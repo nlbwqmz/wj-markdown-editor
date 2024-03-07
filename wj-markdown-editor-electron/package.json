@@ -1,0 +1,74 @@
+{
+  "author": {
+    "name": "魏杰"
+  },
+  "description": "markdown编辑器",
+  "name": "wj-markdown-editor",
+  "version": "0.0.1",
+  "main": "src/main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "set NODE_ENV=dev && electron .",
+    "static": "electron .",
+    "make": "cd ../wj-markdown-editor-web && yarn build && cd ../wj-markdown-editor-electron && electron-builder",
+    "build": "electron-builder"
+  },
+  "build": {
+    "publish": {
+      "provider": "generic",
+      "url": ""
+    },
+    "productName": "wj-markdown-editor",
+    "directories": {
+      "output": "electron-build"
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "md"
+        ],
+        "name": "Markdown File",
+        "role": "Editor"
+      }
+    ],
+    "files": [
+      "!config.json",
+      "!img/**"
+    ],
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "wj-markdown-editor",
+      "menuCategory": "wj-markdown-editor",
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "installerIcon": "./icon/favicon.ico",
+      "uninstallerIcon": "./icon/favicon.ico",
+      "installerHeaderIcon": "./icon/favicon.ico",
+      "perMachine": false
+    },
+    "win": {
+      "artifactName": "${productName}-${platform}-${arch}-${version}.${ext}",
+      "icon": "./icon/favicon.ico",
+      "target": [
+        {
+          "target": "nsis"
+        }
+      ],
+      "asarUnpack": [
+        "tool/**"
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "croner": "^8.0.1",
+    "electron-updater": "^6.1.8",
+    "uuid": "^9.0.1"
+  }
+}
