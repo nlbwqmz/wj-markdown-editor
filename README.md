@@ -1,13 +1,19 @@
 # wj-markdown-editor
 
+[源码地址](https://github.com/nlbwqmz/wj-markdown-editor)
+
+[下载地址](https://github.com/nlbwqmz/wj-markdown-editor/releases)
+
 ## 简介
 
-一款桌面端**markdown**编辑器
+一款开源桌面端**markdown**编辑器
 
 - 编辑界面
+
 ![](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/2ff3fcb0dc4411ee904f0b981a07c8cf.png)
 
 - 预览界面
+
 ![](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/1ba2eae0dc4511ee8525979751551ae8.png)
 
 - 设置界面
