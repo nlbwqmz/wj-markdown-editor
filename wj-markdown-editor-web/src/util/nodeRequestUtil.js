@@ -82,5 +82,11 @@ export default {
   },
   executeUpdate: () => {
     window.node.executeUpdate()
+  },
+  exportSetting: () => {
+    window.node.exportSetting()
+  },
+  importSetting: () => {
+    window.node.importSetting()
   }
 }

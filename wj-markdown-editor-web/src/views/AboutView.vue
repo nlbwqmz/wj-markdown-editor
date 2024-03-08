@@ -6,8 +6,17 @@
     <template #title>
       <span>关于</span>
     </template>
+    <a-alert type="warning" style="margin-bottom: 10px" show-icon>
+      <template #message>
+        <span style="font-size: 12px"><span style="font-weight: bold">便携版</span>暂不支持自动升级，需手动下载，解压后直接替换根目录即可。</span>
+      </template>
+    </a-alert>
     <a-descriptions bordered :column="1" size="small">
-      <a-descriptions-item label="程序名">{{name}}</a-descriptions-item>
+      <a-descriptions-item label="程序名">
+        <span>{{name}}</span>
+        <a-button type="link" href="https://github.com/nlbwqmz/wj-markdown-editor" target="_blank">源码地址</a-button>
+        <a-button type="link" href="https://github.com/nlbwqmz/wj-markdown-editor/releases" target="_blank">下载地址</a-button>
+      </a-descriptions-item>
       <a-descriptions-item label="当前版本">
         <span>{{version}}</span>
         <a-button type="link" :loading="checking" @click="checkUpdate" v-if="!downloading">检查更新</a-button>
@@ -116,7 +125,8 @@ const executeUpdate = () => {
 }
 :deep(.ant-btn) {
   height: revert;
-  padding: 0 15px;
+  padding: 0;
+  margin-left: 10px;
 }
 :deep(.ant-descriptions-item-label){
   width: 90px;

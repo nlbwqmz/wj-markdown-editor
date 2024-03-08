@@ -6,6 +6,7 @@ require('./util/ipcMainUtil')
 const winOnUtil = require('./util/winOnUtil');
 const constant = require('./util/constant')
 const common = require('./util/common')
+const fs = require("fs");
 
 app.whenReady().then(() => {
   common.initUpdater()
@@ -37,6 +38,7 @@ app.whenReady().then(() => {
   } else {
     win.loadFile(path.resolve(__dirname, '../web-dist/index.html'), { hash: globalData.content ? globalData.config.initRoute : constant.router.edit }).then(() => {})
   }
+  fs.writeFileSync('C:\\Users\\cqing\\Desktop\\ttt.txt', `环境：${process.env.PORTABLE_EXECUTABLE_FILE}`)
 })
 
 

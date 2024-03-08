@@ -66,6 +66,7 @@ const data = {
     downloadUpdateToken: undefined,
     originFilePath: originFilePath,
     config,
+    configPath,
     refreshTitle
 }
 

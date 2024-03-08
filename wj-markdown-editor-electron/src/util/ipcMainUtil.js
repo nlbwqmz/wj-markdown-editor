@@ -32,7 +32,13 @@ const uploadImage = async files => {
             globalData.win.webContents.send('showMessage', '当前文件未保存，不能将图片保存到相对位置', 'error', 2, true)
             return undefined
         }
-        const savePath = common.getImgParentPath(insertImgType)
+        let savePath
+        try {
+            savePath = common.getImgParentPath(insertImgType)
+        } catch (e) {
+            globalData.win.webContents.send('showMessage', '图片保存路径创建失败,请检查相关设置是否正确', 'error', 2, true)
+            return undefined
+        }
         list = await Promise.all(files.map(async file => {
             if(file.path){
                 const newFilePath = path.resolve(savePath, uuid.v1().replace(/-/g, '') + '.' + mime.extension(file.type));
@@ -257,4 +263,46 @@ ipcMain.on('cancelDownload', event => {
 
 ipcMain.on('executeUpdate', event => {
     common.executeUpdate()
+})
+
+ipcMain.on('exportSetting', event => {
+    const filePath = dialog.showSaveDialogSync({
+        title: "导出设置",
+        buttonLabel: "导出",
+        defaultPath: 'config.json',
+        filters: [
+            {name: 'JSON文件', extensions: ['json']},
+        ]
+    })
+    if(filePath){
+        fsUtil.exportSetting(globalData.configPath, filePath, () => {
+            globalData.win.webContents.send('showMessage', '导出成功', 'success')
+        })
+    }
+})
+
+ipcMain.on('importSetting', event => {
+    const filePath = dialog.showOpenDialogSync({
+        title: '导入设置',
+        buttonLabel: '导入',
+        filters: [
+            {name: 'JSON文件', extensions: ['json']},
+        ],
+        properties: ['openFile']
+    })
+    if(filePath && filePath.length === 1 && fsUtil.exists(filePath[0])){
+        try {
+            const json = fsUtil.getJsonFileContent(filePath[0])
+            for(const key in defaultConfig){
+                if(!json.hasOwnProperty(key)){
+                    json[key] = defaultConfig[key]
+                }
+            }
+            globalData.config = json
+            globalData.win.webContents.send('showMessage', '导入成功', 'success')
+        } catch (e) {
+            globalData.win.webContents.send('showMessage', '导入失败', 'error')
+        }
+    }
+
 })

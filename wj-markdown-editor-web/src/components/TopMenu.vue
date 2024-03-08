@@ -60,6 +60,14 @@ const menuList = [
         click: nodeRequestUtil.openSettingWin
       },
       {
+        name: '导出设置',
+        click: nodeRequestUtil.exportSetting
+      },
+      {
+        name: '导入设置',
+        click: nodeRequestUtil.importSetting
+      },
+      {
         name: '恢复默认设置',
         click: () => {
           Modal.confirm({

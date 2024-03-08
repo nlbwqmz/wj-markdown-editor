@@ -51,7 +51,9 @@ const showToMain = {
   checkUpdate: () => ipcRenderer.send('checkUpdate'),
   executeDownload: () => ipcRenderer.send('executeDownload'),
   cancelDownload: () => ipcRenderer.send('cancelDownload'),
-  executeUpdate: () => ipcRenderer.send('executeUpdate')
+  executeUpdate: () => ipcRenderer.send('executeUpdate'),
+  exportSetting: () => ipcRenderer.send('exportSetting'),
+  importSetting: () => ipcRenderer.send('importSetting')
 }
 
 contextBridge.exposeInMainWorld('node', {

@@ -16,5 +16,14 @@ module.exports = {
         filePathList.forEach(filePath => {
             fs.unlinkSync(filePath)
         })
+    },
+    exportSetting: (configPath, filePath, callback) => {
+        fs.copyFile(configPath, filePath, callback)
+    },
+    getJsonFileContent: filePath => {
+        return JSON.parse(fs.readFileSync(filePath).toString())
+    },
+    exists: filePath => {
+        return fs.existsSync(filePath)
     }
 }

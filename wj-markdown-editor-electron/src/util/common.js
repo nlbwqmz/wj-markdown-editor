@@ -144,7 +144,7 @@ module.exports = {
             globalData.aboutWin = new BrowserWindow({
                 frame: false,
                 width: 500,
-                height: 230,
+                height: 270,
                 show: false,
                 parent: globalData.win,
                 maximizable: false,
@@ -153,6 +153,10 @@ module.exports = {
                     preload: path.resolve(__dirname, '../preload.js')
                 }
             });
+            globalData.aboutWin.webContents.setWindowOpenHandler(details => {
+                shell.openExternal(details.url).then(() => {})
+                return {action: 'deny'}
+            })
             globalData.aboutWin.once('ready-to-show', () => {
                 globalData.aboutWin.show()
             })
