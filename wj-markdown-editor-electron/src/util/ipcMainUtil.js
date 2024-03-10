@@ -4,7 +4,6 @@ const fs= require('fs')
 const globalData = require('./globalData')
 const common = require('./common')
 const path = require('path')
-const uuid = require('uuid')
 const { execFile } = require('child_process')
 const pathUtil = require('./pathUtil')
 const fsUtil = require('./fsUtil')
@@ -41,11 +40,11 @@ const uploadImage = async files => {
         }
         list = await Promise.all(files.map(async file => {
             if(file.path){
-                const newFilePath = path.resolve(savePath, uuid.v1().replace(/-/g, '') + '.' + mime.extension(file.type));
+                const newFilePath = path.resolve(savePath, common.getUUID() + '.' + mime.extension(file.type));
                 fs.copyFileSync(file.path, newFilePath)
                 return newFilePath
             } else if(file.base64){
-                const newFilePath = path.resolve(savePath, uuid.v1().replace(/-/g, '') + '.' + mime.extension(file.type));
+                const newFilePath = path.resolve(savePath, common.getUUID() + '.' + mime.extension(file.type));
                 const buffer = new Buffer.from(file.base64, 'base64');
                 fs.writeFileSync(newFilePath,  buffer)
                 return newFilePath
@@ -54,7 +53,7 @@ const uploadImage = async files => {
                     const result = await axios.get(file.url, {
                         responseType: 'arraybuffer', // 特别注意，需要加上此参数
                     });
-                    const newFilePath = path.resolve(savePath, uuid.v1().replace(/-/g, '') + '.' + mime.extension(result.headers.get("Content-Type")));
+                    const newFilePath = path.resolve(savePath, common.getUUID() + '.' + mime.extension(result.headers.get("Content-Type")));
                     fs.writeFileSync(newFilePath,  result.data)
                     return newFilePath
                 } catch (e) {
@@ -71,11 +70,11 @@ const uploadImage = async files => {
         const tempPath = app.getPath('temp')
         let tempList = await Promise.all(files.map(async file => {
             if(file.path){
-                const newFilePath = path.resolve(tempPath, uuid.v1().replace(/-/g, '') + '.' + mime.extension(file.type));
+                const newFilePath = path.resolve(tempPath, common.getUUID() + '.' + mime.extension(file.type));
                 fs.copyFileSync(file.path, newFilePath)
                 return newFilePath
             } else if(file.base64){
-                const newFilePath = path.resolve(tempPath, uuid.v1().replace(/-/g, '') + '.' + mime.extension(file.type));
+                const newFilePath = path.resolve(tempPath, common.getUUID() + '.' + mime.extension(file.type));
                 const buffer = new Buffer.from(file.base64, 'base64');
                 fs.writeFileSync(newFilePath,  buffer)
                 return newFilePath
@@ -84,7 +83,7 @@ const uploadImage = async files => {
                     const result = await axios.get(file.url, {
                         responseType: 'arraybuffer', // 特别注意，需要加上此参数
                     });
-                    const newFilePath = path.resolve(tempPath, uuid.v1().replace(/-/g, '') + '.' + mime.extension(result.headers.get("Content-Type")));
+                    const newFilePath = path.resolve(tempPath, common.getUUID() + '.' + mime.extension(result.headers.get("Content-Type")));
                     fs.writeFileSync(newFilePath,  result.data)
                     return newFilePath
                 } catch (e) {
@@ -124,9 +123,8 @@ const uploadImage = async files => {
     }
 }
 
-ipcMain.handle('getFileContent', event => {
-    // fs.writeFileSync("C:\\Users\\cqing\\Desktop\\1.txt", JSON.stringify(process.argv))
-    return globalData.tempContent
+ipcMain.handle('getFileContent', (event, id) => {
+    return globalData.fileStateList.find(item => item.id === id).tempContent
 })
 
 ipcMain.handle('openDirSelect', event => {
@@ -158,9 +156,12 @@ ipcMain.on('exit', (event) => {
     common.exit()
 })
 
-ipcMain.on('onContentChange', (event, content) => {
-    globalData.tempContent = content
-    globalData.saved = globalData.content.length === content.length && globalData.content === content
+ipcMain.on('onContentChange', (event, content, id) => {
+    const fileStateList = globalData.fileStateList
+    const obj = fileStateList.find(item => item.id === id)
+    obj.tempContent = content
+    obj.saved = obj.content.length === content.length && obj.content === content
+    globalData.fileStateList = fileStateList
 })
 
 ipcMain.on('closeExitModal', event => {
@@ -304,5 +305,45 @@ ipcMain.on('importSetting', event => {
             globalData.win.webContents.send('showMessage', '导入失败', 'error')
         }
     }
+})
 
+ipcMain.on('newFile', event => {
+    common.newFile()
+})
+
+ipcMain.handle('closeFile', (event, id) => {
+    const list = globalData.fileStateList.filter(item => item.id !== id)
+    if(list.length === 0){
+        globalData.fileStateList = [common.getNewFileData()]
+    } else {
+        globalData.fileStateList = list
+    }
+    return true
+})
+
+ipcMain.handle('closeFileAndSave', (event, id) => {
+    const fileState = globalData.fileStateList.find(item => item.id === id)
+    let currentPath
+    if(fileState.originFilePath){
+        currentPath = fileState.originFilePath
+    } else {
+        currentPath = dialog.showSaveDialogSync({
+            title: "保存",
+            buttonLabel: "保存",
+            filters: [
+                {name: 'markdown文件', extensions: ['md']},
+            ]
+        })
+    }
+    if (currentPath) {
+        fs.writeFileSync(currentPath, fileState.tempContent)
+        const list = globalData.fileStateList.filter(item => item.id !== id)
+        if(list.length === 0){
+            globalData.fileStateList = [common.getNewFileData()]
+        } else {
+            globalData.fileStateList = list
+        }
+        return true
+    }
+    return false
 })

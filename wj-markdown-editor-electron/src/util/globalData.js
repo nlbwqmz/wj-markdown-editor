@@ -5,6 +5,7 @@ const fsUtil = require('./fsUtil')
 const path = require("path");
 const { Notification} = require("electron");
 const {Cron} = require("croner");
+const uuid = require("uuid");
 
 const openOnFile = () => {
     return Boolean(process.argv && process.argv.length > 0 && process.argv[process.argv.length - 1].match(/^[a-zA-Z]:(\\.*)+\.md$/))
@@ -51,9 +52,34 @@ const refreshTitle = () => {
         }
     }
 }
+// const state = {
+//     saved: true,
+//     content: undefined,
+//     tempContent: undefined,
+//     originFilePath: undefined,
+//     fileName: undefined,
+// }
+const updateFileStateList = () => {
+    data.win.webContents.send('updateFileStateList', data.fileStateList.map(item => {
+        return {
+            id: item.id,
+            saved: item.saved,
+            originFilePath: item.originFilePath,
+            fileName: item.fileName
+        }
+    }))
+}
 const data = {
     win: null,
     initTitle: 'wj-markdown-editor',
+    fileStateList: [{
+        id: uuid.v1().replace(/-/g, ''),
+        saved: true,
+        content: firstContent,
+        tempContent: firstContent,
+        originFilePath: originFilePath,
+        fileName: originFilePath ? pathUtil.getBaseName(originFilePath) : 'untitled'
+    }],
     saved: true,
     content: firstContent,
     tempContent: firstContent,
@@ -67,8 +93,11 @@ const data = {
     originFilePath: originFilePath,
     config,
     configPath,
-    refreshTitle
+    refreshTitle,
+    updateFileStateList
 }
+
+
 
 
 
@@ -94,6 +123,8 @@ const handleDataChange = (name, newValue) => {
         if(data.exportWin && !data.exportWin.isDestroyed()){
             data.exportWin.webContents.send('shouldUpdateConfig', data.config)
         }
+    } else if(name === 'fileStateList'){
+        updateFileStateList()
     }
 }
 const handleJob = minute => {

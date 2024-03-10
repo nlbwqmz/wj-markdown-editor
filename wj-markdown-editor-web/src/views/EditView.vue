@@ -1,6 +1,8 @@
 <template>
   <div style="height: 100%">
-    <md-editor v-model="content" ref="editorRef" @onSave="onSave" style="width: 100%; height: 100%" @onChange="onChange"
+    <md-editor v-model="content" ref="editorRef" style="width: 100%; height: 100%"
+               @onSave="onSave"
+               @onChange="onChange"
                @compositionstart="onCompositionStart"
                @compositionend="onCompositionEnd"
                @on-upload-img="onUploadImg"
@@ -70,9 +72,11 @@ import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import nodeRegisterUtil from '@/util/nodeRegisterUtil'
-import router from '@/router'
 import store from '@/store'
 import commonUtil from '@/util/commonUtil'
+import { useRouter } from 'vue-router'
+const router = useRouter()
+const id = commonUtil.getUrlParam('id')
 // import { message } from 'ant-design-vue'
 // import { EditorView } from '@codemirror/view'
 // import { openSearchPanel, SearchCursor } from '@codemirror/search'
@@ -142,7 +146,7 @@ const onSave = (v, h) => {
 }
 const onChange = content => {
   if (handleChange.value === true) {
-    nodeRequestUtil.onContentChange(content)
+    nodeRequestUtil.onContentChange(content, id)
   }
 }
 const onCompositionStart = () => {
@@ -150,7 +154,7 @@ const onCompositionStart = () => {
 }
 const onCompositionEnd = () => {
   handleChange.value = true
-  nodeRequestUtil.onContentChange(content.value)
+  nodeRequestUtil.onContentChange(content.value, id)
 }
 
 const fileToBase64 = file => {
@@ -214,14 +218,14 @@ const insertScreenshotResult = result => {
 
 onMounted(async () => {
   nodeRegisterUtil.insertScreenshotResult(insertScreenshotResult)
-  content.value = await nodeRequestUtil.getFileContent()
+  content.value = await nodeRequestUtil.getFileContent(id)
   await nextTick(() => {
     editorRef.value?.resetHistory()
   })
 })
 
 const toPreview = () => {
-  router.push({ path: '/preview' })
+  router.push({ path: '/preview', query: { id } })
 }
 
 const config = computed(() => store.state.config)

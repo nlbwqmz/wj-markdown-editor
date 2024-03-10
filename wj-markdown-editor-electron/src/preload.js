@@ -16,18 +16,20 @@ const mainToShow = {
   closeMessage: callback => ipcRenderer.on('closeMessage', _event => callback()),
   messageToAbout: callback => ipcRenderer.on('messageToAbout', (_event, result) => callback(result)),
   updaterDownloadProgress: callback => ipcRenderer.on('updaterDownloadProgress', (_event, progress) => callback(progress)),
-  downloadFinish: callback => ipcRenderer.on('downloadFinish', (_event) => callback())
+  downloadFinish: callback => ipcRenderer.on('downloadFinish', (_event) => callback()),
+  updateFileStateList: callback => ipcRenderer.on('updateFileStateList', (_event, fileStateList) => callback(fileStateList)),
+  changeTab: callback => ipcRenderer.on('changeTab', (_event, id) => callback(id))
 }
 
 //渲染进程调用主进程
 const showToMain = {
   // 获取文件信息
-  getFileContent: () => ipcRenderer.invoke('getFileContent'),
+  getFileContent: id => ipcRenderer.invoke('getFileContent', id),
   uploadImage: files => ipcRenderer.send('uploadImage', files),
   // 保存
   save: isExit => ipcRenderer.send('save', isExit),
   // 检查是否保存
-  onContentChange: content => ipcRenderer.send('onContentChange', content),
+  onContentChange: (content, id) => ipcRenderer.send('onContentChange', content, id),
   exit: () => ipcRenderer.send('exit'),
   saveToOther: () => ipcRenderer.send('saveToOther'),
   closeExitModal: () => ipcRenderer.send('closeExitModal'),
@@ -53,7 +55,10 @@ const showToMain = {
   cancelDownload: () => ipcRenderer.send('cancelDownload'),
   executeUpdate: () => ipcRenderer.send('executeUpdate'),
   exportSetting: () => ipcRenderer.send('exportSetting'),
-  importSetting: () => ipcRenderer.send('importSetting')
+  importSetting: () => ipcRenderer.send('importSetting'),
+  newFile: () => ipcRenderer.send('newFile'),
+  closeFile: id => ipcRenderer.invoke('closeFile', id),
+  closeFileAndSave: id => ipcRenderer.invoke('closeFileAndSave', id)
 }
 
 contextBridge.exposeInMainWorld('node', {

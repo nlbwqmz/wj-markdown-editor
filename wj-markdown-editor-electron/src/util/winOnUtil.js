@@ -18,6 +18,7 @@ module.exports = {
         })
         globalData.win.once('ready-to-show', () => {
             globalData.refreshTitle()
+            globalData.updateFileStateList()
             if(globalData.config.maximize){
                 globalData.win.maximize()
             }

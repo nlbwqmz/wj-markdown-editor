@@ -1,5 +1,5 @@
 <template>
-  <div style="width: 100%; height: 100%" v-show="!loading" id="preview-content">
+  <div style="width: 100%; height: 100%" v-show="!loading" :id="previewId">
     <div v-if="!content" style="display: flex; justify-content: center; align-items: center; height: 100%">
       <a-empty>
         <template #description>
@@ -12,8 +12,9 @@
       <div :style="{ width: `${config.previewWidth}%` }" style="display: flex; justify-content: center">
         <div style="flex: 1; overflow: hidden">
           <md-preview
+            :id="componentId"
             :model-value="content"
-            :editor-id="id"
+            :editor-id="domId"
             :md-heading-id="commonUtil.mdHeadingId"
             no-img-zoom-in
             :preview-theme="config.previewTheme"
@@ -24,7 +25,7 @@
         <div v-if="catalogShow" style="max-width: 400px; min-width: 200px;" :style="{ height: `calc(100vh - ${offsetTop}px)` }">
           <a-affix :offset-top="offsetTop" :style="{ height: `calc(100vh - ${offsetTop}px)` }">
             <div style="border-left: 1px rgba(0, 0, 0, 0.1) solid;overflow: auto" class="wj-scrollbar-hover" :style="{ height: `calc(100vh - ${offsetTop}px)` }">
-              <md-catalog :editor-id="id" :scrollElement="scrollElement" :scroll-element-offset-top="offsetTop" :md-heading-id="commonUtil.mdHeadingId"/>
+              <md-catalog :editor-id="domId" :scrollElement="scrollElement" :scroll-element-offset-top="offsetTop" :md-heading-id="commonUtil.mdHeadingId"/>
             </div>
           </a-affix>
         </div>
@@ -63,13 +64,18 @@ import Viewer from 'viewerjs'
 const router = useRouter()
 const content = ref()
 const scrollElement = document.getElementById('main')
-const id = 'my-editor'
+const domId = commonUtil.createId()
+const previewId = commonUtil.createId()
+const componentId = commonUtil.createId()
+console.log(domId, previewId, componentId)
 const catalogShow = ref()
-const offsetTop = 66
+const offsetTop = 96
 const loading = ref(true)
 const imgViewer = ref()
+const id = commonUtil.getUrlParam('id')
+
 onActivated(async () => {
-  content.value = await nodeRequestUtil.getFileContent()
+  content.value = await nodeRequestUtil.getFileContent(id)
   catalogShow.value = store.state.config.catalogShow
   loading.value = false
 })
@@ -77,7 +83,7 @@ const handleHtmlChanged = commonUtil.debounce(() => {
   if (imgViewer.value) {
     imgViewer.value.update()
   } else {
-    imgViewer.value = new Viewer(document.getElementById('my-editor-preview-wrapper'), {
+    imgViewer.value = new Viewer(document.getElementById(componentId), {
       title: false,
       toolbar: {
         zoomIn: true,
@@ -91,14 +97,14 @@ const handleHtmlChanged = commonUtil.debounce(() => {
         flipHorizontal: true,
         flipVertical: true
       },
-      container: document.getElementById('preview-content')
+      container: document.getElementById(previewId)
     })
   }
 })
 const config = computed(() => store.state.config)
 
 const toEdit = () => {
-  router.push({ path: '/edit' })
+  router.push({ path: '/edit', query: { id } })
 }
 </script>
 

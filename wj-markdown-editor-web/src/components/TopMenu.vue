@@ -1,5 +1,5 @@
 <template>
-  <div style="width: 100%; display: flex; border-bottom: 1px rgba(0, 0, 0, 0.1) solid; padding: 0 0 5px 5px;" class="forbid-select-drag">
+  <div style="width: 100%; display: flex; padding: 0 0 5px 5px;" class="forbid-select-drag">
     <a-dropdown :trigger="['click']" @open-change="openChange($event, index)" v-for="(item, index) in menuList" :key="index">
       <div class="menu-item">
         <div :class="commonUtil.arrFindIndex(activeMenu, index) > -1 ? 'menu-item-content active' : 'menu-item-content'">{{ item.name }}</div>
@@ -34,6 +34,11 @@ const menuList = [
   {
     name: '文件',
     children: [
+      {
+        name: '新建',
+        shortcuts: 'ctrl+n',
+        click: nodeRequestUtil.newFile
+      },
       {
         name: '保存',
         shortcuts: 'ctrl+s',

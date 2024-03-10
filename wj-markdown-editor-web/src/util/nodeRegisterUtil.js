@@ -1,6 +1,7 @@
 import { message } from 'ant-design-vue'
 import commonUtil from '@/util/commonUtil'
 import store from '@/store'
+import router from '@/router'
 export default {
   init: () => {
     window.node.showMessage((content, type, duration = 2, destroyBefore) => {
@@ -33,6 +34,12 @@ export default {
     window.node.toggleView(commonUtil.toggleView)
     window.node.shouldUpdateConfig(config => {
       store.commit('updateConfig', config)
+    })
+    window.node.updateFileStateList(fileStateList => {
+      store.commit('updateFileStateList', fileStateList)
+    })
+    window.node.changeTab(id => {
+      router.push({ path: '/edit', query: { id } }).then(() => {})
     })
   },
   findInPageResult: fun => {

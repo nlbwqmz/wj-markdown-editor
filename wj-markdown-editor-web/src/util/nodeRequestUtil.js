@@ -1,12 +1,12 @@
 export default {
-  getFileContent: () => {
-    return window.node.getFileContent()
+  getFileContent: id => {
+    return window.node.getFileContent(id)
   },
   save: (isExit) => {
     window.node.save(isExit)
   },
-  onContentChange: content => {
-    window.node.onContentChange(content)
+  onContentChange: (content, id) => {
+    window.node.onContentChange(content, id)
   },
   exit: () => {
     window.node.exit()
@@ -88,5 +88,14 @@ export default {
   },
   importSetting: () => {
     window.node.importSetting()
+  },
+  newFile: () => {
+    window.node.newFile()
+  },
+  closeFile: id => {
+    return window.node.closeFile(id)
+  },
+  closeFileAndSave: id => {
+    return window.node.closeFileAndSave(id)
   }
 }

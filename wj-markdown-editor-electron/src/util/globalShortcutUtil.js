@@ -42,6 +42,14 @@ const shortcutList = [
                 common.toggleSearchBar()
             }
         }
+    },
+    {
+        accelerator: 'Ctrl+n',
+        callback: () => {
+            if(globalData.win.isFocused()){
+                common.newFile()
+            }
+        }
     }
 ]
 

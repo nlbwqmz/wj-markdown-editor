@@ -1,4 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import store from '@/store'
+import commonUtil from '@/util/commonUtil'
 
 const routes = [
   {
@@ -73,6 +75,12 @@ router.beforeEach((to, from) => {
   if (to && to.meta && to.meta.title) {
     document.title = to.meta.title
   }
+})
+
+router.afterEach((to) => {
+  const id = commonUtil.getUrlParam('id')
+  store.commit('updateId', id)
+  store.commit('updateRouteState', { id, path: to.path })
 })
 
 export default router

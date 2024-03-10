@@ -6,12 +6,24 @@ const constant = require('./constant')
 const fsUtil = require("./fsUtil");
 const {autoUpdater, CancellationToken} = require("electron-updater");
 const axios = require("axios");
+const uuid = require("uuid");
 const exit = () => {
     app.exit()
 }
 const sendMessageToAbout = (channel, args) => {
     if(globalData.aboutWin && !globalData.aboutWin.isDestroyed()){
         globalData.aboutWin.webContents.send(channel, args)
+    }
+}
+const getUUID = () => uuid.v1().replace(/-/g, '')
+const getNewFileData = () => {
+    return {
+        id: getUUID(),
+        saved: true,
+        content: '',
+        tempContent: '',
+        originFilePath: '',
+        fileName: 'untitled'
     }
 }
 module.exports = {
@@ -304,5 +316,12 @@ module.exports = {
     },
     executeUpdate: () => {
         autoUpdater.quitAndInstall(true, true)
-    }
+    },
+    getNewFileData,
+    newFile: () => {
+        const create = getNewFileData()
+        globalData.fileStateList = [...globalData.fileStateList, create]
+        globalData.win.webContents.send('changeTab', create.id)
+    },
+    getUUID
 }

@@ -3,11 +3,12 @@
     <div v-show="showTop">
       <top-title/>
       <top-menu/>
+      <top-tab/>
     </div>
     <div style="flex: 1; overflow: auto" id="main" class="wj-scrollbar">
       <router-view v-slot="{ Component }">
         <keep-alive>
-          <component :is="Component"/>
+          <component :is="Component" :key="$route.fullPath"/>
         </keep-alive>
       </router-view>
     </div>
@@ -27,6 +28,7 @@ import router from '@/router'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import store from '@/store'
 import TopTitle from '@/components/TopTitle.vue'
+import TopTab from '@/components/TopTab.vue'
 const showTop = ref(false)
 watch(() => router.currentRoute.value, (newValue, olValue) => {
   showTop.value = newValue && newValue.meta && newValue.meta.showTop === true
