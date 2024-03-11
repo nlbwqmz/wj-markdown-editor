@@ -1,24 +1,17 @@
+import store from '@/store'
+
 export default {
   getFileContent: id => {
     return window.node.getFileContent(id)
   },
-  save: (isExit) => {
-    window.node.save(isExit)
-  },
   onContentChange: (content, id) => {
     window.node.onContentChange(content, id)
   },
-  exit: () => {
-    window.node.exit()
-  },
-  uploadImage: files => {
-    return window.node.uploadImage(files)
+  uploadImage: obj => {
+    return window.node.uploadImage(obj)
   },
   saveToOther: () => {
-    window.node.saveToOther()
-  },
-  closeExitModal: () => {
-    window.node.closeExitModal()
+    window.node.saveToOther(store.state.id)
   },
   getConfig: () => {
     return window.node.getConfig()
@@ -56,8 +49,8 @@ export default {
   toggleSearchBar: () => {
     window.node.toggleSearchBar()
   },
-  screenshot: hide => {
-    window.node.screenshot(hide)
+  screenshot: (id, hide) => {
+    window.node.screenshot(id, hide)
   },
   action: type => {
     window.node.action(type)
@@ -97,5 +90,11 @@ export default {
   },
   closeFileAndSave: id => {
     return window.node.closeFileAndSave(id)
+  },
+  saveFile: () => {
+    window.node.saveFile(store.state.id)
+  },
+  updateActiveFileId: id => {
+    window.node.updateActiveFileId(id)
   }
 }

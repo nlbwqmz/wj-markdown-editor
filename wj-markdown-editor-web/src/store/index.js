@@ -1,11 +1,13 @@
 import { createStore } from 'vuex'
+import nodeRequestUtil from '@/util/nodeRequestUtil'
 
 export default createStore({
   state: {
     id: '',
     config: {},
     fileStateList: [],
-    routeState: []
+    routeState: [],
+    editorRefList: []
   },
   getters: {
   },
@@ -14,10 +16,20 @@ export default createStore({
       state.config = value
     },
     updateFileStateList: (state, fileStateList) => {
-      console.log(fileStateList)
+      state.routeState = fileStateList.map(fileState => {
+        const routeState = state.routeState.find(item => item.id === fileState.id)
+        if (routeState) {
+          return routeState
+        }
+        return {
+          id: fileState.id,
+          path: fileState.originFilePath ? ('/' + state.config.initRoute) : '/edit'
+        }
+      })
       state.fileStateList = fileStateList
     },
     updateId: (state, id) => {
+      nodeRequestUtil.updateActiveFileId(id)
       state.id = id
     },
     updateRouteState: (state, obj) => {
@@ -27,6 +39,9 @@ export default createStore({
       } else {
         state.routeState.push(obj)
       }
+    },
+    pushEditorRefList: (state, obj) => {
+      state.editorRefList.push(obj)
     }
   },
   actions: {

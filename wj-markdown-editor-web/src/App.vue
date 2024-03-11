@@ -7,7 +7,7 @@
     </div>
     <div style="flex: 1; overflow: auto" id="main" class="wj-scrollbar">
       <router-view v-slot="{ Component }">
-        <keep-alive>
+        <keep-alive :max="100">
           <component :is="Component" :key="$route.fullPath"/>
         </keep-alive>
       </router-view>

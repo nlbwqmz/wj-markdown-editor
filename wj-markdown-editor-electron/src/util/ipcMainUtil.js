@@ -15,7 +15,9 @@ const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
 }
 
-const uploadImage = async files => {
+const uploadImage = async obj => {
+    const files = obj.fileList
+    const fileState = globalData.fileStateList.find(item => item.id === obj.id)
     let list
     globalData.win.webContents.send('showMessage', '图片处理中', 'loading', 0)
     const insertImgType = common.getImgInsertType(files[0])
@@ -27,13 +29,13 @@ const uploadImage = async files => {
             list = files.map(file => file.path || file.url)
         }
     } else if (insertImgType === '2' || insertImgType === '3' || insertImgType === '4') { // // 2: 复制到 ./%{filename} 文件夹 3: 复制到 ./assets 文件夹 4:复制到指定文件夹
-        if((insertImgType === '2' || insertImgType === '3') && !globalData.originFilePath){
+        if((insertImgType === '2' || insertImgType === '3') && !fileState.originFilePath){
             globalData.win.webContents.send('showMessage', '当前文件未保存，不能将图片保存到相对位置', 'error', 2, true)
             return undefined
         }
         let savePath
         try {
-            savePath = common.getImgParentPath(insertImgType)
+            savePath = common.getImgParentPath(fileState.originFilePath, insertImgType)
         } catch (e) {
             globalData.win.webContents.send('showMessage', '图片保存路径创建失败,请检查相关设置是否正确', 'error', 2, true)
             return undefined
@@ -42,11 +44,17 @@ const uploadImage = async files => {
             if(file.path){
                 const newFilePath = path.resolve(savePath, common.getUUID() + '.' + mime.extension(file.type));
                 fs.copyFileSync(file.path, newFilePath)
+                if(insertImgType === '2' || insertImgType === '3'){
+                    return pathUtil.relative(pathUtil.resolve(savePath, '../'), newFilePath)
+                }
                 return newFilePath
             } else if(file.base64){
                 const newFilePath = path.resolve(savePath, common.getUUID() + '.' + mime.extension(file.type));
                 const buffer = new Buffer.from(file.base64, 'base64');
                 fs.writeFileSync(newFilePath,  buffer)
+                if(insertImgType === '2' || insertImgType === '3'){
+                    return pathUtil.relative(newFilePath, pathUtil.resolve(savePath, '../'))
+                }
                 return newFilePath
             } else if(file.url) {
                 try{
@@ -55,6 +63,9 @@ const uploadImage = async files => {
                     });
                     const newFilePath = path.resolve(savePath, common.getUUID() + '.' + mime.extension(result.headers.get("Content-Type")));
                     fs.writeFileSync(newFilePath,  result.data)
+                    if(insertImgType === '2' || insertImgType === '3'){
+                        return pathUtil.relative(newFilePath, pathUtil.resolve(savePath, '../'))
+                    }
                     return newFilePath
                 } catch (e) {
                     globalData.win.webContents.send('showMessage', '图片下载失败', 'error', 2, true)
@@ -97,7 +108,7 @@ const uploadImage = async files => {
             let error = false
             axios.post(`http://${globalData.config.picGo.host}:${globalData.config.picGo.port}/upload`, { list: tempList }).then(res => {
                 if(res.data.success === true){
-                    globalData.win.webContents.send('insertScreenshotResult', res.data.result)
+                    globalData.win.webContents.send('insertScreenshotResult', { id: obj.id, list: res.data.result })
                 } else {
                     globalData.win.webContents.send('showMessage', `图片上传失败，请检查PicGo服务。(错误信息：${res.data.message})`, 'error', 2, true)
                 }
@@ -116,7 +127,7 @@ const uploadImage = async files => {
         return undefined
     }
     if(list && list.length > 0) {
-        globalData.win.webContents.send('insertScreenshotResult', list)
+        globalData.win.webContents.send('insertScreenshotResult', { id: obj.id, list })
         if(!list.find(item => item === undefined)){
             globalData.win.webContents.send('closeMessage')
         }
@@ -136,38 +147,24 @@ ipcMain.handle('openDirSelect', event => {
     return dirList && dirList.length > 0 ? dirList[0] : undefined
 })
 
-ipcMain.on('uploadImage', (event, files) => {
-    uploadImage(files)
+ipcMain.on('uploadImage', (event, obj) => {
+    uploadImage(obj)
 })
 
 ipcMain.handle('getConfig', event => {
     return globalData.config
 })
 
-ipcMain.on('save', (event, isExit) => {
-    common.save(globalData.tempContent, isExit)
-})
-
-ipcMain.on('saveToOther', (event) => {
-    common.saveToOther(globalData.tempContent)
-})
-
-ipcMain.on('exit', (event) => {
-    common.exit()
+ipcMain.on('saveToOther', (event, id) => {
+    common.saveToOther(id)
 })
 
 ipcMain.on('onContentChange', (event, content, id) => {
     const fileStateList = globalData.fileStateList
-    const obj = fileStateList.find(item => item.id === id)
-    obj.tempContent = content
-    obj.saved = obj.content.length === content.length && obj.content === content
+    const fileState = fileStateList.find(item => item.id === id)
+    fileState.tempContent = content
+    fileState.saved = fileState.content.length === content.length && fileState.content === content
     globalData.fileStateList = fileStateList
-})
-
-ipcMain.on('closeExitModal', event => {
-    if(globalData.exitModal){
-        globalData.exitModal.hide()
-    }
 })
 
 ipcMain.on('openSettingWin', event => {
@@ -214,7 +211,7 @@ ipcMain.on('stopFindInPage', event => {
     globalData.win.webContents.stopFindInPage('clearSelection')
 })
 
-ipcMain.on('screenshot', (event, hide) => {
+ipcMain.on('screenshot', (event, id, hide) => {
     if(hide === true) {
         globalData.win.minimize()
     }
@@ -225,7 +222,7 @@ ipcMain.on('screenshot', (event, hide) => {
                 const buffer = clipboard.readImage().toPNG()
                 if(buffer && buffer.length > 0){
                     const base64 = buffer.toString('base64')
-                    uploadImage([{ base64, type: 'image/png', isScreenshot: true }]).then(res => {})
+                    uploadImage({ id, fileList: [{ base64, type: 'image/png', isScreenshot: true }] }).then(res => {})
                     clipboard.clear()
                 }
             }
@@ -346,4 +343,36 @@ ipcMain.handle('closeFileAndSave', (event, id) => {
         return true
     }
     return false
+})
+
+ipcMain.on('saveFile', (event, id) => {
+    const fileStateList = globalData.fileStateList
+    const index = fileStateList.findIndex(item => item.id === id)
+    const fileState = fileStateList[index]
+    let currentPath
+    if(fileState.originFilePath){
+        currentPath = fileState.originFilePath
+    } else {
+        currentPath = dialog.showSaveDialogSync({
+            title: "保存",
+            buttonLabel: "保存",
+            filters: [
+                {name: 'markdown文件', extensions: ['md']},
+            ]
+        })
+    }
+    if (currentPath) {
+        fs.writeFileSync(currentPath, fileState.tempContent)
+        fileState.content = fileState.tempContent
+        fileState.saved = true
+        fileState.originFilePath = currentPath
+        fileState.fileName = pathUtil.getBaseName(currentPath)
+        globalData.fileStateList = fileStateList
+        globalData.win.webContents.send('showMessage', '保存成功', 'success')
+
+    }
+})
+
+ipcMain.on('updateActiveFileId', (event, id) => {
+    globalData.activeFileId = id
 })

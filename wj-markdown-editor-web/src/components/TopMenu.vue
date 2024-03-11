@@ -42,7 +42,7 @@ const menuList = [
       {
         name: '保存',
         shortcuts: 'ctrl+s',
-        click: () => nodeRequestUtil.save(false)
+        click: () => nodeRequestUtil.saveFile()
       },
       {
         name: '另存为',

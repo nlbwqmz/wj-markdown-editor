@@ -6,7 +6,7 @@
     </template>
     <div style="display: flex; flex-direction: column">
       <div style="flex: 1; overflow: auto; max-height: calc(100vh - 100px)" class="wj-scrollbar">
-        <md-preview :model-value="content" :editor-id="id" id="export"
+        <md-preview :model-value="content" :editor-id="editorId" id="export"
                     :preview-theme="config.previewTheme"
                     :code-theme="config.codeTheme"
         ></md-preview>
@@ -27,10 +27,12 @@ import html2pdf from 'html2pdf.js'
 import { ExportOutlined } from '@ant-design/icons-vue'
 import WjModal from '@/components/WjModal.vue'
 import store from '@/store'
+import commonUtil from '@/util/commonUtil'
 const content = ref()
-const id = 'my-editor'
+const editorId = commonUtil.createId()
+const id = commonUtil.getUrlParam('id')
 onActivated(async () => {
-  content.value = await nodeRequestUtil.getFileContent()
+  content.value = await nodeRequestUtil.getFileContent(id)
 })
 
 const onHtmlChanged = () => {

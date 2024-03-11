@@ -8,8 +8,9 @@ module.exports = {
             if (path.isAbsolute(url)) {
                 return net.fetch('file:///' + url)
             } else {
-                if(globalData.originFilePath){
-                    return net.fetch('file:///' + path.resolve(path.dirname(globalData.originFilePath), url))
+                const fileState = globalData.fileStateList.find(item => item.id === globalData.activeFileId)
+                if(fileState && fileState.originFilePath){
+                    return net.fetch('file:///' + path.resolve(path.dirname(fileState.originFilePath), url))
                 }
             }
         })

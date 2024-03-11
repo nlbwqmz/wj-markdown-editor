@@ -9,6 +9,7 @@ const getUrlParam = name => {
   return searchParams.get(name)
 }
 const createId = () => 'a' + nanoid()
+
 export default {
   initMessageConfig: () => {
     message.config({

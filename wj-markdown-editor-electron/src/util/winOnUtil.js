@@ -17,21 +17,20 @@ module.exports = {
             return {action: 'deny'}
         })
         globalData.win.once('ready-to-show', () => {
-            globalData.refreshTitle()
             globalData.updateFileStateList()
             if(globalData.config.maximize){
                 globalData.win.maximize()
             }
             globalData.win.show()
         })
-        globalData.win.on('close', e => {
-            e.preventDefault()
-            if(globalData.saved){
-                common.exit()
-            } else {
-                common.exitModal()
-            }
-        })
+        // globalData.win.on('close', e => {
+        //     e.preventDefault()
+        //     if(globalData.saved){
+        //         common.exit()
+        //     } else {
+        //         common.exitModal()
+        //     }
+        // })
         globalData.win.on('will-resize', (event, newBounds ) => {
             if(newBounds.width < 850 || newBounds.height < 280){
                 event.preventDefault()

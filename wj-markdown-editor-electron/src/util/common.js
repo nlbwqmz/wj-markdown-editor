@@ -27,33 +27,7 @@ const getNewFileData = () => {
     }
 }
 module.exports = {
-    save: (content, isExit) => {
-        let currentPath
-        if(globalData.originFilePath){
-            currentPath = globalData.originFilePath
-        } else {
-            currentPath = dialog.showSaveDialogSync({
-                title: "保存",
-                buttonLabel: "保存",
-                filters: [
-                    {name: 'markdown文件', extensions: ['md']},
-                ]
-            })
-        }
-        if (currentPath) {
-            fs.writeFileSync(currentPath, content)
-            globalData.originFilePath = currentPath
-            globalData.saved = true
-            globalData.content = content
-            globalData.tempContent = content
-            if(isExit){
-                exit()
-            } else {
-                globalData.win.webContents.send('showMessage', '保存成功', 'success')
-            }
-        }
-    },
-    saveToOther: content => {
+    saveToOther: id => {
         const currentPath = dialog.showSaveDialogSync({
             title: "另存为",
             buttonLabel: "保存",
@@ -62,39 +36,11 @@ module.exports = {
             ]
         })
         if(currentPath) {
-            fs.writeFileSync(currentPath, content)
+            fs.writeFileSync(currentPath, globalData.fileStateList.find(item => item.id === id).tempContent)
             globalData.win.webContents.send('showMessage', '另存成功', 'success')
         }
     },
     exit,
-    exitModal: () => {
-        if(!globalData.exitModal || globalData.exitModal.isDestroyed()) {
-            globalData.exitModal = new BrowserWindow({
-                frame: false,
-                width: 500,
-                height: 200,
-                show: false,
-                parent: globalData.win,
-                modal: true,
-                maximizable: false,
-                resizable: false,
-                webPreferences: {
-                    preload: path.resolve(__dirname, '../preload.js')
-                }
-            });
-            globalData.exitModal.once('ready-to-show', () => {
-                globalData.exitModal.show()
-            })
-            if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-                globalData.exitModal.loadURL('http://localhost:8080/#/' + constant.router.exitModal).then(() => {})
-            } else {
-                globalData.exitModal.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), { hash: constant.router.exitModal }).then(() => {})
-            }
-        } else {
-            globalData.exitModal.center()
-            globalData.exitModal.show()
-        }
-    },
     openSettingWin: () => {
         if(!globalData.settingWin || globalData.settingWin.isDestroyed()) {
             globalData.settingWin = new BrowserWindow({
@@ -146,9 +92,9 @@ module.exports = {
             globalData.exportWin.show()
         })
         if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-            globalData.exportWin.loadURL('http://localhost:8080/#/' + constant.router.export).then(() => {})
+            globalData.exportWin.loadURL('http://localhost:8080/#/' + constant.router.export + '?id=' + globalData.activeFileId).then(() => {})
         } else {
-            globalData.exportWin.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), { hash: constant.router.export }).then(() => {})
+            globalData.exportWin.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), { hash: constant.router.export, search: 'id=' + globalData.activeFileId }).then(() => {})
         }
     },
     openAboutWin: () => {
@@ -239,12 +185,12 @@ module.exports = {
     shouldUpdateConfig: () => {
         globalData.win.webContents.send('shouldUpdateConfig', globalData.config)
     },
-    getImgParentPath: insertImgType => {
+    getImgParentPath: (originFilePath, insertImgType) => {
         let savePath
         if(insertImgType === '2'){
-            savePath = path.resolve(path.dirname(globalData.originFilePath), path.parse(globalData.originFilePath).name)
+            savePath = path.resolve(path.dirname(originFilePath), path.parse(originFilePath).name)
         } else if (insertImgType === '3'){
-            savePath = path.resolve(path.dirname(globalData.originFilePath), 'assets')
+            savePath = path.resolve(path.dirname(originFilePath), 'assets')
         } else {
             savePath = globalData.config.imgSavePath
         }

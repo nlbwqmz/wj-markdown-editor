@@ -2,6 +2,8 @@ import { message } from 'ant-design-vue'
 import commonUtil from '@/util/commonUtil'
 import store from '@/store'
 import router from '@/router'
+import nodeRequestUtil from '@/util/nodeRequestUtil'
+
 export default {
   init: () => {
     window.node.showMessage((content, type, duration = 2, destroyBefore) => {
@@ -39,20 +41,39 @@ export default {
       store.commit('updateFileStateList', fileStateList)
     })
     window.node.changeTab(id => {
-      router.push({ path: '/edit', query: { id } }).then(() => {})
+      const routeState = store.state.routeState.find(item => item.id === id)
+      router.push({ path: routeState.path, query: { id } }).then(() => {})
+    })
+    window.node.noticeToSave(nodeRequestUtil.saveFile)
+    window.node.insertScreenshotResult(result => {
+      if (result) {
+        const editorRef = store.state.editorRefList.find(item => item.id === store.state.id).editorRef
+        result.list.forEach(item => {
+          if (item) {
+            editorRef?.insert(() => {
+              /**
+               * @return targetValue    待插入内容
+               * @return select         插入后是否自动选中内容，默认：true
+               * @return deviationStart 插入后选中内容鼠标开始位置，默认：0
+               * @return deviationEnd   插入后选中内容鼠标结束位置，默认：0
+               */
+              return {
+                targetValue: `![](${item})\n`,
+                select: false,
+                deviationStart: 0,
+                deviationEnd: 0
+              }
+            })
+          }
+        })
+      }
     })
   },
   findInPageResult: fun => {
     window.node.findInPageResult(fun)
   },
-  insertScreenshotResult: callback => {
-    window.node.insertScreenshotResult(callback)
-  },
   showMaximizeAction: callback => {
     window.node.showMaximizeAction(callback)
-  },
-  refreshTitle: callback => {
-    window.node.refreshTitle(callback)
   },
   messageToAbout: callback => {
     window.node.messageToAbout(callback)

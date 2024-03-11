@@ -6,12 +6,12 @@
           <img :src="logo" alt="logo"/>
         </div>
         <div class="horizontal-vertical-center">
-          <span style="font-size: 12px; padding-left: 5px">{{name}}</span>
+          <span style="font-size: 12px; padding-left: 5px">wj-markdown-editor</span>
         </div>
       </div>
       <div class="content horizontal-vertical-center">
-        <span class="text-ellipsis" style="direction: rtl">{{content}}</span>
-        <span v-show="!saved" style="color: red">*</span>
+<!--        <span class="text-ellipsis" style="direction: rtl">{{content}}</span>-->
+<!--        <span v-show="!saved" style="color: red">*</span>-->
       </div>
     </div>
     <div class="right forbid-select-drag">
@@ -30,25 +30,36 @@ import close from '@/assets/icon/close.png'
 import maximize from '@/assets/icon/maximize.png'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import nodeRegisterUtil from '@/util/nodeRegisterUtil'
-import { ref } from 'vue'
+import { createVNode, h, ref } from 'vue'
 import unmaximize from '@/assets/icon/unmaximize.png'
+import store from '@/store'
+import { Button, Modal } from 'ant-design-vue'
+import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 
 const showMaximizeAction = ref(true)
-const name = ref('')
-const content = ref('')
-const saved = ref(true)
 const action = type => {
-  nodeRequestUtil.action(type)
+  if (type !== 'close') {
+    nodeRequestUtil.action(type)
+  } else {
+    if (store.state.fileStateList.some(item => item.saved === false)) {
+      const modal = Modal.confirm({
+        centered: true,
+        title: '提示',
+        icon: createVNode(ExclamationCircleOutlined),
+        content: '有文件未保存，是否确认退出程序？',
+        footer: h('div', { style: { width: '100%', display: 'flex', justifyContent: 'right', gap: '10px', paddingTop: '10px' } }, [
+          h(Button, { onClick: () => modal.destroy() }, () => '取消'),
+          h(Button, { type: 'primary', danger: true, onClick: () => { nodeRequestUtil.action('close'); modal.destroy() } }, () => '直接关闭')
+        ])
+      })
+    } else {
+      nodeRequestUtil.action('close')
+    }
+  }
 }
 
 nodeRegisterUtil.showMaximizeAction(bool => {
   showMaximizeAction.value = bool
-})
-nodeRegisterUtil.refreshTitle(title => {
-  name.value = title.name
-  content.value = title.content
-  document.title = title.title
-  saved.value = title.saved
 })
 </script>
 

@@ -1,6 +1,7 @@
 <template>
   <div style="height: 100%">
     <md-editor v-model="content" ref="editorRef" style="width: 100%; height: 100%"
+               :editorId="editorId"
                @onSave="onSave"
                @onChange="onChange"
                @compositionstart="onCompositionStart"
@@ -48,10 +49,10 @@
     <template #overlay>
       <a-menu>
         <a-menu-item>
-          <div @click="() => { nodeRequestUtil.screenshot(false) }">直接截图</div>
+          <div @click="() => { nodeRequestUtil.screenshot(id, false) }">直接截图</div>
         </a-menu-item>
         <a-menu-item>
-          <div @click="() => { nodeRequestUtil.screenshot(true) }">隐藏截图</div>
+          <div @click="() => { nodeRequestUtil.screenshot(id, true) }">隐藏截图</div>
         </a-menu-item>
       </a-menu>
     </template>
@@ -71,7 +72,6 @@ import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
-import nodeRegisterUtil from '@/util/nodeRegisterUtil'
 import store from '@/store'
 import commonUtil from '@/util/commonUtil'
 import { useRouter } from 'vue-router'
@@ -87,6 +87,7 @@ const networkImgModal = ref(false)
 const imgUrl = ref()
 const imgUrlInputStatus = ref('')
 const networkImgModalOkDisabled = ref(true)
+const editorId = commonUtil.createId()
 
 const checkImgUrl = (value, blankAble) => {
   if (value) {
@@ -142,7 +143,7 @@ const uploadLocalImg = () => {
   fileInput.click()
 }
 const onSave = (v, h) => {
-  nodeRequestUtil.save(false)
+  nodeRequestUtil.saveFile()
 }
 const onChange = content => {
   if (handleChange.value === true) {
@@ -170,7 +171,6 @@ const fileToBase64 = file => {
       // 解析为 Promise 对象，并返回 base64 编码的字符串
       resolve(base64String)
     }
-
     // 加载失败时
     reader.onerror = function () {
       reject(new Error('Failed to load file'))
@@ -188,36 +188,11 @@ const onUploadImg = async (files) => {
       return { base64: await fileToBase64(item), type: item.type }
     }
   }))
-  nodeRequestUtil.uploadImage(list)
-}
-const insertScreenshotResult = result => {
-  if (result) {
-    if (!(result instanceof Array)) {
-      result = [result]
-    }
-    result.forEach(item => {
-      if (item) {
-        editorRef.value?.insert(() => {
-          /**
-           * @return targetValue    待插入内容
-           * @return select         插入后是否自动选中内容，默认：true
-           * @return deviationStart 插入后选中内容鼠标开始位置，默认：0
-           * @return deviationEnd   插入后选中内容鼠标结束位置，默认：0
-           */
-          return {
-            targetValue: `![](${item})\n`,
-            select: false,
-            deviationStart: 0,
-            deviationEnd: 0
-          }
-        })
-      }
-    })
-  }
+  nodeRequestUtil.uploadImage({ id, fileList: list })
 }
 
 onMounted(async () => {
-  nodeRegisterUtil.insertScreenshotResult(insertScreenshotResult)
+  store.commit('pushEditorRefList', { id, editorRef })
   content.value = await nodeRequestUtil.getFileContent(id)
   await nextTick(() => {
     editorRef.value?.resetHistory()

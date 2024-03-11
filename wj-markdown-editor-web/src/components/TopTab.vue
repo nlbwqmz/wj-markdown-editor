@@ -1,5 +1,5 @@
 <template>
-  <div class="container wj-scrollbar-hover">
+  <div class="container wj-hide-scrollbar" @mousewheel="handleScroll($event)" ref="tabContainerRef">
     <div class="tab-item" v-for="(item) in fileStateList" :key="item.id">
       <div class="tab-name horizontal-vertical-center" @click="go(item.id)" :class="id === item.id ? 'active': ''">
         <span class="text-ellipsis">{{ item.fileName }}</span>
@@ -10,58 +10,64 @@
       </div>
     </div>
   </div>
-  <a-modal v-model:open="open" title="提示">
-    <template #footer>
-      <a-button style="margin-left: 10px" @click="open = false">取消</a-button>
-      <a-button style="margin-left: 10px" type="primary" danger @click="closeFile">直接关闭</a-button>
-      <a-button style="margin-left: 10px" type="primary" @click="closeFileAndSave">保存并关闭</a-button>
-    </template>
-    <p>{{ closeFileName }}未保存，是否确认关闭？</p>
-  </a-modal>
 </template>
 
 <script setup>
 import close from '@/assets/icon/close.png'
-import { computed, ref } from 'vue'
+import { computed, createVNode, h, ref } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
+import { Modal, Button } from 'ant-design-vue'
+import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 const store = useStore()
 const router = useRouter()
 const fileStateList = computed(() => store.state.fileStateList)
 const id = computed(() => store.state.id)
-const open = ref(false)
-const closeFileName = ref()
-const closeId = ref()
+const tabContainerRef = ref()
+
+const handleScroll = e => {
+  tabContainerRef.value.scrollLeft = tabContainerRef.value.scrollLeft + e.deltaY
+}
 const handleTabClose = item => {
-  console.log('关闭Tab', item.id)
-  closeFileName.value = item.fileName
-  closeId.value = item.id
   if (item.saved === true) {
-    closeFile().then(() => {})
+    closeFile(item.id).then(() => {})
   } else {
-    open.value = true
+    const modal = Modal.confirm({
+      centered: true,
+      title: '提示',
+      icon: createVNode(ExclamationCircleOutlined),
+      content: '当前文件未保存，是否确认关闭？',
+      footer: h('div', { style: { width: '100%', display: 'flex', justifyContent: 'right', gap: '10px', paddingTop: '10px' } }, [
+        h(Button, { onClick: () => modal.destroy() }, () => '取消'),
+        h(Button, { type: 'primary', danger: true, onClick: () => { closeFile(item.id); modal.destroy() } }, () => '直接关闭'),
+        h(Button, { type: 'primary', onClick: () => { closeFileAndSave(item.id); modal.destroy() } }, () => '保存并关闭')
+      ])
+    })
   }
 }
 
-const closeFile = async () => {
-  open.value = false
-  const success = await nodeRequestUtil.closeFile(closeId.value)
-  console.log(closeId.value, success, closeId.value === id.value)
-  if (success && closeId.value === id.value) {
-    const fileState = store.state.fileStateList[0]
-    const routeState = store.state.routeState.find(item => item.id === fileState.id)
-    router.push({ path: routeState.path, query: { id: routeState.id } })
+const closeFile = async (closeId) => {
+  const success = await nodeRequestUtil.closeFile(closeId)
+  if (success && closeId === id.value) {
+    executeChangeTab()
   }
 }
 
-const closeFileAndSave = async () => {
-  open.value = false
-  const success = await nodeRequestUtil.closeFileAndSave(closeId.value)
-  if (success && closeId.value === id.value) {
-    const fileState = store.state.fileStateList[0]
-    const routeState = store.state.routeState.find(item => item.id === fileState.id)
-    router.push({ path: routeState.path, query: { id: routeState.id } })
+const executeChangeTab = () => {
+  const fileState = store.state.fileStateList[0]
+  const routeState = store.state.routeState.find(item => item.id === fileState.id)
+  if (routeState) {
+    router.push({ path: routeState.path, query: { id: routeState.id } }).then(() => {})
+  } else {
+    router.push({ path: '/edit', query: { id: fileState.id } }).then(() => {})
+  }
+}
+
+const closeFileAndSave = async (closeId) => {
+  const success = await nodeRequestUtil.closeFileAndSave(closeId)
+  if (success && closeId === id.value) {
+    executeChangeTab()
   }
 }
 const go = clickedId => {
@@ -81,13 +87,12 @@ const go = clickedId => {
   width: 100%;
   overflow-y: hidden;
   overflow-x: auto;
-  height: 30px;
+  height: 35px;
   display: flex;
   justify-content: left;
-  gap: 10px;
+  //gap: 5px;
   .tab-item {
-    padding: 5px 0 5px 0;
-    //border: 1px red solid;
+    padding: 5px 5px 5px 0;
     border-radius: 5px;
     display: flex;
     height: 100%;
@@ -100,9 +105,9 @@ const go = clickedId => {
     .active {
       color: #4096ff;
     }
-    .tab-name:hover {
-      color: #4096ff;
-    }
+    //.tab-name:hover {
+    //  color: #4096ff;
+    //}
     .tab-close {
       height: 100%;
       width: 20px;
@@ -113,8 +118,11 @@ const go = clickedId => {
       }
     }
     .tab-close:hover {
-      background-color: rgb(237,237,237);
+      background-color: rgb(220, 220, 220);
     }
+  }
+  .tab-item:hover {
+    background-color: rgb(237,237,237);
   }
 }
 </style>

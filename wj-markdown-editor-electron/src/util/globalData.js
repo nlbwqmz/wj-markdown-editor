@@ -35,30 +35,6 @@ if(!configIsExist) {
 
 let job
 let jobRecentMinute = 0
-
-
-const refreshTitle = () => {
-    if(data.originFilePath){
-        if(data.saved){
-            data.win.webContents.send('refreshTitle', { name: data.initTitle, content: data.originFilePath, saved: true, title: pathUtil.getBaseName(data.originFilePath)})
-        } else {
-            data.win.webContents.send('refreshTitle', { name: data.initTitle, content: data.originFilePath, saved: false, title: pathUtil.getBaseName(data.originFilePath)})
-        }
-    } else {
-        if(data.saved){
-            data.win.webContents.send('refreshTitle', { name: data.initTitle, content: 'untitled', saved: true, title: 'untitled'})
-        } else {
-            data.win.webContents.send('refreshTitle', { name: data.initTitle, content: 'untitled', saved: false, title: 'untitled'})
-        }
-    }
-}
-// const state = {
-//     saved: true,
-//     content: undefined,
-//     tempContent: undefined,
-//     originFilePath: undefined,
-//     fileName: undefined,
-// }
 const updateFileStateList = () => {
     data.win.webContents.send('updateFileStateList', data.fileStateList.map(item => {
         return {
@@ -72,6 +48,7 @@ const updateFileStateList = () => {
 const data = {
     win: null,
     initTitle: 'wj-markdown-editor',
+    activeFileId: '',
     fileStateList: [{
         id: uuid.v1().replace(/-/g, ''),
         saved: true,
@@ -80,26 +57,15 @@ const data = {
         originFilePath: originFilePath,
         fileName: originFilePath ? pathUtil.getBaseName(originFilePath) : 'untitled'
     }],
-    saved: true,
-    content: firstContent,
-    tempContent: firstContent,
-    isOpenOnFile,
-    exitModal: undefined,
     settingWin: undefined,
     exportWin: undefined,
     aboutWin: undefined,
     searchBar: undefined,
     downloadUpdateToken: undefined,
-    originFilePath: originFilePath,
     config,
     configPath,
-    refreshTitle,
     updateFileStateList
 }
-
-
-
-
 
 const proxyData = new Proxy(data, {
     get : (target, name) => {
@@ -111,9 +77,7 @@ const proxyData = new Proxy(data, {
     }
 })
 const handleDataChange = (name, newValue) => {
-    if(name === 'originFilePath' || name === 'saved'){
-        refreshTitle()
-    } else if (name === 'config') {
+    if (name === 'config') {
         fs.writeFileSync(configPath, JSON.stringify(data.config))
         handleJob(data.config.autoSave.minute)
         data.win.webContents.send('shouldUpdateConfig', data.config)
@@ -136,14 +100,18 @@ const handleJob = minute => {
         if(minute > 0){
             job = Cron(`*/${minute} * * * *`, { paused: true, protect: true }, () => {
                 // 不立即执行
-                if(data.originFilePath && !data.saved){
-                    fs.writeFileSync(data.originFilePath, data.tempContent)
-                    proxyData.saved = true
-                    proxyData.content = data.tempContent
-                    new Notification({
-                        title: '自动保存成功'
-                    }).show()
-                }
+                const fileStateList = data.fileStateList
+                fileStateList.forEach(item => {
+                    if(item.originFilePath && !item.saved){
+                        fs.writeFileSync(item.originFilePath, item.tempContent)
+                        item.saved = true
+                        item.content = item.tempContent
+                        new Notification({
+                            title: '自动保存成功'
+                        }).show()
+                    }
+                })
+                proxyData.fileStateList = fileStateList
             })
             job.resume()
         }

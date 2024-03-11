@@ -7,7 +7,7 @@ const shortcutList = [
         accelerator: 'Ctrl+s',
         callback: () => {
             if(globalData.win.isFocused()){
-                common.save(globalData.tempContent, false)
+                globalData.win.webContents.send('noticeToSave')
             }
         }
     },
@@ -23,7 +23,7 @@ const shortcutList = [
         accelerator: 'Ctrl+Shift+s',
         callback: () => {
             if(globalData.win.isFocused()){
-                common.saveToOther(globalData.tempContent)
+                common.saveToOther(globalData.activeFileId)
             }
         }
     },

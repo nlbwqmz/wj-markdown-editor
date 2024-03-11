@@ -22,14 +22,6 @@ const routes = [
     }
   },
   {
-    path: '/exitModal',
-    name: 'exitModal',
-    component: () => import('../views/ExitModal.vue'),
-    meta: {
-      showTop: false
-    }
-  },
-  {
     path: '/setting',
     name: 'setting',
     component: () => import('../views/SettingWin.vue'),

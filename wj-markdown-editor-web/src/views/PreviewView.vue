@@ -67,9 +67,8 @@ const scrollElement = document.getElementById('main')
 const domId = commonUtil.createId()
 const previewId = commonUtil.createId()
 const componentId = commonUtil.createId()
-console.log(domId, previewId, componentId)
 const catalogShow = ref()
-const offsetTop = 96
+const offsetTop = 101
 const loading = ref(true)
 const imgViewer = ref()
 const id = commonUtil.getUrlParam('id')

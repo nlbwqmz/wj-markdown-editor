@@ -19,5 +19,11 @@ module.exports = {
     },
     getBaseName: filePath => {
         return path.basename(filePath)
+    },
+    relative: (from, to) => {
+        return path.relative(from, to)
+    },
+    resolve: (path1, path2) => {
+        return path.resolve(path1, path2)
     }
 }

@@ -6,13 +6,16 @@ require('./util/ipcMainUtil')
 const winOnUtil = require('./util/winOnUtil');
 const constant = require('./util/constant')
 const common = require('./util/common')
-const lock = app.requestSingleInstanceLock({ isOpenOnFile: globalData.isOpenOnFile, originFilePath: globalData.originFilePath })
+const lock = app.requestSingleInstanceLock({ fileInfo: globalData.fileStateList[0] })
 if(!lock){
   app.quit()
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
-    console.log(additionalData)
-    if (globalData.win) {
+    if(additionalData.fileInfo && additionalData.fileInfo.originFilePath){
+      globalData.fileStateList = [...globalData.fileStateList, additionalData.fileInfo]
+      globalData.win.webContents.send('changeTab', additionalData.fileInfo.id)
+    }
+    if (globalData.win && !globalData.win.isDestroyed()) {
       if (globalData.win.isMinimized()) {
         globalData.win.restore()
       }
@@ -35,7 +38,6 @@ if(!lock){
         preload: path.resolve(__dirname, 'preload.js')
       }
     })
-    win.webContents.openDevTools()
     globalData.win = win
     win.webContents.on('found-in-page', (event, result) => {
       globalData.searchBar.webContents.send('findInPageResult', result)
@@ -45,15 +47,10 @@ if(!lock){
       if (process.platform !== 'darwin') app.quit()
     })
     Menu.setApplicationMenu(null)
-    // if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-    //   win.loadURL('http://localhost:8080/#/').then(() => {})
-    // } else {
-    //   win.loadFile(path.resolve(__dirname, '../web-dist/index.html')).then(() => {})
-    // }
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-      win.loadURL('http://localhost:8080/#/' + (globalData.content ? globalData.config.initRoute : constant.router.edit) + '?id=' + globalData.fileStateList[0].id).then(() => {})
+      win.loadURL('http://localhost:8080/#/' + (globalData.fileStateList[0].originFilePath ? globalData.config.initRoute : constant.router.edit) + '?id=' + globalData.fileStateList[0].id).then(() => {})
     } else {
-      win.loadFile(path.resolve(__dirname, '../web-dist/index.html'), { hash: globalData.content ? globalData.config.initRoute : constant.router.edit, search: 'id=' + globalData.fileStateList[0].id }).then(() => {})
+      win.loadFile(path.resolve(__dirname, '../web-dist/index.html'), { hash: globalData.fileStateList[0].originFilePath ? globalData.config.initRoute : constant.router.edit, search: 'id=' + globalData.fileStateList[0].id }).then(() => {})
     }
   })
 }
