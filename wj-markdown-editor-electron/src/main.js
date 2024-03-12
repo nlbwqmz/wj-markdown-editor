@@ -43,7 +43,9 @@ if(!lock){
         preload: path.resolve(__dirname, 'preload.js')
       }
     })
-    win.webContents.openDevTools()
+    if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
+      win.webContents.openDevTools()
+    }
     globalData.win = win
     win.webContents.on('found-in-page', (event, result) => {
       globalData.searchBar.webContents.send('findInPageResult', result)
