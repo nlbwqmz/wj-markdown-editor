@@ -8,6 +8,18 @@
 
 一款开源桌面端**markdown**编辑器
 
+![GitHub Release](https://img.shields.io/github/v/release/nlbwqmz/wj-markdown-editor)
+
+![GitHub Release Date](https://img.shields.io/github/release-date/nlbwqmz/wj-markdown-editor)
+
+![GitHub Repo stars](https://img.shields.io/github/stars/nlbwqmz/wj-markdown-editor?style=flat&link=https%3A%2F%2Fgithub.com%2Fnlbwqmz%2Fwj-markdown-editor)
+
+![GitHub forks](https://img.shields.io/github/forks/nlbwqmz/wj-markdown-editor?style=flat&link=https%3A%2F%2Fgithub.com%2Fnlbwqmz%2Fwj-markdown-editor)
+
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/nlbwqmz/wj-markdown-editor/total)
+
+![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/nlbwqmz/wj-markdown-editor)
+
 - 编辑界面
 
 ![](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/2ff3fcb0dc4411ee904f0b981a07c8cf.png)
