@@ -1,10 +1,17 @@
 <template>
   <div class="container wj-hide-scrollbar" @mousewheel="handleScroll($event)" ref="tabContainerRef">
     <div class="tab-item" v-for="(item) in fileStateList" :key="item.id">
-      <div class="tab-name horizontal-vertical-center" @click="go(item.id)" :class="id === item.id ? 'active': ''">
-        <span class="text-ellipsis">{{ item.fileName }}</span>
-        <span v-show="item.saved === false" style="color: red">*</span>
-      </div>
+      <a-dropdown :trigger="['contextmenu']">
+        <div class="tab-name horizontal-vertical-center" @click="go(item.id)" :class="id === item.id ? 'active': ''">
+          <span class="text-ellipsis">{{ item.fileName }}</span>
+          <span v-show="item.saved === false" style="color: red">*</span>
+        </div>
+        <template #overlay>
+          <a-menu>
+            <a-menu-item :key="item.id" :disabled="!item.originFilePath" @click="openFolder(item.id)">打开所有文件夹</a-menu-item>
+          </a-menu>
+        </template>
+      </a-dropdown>
       <div class="tab-close horizontal-vertical-center" @click="handleTabClose(item)">
         <img :src="close" alt="">
       </div>
@@ -75,6 +82,10 @@ const go = clickedId => {
     const routeState = store.state.routeState.find(item => item.id === clickedId)
     router.push({ path: routeState.path, query: { id: routeState.id } })
   }
+}
+
+const openFolder = clickedId => {
+  nodeRequestUtil.openFolder(clickedId)
 }
 </script>
 

@@ -15,7 +15,7 @@
           <a-descriptions-item>
             <template #label>
               启动进入
-              <a-tooltip title="仅当通过文件打开，且内容不为空时生效" auto-adjust-overflow placement="right" color="#1677ff">
+              <a-tooltip title="仅当通过文件打开时生效" auto-adjust-overflow placement="right" color="#1677ff">
                 <InfoCircleOutlined style="margin-left: 10px" class="tooltip-icon"/>
               </a-tooltip>
             </template>

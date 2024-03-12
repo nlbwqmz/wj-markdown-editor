@@ -1,4 +1,4 @@
-const {app, clipboard} = require('electron')
+const {app, clipboard, shell} = require('electron')
 const {ipcMain, dialog} = require('electron')
 const fs= require('fs')
 const globalData = require('./globalData')
@@ -375,4 +375,11 @@ ipcMain.on('saveFile', (event, id) => {
 
 ipcMain.on('updateActiveFileId', (event, id) => {
     globalData.activeFileId = id
+})
+
+ipcMain.on('openFolder', (event, id) => {
+    const fileState = globalData.fileStateList.find(item => item.id === id)
+    if(fileState.originFilePath){
+        shell.showItemInFolder(fileState.originFilePath)
+    }
 })

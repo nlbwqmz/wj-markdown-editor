@@ -12,8 +12,13 @@ if(!lock){
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
     if(additionalData.fileInfo && additionalData.fileInfo.originFilePath){
-      globalData.fileStateList = [...globalData.fileStateList, additionalData.fileInfo]
-      globalData.win.webContents.send('changeTab', additionalData.fileInfo.id)
+      const origin = globalData.fileStateList.find(item => item.originFilePath === additionalData.fileInfo.originFilePath)
+      if(origin){
+        globalData.win.webContents.send('changeTab', origin.id)
+      } else {
+        globalData.fileStateList = [...globalData.fileStateList, additionalData.fileInfo]
+        globalData.win.webContents.send('changeTab', additionalData.fileInfo.id)
+      }
     }
     if (globalData.win && !globalData.win.isDestroyed()) {
       if (globalData.win.isMinimized()) {
@@ -38,6 +43,7 @@ if(!lock){
         preload: path.resolve(__dirname, 'preload.js')
       }
     })
+    win.webContents.openDevTools()
     globalData.win = win
     win.webContents.on('found-in-page', (event, result) => {
       globalData.searchBar.webContents.send('findInPageResult', result)

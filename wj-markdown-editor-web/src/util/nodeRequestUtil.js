@@ -96,5 +96,8 @@ export default {
   },
   updateActiveFileId: id => {
     window.node.updateActiveFileId(id)
+  },
+  openFolder: id => {
+    window.node.openFolder(id)
   }
 }

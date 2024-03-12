@@ -23,14 +23,11 @@ module.exports = {
             }
             globalData.win.show()
         })
-        // globalData.win.on('close', e => {
-        //     e.preventDefault()
-        //     if(globalData.saved){
-        //         common.exit()
-        //     } else {
-        //         common.exitModal()
-        //     }
-        // })
+        globalData.win.on('close', e => {
+            e.preventDefault()
+            globalShortcutUtil.unregister()
+            common.exit()
+        })
         globalData.win.on('will-resize', (event, newBounds ) => {
             if(newBounds.width < 850 || newBounds.height < 280){
                 event.preventDefault()

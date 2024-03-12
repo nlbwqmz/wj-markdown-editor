@@ -23,6 +23,7 @@
       </a-descriptions-item>
       <a-descriptions-item label="最新版本">
         <span :style="checkInfo && checkInfo.success === false ? { color: 'red' } : {}">{{newVersion}}</span>
+        <a-button type="link" :href="`https://github.com/nlbwqmz/wj-markdown-editor/releases/tag/${checkInfo.version}`" target="_blank" v-if="checkInfo && checkInfo.version">更新日志</a-button>
         <a-button type="link" @click="executeDownload" v-if="!downloading && checkInfo && checkInfo.version && checkInfo.version !== version && !downloadFinish">立即下载</a-button>
         <a-button type="link" @click="cancelDownload" v-if="downloading && !downloadFinish" danger>取消下载</a-button>
         <a-popconfirm

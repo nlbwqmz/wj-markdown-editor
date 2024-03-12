@@ -23,7 +23,7 @@ module.exports = {
     relative: (from, to) => {
         return path.relative(from, to)
     },
-    resolve: (path1, path2) => {
-        return path.resolve(path1, path2)
+    resolve: (...paths) => {
+        return path.resolve(...paths)
     }
 }

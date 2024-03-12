@@ -4,7 +4,7 @@
   },
   "description": "markdown编辑器",
   "name": "wj-markdown-editor",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "main": "src/main.js",
   "license": "MIT",
   "scripts": {

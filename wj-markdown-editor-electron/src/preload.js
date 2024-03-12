@@ -56,7 +56,8 @@ const showToMain = {
   closeFile: id => ipcRenderer.invoke('closeFile', id),
   closeFileAndSave: id => ipcRenderer.invoke('closeFileAndSave', id),
   saveFile: id => ipcRenderer.send('saveFile', id),
-  updateActiveFileId: id => ipcRenderer.send('updateActiveFileId', id)
+  updateActiveFileId: id => ipcRenderer.send('updateActiveFileId', id),
+  openFolder: id => ipcRenderer.send('openFolder', id)
 }
 
 contextBridge.exposeInMainWorld('node', {
