@@ -1,11 +1,14 @@
-const {app, BrowserWindow, screen, Menu} = require('electron')
-const path = require("path");
-const globalData = require("./util/globalData")
-const protocolUtil = require('./util/protocolUtil')
-require('./util/ipcMainUtil')
-const winOnUtil = require('./util/winOnUtil');
-const constant = require('./util/constant')
-const common = require('./util/common')
+import {app, BrowserWindow, screen, Menu} from 'electron'
+import path from "path"
+import globalData from "./util/globalData.js"
+import protocolUtil from './util/protocolUtil.js'
+import './util/ipcMainUtil.js'
+import winOnUtil from './util/winOnUtil.js'
+import constant from './util/constant.js'
+import common from './util/common.js'
+import { fileURLToPath } from 'url'
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 const lock = app.requestSingleInstanceLock({ fileInfo: globalData.fileStateList[0] })
 if(!lock){
   app.quit()

@@ -1,6 +1,6 @@
-const { globalShortcut } = require('electron')
-const common = require("./common");
-const globalData = require('./globalData')
+import { globalShortcut } from 'electron'
+import common from "./common.js"
+import globalData from './globalData.js'
 
 const shortcutList = [
     {
@@ -53,7 +53,7 @@ const shortcutList = [
     }
 ]
 
-module.exports = {
+export default {
     register: () => {
         shortcutList.forEach(item => {
             globalShortcut.register(item.accelerator, item.callback)

@@ -1,4 +1,4 @@
-module.exports = {
+export default {
     router: {
         edit: 'edit',
         preview: 'preview',

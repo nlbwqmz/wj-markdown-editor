@@ -1,5 +1,5 @@
-const fs = require("fs");
-const path = require("path");
+import fs from "fs"
+import path from "path"
 const mkdirSyncWithRecursion = dirname => {
     if(fs.existsSync(dirname)) {
         return true;
@@ -10,7 +10,7 @@ const mkdirSyncWithRecursion = dirname => {
         }
     }
 }
-module.exports = {
+export default {
     mkdirSyncWithRecursion,
     deleteFileList: filePathList => {
         filePathList.forEach(filePath => {

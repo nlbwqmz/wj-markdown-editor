@@ -6,6 +6,9 @@ import nodeRequestUtil from '@/util/nodeRequestUtil'
 
 export default {
   init: () => {
+    window.node.loginState(webdavLoginState => {
+      store.commit('loginState', webdavLoginState)
+    })
     window.node.showMessage((content, type, duration = 2, destroyBefore) => {
       if (destroyBefore) {
         message.destroy()

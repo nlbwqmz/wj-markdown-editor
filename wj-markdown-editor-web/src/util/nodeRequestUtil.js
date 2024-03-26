@@ -99,5 +99,17 @@ export default {
   },
   openFolder: id => {
     window.node.openFolder(id)
+  },
+  loginWebdav: data => {
+    window.node.loginWebdav(data)
+  },
+  webdavGetDirectoryContents: path => {
+    return window.node.webdavGetDirectoryContents(path)
+  },
+  webdavLogout: () => {
+    window.node.webdavLogout()
+  },
+  openWebdavMd: (filename, basename) => {
+    window.node.openWebdavMd(filename, basename)
   }
 }

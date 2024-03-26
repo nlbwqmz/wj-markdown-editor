@@ -1,12 +1,16 @@
-const globalData = require("./globalData");
-const {dialog, app, BrowserWindow, Notification, shell} = require("electron");
-const fs = require("fs");
-const path = require("path");
-const constant = require('./constant')
-const fsUtil = require("./fsUtil");
-const {autoUpdater, CancellationToken} = require("electron-updater");
-const axios = require("axios");
-const uuid = require("uuid");
+import globalData from "./globalData.js"
+import {dialog, app, BrowserWindow, shell} from "electron"
+import fs from "fs"
+import path from "path"
+import constant from './constant.js'
+import fsUtil from "./fsUtil.js"
+import electronUpdater from 'electron-updater';
+import axios from "axios"
+import {nanoid} from "nanoid";
+const { autoUpdater, CancellationToken } = electronUpdater;
+import { fileURLToPath } from 'url'
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 const exit = () => {
     app.exit()
 }
@@ -15,7 +19,7 @@ const sendMessageToAbout = (channel, args) => {
         globalData.aboutWin.webContents.send(channel, args)
     }
 }
-const getUUID = () => uuid.v1().replace(/-/g, '')
+const getUUID = () => 'a' + nanoid()
 const getNewFileData = () => {
     return {
         id: getUUID(),
@@ -23,10 +27,11 @@ const getNewFileData = () => {
         content: '',
         tempContent: '',
         originFilePath: '',
-        fileName: 'untitled'
+        fileName: 'untitled',
+        type: 'local'
     }
 }
-module.exports = {
+export default {
     saveToOther: id => {
         const currentPath = dialog.showSaveDialogSync({
             title: "另存为",

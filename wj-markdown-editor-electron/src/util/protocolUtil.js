@@ -1,7 +1,7 @@
-const {protocol, net} = require("electron")
-const path = require('path')
-const globalData = require('./globalData')
-module.exports = {
+import {protocol, net} from "electron"
+import path from 'path'
+import globalData from './globalData.js'
+export default {
     handleProtocol: () => {
         protocol.handle('wj', (request) => {
             const url = decodeURIComponent(request.url.slice('wj:///'.length));

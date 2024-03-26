@@ -1,7 +1,7 @@
-const globalData = require('./globalData')
-const { shell, screen} = require('electron')
-const common = require("./common");
-const globalShortcutUtil = require('./globalShortcutUtil')
+import globalData from './globalData.js'
+import { shell, screen} from 'electron'
+import common from "./common.js"
+import globalShortcutUtil from './globalShortcutUtil.js'
 const debounce = (func, timeout = 300) => {
     let timer;
     return (...args) => {
@@ -9,7 +9,7 @@ const debounce = (func, timeout = 300) => {
         timer = setTimeout(() => { func.apply(this, args); }, timeout);
     };
 }
-module.exports = {
+export default {
     handle: () => {
         // 通过默认浏览器打开链接
         globalData.win.webContents.setWindowOpenHandler(details => {

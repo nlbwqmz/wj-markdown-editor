@@ -7,7 +7,11 @@ export default createStore({
     config: {},
     fileStateList: [],
     routeState: [],
-    editorRefList: []
+    editorRefList: [],
+    showWebdav: false,
+    webdavLogin: false,
+    loginErrorMessage: '',
+    openWebdavPath: ''
   },
   getters: {
   },
@@ -42,6 +46,16 @@ export default createStore({
     },
     pushEditorRefList: (state, obj) => {
       state.editorRefList.push(obj)
+    },
+    switchShowWebdav: state => {
+      state.showWebdav = !state.showWebdav
+    },
+    loginState: (state, webdavLoginState) => {
+      state.webdavLogin = webdavLoginState.webdavLogin
+      state.loginErrorMessage = webdavLoginState.loginErrorMessage
+    },
+    openWebdavPath: (state, currentPath) => {
+      state.openWebdavPath = currentPath
     }
   },
   actions: {

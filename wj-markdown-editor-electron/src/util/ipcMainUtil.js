@@ -1,15 +1,17 @@
-const {app, clipboard, shell} = require('electron')
-const {ipcMain, dialog} = require('electron')
-const fs= require('fs')
-const globalData = require('./globalData')
-const common = require('./common')
-const path = require('path')
-const { execFile } = require('child_process')
-const pathUtil = require('./pathUtil')
-const fsUtil = require('./fsUtil')
-const axios = require('axios').default
-const mime = require('mime-types')
-const defaultConfig = require('./defaultConfig')
+import {app, clipboard, shell} from 'electron'
+import {ipcMain, dialog} from 'electron'
+import fs from 'fs'
+import globalData from './globalData.js'
+import common from './common.js'
+import path from 'path'
+import { execFile } from 'child_process'
+import pathUtil from './pathUtil.js'
+import fsUtil from './fsUtil.js'
+import axios from 'axios'
+import mime from 'mime-types'
+import defaultConfig from './defaultConfig.js'
+import webdavUtil from "./webdavUtil.js";
+import {nanoid} from "nanoid";
 
 const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
@@ -240,6 +242,9 @@ ipcMain.on('action', (event, type) => {
 
 ipcMain.on('restoreDefaultSetting', event => {
     globalData.config = defaultConfig
+    if(globalData.settingWin && !globalData.settingWin.isDestroyed()){
+        globalData.settingWin.webContents.send('shouldUpdateConfig', globalData.config)
+    }
 })
 
 ipcMain.on('openAboutWin', event => {
@@ -347,30 +352,42 @@ ipcMain.handle('closeFileAndSave', (event, id) => {
 
 ipcMain.on('saveFile', (event, id) => {
     const fileStateList = globalData.fileStateList
-    const index = fileStateList.findIndex(item => item.id === id)
-    const fileState = fileStateList[index]
-    let currentPath
-    if(fileState.originFilePath){
-        currentPath = fileState.originFilePath
-    } else {
-        currentPath = dialog.showSaveDialogSync({
-            title: "保存",
-            buttonLabel: "保存",
-            filters: [
-                {name: 'markdown文件', extensions: ['md']},
-            ]
+    const fileState = fileStateList.find(item => item.id === id)
+    if(fileState.type === 'local') {
+        let currentPath
+        if(fileState.originFilePath){
+            currentPath = fileState.originFilePath
+        } else {
+            currentPath = dialog.showSaveDialogSync({
+                title: "保存",
+                buttonLabel: "保存",
+                filters: [
+                    {name: 'markdown文件', extensions: ['md']},
+                ]
+            })
+        }
+        if (currentPath) {
+            fs.writeFileSync(currentPath, fileState.tempContent)
+            fileState.content = fileState.tempContent
+            fileState.saved = true
+            fileState.originFilePath = currentPath
+            fileState.fileName = pathUtil.getBaseName(currentPath)
+            globalData.fileStateList = fileStateList
+            globalData.win.webContents.send('showMessage', '保存成功', 'success')
+        }
+    } else if (fileState.type === 'webdav') {
+        webdavUtil.putFileContents(fileState.originFilePath, fileState.tempContent).then(res => {
+            if(res === true){
+                fileState.content = fileState.tempContent
+                fileState.saved = true
+                globalData.fileStateList = fileStateList
+                globalData.win.webContents.send('showMessage', '保存成功', 'success')
+            } else {
+                globalData.win.webContents.send('showMessage', '保存失败', 'error')
+            }
         })
     }
-    if (currentPath) {
-        fs.writeFileSync(currentPath, fileState.tempContent)
-        fileState.content = fileState.tempContent
-        fileState.saved = true
-        fileState.originFilePath = currentPath
-        fileState.fileName = pathUtil.getBaseName(currentPath)
-        globalData.fileStateList = fileStateList
-        globalData.win.webContents.send('showMessage', '保存成功', 'success')
 
-    }
 })
 
 ipcMain.on('updateActiveFileId', (event, id) => {
@@ -381,5 +398,39 @@ ipcMain.on('openFolder', (event, id) => {
     const fileState = globalData.fileStateList.find(item => item.id === id)
     if(fileState.originFilePath){
         shell.showItemInFolder(fileState.originFilePath)
+    }
+})
+
+ipcMain.on('loginWebdav', (event, data) => {
+    webdavUtil.login(data)
+})
+
+ipcMain.handle('webdavGetDirectoryContents', async (event, currentPath) => {
+    return await webdavUtil.getDirectoryContents(currentPath)
+})
+
+ipcMain.on('webdavLogout', event => {
+    webdavUtil.logout()
+})
+
+ipcMain.on('openWebdavMd', async (event, filename, basename) => {
+    const fileStateList = globalData.fileStateList
+    const  find = fileStateList.find(item => item.type === 'webdav' && item.originFilePath === filename)
+    if(find) {
+        globalData.win.webContents.send('changeTab', find.id)
+    } else {
+        const content = await webdavUtil.getFileContents(filename)
+        const create = {
+            id: common.getUUID(),
+            saved: true,
+            content: content,
+            tempContent: content,
+            originFilePath: filename,
+            fileName: basename,
+            type: 'webdav'
+        }
+        fileStateList.push(create)
+        globalData.fileStateList = fileStateList
+        globalData.win.webContents.send('changeTab', create.id)
     }
 })

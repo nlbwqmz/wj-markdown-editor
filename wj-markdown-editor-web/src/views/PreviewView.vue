@@ -1,5 +1,5 @@
 <template>
-  <div style="width: 100%; height: 100%" v-show="!loading" :id="previewId">
+  <div style="width: 100%; height: 100%; border-left: 1px rgba(0, 0, 0, 0.1) solid" v-show="!loading" :id="previewId">
     <div v-if="!content" style="display: flex; justify-content: center; align-items: center; height: 100%">
       <a-empty>
         <template #description>
@@ -68,7 +68,7 @@ const domId = commonUtil.createId()
 const previewId = commonUtil.createId()
 const componentId = commonUtil.createId()
 const catalogShow = ref()
-const offsetTop = 101
+const offsetTop = 102
 const loading = ref(true)
 const imgViewer = ref()
 const id = commonUtil.getUrlParam('id')

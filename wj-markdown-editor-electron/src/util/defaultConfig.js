@@ -1,5 +1,5 @@
-const pathUtil = require("./pathUtil")
-module.exports = {
+import pathUtil from "./pathUtil.js"
+export default {
   // 初次进入的路由
   initRoute: 'edit',
   // 预览页面内容宽度

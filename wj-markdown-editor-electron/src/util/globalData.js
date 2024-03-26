@@ -1,11 +1,11 @@
-const fs = require("fs");
-const defaultConfig = require('./defaultConfig')
-const pathUtil = require('./pathUtil')
-const fsUtil = require('./fsUtil')
-const path = require("path");
-const { Notification} = require("electron");
-const {Cron} = require("croner");
-const uuid = require("uuid");
+import fs from "fs"
+import defaultConfig from './defaultConfig.js'
+import pathUtil from './pathUtil.js'
+import fsUtil from './fsUtil.js'
+import path from "path"
+import { Notification} from "electron"
+import {Cron} from "croner"
+import {nanoid} from "nanoid";
 
 const openOnFile = () => {
     return Boolean(process.argv && process.argv.length > 0 && process.argv[process.argv.length - 1].match(/^[a-zA-Z]:(\\.*)+\.md$/))
@@ -41,7 +41,8 @@ const updateFileStateList = () => {
             id: item.id,
             saved: item.saved,
             originFilePath: item.originFilePath,
-            fileName: item.fileName
+            fileName: item.fileName,
+            type: item.type
         }
     }))
 }
@@ -49,13 +50,15 @@ const data = {
     win: null,
     initTitle: 'wj-markdown-editor',
     activeFileId: '',
+    webdavLoginState: { webdavLogin: false, loginErrorMessage: '' },
     fileStateList: [{
-        id: uuid.v1().replace(/-/g, ''),
+        id: 'a' + nanoid(),
         saved: true,
         content: firstContent,
         tempContent: firstContent,
         originFilePath: originFilePath,
-        fileName: originFilePath ? pathUtil.getBaseName(originFilePath) : 'untitled'
+        fileName: originFilePath ? pathUtil.getBaseName(originFilePath) : 'untitled',
+        type: 'local'
     }],
     settingWin: undefined,
     exportWin: undefined,
@@ -74,6 +77,7 @@ const proxyData = new Proxy(data, {
     set(target, name, newValue, receiver) {
         target[name] = newValue
         handleDataChange(name, newValue)
+        return true
     }
 })
 const handleDataChange = (name, newValue) => {
@@ -81,14 +85,13 @@ const handleDataChange = (name, newValue) => {
         fs.writeFileSync(configPath, JSON.stringify(data.config))
         handleJob(data.config.autoSave.minute)
         data.win.webContents.send('shouldUpdateConfig', data.config)
-        if(data.settingWin && !data.settingWin.isDestroyed()){
-            data.settingWin.webContents.send('shouldUpdateConfig', data.config)
-        }
         if(data.exportWin && !data.exportWin.isDestroyed()){
             data.exportWin.webContents.send('shouldUpdateConfig', data.config)
         }
     } else if(name === 'fileStateList'){
         updateFileStateList()
+    } else if (name === 'webdavLoginState'){
+        data.win.webContents.send('loginState', data.webdavLoginState)
     }
 }
 const handleJob = minute => {
@@ -118,4 +121,4 @@ const handleJob = minute => {
     }
 }
 handleJob(data.config.autoSave.minute)
-module.exports = proxyData
+export default proxyData

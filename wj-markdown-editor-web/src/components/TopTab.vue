@@ -1,19 +1,29 @@
 <template>
-  <div class="container wj-hide-scrollbar" @mousewheel="handleScroll($event)" ref="tabContainerRef">
-    <div class="tab-item" v-for="(item) in fileStateList" :key="item.id">
-      <a-dropdown :trigger="['contextmenu']">
-        <div class="tab-name horizontal-vertical-center" @click="go(item.id)" :class="id === item.id ? 'active': ''">
-          <span class="text-ellipsis">{{ item.fileName }}</span>
-          <span v-show="item.saved === false" style="color: red">*</span>
+  <div style="display: flex; border: 1px rgba(0, 0, 0, 0.1) solid;">
+    <div class="horizontal-vertical-center" style="padding-left: 10px">
+      <MenuUnfoldOutlined style="cursor: pointer" v-show="!showWebdav" @click="switchShowWebdav"/>
+      <MenuFoldOutlined style="cursor: pointer" v-show="showWebdav" @click="switchShowWebdav"/>
+    </div>
+    <div style="flex: 1; overflow: auto">
+      <div class="container wj-hide-scrollbar" @mousewheel="handleScroll($event)" ref="tabContainerRef">
+        <div class="tab-item" v-for="(item) in fileStateList" :key="item.id">
+          <a-dropdown :trigger="['contextmenu']">
+            <div class="tab-name horizontal-vertical-center" @click="go(item.id)" :class="id === item.id ? 'active': ''">
+              <img :src="cloudImg" alt="" style="width: 16px; height: 16px; margin-right: 5px" v-if="item.type === 'webdav'">
+              <img :src="localImg" alt="" style="width: 12px; height: 12px; margin-right: 5px" v-else>
+              <span class="text-ellipsis">{{ item.fileName }}</span>
+              <span v-show="item.saved === false" style="color: red">*</span>
+            </div>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item :key="item.id" :disabled="!item.originFilePath" @click="openFolder(item)">打开所在文件夹</a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+          <div class="tab-close horizontal-vertical-center" @click="handleTabClose(item)">
+            <img :src="close" alt="">
+          </div>
         </div>
-        <template #overlay>
-          <a-menu>
-            <a-menu-item :key="item.id" :disabled="!item.originFilePath" @click="openFolder(item.id)">打开所有文件夹</a-menu-item>
-          </a-menu>
-        </template>
-      </a-dropdown>
-      <div class="tab-close horizontal-vertical-center" @click="handleTabClose(item)">
-        <img :src="close" alt="">
       </div>
     </div>
   </div>
@@ -21,19 +31,28 @@
 
 <script setup>
 import close from '@/assets/icon/close.png'
+import localImg from '@/assets/icon/local.png'
+import cloudImg from '@/assets/icon/cloud.png'
 import { computed, createVNode, h, ref } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import { Modal, Button } from 'ant-design-vue'
-import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { ExclamationCircleOutlined, MenuUnfoldOutlined, MenuFoldOutlined } from '@ant-design/icons-vue'
 const store = useStore()
 const router = useRouter()
 const fileStateList = computed(() => store.state.fileStateList)
 const id = computed(() => store.state.id)
 const tabContainerRef = ref()
 
+const showWebdav = computed(() => store.state.showWebdav)
+
+const switchShowWebdav = () => {
+  store.commit('switchShowWebdav')
+}
+
 const handleScroll = e => {
+  console.log(12312)
   tabContainerRef.value.scrollLeft = tabContainerRef.value.scrollLeft + e.deltaY
 }
 const handleTabClose = item => {
@@ -84,16 +103,18 @@ const go = clickedId => {
   }
 }
 
-const openFolder = clickedId => {
-  nodeRequestUtil.openFolder(clickedId)
+const openFolder = clicked => {
+  if (clicked.type === 'local') {
+    nodeRequestUtil.openFolder(clicked.id)
+  } else if (clicked.type === 'webdav') {
+    store.commit('openWebdavPath', clicked.originFilePath)
+  }
 }
 </script>
 
 <style scoped lang="less">
 .container {
   user-select: none;
-  border-top: 1px rgba(0, 0, 0, 0.1) solid;
-  border-bottom: 1px rgba(0, 0, 0, 0.1) solid;
   padding: 0 5px 0 5px;
   width: 100%;
   overflow-y: hidden;
