@@ -1,6 +1,8 @@
 import {app} from "electron"
 import path from "path"
 import { fileURLToPath } from 'url'
+import fs from "fs";
+import fsUtil from "./fsUtil.js";
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const toolPath = app.isPackaged ? path.resolve(path.dirname(app.getPath('exe')), 'resources/app.asar.unpacked/tool') : path.resolve(__dirname, '../../tool');
@@ -14,19 +16,12 @@ export default {
     getSnapShotExePath: () => {
         return path.resolve(toolPath, 'SnapShot.exe')
     },
-    getProjectPath: () => {
-        return projectPath
+    getTempPath: () => {
+        const tempPath = path.resolve(app.getPath('temp'), 'wj-markdown-editor')
+        fsUtil.mkdirSyncWithRecursion(tempPath)
+        return tempPath
     },
     getUserDataPath: () => {
         return userDataPath
-    },
-    getBaseName: filePath => {
-        return path.basename(filePath)
-    },
-    relative: (from, to) => {
-        return path.relative(from, to)
-    },
-    resolve: (...paths) => {
-        return path.resolve(...paths)
     }
 }

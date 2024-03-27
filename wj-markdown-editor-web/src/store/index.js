@@ -11,7 +11,8 @@ export default createStore({
     showWebdav: false,
     webdavLogin: false,
     loginErrorMessage: '',
-    openWebdavPath: ''
+    openWebdavPath: '',
+    currentWebdavPath: ''
   },
   getters: {
   },
@@ -50,12 +51,18 @@ export default createStore({
     switchShowWebdav: state => {
       state.showWebdav = !state.showWebdav
     },
+    setShowWebdav: (state, value) => {
+      state.showWebdav = value
+    },
     loginState: (state, webdavLoginState) => {
       state.webdavLogin = webdavLoginState.webdavLogin
       state.loginErrorMessage = webdavLoginState.loginErrorMessage
     },
     openWebdavPath: (state, currentPath) => {
       state.openWebdavPath = currentPath
+    },
+    currentWebdavPath: (state, currentWebdavPath) => {
+      state.currentWebdavPath = currentWebdavPath
     }
   },
   actions: {

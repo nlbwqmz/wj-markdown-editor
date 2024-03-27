@@ -10,6 +10,21 @@ const mkdirSyncWithRecursion = dirname => {
         }
     }
 }
+const deleteFolder = dir => {
+    let files = fs.readdirSync(dir)
+    for(let i=0;i<files.length;i++){
+        let newPath = path.join(dir,files[i]);
+        let stat = fs.statSync(newPath)
+        if(stat.isDirectory()){
+            //如果是文件夹就递归下去
+            deleteFolder(newPath);
+        }else {
+            //删除文件
+            fs.unlinkSync(newPath);
+        }
+    }
+    fs.rmdirSync(dir)//如果文件夹是空的，就将自己删除掉
+}
 export default {
     mkdirSyncWithRecursion,
     deleteFileList: filePathList => {
@@ -25,5 +40,6 @@ export default {
     },
     exists: filePath => {
         return fs.existsSync(filePath)
-    }
+    },
+    deleteFolder
 }

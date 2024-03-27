@@ -10,7 +10,8 @@
           <a-dropdown :trigger="['contextmenu']">
             <div class="tab-name horizontal-vertical-center" @click="go(item.id)" :class="id === item.id ? 'active': ''">
               <img :src="cloudImg" alt="" style="width: 16px; height: 16px; margin-right: 5px" v-if="item.type === 'webdav'">
-              <img :src="localImg" alt="" style="width: 12px; height: 12px; margin-right: 5px" v-else>
+              <img :src="localImg" alt="" style="width: 12px; height: 12px; margin-right: 5px" v-else-if="item.type === 'local'">
+              <img :src="unknownImg" alt="" style="width: 12px; height: 12px; margin-right: 5px" v-else>
               <span class="text-ellipsis">{{ item.fileName }}</span>
               <span v-show="item.saved === false" style="color: red">*</span>
             </div>
@@ -33,6 +34,7 @@
 import close from '@/assets/icon/close.png'
 import localImg from '@/assets/icon/local.png'
 import cloudImg from '@/assets/icon/cloud.png'
+import unknownImg from '@/assets/icon/unknown.png'
 import { computed, createVNode, h, ref } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
@@ -52,7 +54,6 @@ const switchShowWebdav = () => {
 }
 
 const handleScroll = e => {
-  console.log(12312)
   tabContainerRef.value.scrollLeft = tabContainerRef.value.scrollLeft + e.deltaY
 }
 const handleTabClose = item => {

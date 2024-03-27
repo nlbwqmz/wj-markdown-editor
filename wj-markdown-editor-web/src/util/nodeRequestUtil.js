@@ -91,8 +91,8 @@ export default {
   closeFileAndSave: id => {
     return window.node.closeFileAndSave(id)
   },
-  saveFile: () => {
-    window.node.saveFile(store.state.id)
+  saveFile: (type, currentWebdavPath) => {
+    window.node.saveFile(type, currentWebdavPath)
   },
   updateActiveFileId: id => {
     window.node.updateActiveFileId(id)

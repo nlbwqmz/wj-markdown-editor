@@ -7,7 +7,7 @@ const shortcutList = [
         accelerator: 'Ctrl+s',
         callback: () => {
             if(globalData.win.isFocused()){
-                globalData.win.webContents.send('noticeToSave')
+                common.saveFile()
             }
         }
     },

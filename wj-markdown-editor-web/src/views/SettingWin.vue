@@ -30,6 +30,12 @@
               <a-radio-button :value="false">隐藏</a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
+          <a-descriptions-item label="webdav">
+            <a-radio-group v-model:value="config.showWebdav" button-style="solid">
+              <a-radio-button :value="true">显示</a-radio-button>
+              <a-radio-button :value="false">隐藏</a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
           <a-descriptions-item>
             <template #label>
               自动保存

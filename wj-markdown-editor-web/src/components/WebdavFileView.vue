@@ -2,6 +2,7 @@
   <div class="header">
     <div class="horizontal-vertical-center back" @click="handleBack" :style="currentPath === '/' ? 'cursor: not-allowed;' : ''"><ArrowLeftOutlined /></div>
     <div class="text-ellipsis" style="flex: 1; line-height: 25px; text-align: center">{{title}}</div>
+    <div class="horizontal-vertical-center"><a-button type="link" size="small" @click="refresh">刷新</a-button></div>
     <div class="horizontal-vertical-center"><a-button type="link" size="small" @click="logout">退出</a-button></div>
   </div>
   <div class="container wj-scrollbar-small">
@@ -11,7 +12,7 @@
         <img :src="markdownImg" v-else-if="isMdFile(item.basename)" alt="" class="icon">
         <img :src="fileImg" v-else alt="" class="icon">
       </div>
-      <div class="text-ellipsis" style="flex: 1; line-height: 25px" :style="fileStateList.some(fileState => fileState.type === 'webdav' && fileState.originFilePath === item.filename) ? 'color: #4096ff;' : ''">
+      <div :title="item.basename" class="text-ellipsis" style="flex: 1; line-height: 25px" :style="fileStateList.some(fileState => fileState.type === 'webdav' && fileState.originFilePath === item.filename) ? 'color: #4096ff;' : ''">
         {{item.basename}}
       </div>
     </div>
@@ -35,7 +36,6 @@ const handleBack = async () => {
     const split = currentPath.value.split('/')
     split.splice(split.length - 1, 1)
     currentPath.value = split.join('/') || '/'
-    console.log(fileList.value)
   }
 }
 const handleFileClick = async file => {
@@ -51,8 +51,8 @@ const handleFileClick = async file => {
 watch(currentPath, async (newValue, oldValue) => {
   const split = newValue.split('/')
   title.value = split[split.length - 1] || '/'
+  store.commit('currentWebdavPath', currentPath)
   fileList.value = await nodeRequestUtil.webdavGetDirectoryContents(newValue)
-  console.log(fileList.value)
 }, { immediate: true })
 
 const isMdFile = filename => {
@@ -68,10 +68,18 @@ watch(() => store.state.openWebdavPath, (newValue, oldValue) => {
   if (newValue) {
     const split = newValue.split('/')
     split.splice(split.length - 1, 1)
-    currentPath.value = split.join('/') || '/'
+    const newPath = split.join('/') || '/'
+    if (currentPath.value === newPath) {
+      refresh()
+    } else {
+      currentPath.value = newPath
+    }
     store.commit('openWebdavPath', '')
   }
 })
+const refresh = async () => {
+  fileList.value = await nodeRequestUtil.webdavGetDirectoryContents(currentPath.value)
+}
 </script>
 
 <style scoped lang="less">

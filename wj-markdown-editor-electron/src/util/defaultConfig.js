@@ -13,11 +13,11 @@ export default {
   // 预览界面是否默认显示目录
   catalogShow: true,
   // 图片插入模式 1: 无操作 2: 复制到 ./%{filename} 文件夹 3: 复制到 ./assets 文件夹 4: 复制到指定文件夹 5: 上传
-  insertLocalImgType: '4',
-  insertNetworkImgType: '4',
-  insertPasteboardLocalImgType: '4',
-  insertPasteboardNetworkImgType: '4',
-  insertScreenshotImgType: '4',
+  insertLocalImgType: '2',
+  insertNetworkImgType: '2',
+  insertPasteboardLocalImgType: '2',
+  insertPasteboardNetworkImgType: '2',
+  insertScreenshotImgType: '2',
   // 图片复制到指定路径
   imgSavePath: pathUtil.getDefaultImgSavePath(),
   // 是否最大化
@@ -31,5 +31,7 @@ export default {
   },
   autoSave: {
     minute: 0
-  }
+  },
+  // 默认显示webdav
+  showWebdav: true
 }

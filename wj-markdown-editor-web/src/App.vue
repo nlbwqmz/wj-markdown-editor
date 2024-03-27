@@ -40,12 +40,14 @@ import TopTab from '@/components/TopTab.vue'
 import WebdavLoginView from '@/components/WebdavLoginView.vue'
 import WebdavFileView from '@/components/WebdavFileView.vue'
 const showTop = ref(false)
+
 watch(() => router.currentRoute.value, (newValue, olValue) => {
   showTop.value = newValue && newValue.meta && newValue.meta.showTop === true
 }, { immediate: true })
 onBeforeMount(async () => {
   const config = await nodeRequestUtil.getConfig()
   store.commit('updateConfig', config)
+  store.commit('setShowWebdav', config.showWebdav)
 })
 const showWebdav = computed(() => store.state.showWebdav)
 const webdavLogin = computed(() => store.state.webdavLogin)

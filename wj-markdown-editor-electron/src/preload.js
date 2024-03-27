@@ -19,7 +19,8 @@ const mainToShow = {
   updateFileStateList: callback => ipcRenderer.on('updateFileStateList', (_event, fileStateList) => callback(fileStateList)),
   changeTab: callback => ipcRenderer.on('changeTab', (_event, id) => callback(id)),
   noticeToSave: callback => ipcRenderer.on('noticeToSave', (_event) => callback()),
-  loginState: callback => ipcRenderer.on('loginState', (_event, webdavLoginState) => callback(webdavLoginState))
+  loginState: callback => ipcRenderer.on('loginState', (_event, webdavLoginState) => callback(webdavLoginState)),
+  openWebdavPath: callback => ipcRenderer.on('openWebdavPath', (_event, p) => callback(p))
 }
 
 //渲染进程调用主进程
@@ -56,7 +57,7 @@ const showToMain = {
   newFile: () => ipcRenderer.send('newFile'),
   closeFile: id => ipcRenderer.invoke('closeFile', id),
   closeFileAndSave: id => ipcRenderer.invoke('closeFileAndSave', id),
-  saveFile: id => ipcRenderer.send('saveFile', id),
+  saveFile: (type, currentWebdavPath) => ipcRenderer.send('saveFile', type, currentWebdavPath),
   updateActiveFileId: id => ipcRenderer.send('updateActiveFileId', id),
   openFolder: id => ipcRenderer.send('openFolder', id),
   loginWebdav: data => ipcRenderer.send('loginWebdav', data),

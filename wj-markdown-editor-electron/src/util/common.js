@@ -9,9 +9,12 @@ import axios from "axios"
 import {nanoid} from "nanoid";
 const { autoUpdater, CancellationToken } = electronUpdater;
 import { fileURLToPath } from 'url'
+import pathUtil from "./pathUtil.js";
+import webdavUtil from "./webdavUtil.js";
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const exit = () => {
+    fsUtil.deleteFolder(pathUtil.getTempPath())
     app.exit()
 }
 const sendMessageToAbout = (channel, args) => {
@@ -28,7 +31,7 @@ const getNewFileData = () => {
         tempContent: '',
         originFilePath: '',
         fileName: 'untitled',
-        type: 'local'
+        type: ''
     }
 }
 export default {
@@ -190,16 +193,19 @@ export default {
     shouldUpdateConfig: () => {
         globalData.win.webContents.send('shouldUpdateConfig', globalData.config)
     },
-    getImgParentPath: (originFilePath, insertImgType) => {
+    getImgParentPath: (fileState, insertImgType) => {
+        const originFilePath = fileState.originFilePath
         let savePath
         if(insertImgType === '2'){
-            savePath = path.resolve(path.dirname(originFilePath), path.parse(originFilePath).name)
+            savePath = path.join(path.dirname(originFilePath), path.parse(originFilePath).name)
         } else if (insertImgType === '3'){
-            savePath = path.resolve(path.dirname(originFilePath), 'assets')
+            savePath = path.join(path.dirname(originFilePath), 'assets')
         } else {
             savePath = globalData.config.imgSavePath
         }
-        fsUtil.mkdirSyncWithRecursion(savePath)
+        if(fileState.type === 'local' || (insertImgType !== '2' && insertImgType !== '3')){
+            fsUtil.mkdirSyncWithRecursion(savePath)
+        }
         return savePath
     },
     getImgInsertType: (file) => {
@@ -274,5 +280,89 @@ export default {
         globalData.fileStateList = [...globalData.fileStateList, create]
         globalData.win.webContents.send('changeTab', create.id)
     },
-    getUUID
+    getUUID,
+    saveFile: (type, currentWebdavPath) => {
+        const fileStateList = globalData.fileStateList
+        const fileState = globalData.fileStateList.find(item => item.id === globalData.activeFileId)
+        if(fileState.type === 'webdav' && globalData.webdavLoginState.webdavLogin === false) {
+            globalData.win.webContents.send('showMessage', '请先登录webdav', 'error')
+            return
+        }
+        if(fileState.type) {
+            if (fileState.type === 'local') {
+                let currentPath
+                if (fileState.originFilePath) {
+                    currentPath = fileState.originFilePath
+                } else {
+                    currentPath = dialog.showSaveDialogSync({
+                        title: "保存",
+                        buttonLabel: "保存",
+                        filters: [
+                            {name: 'markdown文件', extensions: ['md']},
+                        ]
+                    })
+                }
+                if (currentPath) {
+                    fs.writeFileSync(currentPath, fileState.tempContent)
+                    fileState.content = fileState.tempContent
+                    fileState.saved = true
+                    fileState.originFilePath = currentPath
+                    fileState.fileName = path.basename(currentPath)
+                    globalData.fileStateList = fileStateList
+                    globalData.win.webContents.send('showMessage', '保存成功', 'success')
+                }
+            } else if (fileState.type === 'webdav') {
+                webdavUtil.putFileContents(fileState.originFilePath, fileState.tempContent).then(res => {
+                    if (res === true) {
+                        fileState.content = fileState.tempContent
+                        fileState.saved = true
+                        globalData.fileStateList = fileStateList
+                        globalData.win.webContents.send('showMessage', '保存成功', 'success')
+                    } else {
+                        globalData.win.webContents.send('showMessage', '保存失败', 'error')
+                    }
+                })
+            }
+        } else if (globalData.webdavLoginState.webdavLogin === false || type === 'local') {
+            let currentPath
+            if (fileState.originFilePath) {
+                currentPath = fileState.originFilePath
+            } else {
+                currentPath = dialog.showSaveDialogSync({
+                    title: "保存",
+                    buttonLabel: "保存",
+                    filters: [
+                        {name: 'markdown文件', extensions: ['md']},
+                    ]
+                })
+            }
+            if (currentPath) {
+                fs.writeFileSync(currentPath, fileState.tempContent)
+                fileState.content = fileState.tempContent
+                fileState.saved = true
+                fileState.originFilePath = currentPath
+                fileState.fileName = path.basename(currentPath)
+                fileState.type = 'local'
+                globalData.fileStateList = fileStateList
+                globalData.win.webContents.send('showMessage', '保存成功', 'success')
+            }
+        } else if (type === 'webdav'){
+            webdavUtil.putFileContents(currentWebdavPath, fileState.tempContent).then(res => {
+                if (res === true) {
+                    fileState.content = fileState.tempContent
+                    fileState.saved = true
+                    fileState.fileName = path.basename(currentWebdavPath)
+                    fileState.type = 'webdav'
+                    fileState.originFilePath = currentWebdavPath
+                    globalData.fileStateList = fileStateList
+                    globalData.win.webContents.send('showMessage', '保存成功', 'success')
+                    globalData.win.webContents.send('openWebdavPath', currentWebdavPath)
+                } else {
+                    globalData.win.webContents.send('showMessage', '保存失败', 'error')
+                }
+            })
+        } else {
+            globalData.win.webContents.send('noticeToSave')
+        }
+    }
 }

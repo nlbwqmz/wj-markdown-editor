@@ -57,8 +57,8 @@ const data = {
         content: firstContent,
         tempContent: firstContent,
         originFilePath: originFilePath,
-        fileName: originFilePath ? pathUtil.getBaseName(originFilePath) : 'untitled',
-        type: 'local'
+        fileName: originFilePath ? path.basename(originFilePath) : 'untitled',
+        type: originFilePath ? 'local' : ''
     }],
     settingWin: undefined,
     exportWin: undefined,

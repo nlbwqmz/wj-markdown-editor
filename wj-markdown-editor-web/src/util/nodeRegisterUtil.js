@@ -1,8 +1,9 @@
-import { message } from 'ant-design-vue'
+import { Button, Input, message, Modal } from 'ant-design-vue'
 import commonUtil from '@/util/commonUtil'
 import store from '@/store'
 import router from '@/router'
-import nodeRequestUtil from '@/util/nodeRequestUtil'
+import { createApp } from 'vue'
+import SaveTo from '@/components/SaveTo.vue'
 
 export default {
   init: () => {
@@ -47,7 +48,18 @@ export default {
       const routeState = store.state.routeState.find(item => item.id === id)
       router.push({ path: routeState.path, query: { id } }).then(() => {})
     })
-    window.node.noticeToSave(nodeRequestUtil.saveFile)
+    window.node.noticeToSave(() => {
+      const div = document.createElement('div')
+      const app = createApp(SaveTo, {
+        path: store.state.currentWebdavPath,
+        onClose: () => {
+          app.unmount()
+          div.remove()
+        }
+      })
+      document.body.appendChild(div)
+      app.use(Modal).use(Button).use(Input).mount(div)
+    })
     window.node.insertScreenshotResult(result => {
       if (result) {
         const editorRef = store.state.editorRefList.find(item => item.id === store.state.id).editorRef
@@ -70,6 +82,9 @@ export default {
           }
         })
       }
+    })
+    window.node.openWebdavPath(path => {
+      store.commit('openWebdavPath', path)
     })
   },
   findInPageResult: fun => {

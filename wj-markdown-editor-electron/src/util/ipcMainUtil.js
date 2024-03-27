@@ -37,25 +37,39 @@ const uploadImage = async obj => {
         }
         let savePath
         try {
-            savePath = common.getImgParentPath(fileState.originFilePath, insertImgType)
+            savePath = common.getImgParentPath(fileState, insertImgType)
         } catch (e) {
             globalData.win.webContents.send('showMessage', '图片保存路径创建失败,请检查相关设置是否正确', 'error', 2, true)
             return undefined
         }
         list = await Promise.all(files.map(async file => {
             if(file.path){
-                const newFilePath = path.resolve(savePath, common.getUUID() + '.' + mime.extension(file.type));
-                fs.copyFileSync(file.path, newFilePath)
+                const newFilePath = path.join(savePath, common.getUUID() + '.' + mime.extension(file.type));
+                if(fileState.type === 'local' || insertImgType === '4'){
+                    fs.copyFileSync(file.path, newFilePath)
+                } else {
+                    const flag = await webdavUtil.putFileContents(newFilePath, fs.readFileSync(file.path))
+                    if(!flag){
+                        return undefined
+                    }
+                }
                 if(insertImgType === '2' || insertImgType === '3'){
-                    return pathUtil.relative(pathUtil.resolve(savePath, '../'), newFilePath)
+                    return path.relative(path.join(savePath, '../'), newFilePath)
                 }
                 return newFilePath
             } else if(file.base64){
-                const newFilePath = path.resolve(savePath, common.getUUID() + '.' + mime.extension(file.type));
+                const newFilePath = path.join(savePath, common.getUUID() + '.' + mime.extension(file.type));
                 const buffer = new Buffer.from(file.base64, 'base64');
-                fs.writeFileSync(newFilePath,  buffer)
+                if(fileState.type === 'local' || insertImgType === '4'){
+                    fs.writeFileSync(newFilePath,  buffer)
+                } else {
+                    const flag = await webdavUtil.putFileContents(newFilePath, buffer)
+                    if(!flag){
+                        return undefined
+                    }
+                }
                 if(insertImgType === '2' || insertImgType === '3'){
-                    return pathUtil.relative(newFilePath, pathUtil.resolve(savePath, '../'))
+                    return path.relative(path.join(savePath, '../'), newFilePath)
                 }
                 return newFilePath
             } else if(file.url) {
@@ -63,10 +77,17 @@ const uploadImage = async obj => {
                     const result = await axios.get(file.url, {
                         responseType: 'arraybuffer', // 特别注意，需要加上此参数
                     });
-                    const newFilePath = path.resolve(savePath, common.getUUID() + '.' + mime.extension(result.headers.get("Content-Type")));
-                    fs.writeFileSync(newFilePath,  result.data)
+                    const newFilePath = path.join(savePath, common.getUUID() + '.' + mime.extension(result.headers.get("Content-Type")));
+                    if(fileState.type === 'local' || insertImgType === '4'){
+                        fs.writeFileSync(newFilePath,  result.data)
+                    } else {
+                        const flag = await webdavUtil.putFileContents(newFilePath, result.data)
+                        if(!flag){
+                            return undefined
+                        }
+                    }
                     if(insertImgType === '2' || insertImgType === '3'){
-                        return pathUtil.relative(newFilePath, pathUtil.resolve(savePath, '../'))
+                        return path.relative(path.join(savePath, '../'), newFilePath)
                     }
                     return newFilePath
                 } catch (e) {
@@ -80,7 +101,7 @@ const uploadImage = async obj => {
             globalData.win.webContents.send('showMessage', '请配置PicGo服务信息', 'error', 2, true)
             return undefined
         }
-        const tempPath = app.getPath('temp')
+        const tempPath = pathUtil.getTempPath()
         let tempList = await Promise.all(files.map(async file => {
             if(file.path){
                 const newFilePath = path.resolve(tempPath, common.getUUID() + '.' + mime.extension(file.type));
@@ -350,44 +371,8 @@ ipcMain.handle('closeFileAndSave', (event, id) => {
     return false
 })
 
-ipcMain.on('saveFile', (event, id) => {
-    const fileStateList = globalData.fileStateList
-    const fileState = fileStateList.find(item => item.id === id)
-    if(fileState.type === 'local') {
-        let currentPath
-        if(fileState.originFilePath){
-            currentPath = fileState.originFilePath
-        } else {
-            currentPath = dialog.showSaveDialogSync({
-                title: "保存",
-                buttonLabel: "保存",
-                filters: [
-                    {name: 'markdown文件', extensions: ['md']},
-                ]
-            })
-        }
-        if (currentPath) {
-            fs.writeFileSync(currentPath, fileState.tempContent)
-            fileState.content = fileState.tempContent
-            fileState.saved = true
-            fileState.originFilePath = currentPath
-            fileState.fileName = pathUtil.getBaseName(currentPath)
-            globalData.fileStateList = fileStateList
-            globalData.win.webContents.send('showMessage', '保存成功', 'success')
-        }
-    } else if (fileState.type === 'webdav') {
-        webdavUtil.putFileContents(fileState.originFilePath, fileState.tempContent).then(res => {
-            if(res === true){
-                fileState.content = fileState.tempContent
-                fileState.saved = true
-                globalData.fileStateList = fileStateList
-                globalData.win.webContents.send('showMessage', '保存成功', 'success')
-            } else {
-                globalData.win.webContents.send('showMessage', '保存失败', 'error')
-            }
-        })
-    }
-
+ipcMain.on('saveFile', (event, type, currentWebdavPath) => {
+    common.saveFile(type, currentWebdavPath)
 })
 
 ipcMain.on('updateActiveFileId', (event, id) => {

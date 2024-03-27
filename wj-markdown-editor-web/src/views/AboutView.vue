@@ -16,6 +16,7 @@
         <span>{{name}}</span>
         <a-button type="link" href="https://github.com/nlbwqmz/wj-markdown-editor" target="_blank">源码地址</a-button>
         <a-button type="link" href="https://github.com/nlbwqmz/wj-markdown-editor/releases" target="_blank">下载地址</a-button>
+        <a-button type="link" href="https://github.com/nlbwqmz/wj-markdown-editor/issues" danger target="_blank">问题和建议</a-button>
       </a-descriptions-item>
       <a-descriptions-item label="当前版本">
         <span>{{version}}</span>
