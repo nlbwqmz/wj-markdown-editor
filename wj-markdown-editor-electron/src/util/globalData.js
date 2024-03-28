@@ -6,6 +6,7 @@ import path from "path"
 import { Notification} from "electron"
 import {Cron} from "croner"
 import {nanoid} from "nanoid";
+import webdavUtil from "./webdavUtil.js";
 
 const openOnFile = () => {
     return Boolean(process.argv && process.argv.length > 0 && process.argv[process.argv.length - 1].match(/^[a-zA-Z]:(\\.*)+\.md$/))
@@ -67,7 +68,8 @@ const data = {
     downloadUpdateToken: undefined,
     config,
     configPath,
-    updateFileStateList
+    updateFileStateList,
+    webdavClient: null
 }
 
 const proxyData = new Proxy(data, {
@@ -101,20 +103,28 @@ const handleJob = minute => {
             job.stop()
         }
         if(minute > 0){
-            job = Cron(`*/${minute} * * * *`, { paused: true, protect: true }, () => {
+            job = Cron(`*/${minute} * * * *`, { paused: true, protect: true }, async () => {
                 // 不立即执行
                 const fileStateList = data.fileStateList
-                fileStateList.forEach(item => {
+                let has = false
+                for (const item of fileStateList) {
                     if(item.originFilePath && !item.saved){
-                        fs.writeFileSync(item.originFilePath, item.tempContent)
+                        if(item.type === 'local') {
+                            fs.writeFileSync(item.originFilePath, item.tempContent)
+                        } else if (item.type === 'webdav') {
+                            await data.webdavClient.putFileContents(item.originFilePath, item.tempContent)
+                        }
                         item.saved = true
                         item.content = item.tempContent
-                        new Notification({
-                            title: '自动保存成功'
-                        }).show()
+                        has = true
                     }
-                })
-                proxyData.fileStateList = fileStateList
+                }
+                if(has){
+                    new Notification({
+                        title: '自动保存成功'
+                    }).show()
+                    proxyData.fileStateList = fileStateList
+                }
             })
             job.resume()
         }
