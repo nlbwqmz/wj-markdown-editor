@@ -82,7 +82,7 @@ const handleHtmlChanged = commonUtil.debounce(() => {
   if (imgViewer.value) {
     imgViewer.value.update()
   } else {
-    imgViewer.value = new Viewer(document.getElementById(componentId), {
+    imgViewer.value = new Viewer(document.getElementById(previewId), {
       title: false,
       toolbar: {
         zoomIn: true,
