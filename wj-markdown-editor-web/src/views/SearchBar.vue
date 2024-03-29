@@ -64,7 +64,7 @@ nodeRegisterUtil.findInPageResult(findInPageResult)
   width: 100%;
   background-color: white;
   display: flex;
-  height: 100vh;
+  height: 100%;
   justify-content: space-around;
   padding: 10px;
   .title {
