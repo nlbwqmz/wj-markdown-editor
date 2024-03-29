@@ -1,5 +1,5 @@
 <template>
-  <div style="display: flex; flex-direction: column; height: 100vh">
+  <div style="display: flex; flex-direction: column; height: 100%">
     <div class="title-content">
       <div class="left electron-drag">
         <div style="display: flex; justify-content: left">

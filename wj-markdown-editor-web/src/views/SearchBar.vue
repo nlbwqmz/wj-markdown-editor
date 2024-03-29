@@ -84,7 +84,7 @@ nodeRegisterUtil.findInPageResult(findInPageResult)
     border: none;
     outline: none;
     width: 120px;
-    border-bottom: 1px rgba(0, 0, 0, 0.1) solid;
+    border-bottom: var(--wj-inner-border);
   }
   .action {
     height: 100%;
@@ -99,7 +99,7 @@ nodeRegisterUtil.findInPageResult(findInPageResult)
     padding: 2px;
   }
   .icon:hover {
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: var(--wj-hover-color);
   }
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div style="display: flex; border: 1px rgba(0, 0, 0, 0.1) solid;">
+  <div style="display: flex; border: var(--wj-inner-border)">
     <div class="horizontal-vertical-center" style="padding-left: 10px">
       <MenuUnfoldOutlined style="cursor: pointer" v-show="!showWebdav" @click="switchShowWebdav"/>
       <MenuFoldOutlined style="cursor: pointer" v-show="showWebdav" @click="switchShowWebdav"/>

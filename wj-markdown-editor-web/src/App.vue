@@ -1,11 +1,11 @@
 <template>
-  <div style="display: flex; flex-direction: column;width: 100%; height: 100vh;">
+  <div style="display: flex; flex-direction: column;width: 100%; height: 100%;">
     <div v-show="showTop">
       <top-title/>
       <top-menu/>
     </div>
     <div style="flex: 1; display: flex; width: 100%; overflow: hidden">
-      <div style="width: 300px; border-top: 1px rgba(0, 0, 0, 0.1) solid" v-if="showTop" v-show="showWebdav">
+      <div style="width: 300px; border-top: var(--wj-inner-border)" v-if="showTop" v-show="showWebdav">
         <webdav-login-view v-if="!webdavLogin"/>
         <webdav-file-view v-if="webdavLogin"/>
       </div>
@@ -27,6 +27,15 @@
 * {
   margin: 0;
   padding: 0;
+}
+#app {
+  width: 100%;
+  height: 100%;
+  border: 1px rgba(0, 0, 0, 0.3) solid;
+}
+body {
+  width: 100%;
+  height: 100%;
 }
 </style>
 <script setup>

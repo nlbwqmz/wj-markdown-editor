@@ -11,6 +11,7 @@ import nodeRegisterUtil from '@/util/nodeRegisterUtil'
 import Antd from 'ant-design-vue'
 import 'ant-design-vue/dist/reset.css'
 import './assets/css/common.less'
+import './assets/css/variable.css'
 import commonUtil from '@/util/commonUtil'
 config({
   // 删除编辑器保存快捷键

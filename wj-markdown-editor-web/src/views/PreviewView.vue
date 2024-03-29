@@ -1,6 +1,6 @@
 <template>
-  <div style="width: 100%; height: 100%; border-left: 1px rgba(0, 0, 0, 0.1) solid" v-show="!loading" :id="previewId">
-    <div v-if="!content" style="display: flex; justify-content: center; align-items: center; height: 100%">
+  <div style="width: 100%; min-height: 100%; border-left: var(--wj-inner-border)" v-show="!loading" :id="previewId">
+    <div v-if="!content" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }" class="horizontal-vertical-center">
       <a-empty>
         <template #description>
           <p style="color: rgba(0, 0, 0, 0.25)">暂无文本</p>
@@ -22,9 +22,9 @@
             @on-html-changed="handleHtmlChanged()">
           </md-preview>
         </div>
-        <div v-if="catalogShow" style="max-width: 400px; min-width: 200px;" :style="{ height: `calc(100vh - ${offsetTop}px)` }">
-          <a-affix :offset-top="offsetTop" :style="{ height: `calc(100vh - ${offsetTop}px)` }">
-            <div style="border-left: 1px rgba(0, 0, 0, 0.1) solid;overflow: auto" class="wj-scrollbar-hover" :style="{ height: `calc(100vh - ${offsetTop}px)` }">
+        <div v-if="catalogShow" style="max-width: 400px; min-width: 200px;" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
+          <a-affix :offset-top="offsetTop" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
+            <div style="border-left: var(--wj-inner-border);overflow: auto" class="wj-scrollbar-hover" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
               <md-catalog :editor-id="domId" :scrollElement="scrollElement" :scroll-element-offset-top="offsetTop" :md-heading-id="commonUtil.mdHeadingId"/>
             </div>
           </a-affix>
@@ -68,7 +68,7 @@ const domId = commonUtil.createId()
 const previewId = commonUtil.createId()
 const componentId = commonUtil.createId()
 const catalogShow = ref()
-const offsetTop = 102
+const offsetTop = 103
 const loading = ref(true)
 const imgViewer = ref()
 const id = commonUtil.getUrlParam('id')
