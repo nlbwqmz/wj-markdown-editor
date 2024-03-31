@@ -40,8 +40,10 @@
             </template>
           </a-input-password>
         </a-form-item>
-        <a-form-item class="horizontal-vertical-center" v-if="loginErrorMessage">
-          <span style="color: red">{{loginErrorMessage}}</span>
+        <a-form-item name="autoLogin">
+          <div style="display: flex; justify-content: center">
+            <a-checkbox v-model:checked="formState.autoLogin">自动登录</a-checkbox>
+          </div>
         </a-form-item>
         <a-form-item class="horizontal-vertical-center">
           <a-button :disabled="disabled" type="primary" @click="login" :loading="loading">
@@ -54,16 +56,24 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { LockOutlined, UserOutlined, LinkOutlined } from '@ant-design/icons-vue'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import commonUtil from '@/util/commonUtil'
-import store from '@/store'
 
 const formState = reactive({
   username: '',
   password: '',
-  url: ''
+  url: '',
+  autoLogin: false
+})
+
+onMounted(async () => {
+  const loginInfo = await nodeRequestUtil.getLoginInfo()
+  if (loginInfo) {
+    formState.username = loginInfo.username
+    formState.url = loginInfo.url
+  }
 })
 const loading = ref(false)
 const disabled = computed(() => {
@@ -75,7 +85,6 @@ const login = async () => {
   await nodeRequestUtil.loginWebdav(commonUtil.deepCopy(formState))
   loading.value = false
 }
-const loginErrorMessage = computed(() => store.state.loginErrorMessage)
 </script>
 
 <style scoped lang="less">

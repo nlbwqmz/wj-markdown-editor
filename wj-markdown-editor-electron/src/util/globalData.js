@@ -6,7 +6,6 @@ import path from "path"
 import { Notification} from "electron"
 import {Cron} from "croner"
 import {nanoid} from "nanoid";
-import webdavUtil from "./webdavUtil.js";
 
 const openOnFile = () => {
     return Boolean(process.argv && process.argv.length > 0 && process.argv[process.argv.length - 1].match(/^[a-zA-Z]:(\\.*)+\.md$/))
@@ -15,7 +14,7 @@ fsUtil.mkdirSyncWithRecursion(pathUtil.getUserDataPath())
 const isOpenOnFile = openOnFile()
 const originFilePath = isOpenOnFile ? process.argv[process.argv.length - 1] : undefined
 const firstContent = isOpenOnFile ? fs.readFileSync(originFilePath).toString() : ''
-const configPath = path.resolve(pathUtil.getUserDataPath(), 'config.json')
+const configPath = pathUtil.getConfigPath()
 const configIsExist = fs.existsSync(configPath)
 const config = configIsExist ? JSON.parse(fs.readFileSync(configPath).toString()) : defaultConfig
 if(configIsExist){
@@ -51,7 +50,7 @@ const data = {
     win: null,
     initTitle: 'wj-markdown-editor',
     activeFileId: '',
-    webdavLoginState: { webdavLogin: false, loginErrorMessage: '' },
+    webdavLoginState: false,
     fileStateList: [{
         id: 'a' + nanoid(),
         saved: true,

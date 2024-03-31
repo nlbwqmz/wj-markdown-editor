@@ -111,5 +111,8 @@ export default {
   },
   openWebdavMd: (filename, basename) => {
     window.node.openWebdavMd(filename, basename)
+  },
+  getLoginInfo: () => {
+    return window.node.getLoginInfo()
   }
 }

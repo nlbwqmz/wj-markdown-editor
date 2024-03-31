@@ -2,6 +2,7 @@ import globalData from './globalData.js'
 import { shell, screen} from 'electron'
 import common from "./common.js"
 import globalShortcutUtil from './globalShortcutUtil.js'
+import webdavUtil from "./webdavUtil.js";
 const debounce = (func, timeout = 300) => {
     let timer;
     return (...args) => {
@@ -18,6 +19,7 @@ export default {
         })
         globalData.win.once('ready-to-show', () => {
             globalData.updateFileStateList()
+            webdavUtil.autoLogin()
             if(globalData.config.maximize){
                 globalData.win.maximize()
             }

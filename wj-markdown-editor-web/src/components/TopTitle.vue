@@ -95,7 +95,7 @@ nodeRegisterUtil.showMaximizeAction(bool => {
       background-color: rgb(237,237,237);
     }
     .close-img-div:hover {
-      background-color: red;
+      background-color: #ff4d4f;
     }
   }
 }

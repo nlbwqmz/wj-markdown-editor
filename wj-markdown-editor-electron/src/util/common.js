@@ -284,7 +284,7 @@ export default {
     saveFile: (type, currentWebdavPath) => {
         const fileStateList = globalData.fileStateList
         const fileState = globalData.fileStateList.find(item => item.id === globalData.activeFileId)
-        if(fileState.type === 'webdav' && globalData.webdavLoginState.webdavLogin === false) {
+        if(fileState.type === 'webdav' && globalData.webdavLoginState === false) {
             globalData.win.webContents.send('showMessage', '请先登录webdav', 'error')
             return
         }
@@ -323,7 +323,7 @@ export default {
                     }
                 })
             }
-        } else if (globalData.webdavLoginState.webdavLogin === false || type === 'local') {
+        } else if (globalData.webdavLoginState === false || type === 'local') {
             let currentPath
             if (fileState.originFilePath) {
                 currentPath = fileState.originFilePath

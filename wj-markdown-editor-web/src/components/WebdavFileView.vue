@@ -6,16 +6,18 @@
     <div class="horizontal-vertical-center"><a-button type="link" size="small" @click="logout">退出</a-button></div>
   </div>
   <div class="container wj-scrollbar-small">
-    <div class="file" v-for="(item, index) in fileList" :key="index" @click="handleFileClick(item)">
-      <div class="horizontal-vertical-center">
-        <img :src="folderImg" v-if="item.type === 'directory'" alt="" class="icon">
-        <img :src="markdownImg" v-else-if="isMdFile(item.basename)" alt="" class="icon">
-        <img :src="fileImg" v-else alt="" class="icon">
+    <a-spin :spinning="spinning">
+      <div class="file" v-for="(item, index) in fileList" :key="index" @click="handleFileClick(item)">
+        <div class="horizontal-vertical-center">
+          <img :src="folderImg" v-if="item.type === 'directory'" alt="" class="icon">
+          <img :src="markdownImg" v-else-if="isMdFile(item.basename)" alt="" class="icon">
+          <img :src="fileImg" v-else alt="" class="icon">
+        </div>
+        <div :title="item.basename" class="text-ellipsis" style="flex: 1; line-height: 25px" :style="fileStateList.some(fileState => fileState.type === 'webdav' && fileState.originFilePath === item.filename) ? 'color: #4096ff;' : ''">
+          {{item.basename}}
+        </div>
       </div>
-      <div :title="item.basename" class="text-ellipsis" style="flex: 1; line-height: 25px" :style="fileStateList.some(fileState => fileState.type === 'webdav' && fileState.originFilePath === item.filename) ? 'color: #4096ff;' : ''">
-        {{item.basename}}
-      </div>
-    </div>
+    </a-spin>
   </div>
 </template>
 
@@ -25,12 +27,19 @@ import { ArrowLeftOutlined } from '@ant-design/icons-vue'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import folderImg from '@/assets/icon/folder.png'
 import fileImg from '@/assets/icon/file.png'
-import markdownImg from '@/assets/icon/markdown.png'
+import markdownImg from '@/assets/logo.png'
 import { message } from 'ant-design-vue'
 import store from '@/store'
 const fileList = ref([])
 const currentPath = ref('/')
 const title = ref('/')
+const spinning = ref(false)
+
+const refresh = async () => {
+  spinning.value = true
+  fileList.value = await nodeRequestUtil.webdavGetDirectoryContents(currentPath.value)
+  spinning.value = false
+}
 const handleBack = async () => {
   if (currentPath.value !== '/') {
     const split = currentPath.value.split('/')
@@ -52,7 +61,7 @@ watch(currentPath, async (newValue, oldValue) => {
   const split = newValue.split('/')
   title.value = split[split.length - 1] || '/'
   store.commit('currentWebdavPath', currentPath)
-  fileList.value = await nodeRequestUtil.webdavGetDirectoryContents(newValue)
+  await refresh()
 }, { immediate: true })
 
 const isMdFile = filename => {
@@ -77,9 +86,6 @@ watch(() => store.state.openWebdavPath, (newValue, oldValue) => {
     store.commit('openWebdavPath', '')
   }
 })
-const refresh = async () => {
-  fileList.value = await nodeRequestUtil.webdavGetDirectoryContents(currentPath.value)
-}
 </script>
 
 <style scoped lang="less">

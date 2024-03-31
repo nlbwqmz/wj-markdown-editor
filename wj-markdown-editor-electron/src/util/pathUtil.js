@@ -23,5 +23,11 @@ export default {
     },
     getUserDataPath: () => {
         return userDataPath
+    },
+    getConfigPath: () => {
+        return path.resolve(userDataPath, 'config.json')
+    },
+    getLoginInfoPath: () => {
+        return path.resolve(userDataPath, 'login_info')
     }
 }

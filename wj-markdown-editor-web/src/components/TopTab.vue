@@ -13,7 +13,7 @@
               <img :src="localImg" alt="" style="width: 12px; height: 12px; margin-right: 5px" v-else-if="item.type === 'local'">
               <img :src="unknownImg" alt="" style="width: 12px; height: 12px; margin-right: 5px" v-else>
               <span class="text-ellipsis">{{ item.fileName }}</span>
-              <span v-show="item.saved === false" style="color: red">*</span>
+              <span v-show="item.saved === false" style="color: #ff4d4f">*</span>
             </div>
             <template #overlay>
               <a-menu>

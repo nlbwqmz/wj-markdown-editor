@@ -10,7 +10,6 @@ export default createStore({
     editorRefList: [],
     showWebdav: false,
     webdavLogin: false,
-    loginErrorMessage: '',
     openWebdavPath: '',
     currentWebdavPath: ''
   },
@@ -55,8 +54,7 @@ export default createStore({
       state.showWebdav = value
     },
     loginState: (state, webdavLoginState) => {
-      state.webdavLogin = webdavLoginState.webdavLogin
-      state.loginErrorMessage = webdavLoginState.loginErrorMessage
+      state.webdavLogin = webdavLoginState
     },
     openWebdavPath: (state, currentPath) => {
       state.openWebdavPath = currentPath

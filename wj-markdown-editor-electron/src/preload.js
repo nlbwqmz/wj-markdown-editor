@@ -63,7 +63,8 @@ const showToMain = {
   loginWebdav: data => ipcRenderer.send('loginWebdav', data),
   webdavGetDirectoryContents: currentPath => ipcRenderer.invoke('webdavGetDirectoryContents', currentPath),
   webdavLogout: () => ipcRenderer.send('webdavLogout'),
-  openWebdavMd: (filename, basename) => ipcRenderer.send('openWebdavMd', filename, basename)
+  openWebdavMd: (filename, basename) => ipcRenderer.send('openWebdavMd', filename, basename),
+  getLoginInfo: () => ipcRenderer.invoke('getLoginInfo')
 }
 
 contextBridge.exposeInMainWorld('node', {

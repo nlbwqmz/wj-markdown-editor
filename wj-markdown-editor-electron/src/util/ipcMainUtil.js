@@ -387,7 +387,7 @@ ipcMain.on('openFolder', (event, id) => {
 })
 
 ipcMain.on('loginWebdav', (event, data) => {
-    webdavUtil.login(data)
+    webdavUtil.login(data, true)
 })
 
 ipcMain.handle('webdavGetDirectoryContents', async (event, currentPath) => {
@@ -418,4 +418,8 @@ ipcMain.on('openWebdavMd', async (event, filename, basename) => {
         globalData.fileStateList = fileStateList
         globalData.win.webContents.send('changeTab', create.id)
     }
+})
+
+ipcMain.handle('getLoginInfo', async () => {
+    return await webdavUtil.getLoginInfo()
 })
