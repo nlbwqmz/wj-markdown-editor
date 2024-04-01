@@ -4,7 +4,7 @@
   },
   "description": "markdown编辑器",
   "name": "wj-markdown-editor",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "main": "src/main.js",
   "license": "MIT",
   "type": "module",
@@ -34,7 +34,8 @@
     ],
     "files": [
       "!config.json",
-      "!img/**"
+      "!img/**",
+      "!login_info"
     ],
     "nsis": {
       "oneClick": false,
