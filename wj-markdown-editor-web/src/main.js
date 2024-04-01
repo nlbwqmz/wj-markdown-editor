@@ -83,6 +83,15 @@ config({
     cropper: { js: './lib/cropper.1.5.13.min.js', css: './lib/cropper.1.5.13.min.css' }
   }
 })
-commonUtil.initMessageConfig()
 nodeRegisterUtil.init()
+commonUtil.initMessageConfig()
+window.onload = function () {
+  const startupLoading = document.getElementById('startup-loading')
+  if (startupLoading) {
+    startupLoading.addEventListener('animationend', () => {
+      startupLoading.remove()
+    }, { once: true })
+    startupLoading.style.animation = 'startup-load-leave 0.5s linear forwards'
+  }
+}
 createApp(App).use(store).use(router).use(Antd).mount('#app')

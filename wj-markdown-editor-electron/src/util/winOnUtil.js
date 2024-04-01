@@ -18,11 +18,6 @@ export default {
             return {action: 'deny'}
         })
         globalData.win.once('ready-to-show', () => {
-            globalData.updateFileStateList()
-            webdavUtil.autoLogin()
-            if(globalData.config.maximize){
-                globalData.win.maximize()
-            }
             globalData.win.show()
         })
         globalData.win.on('close', e => {
@@ -49,19 +44,9 @@ export default {
         globalData.win.on('maximize', debounce(() => {
             globalData.win.webContents.send('showMaximizeAction', false)
             common.moveSearchBar()
-            globalData.config = {
-                ...globalData.config,
-                maximize: true
-            }
-            common.moveSearchBar()
         }))
         globalData.win.on('unmaximize', debounce(() => {
             globalData.win.webContents.send('showMaximizeAction', true)
-            common.moveSearchBar()
-            globalData.config = {
-                ...globalData.config,
-                maximize: false
-            }
             common.moveSearchBar()
         }))
         globalData.win.on('minimize', debounce(() => {

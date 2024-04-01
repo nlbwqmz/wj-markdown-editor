@@ -114,5 +114,11 @@ export default {
   },
   getLoginInfo: () => {
     return window.node.getLoginInfo()
+  },
+  getFileStateList: () => {
+    return window.node.getFileStateList()
+  },
+  checkAutoLogin: () => {
+    window.node.checkAutoLogin()
   }
 }

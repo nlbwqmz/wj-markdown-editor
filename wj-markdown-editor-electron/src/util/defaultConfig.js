@@ -20,8 +20,6 @@ export default {
   insertScreenshotImgType: '2',
   // 图片复制到指定路径
   imgSavePath: pathUtil.getDefaultImgSavePath(),
-  // 是否最大化
-  maximize: false,
   theme: 'default',
   previewTheme: 'default',
   codeTheme: 'atom',

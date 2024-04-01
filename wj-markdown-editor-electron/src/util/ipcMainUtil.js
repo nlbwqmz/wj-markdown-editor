@@ -423,3 +423,19 @@ ipcMain.on('openWebdavMd', async (event, filename, basename) => {
 ipcMain.handle('getLoginInfo', async () => {
     return await webdavUtil.getLoginInfo()
 })
+
+ipcMain.handle('getFileStateList', () => {
+    return globalData.fileStateList.map(item => {
+        return {
+            id: item.id,
+            saved: item.saved,
+            originFilePath: item.originFilePath,
+            fileName: item.fileName,
+            type: item.type
+        }
+    })
+})
+
+ipcMain.on('checkAutoLogin', () => {
+    webdavUtil.autoLogin()
+})
