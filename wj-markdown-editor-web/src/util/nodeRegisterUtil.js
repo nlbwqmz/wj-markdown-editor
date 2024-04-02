@@ -1,9 +1,11 @@
-import { Button, Input, message, Modal } from 'ant-design-vue'
+import { Button, Input, message, Modal, notification } from 'ant-design-vue'
 import commonUtil from '@/util/commonUtil'
 import store from '@/store'
 import router from '@/router'
-import { createApp } from 'vue'
+import { createApp, h } from 'vue'
 import SaveTo from '@/components/SaveTo.vue'
+import nodeRequestUtil from '@/util/nodeRequestUtil'
+import { SmileOutlined } from '@ant-design/icons-vue'
 
 export default {
   init: () => {
@@ -19,24 +21,6 @@ export default {
     window.node.closeMessage(() => {
       message.destroy()
     })
-    // window.node.exitModal(() => {
-    //   if (!currentExitModal) {
-    //     currentExitModal = Modal.confirm({
-    //       title: '提示',
-    //       centered: true,
-    //       width: '500px',
-    //       icon: h(ExclamationCircleOutlined),
-    //       content: h(
-    //         'div', {}, '数据未保存，是否确认退出?'),
-    //       footer: h('div', { style: { width: '100%', textAlign: 'right', marginTop: '20px' } },
-    //         [
-    //           h(Button, { onclick: () => { currentExitModal.destroy(); currentExitModal = undefined }, style: { marginLeft: '10px' } }, () => '取消'),
-    //           h(Button, { danger: true, type: 'primary', style: { marginLeft: '10px' }, onclick: () => { nodeRequestUtil.exit() } }, () => '不保存直接退出'),
-    //           h(Button, { type: 'primary', style: { marginLeft: '10px' }, onclick: () => { nodeRequestUtil.save(true) } }, () => '保存并退出')]
-    //       )
-    //     })
-    //   }
-    // })
     window.node.toggleView(commonUtil.toggleView)
     window.node.shouldUpdateConfig(config => {
       store.commit('updateConfig', config)
@@ -87,6 +71,31 @@ export default {
     })
     window.node.openWebdavPath(path => {
       store.commit('openWebdavPath', path)
+    })
+    window.node.hasNewVersion(() => {
+      const key = `notification${Date.now()}`
+      notification.info({
+        top: '70px',
+        message: '消息',
+        description: '发现新版本！',
+        btn: () =>
+          h(
+            Button,
+            {
+              type: 'primary',
+              size: 'small',
+              onClick: () => { notification.close(key); nodeRequestUtil.openAboutWin() }
+            },
+            {
+              default: () => '去更新'
+            }
+          ),
+        icon: () =>
+          h(SmileOutlined, {
+            style: 'color: #108ee9'
+          }),
+        key
+      })
     })
   },
   findInPageResult: fun => {

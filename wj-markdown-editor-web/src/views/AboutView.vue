@@ -50,7 +50,7 @@ import 'md-editor-v3/lib/preview.css'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import { InfoCircleOutlined } from '@ant-design/icons-vue'
 import WjModal from '@/components/WjModal.vue'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import nodeRegisterUtil from '@/util/nodeRegisterUtil'
 import { useRoute } from 'vue-router'
 const route = useRoute()
@@ -118,6 +118,9 @@ const executeUpdate = () => {
   nodeRequestUtil.executeUpdate()
 }
 
+onMounted(() => {
+  checkUpdate()
+})
 </script>
 
 <style lang="less" scoped>

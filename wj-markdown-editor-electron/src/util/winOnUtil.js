@@ -19,6 +19,9 @@ export default {
         })
         globalData.win.once('ready-to-show', () => {
             globalData.win.show()
+            setTimeout(() => {
+                common.autoCheckAppUpdate()
+            }, 5000)
         })
         globalData.win.on('close', e => {
             e.preventDefault()

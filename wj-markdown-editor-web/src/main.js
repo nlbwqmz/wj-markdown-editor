@@ -5,7 +5,6 @@ import store from './store'
 import { config } from 'md-editor-v3'
 // 行号
 // import { lineNumbers } from '@codemirror/view'
-import { search } from '@codemirror/search'
 import nodeRegisterUtil from '@/util/nodeRegisterUtil'
 
 import Antd from 'ant-design-vue'
@@ -13,10 +12,13 @@ import 'ant-design-vue/dist/reset.css'
 import './assets/css/common.less'
 import './assets/css/variable.css'
 import commonUtil from '@/util/commonUtil'
+
+nodeRegisterUtil.init()
+commonUtil.initMessageConfig()
 config({
   // 删除编辑器保存快捷键
   codeMirrorExtensions (theme, extensions) {
-    const newExtensions = [...extensions, search()]
+    const newExtensions = [...extensions]
     const index = newExtensions[0].value.findIndex(item => item.key === 'Ctrl-s')
     newExtensions[0].value.splice(index, 1)
     return newExtensions
@@ -83,15 +85,4 @@ config({
     cropper: { js: './lib/cropper.1.5.13.min.js', css: './lib/cropper.1.5.13.min.css' }
   }
 })
-nodeRegisterUtil.init()
-commonUtil.initMessageConfig()
-window.onload = function () {
-  const startupLoading = document.getElementById('startup-loading')
-  if (startupLoading) {
-    startupLoading.addEventListener('animationend', () => {
-      startupLoading.remove()
-    }, { once: true })
-    startupLoading.style.animation = 'startup-load-leave 0.5s linear forwards'
-  }
-}
 createApp(App).use(store).use(router).use(Antd).mount('#app')

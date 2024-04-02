@@ -20,6 +20,7 @@ const mainToShow = {
   changeTab: callback => ipcRenderer.on('changeTab', (_event, id) => callback(id)),
   noticeToSave: callback => ipcRenderer.on('noticeToSave', (_event, data) => callback(data)),
   loginState: callback => ipcRenderer.on('loginState', (_event, webdavLoginState) => callback(webdavLoginState)),
+  hasNewVersion: callback => ipcRenderer.on('hasNewVersion', (_event) => callback()),
   openWebdavPath: callback => ipcRenderer.on('openWebdavPath', (_event, p) => callback(p))
 }
 

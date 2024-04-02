@@ -18,6 +18,16 @@
     <script>
       if(window.location.href.indexOf('searchBar') > -1){
         document.getElementById('startup-loading').remove()
+      } else {
+        window.onload = function () {
+          const startupLoading = document.getElementById('startup-loading')
+          if (startupLoading) {
+            startupLoading.addEventListener('animationend', () => {
+              startupLoading.remove()
+            }, { once: true })
+            startupLoading.style.animation = 'startup-load-leave 0.5s linear forwards'
+          }
+        }
       }
     </script>
     <div id="app"></div>
