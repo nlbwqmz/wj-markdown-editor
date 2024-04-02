@@ -28,6 +28,7 @@ import { createVNode, ref } from 'vue'
 import commonUtil from '@/util/commonUtil'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import { Modal } from 'ant-design-vue'
+import store from '@/store'
 
 const activeMenu = ref([])
 const menuList = [
@@ -42,7 +43,7 @@ const menuList = [
       {
         name: '保存',
         shortcuts: 'ctrl+s',
-        click: () => nodeRequestUtil.saveFile()
+        click: () => nodeRequestUtil.saveFile({ id: store.state.id })
       },
       {
         name: '另存为',

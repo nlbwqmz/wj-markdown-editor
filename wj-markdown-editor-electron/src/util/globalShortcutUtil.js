@@ -7,7 +7,7 @@ const shortcutList = [
         accelerator: 'Ctrl+s',
         callback: () => {
             if(globalData.win.isFocused()){
-                common.saveFile()
+                common.saveFile({ id: globalData.activeFileId })
             }
         }
     },

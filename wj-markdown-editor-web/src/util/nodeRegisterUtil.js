@@ -48,10 +48,12 @@ export default {
       const routeState = store.state.routeState.find(item => item.id === id)
       router.push({ path: routeState.path, query: { id } }).then(() => {})
     })
-    window.node.noticeToSave(() => {
+    window.node.noticeToSave(data => {
       const div = document.createElement('div')
       const app = createApp(SaveTo, {
         path: store.state.currentWebdavPath,
+        id: data.id,
+        close: data.close,
         onClose: () => {
           app.unmount()
           div.remove()

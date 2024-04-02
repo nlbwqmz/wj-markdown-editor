@@ -92,7 +92,7 @@ watch(() => store.state.openWebdavPath, (newValue, oldValue) => {
 .header {
   height: 35px;
   width: 100%;
-  padding: 5px;
+  padding: 5px 5px 5px 0;
   display: flex;
   gap: 10px;
   .back {

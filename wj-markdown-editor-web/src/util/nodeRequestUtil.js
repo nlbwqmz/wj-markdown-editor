@@ -86,13 +86,10 @@ export default {
     window.node.newFile()
   },
   closeFile: id => {
-    return window.node.closeFile(id)
+    window.node.closeFile(id)
   },
-  closeFileAndSave: id => {
-    return window.node.closeFileAndSave(id)
-  },
-  saveFile: (type, currentWebdavPath) => {
-    window.node.saveFile(type, currentWebdavPath)
+  saveFile: data => {
+    window.node.saveFile(data)
   },
   updateActiveFileId: id => {
     window.node.updateActiveFileId(id)

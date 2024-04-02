@@ -22,7 +22,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
-const props = defineProps(['path'])
+const props = defineProps(['path', 'id', 'close'])
 const emit = defineEmits(['close'])
 const open = ref(true)
 const value = ref()
@@ -32,11 +32,11 @@ const handleClose = () => {
   emit('close')
 }
 const handleLocal = () => {
-  nodeRequestUtil.saveFile('local')
+  nodeRequestUtil.saveFile({ id: props.id, type: 'local', close: props.close })
   open.value = false
 }
 const handleWebdav = () => {
-  nodeRequestUtil.saveFile('webdav', props.path + '/' + value.value + '.md')
+  nodeRequestUtil.saveFile({ id: props.id, type: 'webdav', close: props.close, currentWebdavPath: props.path + '/' + value.value + '.md' })
   open.value = false
 }
 

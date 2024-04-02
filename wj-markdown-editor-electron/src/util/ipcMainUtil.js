@@ -334,45 +334,12 @@ ipcMain.on('newFile', event => {
     common.newFile()
 })
 
-ipcMain.handle('closeFile', (event, id) => {
-    const list = globalData.fileStateList.filter(item => item.id !== id)
-    if(list.length === 0){
-        globalData.fileStateList = [common.getNewFileData()]
-    } else {
-        globalData.fileStateList = list
-    }
-    return true
+ipcMain.on('closeFile', (event, id) => {
+    common.closeAndChangeTab(id)
 })
 
-ipcMain.handle('closeFileAndSave', (event, id) => {
-    const fileState = globalData.fileStateList.find(item => item.id === id)
-    let currentPath
-    if(fileState.originFilePath){
-        currentPath = fileState.originFilePath
-    } else {
-        currentPath = dialog.showSaveDialogSync({
-            title: "保存",
-            buttonLabel: "保存",
-            filters: [
-                {name: 'markdown文件', extensions: ['md']},
-            ]
-        })
-    }
-    if (currentPath) {
-        fs.writeFileSync(currentPath, fileState.tempContent)
-        const list = globalData.fileStateList.filter(item => item.id !== id)
-        if(list.length === 0){
-            globalData.fileStateList = [common.getNewFileData()]
-        } else {
-            globalData.fileStateList = list
-        }
-        return true
-    }
-    return false
-})
-
-ipcMain.on('saveFile', (event, type, currentWebdavPath) => {
-    common.saveFile(type, currentWebdavPath)
+ipcMain.on('saveFile', (event, data) => {
+    common.saveFile(data)
 })
 
 ipcMain.on('updateActiveFileId', (event, id) => {

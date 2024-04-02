@@ -22,7 +22,7 @@
             @on-html-changed="handleHtmlChanged()">
           </md-preview>
         </div>
-        <div v-if="catalogShow" style="max-width: 400px; min-width: 200px;" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
+        <div v-if="catalogShow" style="max-width: 300px; min-width: 200px;" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
           <a-affix :offset-top="offsetTop" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
             <div style="border-left: var(--wj-inner-border);overflow: auto" class="wj-scrollbar-hover" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
               <md-catalog :editor-id="domId" :scrollElement="scrollElement" :scroll-element-offset-top="offsetTop" :md-heading-id="commonUtil.mdHeadingId"/>

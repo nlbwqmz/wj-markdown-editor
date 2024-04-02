@@ -143,7 +143,7 @@ const uploadLocalImg = () => {
   fileInput.click()
 }
 const onSave = (v, h) => {
-  nodeRequestUtil.saveFile()
+  nodeRequestUtil.saveFile({ id })
 }
 const onChange = content => {
   if (handleChange.value === true) {

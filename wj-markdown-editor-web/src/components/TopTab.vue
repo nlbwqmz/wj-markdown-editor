@@ -58,7 +58,7 @@ const handleScroll = e => {
 }
 const handleTabClose = item => {
   if (item.saved === true) {
-    closeFile(item.id).then(() => {})
+    closeFile(item.id)
   } else {
     const modal = Modal.confirm({
       centered: true,
@@ -74,28 +74,12 @@ const handleTabClose = item => {
   }
 }
 
-const closeFile = async (closeId) => {
-  const success = await nodeRequestUtil.closeFile(closeId)
-  if (success && closeId === id.value) {
-    executeChangeTab()
-  }
+const closeFile = (closeId) => {
+  nodeRequestUtil.closeFile(closeId)
 }
 
-const executeChangeTab = () => {
-  const fileState = store.state.fileStateList[0]
-  const routeState = store.state.routeState.find(item => item.id === fileState.id)
-  if (routeState) {
-    router.push({ path: routeState.path, query: { id: routeState.id } }).then(() => {})
-  } else {
-    router.push({ path: '/edit', query: { id: fileState.id } }).then(() => {})
-  }
-}
-
-const closeFileAndSave = async (closeId) => {
-  const success = await nodeRequestUtil.closeFileAndSave(closeId)
-  if (success && closeId === id.value) {
-    executeChangeTab()
-  }
+const closeFileAndSave = (closeId) => {
+  nodeRequestUtil.saveFile({ id: closeId, close: true })
 }
 const go = clickedId => {
   if (id.value !== clickedId) {
