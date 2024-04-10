@@ -157,8 +157,37 @@ const uploadImage = async obj => {
     }
 }
 
-ipcMain.handle('getFileContent', (event, id) => {
-    return globalData.fileStateList.find(item => item.id === id).tempContent
+ipcMain.handle('getFileContent', async (event, id) => {
+    const fileStateList = globalData.fileStateList
+    const fileState = fileStateList.find(item => item.id === id);
+    if(!fileState.loaded){
+        if(fileState.type === 'local') {
+            if(fsUtil.exists(fileState.originFilePath)){
+                const content = fs.readFileSync(fileState.originFilePath).toString()
+                fileState.content = content
+                fileState.tempContent = content
+            } else {
+                fileState.type = ''
+                fileState.originFilePath = ''
+                fileState.exists = false
+                globalData.fileStateList = fileStateList
+                return { exists: false }
+            }
+        } else if(fileState.type === 'webdav'){
+            if(await webdavUtil.exists(fileState.originFilePath)){
+                const content = await webdavUtil.getFileContents(fileState.originFilePath)
+                fileState.content = content
+                fileState.tempContent = content
+            } else {
+                fileState.type = ''
+                fileState.originFilePath = ''
+                fileState.exists = false
+                globalData.fileStateList = fileStateList
+                return { exists: false }
+            }
+        }
+    }
+    return { exists: true, content: globalData.fileStateList.find(item => item.id === id).tempContent }
 })
 
 ipcMain.handle('openDirSelect', event => {

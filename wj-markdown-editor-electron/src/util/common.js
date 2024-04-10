@@ -70,6 +70,11 @@ const closeAndChangeTab = id => {
 }
 export default {
     saveToOther: id => {
+        const fileState = globalData.fileStateList.find(item => item.id === id)
+        if(fileState.exists === false){
+            globalData.win.webContents.send('showMessage', '未找到当前文件', 'warning')
+            return;
+        }
         const currentPath = dialog.showSaveDialogSync({
             title: "另存为",
             buttonLabel: "保存",
@@ -78,7 +83,7 @@ export default {
             ]
         })
         if (currentPath) {
-            fs.writeFileSync(currentPath, globalData.fileStateList.find(item => item.id === id).tempContent)
+            fs.writeFileSync(currentPath, fileState.tempContent)
             globalData.win.webContents.send('showMessage', '另存成功', 'success')
         }
     },
@@ -122,6 +127,11 @@ export default {
         }
     },
     openExportPdfWin: () => {
+        const fileState = globalData.fileStateList.find(item => item.id === globalData.activeFileId)
+        if(fileState.exists === false){
+            globalData.win.webContents.send('showMessage', '未找到当前文件', 'warning')
+            return;
+        }
         globalData.exportWin = new BrowserWindow({
             frame: false,
             modal: true,
@@ -345,6 +355,10 @@ export default {
         // type, currentWebdavPath
         const fileStateList = globalData.fileStateList
         const fileState = globalData.fileStateList.find(item => item.id === data.id)
+        if(fileState.exists === false){
+            globalData.win.webContents.send('showMessage', '未找到当前文件', 'warning')
+            return;
+        }
         if (fileState.type === 'webdav' && globalData.webdavLoginState === false) {
             globalData.win.webContents.send('showMessage', '请先登录webdav', 'error')
             return
@@ -364,17 +378,18 @@ export default {
                     })
                 }
                 if (currentPath) {
-                    fs.writeFileSync(currentPath, fileState.tempContent)
-                    if (data.close !== true) {
-                        fileState.content = fileState.tempContent
-                        fileState.saved = true
-                        fileState.originFilePath = currentPath
-                        fileState.fileName = path.basename(currentPath)
-                        globalData.fileStateList = fileStateList
-                    } else {
-                        closeAndChangeTab(data.id)
-                    }
-                    globalData.win.webContents.send('showMessage', '保存成功', 'success')
+                    fs.writeFile(currentPath, fileState.tempContent, () => {
+                        if (data.close !== true) {
+                            fileState.content = fileState.tempContent
+                            fileState.saved = true
+                            fileState.originFilePath = currentPath
+                            fileState.fileName = path.basename(currentPath)
+                            globalData.fileStateList = fileStateList
+                        } else {
+                            closeAndChangeTab(data.id)
+                        }
+                        globalData.win.webContents.send('showMessage', '保存成功', 'success')
+                    })
                 }
             } else if (fileState.type === 'webdav') {
                 webdavUtil.putFileContents(fileState.originFilePath, fileState.tempContent).then(res => {
@@ -406,18 +421,19 @@ export default {
                 })
             }
             if (currentPath) {
-                fs.writeFileSync(currentPath, fileState.tempContent)
-                if (data.close !== true) {
-                    fileState.content = fileState.tempContent
-                    fileState.saved = true
-                    fileState.originFilePath = currentPath
-                    fileState.fileName = path.basename(currentPath)
-                    fileState.type = 'local'
-                    globalData.fileStateList = fileStateList
-                } else {
-                    closeAndChangeTab(data.id)
-                }
-                globalData.win.webContents.send('showMessage', '保存成功', 'success')
+                fs.writeFile(currentPath, fileState.tempContent, () => {
+                    if (data.close !== true) {
+                        fileState.content = fileState.tempContent
+                        fileState.saved = true
+                        fileState.originFilePath = currentPath
+                        fileState.fileName = path.basename(currentPath)
+                        fileState.type = 'local'
+                        globalData.fileStateList = fileStateList
+                    } else {
+                        closeAndChangeTab(data.id)
+                    }
+                    globalData.win.webContents.send('showMessage', '保存成功', 'success')
+                })
             }
         } else if (data.type === 'webdav') {
             webdavUtil.putFileContents(data.currentWebdavPath, fileState.tempContent).then(res => {

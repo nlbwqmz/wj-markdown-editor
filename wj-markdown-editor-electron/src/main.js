@@ -9,13 +9,13 @@ import common from './util/common.js'
 import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const lock = app.requestSingleInstanceLock({ fileInfo: globalData.fileStateList[0] })
+const lock = app.requestSingleInstanceLock({ fileInfo: globalData.fileStateList[globalData.fileStateList.length - 1] })
 if(!lock){
   app.quit()
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
     if(additionalData.fileInfo && additionalData.fileInfo.originFilePath){
-      const origin = globalData.fileStateList.find(item => item.originFilePath === additionalData.fileInfo.originFilePath)
+      const origin = globalData.fileStateList.find(item => item.originFilePath === additionalData.fileInfo.originFilePath && item.type === additionalData.fileInfo.type)
       if(origin){
         globalData.win.webContents.send('changeTab', origin.id)
       } else {
@@ -58,10 +58,11 @@ if(!lock){
       if (process.platform !== 'darwin') app.quit()
     })
     Menu.setApplicationMenu(null)
+    const index = globalData.fileStateList.length - 1
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-      win.loadURL('http://localhost:8080/#/' + (globalData.fileStateList[0].originFilePath ? globalData.config.initRoute : constant.router.edit) + '?id=' + globalData.fileStateList[0].id).then(() => {})
+      win.loadURL('http://localhost:8080/#/' + (globalData.fileStateList[index].originFilePath ? globalData.config.initRoute : constant.router.edit) + '?id=' + globalData.fileStateList[index].id).then(() => {})
     } else {
-      win.loadFile(path.resolve(__dirname, '../web-dist/index.html'), { hash: globalData.fileStateList[0].originFilePath ? globalData.config.initRoute : constant.router.edit, search: 'id=' + globalData.fileStateList[0].id }).then(() => {})
+      win.loadFile(path.resolve(__dirname, '../web-dist/index.html'), { hash: globalData.fileStateList[index].originFilePath ? globalData.config.initRoute : constant.router.edit, search: 'id=' + globalData.fileStateList[index].id }).then(() => {})
     }
   })
 }

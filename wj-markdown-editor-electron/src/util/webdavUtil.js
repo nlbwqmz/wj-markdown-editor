@@ -14,6 +14,7 @@ const func = {
         })
         globalData.webdavClient.getDirectoryContents('/').then(() => {
             globalData.webdavLoginState = true
+            globalData.autoLogin = data.autoLogin
             if(write === true){
                 if(data.autoLogin === true) {
                     fs.writeFile(pathUtil.getLoginInfoPath(), aesUtil.encrypt(JSON.stringify(data)), () => {})
@@ -34,6 +35,7 @@ const func = {
         }
     },
     logout: () => {
+        globalData.autoLogin = false
         globalData.webdavClient = null
         globalData.webdavLoginState = false
         const loginInfoPath = pathUtil.getLoginInfoPath();
@@ -107,6 +109,13 @@ const func = {
                 resolve()
             }
         })
+    },
+    exists: async path => {
+        try{
+            return await globalData.webdavClient.exists(path)
+        } catch (e) {
+            return false
+        }
     }
 }
 

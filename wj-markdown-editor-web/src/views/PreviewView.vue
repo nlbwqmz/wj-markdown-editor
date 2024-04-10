@@ -74,9 +74,14 @@ const imgViewer = ref()
 const id = commonUtil.getUrlParam('id')
 
 onActivated(async () => {
-  content.value = await nodeRequestUtil.getFileContent(id)
+  const fileContent = await nodeRequestUtil.getFileContent(id)
   catalogShow.value = store.state.config.catalogShow
   loading.value = false
+  if (fileContent.exists === true) {
+    content.value = fileContent.content
+  } else {
+    router.push({ path: '/notFound', query: { id } }).then(() => {})
+  }
 })
 const handleHtmlChanged = commonUtil.debounce(() => {
   if (imgViewer.value) {

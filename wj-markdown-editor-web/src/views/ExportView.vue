@@ -28,11 +28,23 @@ import { ExportOutlined } from '@ant-design/icons-vue'
 import WjModal from '@/components/WjModal.vue'
 import store from '@/store'
 import commonUtil from '@/util/commonUtil'
+import { Modal } from 'ant-design-vue'
 const content = ref()
 const editorId = commonUtil.createId()
 const id = commonUtil.getUrlParam('id')
 onActivated(async () => {
-  content.value = await nodeRequestUtil.getFileContent(id)
+  const fileContent = await nodeRequestUtil.getFileContent(id)
+  if (fileContent.exists === true) {
+    content.value = fileContent.content
+  } else {
+    Modal.warning({
+      title: '提示',
+      content: '未找到当前文件',
+      maskClosable: false,
+      closable: false,
+      onOk: nodeRequestUtil.closeExportWin
+    })
+  }
 })
 
 const onHtmlChanged = () => {

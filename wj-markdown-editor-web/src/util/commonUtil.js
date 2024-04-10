@@ -1,6 +1,7 @@
 import router from '@/router'
 import { message } from 'ant-design-vue'
 import { nanoid } from 'nanoid'
+import store from '@/store'
 const getUrlParam = name => {
   if (router.currentRoute.value.query[name]) {
     return router.currentRoute.value.query[name]
@@ -41,5 +42,9 @@ export default {
     }
   },
   getUrlParam,
-  createId
+  createId,
+  changeTab: id => {
+    const routeState = store.state.routeState.find(item => item.id === id)
+    router.push({ path: routeState.path, query: { id } }).then(() => {})
+  }
 }

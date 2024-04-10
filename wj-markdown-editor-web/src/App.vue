@@ -54,12 +54,12 @@ watch(() => router.currentRoute.value, (newValue, olValue) => {
   showTop.value = newValue && newValue.meta && newValue.meta.showTop === true
 }, { immediate: true })
 onBeforeMount(async () => {
+  nodeRequestUtil.checkAutoLogin()
   const config = await nodeRequestUtil.getConfig()
   store.commit('updateConfig', config)
   store.commit('setShowWebdav', config.showWebdav)
   const fileStateList = await nodeRequestUtil.getFileStateList()
   store.commit('updateFileStateList', fileStateList)
-  nodeRequestUtil.checkAutoLogin()
 })
 const showWebdav = computed(() => store.state.showWebdav)
 const webdavLogin = computed(() => store.state.webdavLogin)

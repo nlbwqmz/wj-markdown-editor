@@ -11,11 +11,15 @@ import Antd from 'ant-design-vue'
 import 'ant-design-vue/dist/reset.css'
 import './assets/css/common.less'
 import './assets/css/variable.css'
+import './assets/css/loading.less'
 import commonUtil from '@/util/commonUtil'
 
 nodeRegisterUtil.init()
 commonUtil.initMessageConfig()
 config({
+  markdownItPlugins (plugins) {
+    return plugins.filter((p) => p.type !== 'xss')
+  },
   // 删除编辑器保存快捷键
   codeMirrorExtensions (theme, extensions) {
     const newExtensions = [...extensions]
@@ -85,4 +89,26 @@ config({
     cropper: { js: './lib/cropper.1.5.13.min.js', css: './lib/cropper.1.5.13.min.css' }
   }
 })
-createApp(App).use(store).use(router).use(Antd).mount('#app')
+const app = createApp(App).use(store).use(router).use(Antd)
+
+app.directive('loading', (el, binding) => {
+  if (binding.value) {
+    if (!binding.oldValue) {
+      el.classList.add('wj-loading-container-origin')
+      if (!['relative', 'fixed', 'absolute'].includes(el.style.position)) {
+        el.classList.add('wj-loading-container-origin-relative')
+      }
+      const div = document.createElement('div')
+      div.classList.add('wj-loading')
+      div.innerHTML = '<div class="wj-loading-container"><div class="wj-loader-bounce"></div></div>'
+      el.appendChild(div)
+    }
+  } else {
+    el.classList.remove('wj-loading-container-origin', 'wj-loading-container-origin-relative')
+    const dom = el.querySelector('.wj-loading')
+    if (dom) {
+      dom.remove()
+    }
+  }
+})
+app.mount('#app')

@@ -1,7 +1,6 @@
 import { Button, Input, message, Modal, notification } from 'ant-design-vue'
 import commonUtil from '@/util/commonUtil'
 import store from '@/store'
-import router from '@/router'
 import { createApp, h } from 'vue'
 import SaveTo from '@/components/SaveTo.vue'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
@@ -29,8 +28,7 @@ export default {
       store.commit('updateFileStateList', fileStateList)
     })
     window.node.changeTab(id => {
-      const routeState = store.state.routeState.find(item => item.id === id)
-      router.push({ path: routeState.path, query: { id } }).then(() => {})
+      commonUtil.changeTab(id)
     })
     window.node.noticeToSave(data => {
       const div = document.createElement('div')

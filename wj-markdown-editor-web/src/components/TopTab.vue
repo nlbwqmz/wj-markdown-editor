@@ -37,12 +37,11 @@ import cloudImg from '@/assets/icon/cloud.png'
 import unknownImg from '@/assets/icon/unknown.png'
 import { computed, createVNode, h, ref } from 'vue'
 import { useStore } from 'vuex'
-import { useRouter } from 'vue-router'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import { Modal, Button } from 'ant-design-vue'
 import { ExclamationCircleOutlined, MenuUnfoldOutlined, MenuFoldOutlined } from '@ant-design/icons-vue'
+import commonUtil from '@/util/commonUtil'
 const store = useStore()
-const router = useRouter()
 const fileStateList = computed(() => store.state.fileStateList)
 const id = computed(() => store.state.id)
 const tabContainerRef = ref()
@@ -83,8 +82,7 @@ const closeFileAndSave = (closeId) => {
 }
 const go = clickedId => {
   if (id.value !== clickedId) {
-    const routeState = store.state.routeState.find(item => item.id === clickedId)
-    router.push({ path: routeState.path, query: { id: routeState.id } })
+    commonUtil.changeTab(clickedId)
   }
 }
 

@@ -88,7 +88,6 @@ const imgUrl = ref()
 const imgUrlInputStatus = ref('')
 const networkImgModalOkDisabled = ref(true)
 const editorId = commonUtil.createId()
-
 const checkImgUrl = (value, blankAble) => {
   if (value) {
     return /^http(s)?:\/\/[\w.-]+(?:\.[\w.-]+)+[\w\-._~:/?#[\]@!$&'*+,;=]+$/.test(value)
@@ -193,10 +192,15 @@ const onUploadImg = async (files) => {
 
 onMounted(async () => {
   store.commit('pushEditorRefList', { id, editorRef })
-  content.value = await nodeRequestUtil.getFileContent(id)
-  await nextTick(() => {
-    editorRef.value?.resetHistory()
-  })
+  const fileContent = await nodeRequestUtil.getFileContent(id)
+  if (fileContent.exists === true) {
+    content.value = fileContent.content
+    await nextTick(() => {
+      editorRef.value?.resetHistory()
+    })
+  } else {
+    router.push({ path: '/notFound', query: { id } }).then(() => {})
+  }
 })
 
 const toPreview = () => {

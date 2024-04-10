@@ -1,7 +1,6 @@
 import {app} from "electron"
 import path from "path"
 import { fileURLToPath } from 'url'
-import fs from "fs";
 import fsUtil from "./fsUtil.js";
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -29,5 +28,8 @@ export default {
     },
     getLoginInfoPath: () => {
         return path.resolve(userDataPath, 'login_info')
-    }
+    },
+    getLastOpenedFilePath: () => {
+        return path.resolve(userDataPath, 'last_opened.json')
+    },
 }

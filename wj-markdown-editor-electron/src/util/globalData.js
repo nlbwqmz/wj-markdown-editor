@@ -13,7 +13,7 @@ const openOnFile = () => {
 fsUtil.mkdirSyncWithRecursion(pathUtil.getUserDataPath())
 const isOpenOnFile = openOnFile()
 const originFilePath = isOpenOnFile ? process.argv[process.argv.length - 1] : undefined
-const firstContent = isOpenOnFile ? fs.readFileSync(originFilePath).toString() : ''
+// const firstContent = isOpenOnFile ? fs.readFileSync(originFilePath).toString() : ''
 const configPath = pathUtil.getConfigPath()
 const configIsExist = fs.existsSync(configPath)
 const config = configIsExist ? JSON.parse(fs.readFileSync(configPath).toString()) : defaultConfig
@@ -26,15 +26,70 @@ if(configIsExist){
         }
     }
     if(flag){
-        fs.writeFileSync(configPath, JSON.stringify(config))
+        fs.writeFile(configPath, JSON.stringify(config), () => {})
     }
 }
 if(!configIsExist) {
-    fs.writeFileSync(configPath, JSON.stringify(config))
+    fs.writeFile(configPath, JSON.stringify(config), () => {})
+}
+
+const initFileStateList = () => {
+    const list = []
+    if(fsUtil.exists(pathUtil.getLastOpenedFilePath())){
+        list.push(...JSON.parse(fs.readFileSync(pathUtil.getLastOpenedFilePath()).toString()).map(item => {
+            return {
+                ...item,
+                saved: true,
+                content: '',
+                tempContent: '',
+                loaded: false
+            }
+        }))
+    }
+    if(isOpenOnFile){
+        const index = list.findIndex(item => item.originFilePath === originFilePath && item.type === 'local')
+        if(index > -1){
+            list.splice(index, 1)
+        }
+        list.push({
+            id: 'a' + nanoid(),
+            saved: true,
+            content: '',
+            tempContent: '',
+            originFilePath: originFilePath,
+            fileName: path.basename(originFilePath),
+            type: 'local',
+            loaded: false
+        })
+    }
+    if(list.length === 0){
+        list.push({
+            id: 'a' + nanoid(),
+            saved: true,
+            content: '',
+            tempContent: '',
+            originFilePath: undefined,
+            fileName: 'untitled',
+            type: '',
+            loaded: false
+        })
+    }
+    return list
 }
 
 let job
 let jobRecentMinute = 0
+
+const writeLastOpenedFile = () => {
+    fs.writeFile(pathUtil.getLastOpenedFilePath(), JSON.stringify(data.fileStateList.filter(item => (data.autoLogin === true && item.type) || (!data.autoLogin && item.type === 'local')).map(item => {
+        return {
+            id: item.id,
+            originFilePath: item.originFilePath,
+            fileName: item.fileName,
+            type: item.type
+        }
+    })), () => {})
+}
 const updateFileStateList = () => {
     data.win.webContents.send('updateFileStateList', data.fileStateList.map(item => {
         return {
@@ -45,21 +100,14 @@ const updateFileStateList = () => {
             type: item.type
         }
     }))
+    writeLastOpenedFile()
 }
 const data = {
     win: null,
     initTitle: 'wj-markdown-editor',
     activeFileId: '',
     webdavLoginState: false,
-    fileStateList: [{
-        id: 'a' + nanoid(),
-        saved: true,
-        content: firstContent,
-        tempContent: firstContent,
-        originFilePath: originFilePath,
-        fileName: originFilePath ? path.basename(originFilePath) : 'untitled',
-        type: originFilePath ? 'local' : ''
-    }],
+    fileStateList: initFileStateList(),
     settingWin: undefined,
     exportWin: undefined,
     aboutWin: undefined,
@@ -68,7 +116,8 @@ const data = {
     config,
     configPath,
     updateFileStateList,
-    webdavClient: null
+    webdavClient: null,
+    autoLogin: false
 }
 
 const proxyData = new Proxy(data, {
@@ -93,6 +142,8 @@ const handleDataChange = (name, newValue) => {
         updateFileStateList()
     } else if (name === 'webdavLoginState'){
         data.win.webContents.send('loginState', data.webdavLoginState)
+    } else if (name === 'autoLogin') {
+        writeLastOpenedFile()
     }
 }
 const handleJob = minute => {
@@ -129,5 +180,6 @@ const handleJob = minute => {
         }
     }
 }
+writeLastOpenedFile()
 handleJob(data.config.autoSave.minute)
 export default proxyData

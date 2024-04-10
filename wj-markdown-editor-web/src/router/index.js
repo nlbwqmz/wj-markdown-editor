@@ -55,6 +55,15 @@ const routes = [
     meta: {
       showTop: false
     }
+  },
+  {
+    path: '/notFound',
+    name: 'notFound',
+    component: () => import('../views/NotFound.vue'),
+    meta: {
+      showTop: true,
+      title: 'wj-markdown-editor'
+    }
   }
 ]
 
