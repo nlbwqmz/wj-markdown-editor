@@ -738,6 +738,16 @@ electron-publish@24.8.1:
     lazy-val "^1.0.5"
     mime "^2.5.2"
 
+electron-screenshots@^0.5.26:
+  version "0.5.26"
+  resolved "https://registry.npmmirror.com/electron-screenshots/-/electron-screenshots-0.5.26.tgz#d5e14cf11271adbd0e7f961cbe926c139d87a5d2"
+  integrity sha512-btr1S8arUt+rqVjgiY4+hdi9DQJGCYHG9x0A3n3rrJvCaet7XnRRnEULXDLtY86CZHeg7JsQzeMdQ4Lj2Bu8lQ==
+  dependencies:
+    debug "^4.3.4"
+    fs-extra "^11.1.1"
+    node-screenshots "^0.1.9"
+    react-screenshots "^0.5.22"
+
 electron-updater@^6.1.8:
   version "6.1.8"
   resolved "https://registry.yarnpkg.com/electron-updater/-/electron-updater-6.1.8.tgz#17637bca165322f4e526b13c99165f43e6f697d8"
@@ -891,6 +901,15 @@ fs-extra@^10.0.0, fs-extra@^10.1.0:
   version "10.1.0"
   resolved "https://registry.yarnpkg.com/fs-extra/-/fs-extra-10.1.0.tgz#02873cfbc4084dde127eaa5f9905eef2325d1abf"
   integrity sha512-oRXApq54ETRj4eMiFzGnHWGy+zo5raudjuxN0b8H7s/RU2oW0Wvsx9O0ACRN/kRq9E8Vu/ReskGB5o3ji+FzHQ==
+  dependencies:
+    graceful-fs "^4.2.0"
+    jsonfile "^6.0.1"
+    universalify "^2.0.0"
+
+fs-extra@^11.1.1:
+  version "11.2.0"
+  resolved "https://registry.npmmirror.com/fs-extra/-/fs-extra-11.2.0.tgz#e70e17dfad64232287d01929399e0ea7c86b0e5b"
+  integrity sha512-PmDi3uwK5nFuXh7XDTlVnS17xJS7vW36is2+w3xcv8SVxiB4NyATf4ctkVY5bkSjX0Y4nbvZCq1/EjtEyr9ktw==
   dependencies:
     graceful-fs "^4.2.0"
     jsonfile "^6.0.1"
@@ -1422,6 +1441,60 @@ node-machine-id@^1.1.12:
   resolved "https://registry.npmmirror.com/node-machine-id/-/node-machine-id-1.1.12.tgz#37904eee1e59b320bb9c5d6c0a59f3b469cb6267"
   integrity sha512-QNABxbrPa3qEIfrE6GOJ7BYIuignnJw7iQ2YPbc3Nla1HzRJjXzZOiikfF8m7eAMfichLt3M4VgLOetqgDmgGQ==
 
+node-screenshots-darwin-arm64@0.1.9:
+  version "0.1.9"
+  resolved "https://registry.npmmirror.com/node-screenshots-darwin-arm64/-/node-screenshots-darwin-arm64-0.1.9.tgz#4413a62570eb662cb259fffcca504ab3cef2a0e5"
+  integrity sha512-zDhuui2hsgUA5FyL1wQQ9c2lPbvqmJzi45g7J+sxEmDDvRjmVv+92wTuiWuERiVAIkpjN2h+f2IR3HtOgHJHXw==
+
+node-screenshots-darwin-universal@0.1.9:
+  version "0.1.9"
+  resolved "https://registry.npmmirror.com/node-screenshots-darwin-universal/-/node-screenshots-darwin-universal-0.1.9.tgz#2d0a5e9cf40dfca5ac9f734c816715db350e7ab5"
+  integrity sha512-4SbvokC/GvOTzYDQzcFa39c02mxWzvhIRT72J9ys82HcKgmeWWbVih2atLUvFONQrSnMt+pxrCUBqFiJVawcyQ==
+
+node-screenshots-darwin-x64@0.1.9:
+  version "0.1.9"
+  resolved "https://registry.npmmirror.com/node-screenshots-darwin-x64/-/node-screenshots-darwin-x64-0.1.9.tgz#9883cfd35f5753913f05183dd653708977964717"
+  integrity sha512-/+VYlLVbsoYYmV/by+oPZY7aUfwF02dyl0rWUxM+xaGn80o55zht05B4UaIN8vcuBByunsGv2gybECT6Gk74PA==
+
+node-screenshots-linux-x64-gnu@0.1.9:
+  version "0.1.9"
+  resolved "https://registry.npmmirror.com/node-screenshots-linux-x64-gnu/-/node-screenshots-linux-x64-gnu-0.1.9.tgz#21368912ce5234b428bcfb539f3140664130e0f1"
+  integrity sha512-n7uTdNJCMqJ3tEMRq0wAOsq8qiK8cbOV+fqDgaQnlFLY+5PTxH67r09r41CJdWwX5sGeDsKHguosh7ZcGte+TA==
+
+node-screenshots-linux-x64-musl@0.1.9:
+  version "0.1.9"
+  resolved "https://registry.npmmirror.com/node-screenshots-linux-x64-musl/-/node-screenshots-linux-x64-musl-0.1.9.tgz#9eddb506a82f62ccbdf450d1b5ece2d414c1c718"
+  integrity sha512-zOIv5rIpL+ndWH0XWLrJOIELxh4P96WcE1omaql2oeWleS4EGwb0VqVJLhjadiMm1YROq8nvp8Vxz850nw5XPQ==
+
+node-screenshots-win32-arm64-msvc@0.1.9:
+  version "0.1.9"
+  resolved "https://registry.npmmirror.com/node-screenshots-win32-arm64-msvc/-/node-screenshots-win32-arm64-msvc-0.1.9.tgz#c165c10230362cb5cdf3a106bc730965ef1b0382"
+  integrity sha512-wBw6SsRSKcLMyM3zTx38rzPJ1l5MjDvveWbacpkSkOXmlMMknhDr7wOsDM/VvbBV9RnEid6+AJ25gXc35HJrcA==
+
+node-screenshots-win32-ia32-msvc@0.1.9:
+  version "0.1.9"
+  resolved "https://registry.npmmirror.com/node-screenshots-win32-ia32-msvc/-/node-screenshots-win32-ia32-msvc-0.1.9.tgz#5cfc18e4a667d350c52d019be0493908b5e844de"
+  integrity sha512-uZW5gbKV6Hrmk2tafoAyHnn48cJ0LWRsSh8HQjiOjyeYd2E29ubPczhlt7NhAxr7ZUCzDeOigEZYm+VV2HCTrg==
+
+node-screenshots-win32-x64-msvc@0.1.9:
+  version "0.1.9"
+  resolved "https://registry.npmmirror.com/node-screenshots-win32-x64-msvc/-/node-screenshots-win32-x64-msvc-0.1.9.tgz#faacca9a952eef00ec51b061c62896d507958811"
+  integrity sha512-9HR/YaYwAImHeuptFtnQuP4/JI9OxfcqQlLiK1XgYwH18eTnv49ukG09MbDAiHvXXWYxQK3Q5w2H7da7FCoCWA==
+
+node-screenshots@^0.1.9:
+  version "0.1.9"
+  resolved "https://registry.npmmirror.com/node-screenshots/-/node-screenshots-0.1.9.tgz#c6a17657def4dd12ffaa9fe9832ae0154d571196"
+  integrity sha512-9f6yV/e7LU0KWkOJAQNR6GTEtnbnSaZKf9ukkF1VDJk0qj3aIcedQqYtd92IdEK8chVg+YbMfSuchlhq8iHI0Q==
+  optionalDependencies:
+    node-screenshots-darwin-arm64 "0.1.9"
+    node-screenshots-darwin-universal "0.1.9"
+    node-screenshots-darwin-x64 "0.1.9"
+    node-screenshots-linux-x64-gnu "0.1.9"
+    node-screenshots-linux-x64-musl "0.1.9"
+    node-screenshots-win32-arm64-msvc "0.1.9"
+    node-screenshots-win32-ia32-msvc "0.1.9"
+    node-screenshots-win32-x64-msvc "0.1.9"
+
 normalize-url@^6.0.1:
   version "6.1.0"
   resolved "https://registry.yarnpkg.com/normalize-url/-/normalize-url-6.1.0.tgz#40d0885b535deffe3f3147bec877d05fe4c5668a"
@@ -1521,6 +1594,11 @@ quick-lru@^5.1.1:
   version "5.1.1"
   resolved "https://registry.yarnpkg.com/quick-lru/-/quick-lru-5.1.1.tgz#366493e6b3e42a3a6885e2e99d18f80fb7a8c932"
   integrity sha512-WuyALRjWPDGtt/wzJiadO5AXY+8hZ80hVpe6MyivgraREW751X3SbhRvG3eLKOYN+8VEvqLcf3wdnt44Z4S4SA==
+
+react-screenshots@^0.5.22:
+  version "0.5.22"
+  resolved "https://registry.npmmirror.com/react-screenshots/-/react-screenshots-0.5.22.tgz#2d974189d2d2df74388a4a19482fd1c956641837"
+  integrity sha512-aooIlb1k6161BTqhhyADlMrlF0n1UdudjuhyvXaCQfwURXZNuUerMxFuOfwNCgSbPAHlxdHCWtYQ6iQT+RaF+w==
 
 read-config-file@6.3.2:
   version "6.3.2"

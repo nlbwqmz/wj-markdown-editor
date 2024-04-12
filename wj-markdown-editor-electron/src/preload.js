@@ -21,7 +21,8 @@ const mainToShow = {
   noticeToSave: callback => ipcRenderer.on('noticeToSave', (_event, data) => callback(data)),
   loginState: callback => ipcRenderer.on('loginState', (_event, webdavLoginState) => callback(webdavLoginState)),
   hasNewVersion: callback => ipcRenderer.on('hasNewVersion', (_event) => callback()),
-  openWebdavPath: callback => ipcRenderer.on('openWebdavPath', (_event, p) => callback(p))
+  openWebdavPath: callback => ipcRenderer.on('openWebdavPath', (_event, p) => callback(p)),
+  confirmExit: callback => ipcRenderer.on('confirmExit', (_event) => callback()),
 }
 
 //渲染进程调用主进程
@@ -66,7 +67,8 @@ const showToMain = {
   openWebdavMd: (filename, basename) => ipcRenderer.send('openWebdavMd', filename, basename),
   getLoginInfo: () => ipcRenderer.invoke('getLoginInfo'),
   getFileStateList: () => ipcRenderer.invoke('getFileStateList'),
-  checkAutoLogin: () => ipcRenderer.send('checkAutoLogin')
+  checkAutoLogin: () => ipcRenderer.send('checkAutoLogin'),
+  exit: () => ipcRenderer.send('exit')
 }
 
 contextBridge.exposeInMainWorld('node', {

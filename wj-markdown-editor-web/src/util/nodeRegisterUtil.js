@@ -1,10 +1,10 @@
 import { Button, Input, message, Modal, notification } from 'ant-design-vue'
 import commonUtil from '@/util/commonUtil'
 import store from '@/store'
-import { createApp, h } from 'vue'
+import { createApp, createVNode, h } from 'vue'
 import SaveTo from '@/components/SaveTo.vue'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
-import { SmileOutlined } from '@ant-design/icons-vue'
+import { ExclamationCircleOutlined, SmileOutlined } from '@ant-design/icons-vue'
 
 export default {
   init: () => {
@@ -93,6 +93,18 @@ export default {
             style: 'color: #108ee9'
           }),
         key
+      })
+    })
+    window.node.confirmExit(() => {
+      const modal = Modal.confirm({
+        centered: true,
+        title: '提示',
+        icon: createVNode(ExclamationCircleOutlined),
+        content: '有文件未保存，是否确认退出程序？',
+        footer: h('div', { style: { width: '100%', display: 'flex', justifyContent: 'right', gap: '10px', paddingTop: '10px' } }, [
+          h(Button, { onClick: () => modal.destroy() }, () => '取消'),
+          h(Button, { type: 'primary', danger: true, onClick: () => { nodeRequestUtil.exit(); modal.destroy() } }, () => '直接关闭')
+        ])
       })
     })
   },

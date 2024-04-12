@@ -1,4 +1,4 @@
-import {app, BrowserWindow, screen, Menu} from 'electron'
+import {app, BrowserWindow, screen, Menu, Tray} from 'electron'
 import path from "path"
 import globalData from "./util/globalData.js"
 import protocolUtil from './util/protocolUtil.js'
@@ -6,10 +6,12 @@ import './util/ipcMainUtil.js'
 import winOnUtil from './util/winOnUtil.js'
 import constant from './util/constant.js'
 import common from './util/common.js'
+import screenshotsUtil from "./util/screenshotsUtil.js";
 import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const lock = app.requestSingleInstanceLock({ fileInfo: globalData.fileStateList[globalData.fileStateList.length - 1] })
+
 if(!lock){
   app.quit()
 } else {
@@ -30,7 +32,18 @@ if(!lock){
       globalData.win.focus()
     }
   })
+
+  const createTray = () => {
+    const tray = new Tray(path.resolve(__dirname, '../icon/favicon.png'))
+    const contextMenu = Menu.buildFromTemplate([
+      { label: '退出', type: 'normal', click: () => { globalData.win?.close() } },
+    ])
+    tray.setContextMenu(contextMenu)
+    tray.on('click', common.winShow)
+    tray.on('double-click', common.winShow)
+  }
   app.whenReady().then(() => {
+    screenshotsUtil.init()
     common.initUpdater()
     protocolUtil.handleProtocol()
     const win = new BrowserWindow({
@@ -50,13 +63,11 @@ if(!lock){
       win.webContents.openDevTools()
     }
     globalData.win = win
-    win.webContents.on('found-in-page', (event, result) => {
-      globalData.searchBar.webContents.send('findInPageResult', result)
-    })
     winOnUtil.handle()
     app.on('window-all-closed', () => {
       if (process.platform !== 'darwin') app.quit()
     })
+    createTray()
     Menu.setApplicationMenu(null)
     const index = globalData.fileStateList.length - 1
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {

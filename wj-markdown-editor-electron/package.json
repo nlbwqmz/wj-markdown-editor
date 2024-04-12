@@ -1,17 +1,18 @@
 {
   "author": {
-    "name": "魏杰"
+    "name": "魏杰",
+    "email": "bxqyher@outlook.com"
   },
   "description": "markdown编辑器",
   "name": "wj-markdown-editor",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "main": "src/main.js",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "start": "set NODE_ENV=dev && electron .",
     "static": "electron .",
-    "make": "cd ../wj-markdown-editor-web && yarn build && cd ../wj-markdown-editor-electron && electron-builder",
+    "make": "cd ../wj-markdown-editor-web && yarn install && yarn build && cd ../wj-markdown-editor-electron && yarn install && electron-builder",
     "build": "electron-builder"
   },
   "build": {
@@ -74,6 +75,7 @@
     "axios": "^1.6.7",
     "croner": "^8.0.1",
     "crypto": "^1.0.1",
+    "electron-screenshots": "^0.5.26",
     "electron-updater": "^6.1.8",
     "nanoid": "^5.0.6",
     "node-machine-id": "^1.1.12",

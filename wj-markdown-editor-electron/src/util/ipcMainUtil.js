@@ -12,6 +12,8 @@ import mime from 'mime-types'
 import defaultConfig from './defaultConfig.js'
 import webdavUtil from "./webdavUtil.js";
 import {nanoid} from "nanoid";
+import screenshotsUtil from "./screenshotsUtil.js";
+import globalShortcutUtil from "./globalShortcutUtil.js";
 
 const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
@@ -166,6 +168,8 @@ ipcMain.handle('getFileContent', async (event, id) => {
                 const content = fs.readFileSync(fileState.originFilePath).toString()
                 fileState.content = content
                 fileState.tempContent = content
+                fileState.loaded = true
+                globalData.fileStateList = fileStateList
             } else {
                 fileState.type = ''
                 fileState.originFilePath = ''
@@ -178,6 +182,8 @@ ipcMain.handle('getFileContent', async (event, id) => {
                 const content = await webdavUtil.getFileContents(fileState.originFilePath)
                 fileState.content = content
                 fileState.tempContent = content
+                fileState.loaded = true
+                globalData.fileStateList = fileStateList
             } else {
                 fileState.type = ''
                 fileState.originFilePath = ''
@@ -264,32 +270,53 @@ ipcMain.on('stopFindInPage', event => {
 })
 
 ipcMain.on('screenshot', (event, id, hide) => {
+    const startCapture = () => {
+        screenshotsUtil.startCapture((base64, bounds) => {
+            uploadImage({ id, fileList: [{ base64, type: 'image/png', isScreenshot: true }] }).then(() => {})
+        }, () => {
+            if(hide === true) {
+                common.winShow()
+            }
+        })
+    }
     if(hide === true) {
         globalData.win.minimize()
+        setTimeout(() => {
+            startCapture()
+        }, 200)
+    } else {
+        startCapture()
     }
-    setTimeout(() => {
-        const childProcess =  execFile(pathUtil.getSnapShotExePath())
-        childProcess.on('exit', (code) => {
-            if (code === 0 || code === 1) {
-                const buffer = clipboard.readImage().toPNG()
-                if(buffer && buffer.length > 0){
-                    const base64 = buffer.toString('base64')
-                    uploadImage({ id, fileList: [{ base64, type: 'image/png', isScreenshot: true }] }).then(res => {})
-                    clipboard.clear()
-                }
-            }
-            if(hide === true) {
-                globalData.win.restore()
-            }
-            childProcess.kill()
-        })
-    }, 200)
+    //setTimeout(() => {
+        // const childProcess =  execFile(pathUtil.getSnapShotExePath())
+        // childProcess.on('exit', (code) => {
+        //     if (code === 0 || code === 1) {
+        //         const buffer = clipboard.readImage().toPNG()
+        //         if(buffer && buffer.length > 0){
+        //             const base64 = buffer.toString('base64')
+        //             uploadImage({ id, fileList: [{ base64, type: 'image/png', isScreenshot: true }] }).then(res => {})
+        //             clipboard.clear()
+        //         }
+        //     }
+        //     if(hide === true) {
+        //         globalData.win.restore()
+        //     }
+        //     childProcess.kill()
+        // })
+    //}, 200)
 })
 
 ipcMain.on('action', (event, type) => {
-    globalData.win[type]()
+    if(type === 'minimize' && globalData.config.minimizeToTray === true){
+        globalData.win.hide()
+    } else {
+        globalData.win[type]()
+    }
 })
-
+ipcMain.on('exit', () => {
+    globalShortcutUtil.unregister()
+    common.exit()
+})
 ipcMain.on('restoreDefaultSetting', event => {
     globalData.config = defaultConfig
     if(globalData.settingWin && !globalData.settingWin.isDestroyed()){

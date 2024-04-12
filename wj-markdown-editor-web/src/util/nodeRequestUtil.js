@@ -55,6 +55,9 @@ export default {
   action: type => {
     window.node.action(type)
   },
+  exit: () => {
+    window.node.exit()
+  },
   restoreDefaultSetting: () => {
     window.node.restoreDefaultSetting()
   },

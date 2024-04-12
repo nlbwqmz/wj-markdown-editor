@@ -2,6 +2,7 @@ import pathUtil from "./pathUtil.js"
 export default {
   // 初次进入的路由
   initRoute: 'edit',
+  minimizeToTray: false,
   // 预览页面内容宽度
   previewWidth: 80,
   // 窗口宽度

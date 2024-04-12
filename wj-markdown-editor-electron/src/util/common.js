@@ -88,6 +88,16 @@ export default {
         }
     },
     exit,
+    winShow: () => {
+        if(globalData.win.isMinimized()){
+            globalData.win.restore()
+        } else if (globalData.win.isVisible() === false) {
+            globalData.win.show()
+        }
+        if(globalData.win.isFocused() === false) {
+            globalData.win.focus()
+        }
+    },
     openSettingWin: () => {
         if (!globalData.settingWin || globalData.settingWin.isDestroyed()) {
             globalData.settingWin = new BrowserWindow({
@@ -208,7 +218,6 @@ export default {
         globalData.searchBar = new BrowserWindow({
             width: 350,
             height: 60,
-            alwaysOnTop: true,
             parent: globalData.win,
             frame: false,
             modal: false,
@@ -233,16 +242,21 @@ export default {
             })
         }
     },
-    toggleSearchBarTop: flag => {
-        if (globalData.searchBar && !globalData.searchBar.isDestroyed()) {
-            globalData.searchBar.setAlwaysOnTop(flag)
-        }
-    },
     moveSearchBar: () => {
         if (globalData.searchBar && !globalData.searchBar.isDestroyed()) {
             const size = globalData.win.getSize();
             const position = globalData.win.getPosition();
             globalData.searchBar.setPosition(position[0] + size[0] - globalData.searchBar.getSize()[0] - 80, position[1] + 80)
+        }
+    },
+    hideSearchBar: () => {
+        if (globalData.searchBar && !globalData.searchBar.isDestroyed()) {
+            globalData.searchBar.hide()
+        }
+    },
+    showSearchBar: () => {
+        if(globalData.searchBar && !globalData.searchBar.isDestroyed() && globalData.searchBar.isVisible() === false){
+            globalData.searchBar.show()
         }
     },
     settingWinMinimize: () => {

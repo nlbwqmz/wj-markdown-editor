@@ -24,16 +24,10 @@
               <a-radio-button value="preview">预览</a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="跳转按钮">
-            <a-radio-group v-model:value="config.jumpRouterBtn" button-style="solid">
-              <a-radio-button :value="true">显示</a-radio-button>
-              <a-radio-button :value="false">隐藏</a-radio-button>
-            </a-radio-group>
-          </a-descriptions-item>
-          <a-descriptions-item label="webdav">
-            <a-radio-group v-model:value="config.showWebdav" button-style="solid">
-              <a-radio-button :value="true">显示</a-radio-button>
-              <a-radio-button :value="false">隐藏</a-radio-button>
+          <a-descriptions-item label="最小化到托盘">
+            <a-radio-group v-model:value="config.minimizeToTray" button-style="solid">
+              <a-radio-button :value="true">是</a-radio-button>
+              <a-radio-button :value="false">否</a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item>
@@ -56,6 +50,18 @@
           <template #title>
             <span id="view">视图</span>
           </template>
+          <a-descriptions-item label="跳转按钮">
+            <a-radio-group v-model:value="config.jumpRouterBtn" button-style="solid">
+              <a-radio-button :value="true">显示</a-radio-button>
+              <a-radio-button :value="false">隐藏</a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="webdav">
+            <a-radio-group v-model:value="config.showWebdav" button-style="solid">
+              <a-radio-button :value="true">显示</a-radio-button>
+              <a-radio-button :value="false">隐藏</a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
           <a-descriptions-item label="默认显示目录">
             <a-radio-group v-model:value="config.catalogShow" button-style="solid">
               <a-radio-button :value="true">是</a-radio-button>
@@ -249,5 +255,9 @@ const openDirSelect = async () => {
 }
 :deep(.ant-anchor-wrapper) {
   padding-block-start: revert;
+}
+:deep(.ant-radio-button-wrapper) {
+  min-width: 60px;
+  text-align: center;
 }
 </style>

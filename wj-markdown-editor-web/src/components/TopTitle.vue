@@ -30,32 +30,12 @@ import close from '@/assets/icon/close.png'
 import maximize from '@/assets/icon/maximize.png'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import nodeRegisterUtil from '@/util/nodeRegisterUtil'
-import { createVNode, h, ref } from 'vue'
+import { ref } from 'vue'
 import unmaximize from '@/assets/icon/unmaximize.png'
-import store from '@/store'
-import { Button, Modal } from 'ant-design-vue'
-import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 
 const showMaximizeAction = ref(true)
 const action = type => {
-  if (type !== 'close') {
-    nodeRequestUtil.action(type)
-  } else {
-    if (store.state.fileStateList.some(item => item.saved === false)) {
-      const modal = Modal.confirm({
-        centered: true,
-        title: '提示',
-        icon: createVNode(ExclamationCircleOutlined),
-        content: '有文件未保存，是否确认退出程序？',
-        footer: h('div', { style: { width: '100%', display: 'flex', justifyContent: 'right', gap: '10px', paddingTop: '10px' } }, [
-          h(Button, { onClick: () => modal.destroy() }, () => '取消'),
-          h(Button, { type: 'primary', danger: true, onClick: () => { nodeRequestUtil.action('close'); modal.destroy() } }, () => '直接关闭')
-        ])
-      })
-    } else {
-      nodeRequestUtil.action('close')
-    }
-  }
+  nodeRequestUtil.action(type)
 }
 
 nodeRegisterUtil.showMaximizeAction(bool => {
