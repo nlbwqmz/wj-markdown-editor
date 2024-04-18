@@ -5,10 +5,10 @@ import fsUtil from './fsUtil.js'
 import path from "path"
 import { Notification} from "electron"
 import {Cron} from "croner"
-import {nanoid} from "nanoid";
+import idUtil from "./idUtil.js";
 
 const openOnFile = () => {
-    return Boolean(process.argv && process.argv.length > 0 && process.argv[process.argv.length - 1].match(/^[a-zA-Z]:(\\.*)+\.md$/))
+    return Boolean(process.argv && process.argv.length > 0 && /.*\.md$/.test(process.argv[process.argv.length - 1]))
 }
 fsUtil.mkdirSyncWithRecursion(pathUtil.getUserDataPath())
 const isOpenOnFile = openOnFile()
@@ -52,7 +52,7 @@ const initFileStateList = () => {
             list.splice(index, 1)
         }
         list.push({
-            id: 'a' + nanoid(),
+            id: idUtil.createId(),
             saved: true,
             content: '',
             tempContent: '',
@@ -64,7 +64,7 @@ const initFileStateList = () => {
     }
     if(list.length === 0){
         list.push({
-            id: 'a' + nanoid(),
+            id: idUtil.createId(),
             saved: true,
             content: '',
             tempContent: '',
@@ -132,7 +132,7 @@ const proxyData = new Proxy(data, {
 })
 const handleDataChange = (name, newValue) => {
     if (name === 'config') {
-        fs.writeFileSync(configPath, JSON.stringify(data.config))
+        fs.writeFile(configPath, JSON.stringify(data.config), () => {})
         handleJob(data.config.autoSave.minute)
         data.win.webContents.send('shouldUpdateConfig', data.config)
         if(data.exportWin && !data.exportWin.isDestroyed()){

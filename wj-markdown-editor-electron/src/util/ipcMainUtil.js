@@ -1,19 +1,18 @@
-import {app, clipboard, shell} from 'electron'
+import {shell} from 'electron'
 import {ipcMain, dialog} from 'electron'
 import fs from 'fs'
 import globalData from './globalData.js'
 import common from './common.js'
 import path from 'path'
-import { execFile } from 'child_process'
 import pathUtil from './pathUtil.js'
 import fsUtil from './fsUtil.js'
 import axios from 'axios'
 import mime from 'mime-types'
 import defaultConfig from './defaultConfig.js'
 import webdavUtil from "./webdavUtil.js";
-import {nanoid} from "nanoid";
 import screenshotsUtil from "./screenshotsUtil.js";
 import globalShortcutUtil from "./globalShortcutUtil.js";
+import idUtil from "./idUtil.js";
 
 const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
@@ -46,7 +45,7 @@ const uploadImage = async obj => {
         }
         list = await Promise.all(files.map(async file => {
             if(file.path){
-                const newFilePath = path.join(savePath, common.getUUID() + '.' + mime.extension(file.type));
+                const newFilePath = path.join(savePath, idUtil.createId() + '.' + mime.extension(file.type));
                 if(fileState.type === 'local' || insertImgType === '4'){
                     fs.copyFileSync(file.path, newFilePath)
                 } else {
@@ -60,7 +59,7 @@ const uploadImage = async obj => {
                 }
                 return newFilePath
             } else if(file.base64){
-                const newFilePath = path.join(savePath, common.getUUID() + '.' + mime.extension(file.type));
+                const newFilePath = path.join(savePath, idUtil.createId() + '.' + mime.extension(file.type));
                 const buffer = new Buffer.from(file.base64, 'base64');
                 if(fileState.type === 'local' || insertImgType === '4'){
                     fs.writeFileSync(newFilePath,  buffer)
@@ -79,7 +78,7 @@ const uploadImage = async obj => {
                     const result = await axios.get(file.url, {
                         responseType: 'arraybuffer', // 特别注意，需要加上此参数
                     });
-                    const newFilePath = path.join(savePath, common.getUUID() + '.' + mime.extension(result.headers.get("Content-Type")));
+                    const newFilePath = path.join(savePath, idUtil.createId() + '.' + mime.extension(result.headers.get("Content-Type")));
                     if(fileState.type === 'local' || insertImgType === '4'){
                         fs.writeFileSync(newFilePath,  result.data)
                     } else {
@@ -106,11 +105,11 @@ const uploadImage = async obj => {
         const tempPath = pathUtil.getTempPath()
         let tempList = await Promise.all(files.map(async file => {
             if(file.path){
-                const newFilePath = path.resolve(tempPath, common.getUUID() + '.' + mime.extension(file.type));
+                const newFilePath = path.resolve(tempPath, idUtil.createId() + '.' + mime.extension(file.type));
                 fs.copyFileSync(file.path, newFilePath)
                 return newFilePath
             } else if(file.base64){
-                const newFilePath = path.resolve(tempPath, common.getUUID() + '.' + mime.extension(file.type));
+                const newFilePath = path.resolve(tempPath, idUtil.createId() + '.' + mime.extension(file.type));
                 const buffer = new Buffer.from(file.base64, 'base64');
                 fs.writeFileSync(newFilePath,  buffer)
                 return newFilePath
@@ -119,7 +118,7 @@ const uploadImage = async obj => {
                     const result = await axios.get(file.url, {
                         responseType: 'arraybuffer', // 特别注意，需要加上此参数
                     });
-                    const newFilePath = path.resolve(tempPath, common.getUUID() + '.' + mime.extension(result.headers.get("Content-Type")));
+                    const newFilePath = path.resolve(tempPath, idUtil.createId() + '.' + mime.extension(result.headers.get("Content-Type")));
                     fs.writeFileSync(newFilePath,  result.data)
                     return newFilePath
                 } catch (e) {
@@ -429,7 +428,7 @@ ipcMain.on('openWebdavMd', async (event, filename, basename) => {
     } else {
         const content = await webdavUtil.getFileContents(filename)
         const create = {
-            id: common.getUUID(),
+            id: idUtil.createId(),
             saved: true,
             content: content,
             tempContent: content,

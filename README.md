@@ -8,7 +8,7 @@
 
 ## 简介
 
-一款支持webdav的开源桌面端**markdown**编辑器
+一款支持**webdav**的开源桌面端**markdown**编辑器，支持`windows`、`linux`系统。
 
 ![GitHub Release](https://img.shields.io/github/v/release/nlbwqmz/wj-markdown-editor)
 
@@ -50,6 +50,11 @@
 - **便携版**暂不支持自动升级，需手动下载，解压后直接替换根目录即可。
 
 ## 更新记录
+
+#### 1.2.3
+
+1. 新增linux版本
+2. 优化使用体验
 
 #### 1.2.2
 

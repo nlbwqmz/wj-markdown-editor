@@ -34,14 +34,16 @@ if(!lock){
   })
 
   const createTray = () => {
-    const tray = new Tray(path.resolve(__dirname, '../icon/favicon.png'))
+    const tray = new Tray(path.resolve(__dirname, '../icon/256x256.png'))
     const contextMenu = Menu.buildFromTemplate([
-      { label: '退出', type: 'normal', click: () => { globalData.win?.close() } },
+      { label: '打开', type: 'normal', click: common.winShow },
+      { label: '退出', type: 'normal', click: () => { globalData.win?.close() } }
     ])
     tray.setContextMenu(contextMenu)
     tray.on('click', common.winShow)
     tray.on('double-click', common.winShow)
   }
+
   app.whenReady().then(() => {
     screenshotsUtil.init()
     common.initUpdater()

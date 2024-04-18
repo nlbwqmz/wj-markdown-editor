@@ -6,12 +6,11 @@ import constant from './constant.js'
 import fsUtil from "./fsUtil.js"
 import electronUpdater from 'electron-updater';
 import axios from "axios"
-import {nanoid} from "nanoid";
-
 const {autoUpdater, CancellationToken} = electronUpdater;
 import {fileURLToPath} from 'url'
 import pathUtil from "./pathUtil.js";
 import webdavUtil from "./webdavUtil.js";
+import idUtil from "./idUtil.js";
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -24,10 +23,9 @@ const sendMessageToAbout = (channel, args) => {
         globalData.aboutWin.webContents.send(channel, args)
     }
 }
-const getUUID = () => 'a' + nanoid()
 const getNewFileData = () => {
     return {
-        id: getUUID(),
+        id: idUtil.createId(),
         saved: true,
         content: '',
         tempContent: '',
@@ -83,8 +81,10 @@ export default {
             ]
         })
         if (currentPath) {
-            fs.writeFileSync(currentPath, fileState.tempContent)
-            globalData.win.webContents.send('showMessage', '另存成功', 'success')
+            fs.writeFile(currentPath, fileState.tempContent, () => {
+                globalData.win.webContents.send('showMessage', '另存成功', 'success')
+            })
+
         }
     },
     exit,
@@ -238,8 +238,7 @@ export default {
             globalData.searchBar.loadURL('http://localhost:8080/#/' + constant.router.searchBar).then(() => {
             })
         } else {
-            globalData.searchBar.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), {hash: constant.router.searchBar}).then(() => {
-            })
+            globalData.searchBar.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), {hash: constant.router.searchBar}).then(() => {})
         }
     },
     moveSearchBar: () => {
@@ -320,17 +319,6 @@ export default {
             autoUpdater.autoDownload = false
             autoUpdater.autoInstallOnAppQuit = false
             autoUpdater.on('checking-for-update', () => {})
-            // autoUpdater.on('update-available', info => {
-            //     sendMessageToAbout('messageToAbout', {finish: true, success: true, version: info.version})
-            // })
-            // autoUpdater.on('update-not-available', () => {
-            //     sendMessageToAbout('messageToAbout', {finish: true, success: true, version: app.getVersion()})
-            // })
-            // 已在回调中通知下载完成
-            // autoUpdater.on('update-downloaded', () => {
-            //     sendMessageToAbout('downloadFinish')
-            //     // autoUpdater.quitAndInstall()
-            // })
             autoUpdater.on('download-progress', progressInfo => {
                 sendMessageToAbout('updaterDownloadProgress', {
                     percent: progressInfo.percent,
@@ -364,7 +352,6 @@ export default {
         globalData.fileStateList = [...globalData.fileStateList, create]
         globalData.win.webContents.send('changeTab', create.id)
     },
-    getUUID,
     saveFile: data => {
         // type, currentWebdavPath
         const fileStateList = globalData.fileStateList

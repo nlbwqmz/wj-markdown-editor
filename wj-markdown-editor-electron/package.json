@@ -3,14 +3,15 @@
     "name": "魏杰",
     "email": "bxqyher@outlook.com"
   },
+  "homepage": "https://github.com/nlbwqmz/wj-markdown-editor",
   "description": "markdown编辑器",
   "name": "wj-markdown-editor",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "main": "src/main.js",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "start": "set NODE_ENV=dev && electron .",
+    "start": "cross-env NODE_ENV=dev electron .",
     "static": "electron .",
     "make": "cd ../wj-markdown-editor-web && yarn install && yarn build && cd ../wj-markdown-editor-electron && yarn install && electron-builder",
     "build": "electron-builder"
@@ -24,15 +25,6 @@
     "directories": {
       "output": "electron-build"
     },
-    "fileAssociations": [
-      {
-        "ext": [
-          "md"
-        ],
-        "name": "Markdown File",
-        "role": "Editor"
-      }
-    ],
     "files": [
       "!config.json",
       "!img/**",
@@ -62,12 +54,34 @@
           "target": "zip"
         }
       ],
-      "asarUnpack": [
-        "tool/**"
+      "fileAssociations": [
+        {
+          "ext": ["md"],
+          "name": "Markdown File"
+        }
+      ]
+    },
+    "linux": {
+      "icon": "./icon",
+      "category": "Utility",
+      "artifactName": "${productName}-${platform}-${arch}-${version}.${ext}",
+      "mimeTypes": ["text/markdown"],
+      "target": [
+        {
+          "target": "deb"
+        }
+      ],
+      "fileAssociations": [
+        {
+          "ext": ["md"],
+          "mimeType": "text/markdown",
+          "name": "Markdown File"
+        }
       ]
     }
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "electron": "^29.0.0",
     "electron-builder": "^24.9.1"
   },
