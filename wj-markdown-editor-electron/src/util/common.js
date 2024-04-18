@@ -84,7 +84,6 @@ export default {
             fs.writeFile(currentPath, fileState.tempContent, () => {
                 globalData.win.webContents.send('showMessage', '另存成功', 'success')
             })
-
         }
     },
     exit,
@@ -138,33 +137,58 @@ export default {
     },
     openExportPdfWin: () => {
         const fileState = globalData.fileStateList.find(item => item.id === globalData.activeFileId)
-        if(fileState.exists === false){
+        if(!fileState ||fileState.exists === false){
             globalData.win.webContents.send('showMessage', '未找到当前文件', 'warning')
             return;
         }
-        globalData.exportWin = new BrowserWindow({
-            frame: false,
-            modal: true,
-            parent: globalData.win,
-            maximizable: false,
-            resizable: false,
-            show: false,
-            webPreferences: {
-                preload: path.resolve(__dirname, '../preload.js')
+        const pdfPath = dialog.showSaveDialogSync({
+            title: "导出PDF",
+            buttonLabel: "导出",
+            defaultPath: path.parse(fileState.fileName).name,
+            filters: [
+                {name: 'pdf文件', extensions: ['pdf']}
+            ]
+        })
+        if (pdfPath) {
+            globalData.win.webContents.send('showMessage', '导出中...', 'loading', 0)
+            globalData.exportWin = new BrowserWindow({
+                frame: false,
+                modal: true,
+                parent: globalData.win,
+                maximizable: false,
+                resizable: false,
+                show: false,
+                webPreferences: {
+                    preload: path.resolve(__dirname, '../preload.js')
+                }
+            })
+            globalData.exportWin.once('execute-export-pdf', () => {
+                globalData.exportWin.webContents.printToPDF({
+                    pageSize: 'A4',
+                    printBackground: true,
+                    generateTaggedPDF: true,
+                    displayHeaderFooter: true,
+                    headerTemplate: '<span></span>',
+                    footerTemplate: '<div style="font-size: 12px; text-align: center; width: 100%">第<span class="pageNumber"></span>页 共<span class="totalPages"></span>页 文档由<a target="_blank" href="https://github.com/nlbwqmz/wj-markdown-editor">wj-markdown-editor</a>导出</div>'
+                }).then(buffer => {
+                    fs.writeFile(pdfPath, Buffer.from(buffer), () => {
+                        globalData.win.webContents.send('showMessage', '导出成功', 'success', 2, true)
+                        globalData.exportWin.close()
+                    })
+                }).catch(() => {
+                    globalData.win.webContents.send('showMessage', '导出失败', 'error', 2, true)
+                    globalData.exportWin.close()
+                })
+            })
+            if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
+                globalData.exportWin.loadURL('http://localhost:8080/#/' + constant.router.export + '?id=' + globalData.activeFileId).then(() => {
+                })
+            } else {
+                globalData.exportWin.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), {
+                    hash: constant.router.export,
+                    search: 'id=' + globalData.activeFileId
+                }).then(() => {})
             }
-        })
-        globalData.exportWin.once('ready-to-show', () => {
-            globalData.exportWin.show()
-        })
-        if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-            globalData.exportWin.loadURL('http://localhost:8080/#/' + constant.router.export + '?id=' + globalData.activeFileId).then(() => {
-            })
-        } else {
-            globalData.exportWin.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), {
-                hash: constant.router.export,
-                search: 'id=' + globalData.activeFileId
-            }).then(() => {
-            })
         }
     },
     openAboutWin: () => {

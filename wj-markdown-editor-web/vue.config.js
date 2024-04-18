@@ -1,5 +1,6 @@
 const { defineConfig } = require('@vue/cli-service')
 module.exports = defineConfig({
+  productionSourceMap: false,
   transpileDependencies: true,
   outputDir: '../wj-markdown-editor-electron/web-dist',
   publicPath: './',

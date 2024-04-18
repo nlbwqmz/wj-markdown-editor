@@ -246,6 +246,12 @@ ipcMain.on('exportPdf', event => {
     common.openExportPdfWin()
 })
 
+ipcMain.on('executeExportPdf', () => {
+    if(globalData.exportWin && !globalData.exportWin.isDestroyed()) {
+        globalData.exportWin.emit('execute-export-pdf')
+    }
+})
+
 ipcMain.on('closeExportWin', event => {
     if(globalData.exportWin){
         globalData.exportWin.close()

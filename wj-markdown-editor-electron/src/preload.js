@@ -40,6 +40,7 @@ const showToMain = {
   updateConfig: config => ipcRenderer.send('updateConfig', config),
   openDirSelect: () => ipcRenderer.invoke('openDirSelect'),
   exportPdf: () => ipcRenderer.send('exportPdf'),
+  executeExportPdf: () => ipcRenderer.send('executeExportPdf'),
   closeExportWin: () => ipcRenderer.send('closeExportWin'),
   findInPage: (searchContent) => ipcRenderer.send('findInPage', searchContent),
   findInPageNext: (searchContent, forward) => ipcRenderer.send('findInPageNext', searchContent, forward),

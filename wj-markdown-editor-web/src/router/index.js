@@ -80,8 +80,10 @@ router.beforeEach((to, from) => {
 
 router.afterEach((to) => {
   const id = commonUtil.getUrlParam('id')
-  store.commit('updateId', id)
-  store.commit('updateRouteState', { id, path: to.path })
+  if (id) {
+    store.commit('updateId', id)
+    store.commit('updateRouteState', { id, path: to.path })
+  }
 })
 
 export default router
