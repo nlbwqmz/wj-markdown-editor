@@ -25,12 +25,7 @@ if(!lock){
         globalData.win.webContents.send('changeTab', additionalData.fileInfo.id)
       }
     }
-    if (globalData.win && !globalData.win.isDestroyed()) {
-      if (globalData.win.isMinimized()) {
-        globalData.win.restore()
-      }
-      globalData.win.focus()
-    }
+    common.winShow()
   })
 
   const createTray = () => {
