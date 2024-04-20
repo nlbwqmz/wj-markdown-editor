@@ -1,4 +1,5 @@
 import {shell, screen, BrowserWindow} from 'electron'
+import config from "../local/config.js";
 
 export default {
     handle: (browserWindow, searchBarWin, common, globalShortcutUtil, globalData) => {
@@ -35,11 +36,8 @@ export default {
             const size = browserWindow.getSize();
             searchBarWin.moveSearchBar()
             if(size[0] <= screen.getPrimaryDisplay().workArea.width && size[1] <= screen.getPrimaryDisplay().workArea.height) {
-                globalData.config = {
-                    ...globalData.config,
-                    winWidth: size[0],
-                    winHeight: size[1],
-                }
+                config.winWidth = size[0]
+                config.winHeight = size[1]
             }
         })
         browserWindow.on('maximize', () => {

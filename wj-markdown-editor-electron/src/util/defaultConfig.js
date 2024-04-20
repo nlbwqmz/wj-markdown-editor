@@ -1,5 +1,6 @@
 import pathUtil from "./pathUtil.js"
-export default {
+
+const defaultConfig = {
   // 初次进入的路由
   initRoute: 'edit',
   minimizeToTray: false,
@@ -33,4 +34,9 @@ export default {
   },
   // 默认显示webdav
   showWebdav: true
+}
+export default {
+  get: () => {
+    return JSON.parse(JSON.stringify(defaultConfig))
+  }
 }

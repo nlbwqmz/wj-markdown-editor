@@ -1,4 +1,5 @@
 export default {
+    title: 'wj-markdown-editor',
     router: {
         edit: 'edit',
         preview: 'preview',

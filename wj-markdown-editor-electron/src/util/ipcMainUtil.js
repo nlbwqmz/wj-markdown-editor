@@ -18,6 +18,8 @@ import settingWin from "../win/settingWin.js";
 import aboutWin from "../win/aboutWin.js";
 import searchBarWin from "../win/searchBarWin.js";
 import win from "../win/win.js";
+import config from "../local/config.js";
+import util from "./util.js";
 
 const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
@@ -103,7 +105,7 @@ const uploadImage = async obj => {
             }
         }))
     } else if (insertImgType === '5') { // 上传
-        if(!globalData.config.picGo.host || !globalData.config.picGo.port) {
+        if(!config.picGo.host || !config.picGo.port) {
             win.showMessage('请配置PicGo服务信息', 'error', 2, true)
             return undefined
         }
@@ -135,7 +137,7 @@ const uploadImage = async obj => {
         tempList = tempList && tempList.length > 0 ? tempList.filter(item => item !== undefined) : []
         if(tempList && tempList.length > 0) {
             let error = false
-            axios.post(`http://${globalData.config.picGo.host}:${globalData.config.picGo.port}/upload`, { list: tempList }).then(res => {
+            axios.post(`http://${config.picGo.host}:${config.picGo.port}/upload`, { list: tempList }).then(res => {
                 if(res.data.success === true){
                     win.insertScreenshotResult({ id: obj.id, list: res.data.result })
                 } else {
@@ -209,7 +211,7 @@ ipcMain.on('uploadImage', (event, obj) => {
 })
 
 ipcMain.handle('getConfig', event => {
-    return globalData.config
+    return util.deepCopy(config)
 })
 
 ipcMain.on('saveToOther', (event, id) => {
@@ -236,8 +238,8 @@ ipcMain.on('closeSettingWin', () => {
     settingWin.hide()
 })
 
-ipcMain.on('updateConfig', (event, config) => {
-    globalData.config = config
+ipcMain.on('updateConfig', (event, newConfig) => {
+    util.setByKey(newConfig, config)
 })
 
 ipcMain.on('exportPdf', event => {
@@ -324,7 +326,7 @@ ipcMain.on('screenshot', (event, id, hide) => {
 })
 
 ipcMain.on('action', (event, type) => {
-    if(type === 'minimize' && globalData.config.minimizeToTray === true){
+    if(type === 'minimize' && config.minimizeToTray === true){
         win.hide()
     } else {
         win.instanceFuncName(type)
@@ -335,8 +337,8 @@ ipcMain.on('exit', () => {
     common.exit()
 })
 ipcMain.on('restoreDefaultSetting', event => {
-    globalData.config = defaultConfig
-    settingWin.shouldUpdateConfig(globalData.config)
+    util.setByKey(defaultConfig.get(), config)
+    settingWin.shouldUpdateConfig(util.deepCopy(config))
 })
 
 ipcMain.on('openAboutWin', event => {
@@ -370,7 +372,7 @@ ipcMain.on('exportSetting', event => {
         ]
     })
     if(filePath){
-        fsUtil.exportSetting(globalData.configPath, filePath, () => {
+        fsUtil.exportSetting(pathUtil.getConfigPath(), filePath, () => {
             win.showMessage('导出成功', 'success')
         })
     }
@@ -388,12 +390,13 @@ ipcMain.on('importSetting', event => {
     if(filePath && filePath.length === 1 && fsUtil.exists(filePath[0])){
         try {
             const json = fsUtil.getJsonFileContent(filePath[0])
-            for(const key in defaultConfig){
+            const defaultConfigObj = defaultConfig.get()
+            for(const key in defaultConfigObj){
                 if(!json.hasOwnProperty(key)){
-                    json[key] = defaultConfig[key]
+                    json[key] = defaultConfigObj[key]
                 }
             }
-            globalData.config = json
+            util.setByKey(json, config)
             win.showMessage('导入成功', 'success')
         } catch (e) {
             win.showMessage('导入失败', 'error')

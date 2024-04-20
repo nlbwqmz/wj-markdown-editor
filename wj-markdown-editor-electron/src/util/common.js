@@ -12,6 +12,7 @@ import webdavUtil from "./webdavUtil.js";
 import idUtil from "./idUtil.js";
 import aboutWin from "../win/aboutWin.js";
 import win from "../win/win.js";
+import config from "../local/config.js";
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -86,9 +87,6 @@ export default {
     winShow: () => {
         win.show()
     },
-    shouldUpdateConfig: () => {
-        win.shouldUpdateConfig(globalData.config)
-    },
     getImgParentPath: (fileState, insertImgType) => {
         const originFilePath = fileState.originFilePath
         let savePath
@@ -97,7 +95,7 @@ export default {
         } else if (insertImgType === '3') {
             savePath = path.join(path.dirname(originFilePath), 'assets')
         } else {
-            savePath = globalData.config.imgSavePath
+            savePath = config.imgSavePath
         }
         if (fileState.type === 'local' || (insertImgType !== '2' && insertImgType !== '3')) {
             fsUtil.mkdirSyncWithRecursion(savePath)
@@ -106,15 +104,15 @@ export default {
     },
     getImgInsertType: (file) => {
         if (file.url) { // 通过URL 插入网络图片
-            return globalData.config.insertNetworkImgType
+            return config.insertNetworkImgType
         } else if (file.path && file.isSelect) { // 通过文件选择 插入本地图片
-            return globalData.config.insertLocalImgType
+            return config.insertLocalImgType
         } else if (file.path && !file.isSelect) { // 通过粘贴板 插入本地图片
-            return globalData.config.insertPasteboardLocalImgType
+            return config.insertPasteboardLocalImgType
         } else if (file.base64 && file.isScreenshot) { // 通过屏幕截图 插入图片
-            return globalData.config.insertScreenshotImgType
+            return config.insertScreenshotImgType
         } else if (file.base64 && !file.isScreenshot) { // 通过粘贴板 插入网络图片
-            return globalData.config.insertPasteboardNetworkImgType
+            return config.insertPasteboardNetworkImgType
         }
     },
     checkUpdate: () => {

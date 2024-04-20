@@ -1,12 +1,8 @@
 import fs from "fs"
-import defaultConfig from './defaultConfig.js'
 import pathUtil from './pathUtil.js'
 import fsUtil from './fsUtil.js'
 import path from "path"
-import { Notification} from "electron"
-import {Cron} from "croner"
 import idUtil from "./idUtil.js";
-import exportWin from "../win/exportWin.js";
 import win from "../win/win.js";
 
 const openOnFile = () => {
@@ -16,24 +12,7 @@ fsUtil.mkdirSyncWithRecursion(pathUtil.getUserDataPath())
 const isOpenOnFile = openOnFile()
 const originFilePath = isOpenOnFile ? process.argv[process.argv.length - 1] : undefined
 // const firstContent = isOpenOnFile ? fs.readFileSync(originFilePath).toString() : ''
-const configPath = pathUtil.getConfigPath()
-const configIsExist = fs.existsSync(configPath)
-const config = configIsExist ? JSON.parse(fs.readFileSync(configPath).toString()) : defaultConfig
-if(configIsExist){
-    let flag = false
-    for(const key in defaultConfig){
-        if(!config.hasOwnProperty(key)){
-            flag = true
-            config[key] = defaultConfig[key]
-        }
-    }
-    if(flag){
-        fs.writeFile(configPath, JSON.stringify(config), () => {})
-    }
-}
-if(!configIsExist) {
-    fs.writeFile(configPath, JSON.stringify(config), () => {})
-}
+
 
 const initFileStateList = () => {
     const list = []
@@ -94,13 +73,10 @@ const writeLastOpenedFile = () => {
 }
 
 const data = {
-    initTitle: 'wj-markdown-editor',
     activeFileId: '',
     webdavLoginState: false,
     fileStateList: initFileStateList(),
     downloadUpdateToken: undefined,
-    config,
-    configPath,
     webdavClient: null,
     autoLogin: false
 }
@@ -116,12 +92,7 @@ const proxyData = new Proxy(data, {
     }
 })
 const handleDataChange = (name, newValue) => {
-    if (name === 'config') {
-        fs.writeFile(configPath, JSON.stringify(data.config), () => {})
-        handleJob(data.config.autoSave.minute)
-        win.shouldUpdateConfig(data.config)
-        exportWin.shouldUpdateConfig(data.config)
-    } else if(name === 'fileStateList'){
+    if(name === 'fileStateList'){
         win.updateFileStateList(data.fileStateList.map(item => {
             return {
                 id: item.id,
@@ -138,40 +109,7 @@ const handleDataChange = (name, newValue) => {
         writeLastOpenedFile()
     }
 }
-const handleJob = minute => {
-    if(jobRecentMinute !== minute){
-        jobRecentMinute = minute
-        if(job && !job.isStopped()) {
-            job.stop()
-        }
-        if(minute > 0){
-            job = Cron(`*/${minute} * * * *`, { paused: true, protect: true }, async () => {
-                // 不立即执行
-                const fileStateList = data.fileStateList
-                let has = false
-                for (const item of fileStateList) {
-                    if(item.originFilePath && !item.saved){
-                        if(item.type === 'local') {
-                            fs.writeFileSync(item.originFilePath, item.tempContent)
-                        } else if (item.type === 'webdav') {
-                            await data.webdavClient.putFileContents(item.originFilePath, item.tempContent)
-                        }
-                        item.saved = true
-                        item.content = item.tempContent
-                        has = true
-                    }
-                }
-                if(has){
-                    new Notification({
-                        title: '自动保存成功'
-                    }).show()
-                    proxyData.fileStateList = fileStateList
-                }
-            })
-            job.resume()
-        }
-    }
-}
+
 writeLastOpenedFile()
-handleJob(data.config.autoSave.minute)
+
 export default proxyData

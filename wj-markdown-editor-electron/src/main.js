@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url'
 import win from "./win/win.js";
 import searchBarWin from "./win/searchBarWin.js";
 import globalShortcutUtil from "./util/globalShortcutUtil.js";
+import './util/job.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const lock = app.requestSingleInstanceLock({ fileInfo: globalData.fileStateList[globalData.fileStateList.length - 1] })

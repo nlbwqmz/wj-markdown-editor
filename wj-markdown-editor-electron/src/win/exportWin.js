@@ -2,11 +2,11 @@ import {BrowserWindow} from "electron";
 import path from "path";
 import constant from "../util/constant.js";
 import {fileURLToPath} from "url";
+import {configWatch} from "../local/config.js";
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 let exportWin
-
-export default {
+const obj = {
     open: (parent, pdfPath, id, exportSuccess, exportFail) => {
         exportWin = new BrowserWindow({
             frame: false,
@@ -56,3 +56,16 @@ export default {
         }
     }
 }
+
+const init = () => {
+    configWatch({
+        nameList: [],
+        handle: config => {
+            obj.shouldUpdateConfig(config)
+        }
+    })
+}
+
+init()
+
+export default obj

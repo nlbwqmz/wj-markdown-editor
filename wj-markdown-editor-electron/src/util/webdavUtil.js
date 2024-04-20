@@ -5,6 +5,7 @@ import pathUtil from "./pathUtil.js";
 import fs from "fs";
 import fsUtil from "./fsUtil.js";
 import aesUtil from "./aesUtil.js";
+import win from "../win/win.js";
 
 const func = {
     login: (data, write) => {
