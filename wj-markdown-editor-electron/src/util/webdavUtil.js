@@ -23,7 +23,7 @@ const func = {
                 }
             }
         }).catch(() => {
-            globalData.win.webContents.send('showMessage', '登录失败', 'error')
+            win.showMessage('登录失败', 'error')
             func.logout()
         })
     },
@@ -31,7 +31,7 @@ const func = {
         try{
             return await globalData.webdavClient.getDirectoryContents(currentPath)
         } catch (err) {
-            globalData.win.webContents.send('showMessage', '访问失败', 'error')
+            win.showMessage('访问失败', 'error')
         }
     },
     logout: () => {
@@ -55,7 +55,7 @@ const func = {
         try {
             return await globalData.webdavClient.getFileContents(filename, { format: 'text' })
         } catch (err) {
-            globalData.win.webContents.send('showMessage', '访问失败', 'error')
+            win.showMessage('访问失败', 'error')
         }
     },
     putFileContents: async (filename, content) => {
@@ -66,14 +66,14 @@ const func = {
             }
             return await globalData.webdavClient.putFileContents(filename, content)
         } catch (err) {
-            globalData.win.webContents.send('showMessage', '访问失败', 'error')
+            win.showMessage('访问失败', 'error')
         }
     },
     getFileBuffer: async filename => {
         try {
             return await globalData.webdavClient.getFileContents(filename, { format: 'binary' })
         } catch (err) {
-            globalData.win.webContents.send('showMessage', '访问失败', 'error')
+            win.showMessage('访问失败', 'error')
         }
     },
     autoLogin: () => {

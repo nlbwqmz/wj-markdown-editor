@@ -13,6 +13,11 @@ import webdavUtil from "./webdavUtil.js";
 import screenshotsUtil from "./screenshotsUtil.js";
 import globalShortcutUtil from "./globalShortcutUtil.js";
 import idUtil from "./idUtil.js";
+import exportWin from "../win/exportWin.js";
+import settingWin from "../win/settingWin.js";
+import aboutWin from "../win/aboutWin.js";
+import searchBarWin from "../win/searchBarWin.js";
+import win from "../win/win.js";
 
 const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
@@ -22,25 +27,25 @@ const uploadImage = async obj => {
     const files = obj.fileList
     const fileState = globalData.fileStateList.find(item => item.id === obj.id)
     let list
-    globalData.win.webContents.send('showMessage', '图片处理中', 'loading', 0)
+    win.showMessage('图片处理中', 'loading', 0)
     const insertImgType = common.getImgInsertType(files[0])
     if(insertImgType === '1'){ // 无操作
         if(isBase64Img(files)){
-            globalData.win.webContents.send('showMessage', '无法在当前图片模式下粘贴网络图片或截图', 'error', 2, true)
+            win.showMessage('无法在当前图片模式下粘贴网络图片或截图', 'error', 2, true)
             return undefined
         } else {
             list = files.map(file => file.path || file.url)
         }
     } else if (insertImgType === '2' || insertImgType === '3' || insertImgType === '4') { // // 2: 复制到 ./%{filename} 文件夹 3: 复制到 ./assets 文件夹 4:复制到指定文件夹
         if((insertImgType === '2' || insertImgType === '3') && !fileState.originFilePath){
-            globalData.win.webContents.send('showMessage', '当前文件未保存，不能将图片保存到相对位置', 'error', 2, true)
+            win.showMessage('当前文件未保存，不能将图片保存到相对位置', 'error', 2, true)
             return undefined
         }
         let savePath
         try {
             savePath = common.getImgParentPath(fileState, insertImgType)
         } catch (e) {
-            globalData.win.webContents.send('showMessage', '图片保存路径创建失败,请检查相关设置是否正确', 'error', 2, true)
+            win.showMessage('图片保存路径创建失败,请检查相关设置是否正确', 'error', 2, true)
             return undefined
         }
         list = await Promise.all(files.map(async file => {
@@ -92,14 +97,14 @@ const uploadImage = async obj => {
                     }
                     return newFilePath
                 } catch (e) {
-                    globalData.win.webContents.send('showMessage', '图片下载失败', 'error', 2, true)
+                    win.showMessage('图片下载失败', 'error', 2, true)
                     return undefined
                 }
             }
         }))
     } else if (insertImgType === '5') { // 上传
         if(!globalData.config.picGo.host || !globalData.config.picGo.port) {
-            globalData.win.webContents.send('showMessage', '请配置PicGo服务信息', 'error', 2, true)
+            win.showMessage('请配置PicGo服务信息', 'error', 2, true)
             return undefined
         }
         const tempPath = pathUtil.getTempPath()
@@ -122,7 +127,7 @@ const uploadImage = async obj => {
                     fs.writeFileSync(newFilePath,  result.data)
                     return newFilePath
                 } catch (e) {
-                    globalData.win.webContents.send('showMessage', '图片下载失败', 'error', 2, true)
+                    win.showMessage('图片下载失败', 'error', 2, true)
                     return undefined
                 }
             }
@@ -132,16 +137,16 @@ const uploadImage = async obj => {
             let error = false
             axios.post(`http://${globalData.config.picGo.host}:${globalData.config.picGo.port}/upload`, { list: tempList }).then(res => {
                 if(res.data.success === true){
-                    globalData.win.webContents.send('insertScreenshotResult', { id: obj.id, list: res.data.result })
+                    win.insertScreenshotResult({ id: obj.id, list: res.data.result })
                 } else {
-                    globalData.win.webContents.send('showMessage', `图片上传失败，请检查PicGo服务。(错误信息：${res.data.message})`, 'error', 2, true)
+                    win.showMessage(`图片上传失败，请检查PicGo服务。(错误信息：${res.data.message})`, 'error', 2, true)
                 }
             }).catch(err => {
                 error = true
-                globalData.win.webContents.send('showMessage', `图片上传失败，请检查PicGo服务。(错误信息：${err.message})`, 'error', 2 ,true)
+                win.showMessage(`图片上传失败，请检查PicGo服务。(错误信息：${err.message})`, 'error', 2 ,true)
             }).finally(() => {
                 if(!error){
-                    globalData.win.webContents.send('closeMessage')
+                    win.closeMessage()
                 }
                 if(tempList && tempList.length){
                     fsUtil.deleteFileList(tempList)
@@ -151,9 +156,9 @@ const uploadImage = async obj => {
         return undefined
     }
     if(list && list.length > 0) {
-        globalData.win.webContents.send('insertScreenshotResult', { id: obj.id, list })
+        win.insertScreenshotResult({ id: obj.id, list })
         if(!list.find(item => item === undefined)){
-            globalData.win.webContents.send('closeMessage')
+            win.closeMessage()
         }
     }
 }
@@ -196,12 +201,7 @@ ipcMain.handle('getFileContent', async (event, id) => {
 })
 
 ipcMain.handle('openDirSelect', event => {
-    const dirList = dialog.showOpenDialogSync(globalData.settingWin, {
-        title: '选择文件夹',
-        buttonLabel: '确认',
-        properties: ['openDirectory']
-    })
-    return dirList && dirList.length > 0 ? dirList[0] : undefined
+    return settingWin.dirSelect()
 })
 
 ipcMain.on('uploadImage', (event, obj) => {
@@ -225,17 +225,15 @@ ipcMain.on('onContentChange', (event, content, id) => {
 })
 
 ipcMain.on('openSettingWin', event => {
-    common.openSettingWin()
+    settingWin.open()
 })
 
 
 ipcMain.on('settingWinMinimize', () => {
-    common.settingWinMinimize()
+    settingWin.minimize()
 })
 ipcMain.on('closeSettingWin', () => {
-    if(globalData.settingWin){
-        globalData.settingWin.hide()
-    }
+    settingWin.hide()
 })
 
 ipcMain.on('updateConfig', (event, config) => {
@@ -243,35 +241,49 @@ ipcMain.on('updateConfig', (event, config) => {
 })
 
 ipcMain.on('exportPdf', event => {
-    common.openExportPdfWin()
+    const fileState = globalData.fileStateList.find(item => item.id === globalData.activeFileId)
+    if(!fileState ||fileState.exists === false){
+        win.showMessage('未找到当前文件', 'warning')
+        return;
+    }
+    const pdfPath = dialog.showSaveDialogSync({
+        title: "导出PDF",
+        buttonLabel: "导出",
+        defaultPath: path.parse(fileState.fileName).name,
+        filters: [
+            {name: 'pdf文件', extensions: ['pdf']}
+        ]
+    })
+    if (pdfPath) {
+        win.showMessage('导出中...', 'loading', 0)
+        exportWin.open(win.get(), pdfPath,  globalData.activeFileId, buffer => {
+            fs.writeFile(pdfPath, buffer, () => {
+                win.showMessage('导出成功', 'success', 2, true)
+            })
+        }, () => {
+            win.showMessage('导出失败', 'error', 2, true)
+        })
+    }
 })
 
 ipcMain.on('executeExportPdf', () => {
-    if(globalData.exportWin && !globalData.exportWin.isDestroyed()) {
-        globalData.exportWin.emit('execute-export-pdf')
-    }
-})
-
-ipcMain.on('closeExportWin', event => {
-    if(globalData.exportWin){
-        globalData.exportWin.close()
-    }
+    exportWin.emit('execute-export-pdf')
 })
 
 ipcMain.on('toggleSearchBar', event => {
-    common.toggleSearchBar()
+    searchBarWin.toggleSearchBar(win.get())
 })
 
 ipcMain.on('findInPage', (event, searchContent) => {
-    globalData.win.webContents.findInPage(searchContent, { findNext: true })
+    win.findInPage(searchContent, { findNext: true })
 })
 
 ipcMain.on('findInPageNext', (event, searchContent, forward) => {
-    globalData.win.webContents.findInPage(searchContent, { forward, findNext: false })
+    win.findInPage(searchContent, { forward, findNext: false })
 })
 
 ipcMain.on('stopFindInPage', event => {
-    globalData.win.webContents.stopFindInPage('clearSelection')
+    win.stopFindInPage()
 })
 
 ipcMain.on('screenshot', (event, id, hide) => {
@@ -280,12 +292,12 @@ ipcMain.on('screenshot', (event, id, hide) => {
             uploadImage({ id, fileList: [{ base64, type: 'image/png', isScreenshot: true }] }).then(() => {})
         }, () => {
             if(hide === true) {
-                common.winShow()
+                win.show()
             }
         })
     }
     if(hide === true) {
-        globalData.win.minimize()
+        win.minimize()
         setTimeout(() => {
             startCapture()
         }, 200)
@@ -313,9 +325,9 @@ ipcMain.on('screenshot', (event, id, hide) => {
 
 ipcMain.on('action', (event, type) => {
     if(type === 'minimize' && globalData.config.minimizeToTray === true){
-        globalData.win.hide()
+        win.hide()
     } else {
-        globalData.win[type]()
+        win.instanceFuncName(type)
     }
 })
 ipcMain.on('exit', () => {
@@ -324,16 +336,14 @@ ipcMain.on('exit', () => {
 })
 ipcMain.on('restoreDefaultSetting', event => {
     globalData.config = defaultConfig
-    if(globalData.settingWin && !globalData.settingWin.isDestroyed()){
-        globalData.settingWin.webContents.send('shouldUpdateConfig', globalData.config)
-    }
+    settingWin.shouldUpdateConfig(globalData.config)
 })
 
 ipcMain.on('openAboutWin', event => {
-    common.openAboutWin()
+    aboutWin.open(win.get())
 })
 ipcMain.on('closeAboutWin', event => {
-    common.closeAboutWin()
+    aboutWin.hide()
 })
 ipcMain.on('checkUpdate', event => {
     common.checkUpdate()
@@ -361,7 +371,7 @@ ipcMain.on('exportSetting', event => {
     })
     if(filePath){
         fsUtil.exportSetting(globalData.configPath, filePath, () => {
-            globalData.win.webContents.send('showMessage', '导出成功', 'success')
+            win.showMessage('导出成功', 'success')
         })
     }
 })
@@ -384,9 +394,9 @@ ipcMain.on('importSetting', event => {
                 }
             }
             globalData.config = json
-            globalData.win.webContents.send('showMessage', '导入成功', 'success')
+            win.showMessage('导入成功', 'success')
         } catch (e) {
-            globalData.win.webContents.send('showMessage', '导入失败', 'error')
+            win.showMessage('导入失败', 'error')
         }
     }
 })
@@ -430,7 +440,7 @@ ipcMain.on('openWebdavMd', async (event, filename, basename) => {
     const fileStateList = globalData.fileStateList
     const  find = fileStateList.find(item => item.type === 'webdav' && item.originFilePath === filename)
     if(find) {
-        globalData.win.webContents.send('changeTab', find.id)
+        win.changeTab(find.id)
     } else {
         const content = await webdavUtil.getFileContents(filename)
         const create = {
@@ -444,7 +454,7 @@ ipcMain.on('openWebdavMd', async (event, filename, basename) => {
         }
         fileStateList.push(create)
         globalData.fileStateList = fileStateList
-        globalData.win.webContents.send('changeTab', create.id)
+        win.changeTab(create.id)
     }
 })
 

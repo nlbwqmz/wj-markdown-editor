@@ -1,49 +1,39 @@
-import globalData from './globalData.js'
-import { shell, screen} from 'electron'
-import common from "./common.js"
-import globalShortcutUtil from './globalShortcutUtil.js'
-import webdavUtil from "./webdavUtil.js";
-const debounce = (func, timeout = 300) => {
-    let timer;
-    return (...args) => {
-        clearTimeout(timer);
-        timer = setTimeout(() => { func.apply(this, args); }, timeout);
-    };
-}
+import {shell, screen, BrowserWindow} from 'electron'
+
 export default {
-    handle: () => {
-        globalData.win.webContents.on('found-in-page', (event, result) => {
-            globalData.searchBar.webContents.send('findInPageResult', result)
+    handle: (browserWindow, searchBarWin, common, globalShortcutUtil, globalData) => {
+        browserWindow.webContents.on('found-in-page', (event, result) => {
+            searchBarWin.findInPageResult(result)
         })
         // 通过默认浏览器打开链接
-        globalData.win.webContents.setWindowOpenHandler(details => {
+        browserWindow.webContents.setWindowOpenHandler(details => {
             shell.openExternal(details.url).then(() => {})
             return {action: 'deny'}
         })
-        globalData.win.once('ready-to-show', () => {
-            globalData.win.show()
+        browserWindow.once('ready-to-show', () => {
+            browserWindow.show()
             setTimeout(() => {
                 common.autoCheckAppUpdate()
             }, 5000)
         })
-        globalData.win.on('close', e => {
+        browserWindow.on('close', e => {
             e.preventDefault()
             if(globalData.fileStateList.some(item => item.saved === false)){
                 common.winShow()
-                globalData.win.webContents.send('confirmExit')
+                browserWindow.webContents.send('confirmExit')
             } else {
                 globalShortcutUtil.unregister()
                 common.exit()
             }
         })
-        globalData.win.on('will-resize', (event, newBounds ) => {
+        browserWindow.on('will-resize', (event, newBounds ) => {
             if(newBounds.width < 850 || newBounds.height < 280){
                 event.preventDefault()
             }
         })
-        globalData.win.on('resize', () => {
-            const size = globalData.win.getSize();
-            common.moveSearchBar()
+        browserWindow.on('resize', () => {
+            const size = browserWindow.getSize();
+            searchBarWin.moveSearchBar()
             if(size[0] <= screen.getPrimaryDisplay().workArea.width && size[1] <= screen.getPrimaryDisplay().workArea.height) {
                 globalData.config = {
                     ...globalData.config,
@@ -52,28 +42,28 @@ export default {
                 }
             }
         })
-        globalData.win.on('maximize', () => {
-            globalData.win.webContents.send('showMaximizeAction', false)
-            common.moveSearchBar()
+        browserWindow.on('maximize', () => {
+            browserWindow.webContents.send('showMaximizeAction', false)
+            searchBarWin.moveSearchBar()
         })
-        globalData.win.on('unmaximize', () => {
-            globalData.win.webContents.send('showMaximizeAction', true)
-            common.moveSearchBar()
+        browserWindow.on('unmaximize', () => {
+            browserWindow.webContents.send('showMaximizeAction', true)
+            searchBarWin.moveSearchBar()
         })
-        globalData.win.on('minimize', () => {
-            common.moveSearchBar()
+        browserWindow.on('minimize', () => {
+            searchBarWin.moveSearchBar()
         })
-        globalData.win.on('blur', () => {
+        browserWindow.on('blur', () => {
             globalShortcutUtil.unregister()
         })
-        globalData.win.on('focus', () => {
+        browserWindow.on('focus', () => {
             globalShortcutUtil.register()
         })
-        globalData.win.on('move', () => {
-            common.moveSearchBar()
+        browserWindow.on('move', () => {
+            searchBarWin.moveSearchBar()
         })
-        globalData.win.on('show', common.showSearchBar)
-        globalData.win.on('hide', common.hideSearchBar)
+        browserWindow.on('show', searchBarWin.show)
+        browserWindow.on('hide', searchBarWin.hide)
     }
 }
 

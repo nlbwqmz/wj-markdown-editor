@@ -6,6 +6,8 @@ import path from "path"
 import { Notification} from "electron"
 import {Cron} from "croner"
 import idUtil from "./idUtil.js";
+import exportWin from "../win/exportWin.js";
+import win from "../win/win.js";
 
 const openOnFile = () => {
     return Boolean(process.argv && process.argv.length > 0 && /.*\.md$/.test(process.argv[process.argv.length - 1]))
@@ -90,32 +92,15 @@ const writeLastOpenedFile = () => {
         }
     })), () => {})
 }
-const updateFileStateList = () => {
-    data.win.webContents.send('updateFileStateList', data.fileStateList.map(item => {
-        return {
-            id: item.id,
-            saved: item.saved,
-            originFilePath: item.originFilePath,
-            fileName: item.fileName,
-            type: item.type
-        }
-    }))
-    writeLastOpenedFile()
-}
+
 const data = {
-    win: null,
     initTitle: 'wj-markdown-editor',
     activeFileId: '',
     webdavLoginState: false,
     fileStateList: initFileStateList(),
-    settingWin: undefined,
-    exportWin: undefined,
-    aboutWin: undefined,
-    searchBar: undefined,
     downloadUpdateToken: undefined,
     config,
     configPath,
-    updateFileStateList,
     webdavClient: null,
     autoLogin: false
 }
@@ -134,14 +119,21 @@ const handleDataChange = (name, newValue) => {
     if (name === 'config') {
         fs.writeFile(configPath, JSON.stringify(data.config), () => {})
         handleJob(data.config.autoSave.minute)
-        data.win.webContents.send('shouldUpdateConfig', data.config)
-        if(data.exportWin && !data.exportWin.isDestroyed()){
-            data.exportWin.webContents.send('shouldUpdateConfig', data.config)
-        }
+        win.shouldUpdateConfig(data.config)
+        exportWin.shouldUpdateConfig(data.config)
     } else if(name === 'fileStateList'){
-        updateFileStateList()
+        win.updateFileStateList(data.fileStateList.map(item => {
+            return {
+                id: item.id,
+                saved: item.saved,
+                originFilePath: item.originFilePath,
+                fileName: item.fileName,
+                type: item.type
+            }
+        }))
+        writeLastOpenedFile()
     } else if (name === 'webdavLoginState'){
-        data.win.webContents.send('loginState', data.webdavLoginState)
+        win.loginState(data.webdavLoginState)
     } else if (name === 'autoLogin') {
         writeLastOpenedFile()
     }

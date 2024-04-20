@@ -1,12 +1,15 @@
 import { globalShortcut } from 'electron'
 import common from "./common.js"
 import globalData from './globalData.js'
+import settingWin from "../win/settingWin.js";
+import searchBarWin from "../win/searchBarWin.js";
+import win from "../win/win.js";
 
 const shortcutList = [
     {
         accelerator: 'Ctrl+s',
         callback: () => {
-            if(globalData.win.isFocused()){
+            if(win.isFocused()){
                 common.saveFile({ id: globalData.activeFileId })
             }
         }
@@ -14,15 +17,15 @@ const shortcutList = [
     {
         accelerator: 'Ctrl+Alt+s',
         callback: () => {
-            if(globalData.win.isFocused()){
-                common.openSettingWin()
+            if(win.isFocused()){
+                settingWin.open()
             }
         }
     },
     {
         accelerator: 'Ctrl+Shift+s',
         callback: () => {
-            if(globalData.win.isFocused()){
+            if(win.isFocused()){
                 common.saveToOther(globalData.activeFileId)
             }
         }
@@ -30,23 +33,23 @@ const shortcutList = [
     {
         accelerator: 'Ctrl+Shift+/',
         callback: () => {
-            if(globalData.win.isFocused()){
-                globalData.win.webContents.send('toggleView')
+            if(win.isFocused()){
+                win.toggleView()
             }
         }
     },
     {
         accelerator: 'Ctrl+f',
         callback: () => {
-            if(globalData.win.isFocused()){
-                common.toggleSearchBar()
+            if(win.isFocused()){
+                searchBarWin.toggleSearchBar(win.get())
             }
         }
     },
     {
         accelerator: 'Ctrl+n',
         callback: () => {
-            if(globalData.win.isFocused()){
+            if(win.isFocused()){
                 common.newFile()
             }
         }

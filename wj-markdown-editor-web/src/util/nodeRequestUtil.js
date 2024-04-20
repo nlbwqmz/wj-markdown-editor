@@ -34,9 +34,6 @@ export default {
   exportPdf: () => {
     window.node.exportPdf()
   },
-  closeExportWin: () => {
-    window.node.closeExportWin()
-  },
   findInPage: (searchContent) => {
     window.node.findInPage(searchContent)
   },
