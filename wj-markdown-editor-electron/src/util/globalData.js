@@ -1,9 +1,9 @@
-import fs from "fs"
 import pathUtil from './pathUtil.js'
 import fsUtil from './fsUtil.js'
 import path from "path"
 import idUtil from "./idUtil.js";
 import win from "../win/win.js";
+import lastOpened from "../local/lastOpened.js";
 
 const openOnFile = () => {
     return Boolean(process.argv && process.argv.length > 0 && /.*\.md$/.test(process.argv[process.argv.length - 1]))
@@ -14,19 +14,8 @@ const originFilePath = isOpenOnFile ? process.argv[process.argv.length - 1] : un
 // const firstContent = isOpenOnFile ? fs.readFileSync(originFilePath).toString() : ''
 
 
-const initFileStateList = () => {
-    const list = []
-    if(fsUtil.exists(pathUtil.getLastOpenedFilePath())){
-        list.push(...JSON.parse(fs.readFileSync(pathUtil.getLastOpenedFilePath()).toString()).map(item => {
-            return {
-                ...item,
-                saved: true,
-                content: '',
-                tempContent: '',
-                loaded: false
-            }
-        }))
-    }
+const initFileStateList = async () => {
+    const list = [...await lastOpened.read()]
     if(isOpenOnFile){
         const index = list.findIndex(item => item.originFilePath === originFilePath && item.type === 'local')
         if(index > -1){
@@ -58,24 +47,21 @@ const initFileStateList = () => {
     return list
 }
 
-let job
-let jobRecentMinute = 0
-
 const writeLastOpenedFile = () => {
-    fs.writeFile(pathUtil.getLastOpenedFilePath(), JSON.stringify(data.fileStateList.filter(item => (data.autoLogin === true && item.type) || (!data.autoLogin && item.type === 'local')).map(item => {
+    lastOpened.write(data.fileStateList.filter(item => (data.autoLogin === true && item.type) || (!data.autoLogin && item.type === 'local')).map(item => {
         return {
             id: item.id,
             originFilePath: item.originFilePath,
             fileName: item.fileName,
             type: item.type
         }
-    })), () => {})
+    }))
 }
 
 const data = {
     activeFileId: '',
     webdavLoginState: false,
-    fileStateList: initFileStateList(),
+    fileStateList: await initFileStateList(),
     downloadUpdateToken: undefined,
     webdavClient: null,
     autoLogin: false
