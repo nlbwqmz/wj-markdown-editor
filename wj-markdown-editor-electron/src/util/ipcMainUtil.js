@@ -20,6 +20,7 @@ import searchBarWin from "../win/searchBarWin.js";
 import win from "../win/win.js";
 import config from "../local/config.js";
 import util from "./util.js";
+import fileState from "../runtime/fileState.js";
 
 const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
@@ -27,7 +28,7 @@ const isBase64Img = files => {
 
 const uploadImage = async obj => {
     const files = obj.fileList
-    const fileState = globalData.fileStateList.find(item => item.id === obj.id)
+    const fileStateItem = fileState.getById(obj.id)
     let list
     win.showMessage('图片处理中', 'loading', 0)
     const insertImgType = common.getImgInsertType(files[0])
@@ -39,13 +40,13 @@ const uploadImage = async obj => {
             list = files.map(file => file.path || file.url)
         }
     } else if (insertImgType === '2' || insertImgType === '3' || insertImgType === '4') { // // 2: 复制到 ./%{filename} 文件夹 3: 复制到 ./assets 文件夹 4:复制到指定文件夹
-        if((insertImgType === '2' || insertImgType === '3') && !fileState.originFilePath){
+        if((insertImgType === '2' || insertImgType === '3') && !fileStateItem.originFilePath){
             win.showMessage('当前文件未保存，不能将图片保存到相对位置', 'error', 2, true)
             return undefined
         }
         let savePath
         try {
-            savePath = common.getImgParentPath(fileState, insertImgType)
+            savePath = common.getImgParentPath(fileStateItem, insertImgType)
         } catch (e) {
             win.showMessage('图片保存路径创建失败,请检查相关设置是否正确', 'error', 2, true)
             return undefined
@@ -53,7 +54,7 @@ const uploadImage = async obj => {
         list = await Promise.all(files.map(async file => {
             if(file.path){
                 const newFilePath = path.join(savePath, idUtil.createId() + '.' + mime.extension(file.type));
-                if(fileState.type === 'local' || insertImgType === '4'){
+                if(fileStateItem.type === 'local' || insertImgType === '4'){
                     fs.copyFileSync(file.path, newFilePath)
                 } else {
                     const flag = await webdavUtil.putFileContents(newFilePath, fs.readFileSync(file.path))
@@ -68,7 +69,7 @@ const uploadImage = async obj => {
             } else if(file.base64){
                 const newFilePath = path.join(savePath, idUtil.createId() + '.' + mime.extension(file.type));
                 const buffer = new Buffer.from(file.base64, 'base64');
-                if(fileState.type === 'local' || insertImgType === '4'){
+                if(fileStateItem.type === 'local' || insertImgType === '4'){
                     fs.writeFileSync(newFilePath,  buffer)
                 } else {
                     const flag = await webdavUtil.putFileContents(newFilePath, buffer)
@@ -86,7 +87,7 @@ const uploadImage = async obj => {
                         responseType: 'arraybuffer', // 特别注意，需要加上此参数
                     });
                     const newFilePath = path.join(savePath, idUtil.createId() + '.' + mime.extension(result.headers.get("Content-Type")));
-                    if(fileState.type === 'local' || insertImgType === '4'){
+                    if(fileStateItem.type === 'local' || insertImgType === '4'){
                         fs.writeFileSync(newFilePath,  result.data)
                     } else {
                         const flag = await webdavUtil.putFileContents(newFilePath, result.data)
@@ -166,40 +167,35 @@ const uploadImage = async obj => {
 }
 
 ipcMain.handle('getFileContent', async (event, id) => {
-    const fileStateList = globalData.fileStateList
-    const fileState = fileStateList.find(item => item.id === id);
-    if(!fileState.loaded){
-        if(fileState.type === 'local') {
-            if(fsUtil.exists(fileState.originFilePath)){
-                const content = fs.readFileSync(fileState.originFilePath).toString()
-                fileState.content = content
-                fileState.tempContent = content
-                fileState.loaded = true
-                globalData.fileStateList = fileStateList
+    const fileStateItem = fileState.getById(id)
+    if(!fileStateItem.loaded){
+        if(fileStateItem.type === 'local') {
+            if(fsUtil.exists(fileStateItem.originFilePath)){
+                const content = fs.readFileSync(fileStateItem.originFilePath).toString()
+                fileStateItem.content = content
+                fileStateItem.tempContent = content
+                fileStateItem.loaded = true
             } else {
-                fileState.type = ''
-                fileState.originFilePath = ''
-                fileState.exists = false
-                globalData.fileStateList = fileStateList
+                fileStateItem.type = ''
+                fileStateItem.originFilePath = ''
+                fileStateItem.exists = false
                 return { exists: false }
             }
-        } else if(fileState.type === 'webdav'){
-            if(await webdavUtil.exists(fileState.originFilePath)){
-                const content = await webdavUtil.getFileContents(fileState.originFilePath)
-                fileState.content = content
-                fileState.tempContent = content
-                fileState.loaded = true
-                globalData.fileStateList = fileStateList
+        } else if(fileStateItem.type === 'webdav'){
+            if(await webdavUtil.exists(fileStateItem.originFilePath)){
+                const content = await webdavUtil.getFileContents(fileStateItem.originFilePath)
+                fileStateItem.content = content
+                fileStateItem.tempContent = content
+                fileStateItem.loaded = true
             } else {
-                fileState.type = ''
-                fileState.originFilePath = ''
-                fileState.exists = false
-                globalData.fileStateList = fileStateList
+                fileStateItem.type = ''
+                fileStateItem.originFilePath = ''
+                fileStateItem.exists = false
                 return { exists: false }
             }
         }
     }
-    return { exists: true, content: globalData.fileStateList.find(item => item.id === id).tempContent }
+    return { exists: true, content: fileStateItem.tempContent }
 })
 
 ipcMain.handle('openDirSelect', event => {
@@ -219,11 +215,9 @@ ipcMain.on('saveToOther', (event, id) => {
 })
 
 ipcMain.on('onContentChange', (event, content, id) => {
-    const fileStateList = globalData.fileStateList
-    const fileState = fileStateList.find(item => item.id === id)
-    fileState.tempContent = content
-    fileState.saved = fileState.content.length === content.length && fileState.content === content
-    globalData.fileStateList = fileStateList
+    const fileStateItem = fileState.getById(id)
+    fileStateItem.tempContent = content
+    fileStateItem.saved = fileStateItem.content.length === content.length && fileStateItem.content === content
 })
 
 ipcMain.on('openSettingWin', event => {
@@ -243,15 +237,15 @@ ipcMain.on('updateConfig', (event, newConfig) => {
 })
 
 ipcMain.on('exportPdf', event => {
-    const fileState = globalData.fileStateList.find(item => item.id === globalData.activeFileId)
-    if(!fileState ||fileState.exists === false){
+    const fileStateItem = fileState.getById(globalData.activeFileId)
+    if(!fileStateItem ||fileStateItem.exists === false){
         win.showMessage('未找到当前文件', 'warning')
         return;
     }
     const pdfPath = dialog.showSaveDialogSync({
         title: "导出PDF",
         buttonLabel: "导出",
-        defaultPath: path.parse(fileState.fileName).name,
+        defaultPath: path.parse(fileStateItem.fileName).name,
         filters: [
             {name: 'pdf文件', extensions: ['pdf']}
         ]
@@ -421,9 +415,9 @@ ipcMain.on('updateActiveFileId', (event, id) => {
 })
 
 ipcMain.on('openFolder', (event, id) => {
-    const fileState = globalData.fileStateList.find(item => item.id === id)
-    if(fileState.originFilePath){
-        shell.showItemInFolder(fileState.originFilePath)
+    const fileStateItem = fileState.getById(id)
+    if(fileStateItem.originFilePath){
+        shell.showItemInFolder(fileStateItem.originFilePath)
     }
 })
 
@@ -440,8 +434,7 @@ ipcMain.on('webdavLogout', event => {
 })
 
 ipcMain.on('openWebdavMd', async (event, filename, basename) => {
-    const fileStateList = globalData.fileStateList
-    const  find = fileStateList.find(item => item.type === 'webdav' && item.originFilePath === filename)
+    const  find = fileState.find(item => item.type === 'webdav' && item.originFilePath === filename)
     if(find) {
         win.changeTab(find.id)
     } else {
@@ -455,8 +448,7 @@ ipcMain.on('openWebdavMd', async (event, filename, basename) => {
             fileName: basename,
             type: 'webdav'
         }
-        fileStateList.push(create)
-        globalData.fileStateList = fileStateList
+        fileState.push(create)
         win.changeTab(create.id)
     }
 })
@@ -466,7 +458,7 @@ ipcMain.handle('getLoginInfo', async () => {
 })
 
 ipcMain.handle('getFileStateList', () => {
-    return globalData.fileStateList.map(item => {
+    return fileState.get().map(item => {
         return {
             id: item.id,
             saved: item.saved,

@@ -5,6 +5,7 @@ import webdavUtil from "./webdavUtil.js";
 import fs from "fs";
 import pathUtil from "./pathUtil.js";
 import idUtil from "./idUtil.js";
+import fileState from "../runtime/fileState.js";
 export default {
     handleProtocol: () => {
         protocol.handle('wj', async (request) => {
@@ -12,15 +13,15 @@ export default {
             if (path.isAbsolute(url)) {
                 return net.fetch('file:///' + url)
             } else {
-                const fileState = globalData.fileStateList.find(item => item.id === globalData.activeFileId)
-                if(fileState.type === 'local') {
-                    if(fileState && fileState.originFilePath){
-                        return net.fetch('file:///' + path.resolve(path.dirname(fileState.originFilePath), url))
+                const fileStateItem = fileState.getById(globalData.activeFileId)
+                if(fileStateItem.type === 'local') {
+                    if(fileStateItem && fileStateItem.originFilePath){
+                        return net.fetch('file:///' + path.resolve(path.dirname(fileStateItem.originFilePath), url))
                     }
-                } else if (fileState.type === 'webdav') {
+                } else if (fileStateItem.type === 'webdav') {
                     const tempPath = pathUtil.getTempPath()
                     const newFilePath = path.resolve(tempPath, idUtil.createId() + path.extname(url));
-                    const buffer = await webdavUtil.getFileBuffer(path.join(path.dirname(fileState.originFilePath), url).replaceAll('\\', '/'));
+                    const buffer = await webdavUtil.getFileBuffer(path.join(path.dirname(fileStateItem.originFilePath), url).replaceAll('\\', '/'));
                     fs.writeFileSync(newFilePath,  buffer)
                     return net.fetch('file:///' + newFilePath)
                 }

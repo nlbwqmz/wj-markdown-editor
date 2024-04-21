@@ -4,6 +4,7 @@ import {BrowserWindow, screen} from "electron";
 import winOnUtil from "../util/winOnUtil.js";
 import constant from "../util/constant.js";
 import config, {configWatch} from "../local/config.js";
+import fileState from "../runtime/fileState.js";
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -35,11 +36,11 @@ const obj = {
             win.webContents.openDevTools()
         }
         winOnUtil.handle(win, searchBarWin, common, globalShortcutUtil, globalData)
-        const index = globalData.fileStateList.length - 1
+        const index = fileState.getLength() - 1
         if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-            win.loadURL('http://localhost:8080/#/' + (globalData.fileStateList[index].originFilePath ? config.initRoute : constant.router.edit) + '?id=' + globalData.fileStateList[index].id).then(() => {})
+            win.loadURL('http://localhost:8080/#/' + (fileState.getByIndex(index).originFilePath ? config.initRoute : constant.router.edit) + '?id=' + fileState.getByIndex(index).id).then(() => {})
         } else {
-            win.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), { hash: globalData.fileStateList[index].originFilePath ? config.initRoute : constant.router.edit, search: 'id=' + globalData.fileStateList[index].id }).then(() => {})
+            win.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), { hash: fileState.getByIndex(index).originFilePath ? config.initRoute : constant.router.edit, search: 'id=' + fileState.getByIndex(index).id }).then(() => {})
         }
     },
     show: () => {

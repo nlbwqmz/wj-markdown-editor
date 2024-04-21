@@ -1,5 +1,6 @@
 import {shell, screen, BrowserWindow} from 'electron'
 import config from "../local/config.js";
+import fileState from "../runtime/fileState.js";
 
 export default {
     handle: (browserWindow, searchBarWin, common, globalShortcutUtil, globalData) => {
@@ -19,7 +20,7 @@ export default {
         })
         browserWindow.on('close', e => {
             e.preventDefault()
-            if(globalData.fileStateList.some(item => item.saved === false)){
+            if(fileState.some(item => item.saved === false)){
                 common.winShow()
                 browserWindow.webContents.send('confirmExit')
             } else {

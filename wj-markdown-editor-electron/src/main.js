@@ -10,20 +10,22 @@ import win from "./win/win.js";
 import searchBarWin from "./win/searchBarWin.js";
 import globalShortcutUtil from "./util/globalShortcutUtil.js";
 import './util/job.js'
+import fileState from "./runtime/fileState.js";
+import util from "./util/util.js";
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const lock = app.requestSingleInstanceLock({ fileInfo: globalData.fileStateList[globalData.fileStateList.length - 1] })
+const lock = app.requestSingleInstanceLock({ fileInfo: util.deepCopy(fileState.getByIndex(fileState.getLength() - 1)) })
 
 if(!lock){
   app.quit()
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
     if(additionalData.fileInfo && additionalData.fileInfo.originFilePath){
-      const origin = globalData.fileStateList.find(item => item.originFilePath === additionalData.fileInfo.originFilePath && item.type === additionalData.fileInfo.type)
+      const origin = fileState.find(item => item.originFilePath === additionalData.fileInfo.originFilePath && item.type === additionalData.fileInfo.type)
       if(origin){
         win.changeTab(origin.id)
       } else {
-        globalData.fileStateList = [...globalData.fileStateList, additionalData.fileInfo]
+        fileState.push(additionalData.fileInfo)
         win.changeTab(additionalData.fileInfo.id)
       }
     }

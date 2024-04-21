@@ -5,6 +5,7 @@ import config, {configWatch} from "../local/config.js";
 import globalData from "./globalData.js";
 import path from "path";
 import {fileURLToPath} from "url";
+import fileState from "../runtime/fileState.js";
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -19,19 +20,22 @@ const handleJob = minute => {
       job.stop()
     }
     if(minute > 0){
-      job = Cron(`*/${minute} * * * *`, { paused: true, protect: true }, async () => {
+      job = Cron(`*/${minute} * * * *`, { paused: true, protect: true }, () => {
         // 不立即执行
-        const fileStateList = globalData.fileStateList
         let has = false
-        for (const item of fileStateList) {
+        for (const item of fileState.get()) {
           if(item.originFilePath && !item.saved){
             if(item.type === 'local') {
-              fs.writeFileSync(item.originFilePath, item.tempContent)
+              fs.writeFile(item.originFilePath, item.tempContent, () => {
+                item.saved = true
+                item.content = item.tempContent
+              })
             } else if (item.type === 'webdav') {
-              await globalData.webdavClient.putFileContents(item.originFilePath, item.tempContent)
+              globalData.webdavClient.putFileContents(item.originFilePath, item.tempContent).then(() => {
+                item.saved = true
+                item.content = item.tempContent
+              })
             }
-            item.saved = true
-            item.content = item.tempContent
             has = true
           }
         }
@@ -41,7 +45,6 @@ const handleJob = minute => {
             body: '自动保存成功',
             icon: path.resolve(__dirname, '../../icon/256x256.png'),
           }).show()
-          globalData.fileStateList = fileStateList
         }
       })
       job.resume()
