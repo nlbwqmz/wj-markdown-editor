@@ -2,7 +2,7 @@ import pathUtil from "../util/pathUtil.js";
 import fs from "fs";
 import defaultConfig from "../constant/defaultConfig.js";
 import util from "../util/util.js";
-import DataWatch from "../type/dataWatch.js";
+import DataWatch from "../type/DataWatch.js";
 
 const defaultConfigObj = defaultConfig.get()
 const configPath = pathUtil.getConfigPath();

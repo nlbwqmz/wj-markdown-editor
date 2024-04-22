@@ -1,5 +1,4 @@
-
-class DataWatch {
+export default class {
     #handleList = []
     constructor(data) {
         this.data = new Proxy(data, {
@@ -18,5 +17,3 @@ class DataWatch {
         this.#handleList.push({ nameList, handle })
     }
 }
-
-export default DataWatch
