@@ -8,7 +8,7 @@ import fsUtil from "./fsUtil.js";
 // const toolPath = app.isPackaged ? path.resolve(path.dirname(app.getPath('exe')), 'resources/app.asar.unpacked/tool') : path.resolve(__dirname, '../../tool');
 // const projectPath = app.isPackaged ? path.dirname(app.getPath('exe')) : app.getAppPath()
 const userDataPath = app.isPackaged ? app.getPath('userData') : app.getAppPath();
-
+fsUtil.mkdirSyncWithRecursion(userDataPath)
 export default {
     getDefaultImgSavePath: () => {
         return path.resolve(userDataPath, 'img')

@@ -1,7 +1,7 @@
 import {fileURLToPath} from "url";
 import path from "path";
 import {app, BrowserWindow, shell} from "electron";
-import constant from "../util/constant.js";
+import constant from "../constant/constant.js";
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)

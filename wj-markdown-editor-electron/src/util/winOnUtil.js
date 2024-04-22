@@ -37,8 +37,8 @@ export default {
             const size = browserWindow.getSize();
             searchBarWin.moveSearchBar()
             if(size[0] <= screen.getPrimaryDisplay().workArea.width && size[1] <= screen.getPrimaryDisplay().workArea.height) {
-                config.winWidth = size[0]
-                config.winHeight = size[1]
+                config.data.winWidth = size[0]
+                config.data.winHeight = size[1]
             }
         })
         browserWindow.on('maximize', () => {

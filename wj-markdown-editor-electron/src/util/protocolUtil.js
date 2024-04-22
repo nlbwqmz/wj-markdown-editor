@@ -4,7 +4,7 @@ import globalData from './globalData.js'
 import webdavUtil from "./webdavUtil.js";
 import fs from "fs";
 import pathUtil from "./pathUtil.js";
-import idUtil from "./idUtil.js";
+import util from "./util.js";
 import fileState from "../runtime/fileState.js";
 export default {
     handleProtocol: () => {
@@ -20,7 +20,7 @@ export default {
                     }
                 } else if (fileStateItem.type === 'webdav') {
                     const tempPath = pathUtil.getTempPath()
-                    const newFilePath = path.resolve(tempPath, idUtil.createId() + path.extname(url));
+                    const newFilePath = path.resolve(tempPath, util.createId() + path.extname(url));
                     const buffer = await webdavUtil.getFileBuffer(path.join(path.dirname(fileStateItem.originFilePath), url).replaceAll('\\', '/'));
                     fs.writeFileSync(newFilePath,  buffer)
                     return net.fetch('file:///' + newFilePath)

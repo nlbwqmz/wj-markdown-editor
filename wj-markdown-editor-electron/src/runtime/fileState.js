@@ -1,10 +1,9 @@
 import lastOpened from "../local/lastOpened.js";
-import idUtil from "../util/idUtil.js";
 import path from "path";
 import util from "../util/util.js";
-import globalData from "../util/globalData.js";
 import win from "../win/win.js";
 
+let autoLogin = false
 const createProxy = obj => {
   return new Proxy(obj, {
     set(target, name, newValue, receiver) {
@@ -24,7 +23,7 @@ const initFileStateList = async () => {
       list.splice(index, 1)
     }
     list.push({
-      id: idUtil.createId(),
+      id: util.createId(),
       saved: true,
       content: '',
       tempContent: '',
@@ -36,7 +35,7 @@ const initFileStateList = async () => {
   }
   if(list.length === 0){
     list.push({
-      id: idUtil.createId(),
+      id: util.createId(),
       saved: true,
       content: '',
       tempContent: '',
@@ -52,19 +51,18 @@ const initFileStateList = async () => {
 const fileStateList = [...await initFileStateList()]
 
 
-
 const flush = () => {
+  win.updateFileStateList(fileStateList.map(item => {
+    return {
+      id: item.id,
+      saved: item.saved,
+      originFilePath: item.originFilePath,
+      fileName: item.fileName,
+      type: item.type
+    }
+  }))
   util.debounce(() => {
-    win.updateFileStateList(fileStateList.map(item => {
-      return {
-        id: item.id,
-        saved: item.saved,
-        originFilePath: item.originFilePath,
-        fileName: item.fileName,
-        type: item.type
-      }
-    }))
-    lastOpened.write(fileStateList.filter(item => (globalData.autoLogin === true && item.type) || (!globalData.autoLogin && item.type === 'local')).map(item => {
+    lastOpened.write(fileStateList.filter(item => (autoLogin === true && item.type) || (!autoLogin && item.type === 'local')).map(item => {
       return {
         id: item.id,
         originFilePath: item.originFilePath,
@@ -72,12 +70,12 @@ const flush = () => {
         type: item.type
       }
     }))
-  }, 200)()
+  })()
 }
 
 const creatFileState = () => {
   return createProxy({
-    id: idUtil.createId(),
+    id: util.createId(),
     saved: true,
     content: '',
     tempContent: '',
@@ -133,5 +131,9 @@ export default {
   },
   getLength: () => {
     return fileStateList.length
+  },
+  updateAutoLogin: flag => {
+    autoLogin = flag
+    flush()
   }
 }

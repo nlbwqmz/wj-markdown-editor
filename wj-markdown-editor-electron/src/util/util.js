@@ -1,3 +1,5 @@
+import {nanoid} from "nanoid";
+
 const isOpenOnFile = () => {
   return Boolean(process.argv && process.argv.length > 0 && /.*\.md$/.test(process.argv[process.argv.length - 1]))
 }
@@ -42,5 +44,8 @@ export default {
       }
     }
     return 0;
+  },
+  createId: () => {
+    return 'a' + nanoid()
   }
 }

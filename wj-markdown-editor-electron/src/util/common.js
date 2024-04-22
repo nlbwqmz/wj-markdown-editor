@@ -63,7 +63,7 @@ export default {
         } else if (insertImgType === '3') {
             savePath = path.join(path.dirname(originFilePath), 'assets')
         } else {
-            savePath = config.imgSavePath
+            savePath = config.data.imgSavePath
         }
         if (fileStateItem.type === 'local' || (insertImgType !== '2' && insertImgType !== '3')) {
             fsUtil.mkdirSyncWithRecursion(savePath)
@@ -72,15 +72,15 @@ export default {
     },
     getImgInsertType: (file) => {
         if (file.url) { // 通过URL 插入网络图片
-            return config.insertNetworkImgType
+            return config.data.insertNetworkImgType
         } else if (file.path && file.isSelect) { // 通过文件选择 插入本地图片
-            return config.insertLocalImgType
+            return config.data.insertLocalImgType
         } else if (file.path && !file.isSelect) { // 通过粘贴板 插入本地图片
-            return config.insertPasteboardLocalImgType
+            return config.data.insertPasteboardLocalImgType
         } else if (file.base64 && file.isScreenshot) { // 通过屏幕截图 插入图片
-            return config.insertScreenshotImgType
+            return config.data.insertScreenshotImgType
         } else if (file.base64 && !file.isScreenshot) { // 通过粘贴板 插入网络图片
-            return config.insertPasteboardNetworkImgType
+            return config.data.insertPasteboardNetworkImgType
         }
     },
     checkUpdate: () => {
@@ -144,7 +144,7 @@ export default {
             win.showMessage('未找到当前文件', 'warning')
             return;
         }
-        if (fileStateItem.type === 'webdav' && globalData.webdavLoginState === false) {
+        if (fileStateItem.type === 'webdav' && webdavUtil.getWebdavLoginState() === false) {
             win.showMessage('请先登录webdav', 'error')
             return
         }
@@ -190,7 +190,7 @@ export default {
                     }
                 })
             }
-        } else if (globalData.webdavLoginState === false || data.type === 'local') {
+        } else if (webdavUtil.getWebdavLoginState() === false || data.type === 'local') {
             let currentPath
             if (fileStateItem.originFilePath) {
                 currentPath = fileStateItem.originFilePath

@@ -1,21 +1,6 @@
-import pathUtil from './pathUtil.js'
-import fsUtil from './fsUtil.js'
-import win from "../win/win.js";
-fsUtil.mkdirSyncWithRecursion(pathUtil.getUserDataPath())
-
-
-
-
-
-const writeLastOpenedFile = () => {
-}
-
 const data = {
     activeFileId: '',
-    webdavLoginState: false,
-    downloadUpdateToken: undefined,
-    webdavClient: null,
-    autoLogin: false
+    downloadUpdateToken: undefined
 }
 
 const proxyData = new Proxy(data, {
@@ -29,11 +14,6 @@ const proxyData = new Proxy(data, {
     }
 })
 const handleDataChange = (name, newValue) => {
-    if (name === 'webdavLoginState'){
-        win.loginState(data.webdavLoginState)
-    } else if (name === 'autoLogin') {
-        writeLastOpenedFile()
-    }
 }
 
 

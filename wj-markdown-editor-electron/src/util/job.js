@@ -1,11 +1,11 @@
 import {Cron} from "croner";
 import fs from "fs";
 import {Notification} from "electron";
-import config, {configWatch} from "../local/config.js";
-import globalData from "./globalData.js";
+import config from "../local/config.js";
 import path from "path";
 import {fileURLToPath} from "url";
 import fileState from "../runtime/fileState.js";
+import webdavUtil from "./webdavUtil.js";
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -31,7 +31,7 @@ const handleJob = minute => {
                 item.content = item.tempContent
               })
             } else if (item.type === 'webdav') {
-              globalData.webdavClient.putFileContents(item.originFilePath, item.tempContent).then(() => {
+              webdavUtil.putFileContents(item.originFilePath, item.tempContent).then(() => {
                 item.saved = true
                 item.content = item.tempContent
               })
@@ -53,13 +53,8 @@ const handleJob = minute => {
 }
 
 const init = ()=> {
-  handleJob(config.autoSave.minute)
-  configWatch({
-    nameList: ['autoSave'],
-    handle: config => {
-      handleJob(config.autoSave.minute)
-    }
-  })
+  handleJob(config.data.autoSave.minute)
+  config.watch(['autoSave'], data => { handleJob(data.autoSave.minute) })
 }
 
 init()

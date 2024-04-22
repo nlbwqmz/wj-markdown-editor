@@ -1,21 +1,38 @@
 import { createClient } from "webdav"
-import globalData from "./globalData.js";
 import path from "path";
 import pathUtil from "./pathUtil.js";
 import fs from "fs";
 import fsUtil from "./fsUtil.js";
 import aesUtil from "./aesUtil.js";
 import win from "../win/win.js";
+import fileState from "../runtime/fileState.js";
+
+let webdavClient
+
+const proxyData = new Proxy({
+    webdavLoginState: false,
+    autoLogin: false
+}, {
+    set(target, p, newValue, receiver) {
+        target[p] = newValue;
+        if(p === 'webdavLoginState') {
+            win.loginState(newValue)
+        } else if (p === 'autoLogin'){
+            fileState.updateAutoLogin(newValue)
+        }
+        return true
+    }
+})
 
 const func = {
     login: (data, write) => {
-        globalData.webdavClient = createClient(data.url, {
+        webdavClient = createClient(data.url, {
             username: data.username,
             password: data.password
         })
-        globalData.webdavClient.getDirectoryContents('/').then(() => {
-            globalData.webdavLoginState = true
-            globalData.autoLogin = data.autoLogin
+        webdavClient.getDirectoryContents('/').then(() => {
+            proxyData.webdavLoginState = true
+            proxyData.autoLogin = data.autoLogin
             if(write === true){
                 if(data.autoLogin === true) {
                     fs.writeFile(pathUtil.getLoginInfoPath(), aesUtil.encrypt(JSON.stringify(data)), () => {})
@@ -30,15 +47,15 @@ const func = {
     },
     getDirectoryContents: async currentPath => {
         try{
-            return await globalData.webdavClient.getDirectoryContents(currentPath)
+            return await webdavClient.getDirectoryContents(currentPath)
         } catch (err) {
             win.showMessage('访问失败', 'error')
         }
     },
     logout: () => {
-        globalData.autoLogin = false
-        globalData.webdavClient = null
-        globalData.webdavLoginState = false
+        proxyData.autoLogin = false
+        webdavClient = null
+        proxyData.webdavLoginState = false
         const loginInfoPath = pathUtil.getLoginInfoPath();
         if(fsUtil.exists(loginInfoPath)){
             fs.readFile(loginInfoPath, (err, data) => {
@@ -54,7 +71,7 @@ const func = {
     },
     getFileContents: async filename => {
         try {
-            return await globalData.webdavClient.getFileContents(filename, { format: 'text' })
+            return await webdavClient.getFileContents(filename, { format: 'text' })
         } catch (err) {
             win.showMessage('访问失败', 'error')
         }
@@ -62,17 +79,17 @@ const func = {
     putFileContents: async (filename, content) => {
         try {
             filename = filename.replaceAll('\\', '/')
-            if (await globalData.webdavClient.exists(path.dirname(filename)) === false) {
-                await globalData.webdavClient.createDirectory(path.dirname(filename));
+            if (await webdavClient.exists(path.dirname(filename)) === false) {
+                await webdavClient.createDirectory(path.dirname(filename));
             }
-            return await globalData.webdavClient.putFileContents(filename, content)
+            return await webdavClient.putFileContents(filename, content)
         } catch (err) {
             win.showMessage('访问失败', 'error')
         }
     },
     getFileBuffer: async filename => {
         try {
-            return await globalData.webdavClient.getFileContents(filename, { format: 'binary' })
+            return await webdavClient.getFileContents(filename, { format: 'binary' })
         } catch (err) {
             win.showMessage('访问失败', 'error')
         }
@@ -113,10 +130,13 @@ const func = {
     },
     exists: async path => {
         try{
-            return await globalData.webdavClient.exists(path)
+            return await webdavClient.exists(path)
         } catch (e) {
             return false
         }
+    },
+    getWebdavLoginState: () => {
+        return proxyData.webdavLoginState
     }
 }
 

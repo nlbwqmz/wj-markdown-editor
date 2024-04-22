@@ -2,8 +2,8 @@ import {fileURLToPath} from "url";
 import path from "path";
 import {BrowserWindow, screen} from "electron";
 import winOnUtil from "../util/winOnUtil.js";
-import constant from "../util/constant.js";
-import config, {configWatch} from "../local/config.js";
+import constant from "../constant/constant.js";
+import config from "../local/config.js";
 import fileState from "../runtime/fileState.js";
 
 const __filename = fileURLToPath(import.meta.url)
@@ -23,8 +23,8 @@ const obj = {
             frame: false,
             icon: path.resolve(__dirname, '../../icon/favicon.ico'),
             title: constant.title,
-            width: config.winWidth > 0 ? config.winWidth : screen.getPrimaryDisplay().workArea.width / 2,
-            height: config.winHeight > 0 ? config.winHeight : screen.getPrimaryDisplay().workArea.height / 2,
+            width: config.data.winWidth > 0 ? config.data.winWidth : screen.getPrimaryDisplay().workArea.width / 2,
+            height: config.data.winHeight > 0 ? config.data.winHeight : screen.getPrimaryDisplay().workArea.height / 2,
             show: false,
             maximizable: true,
             resizable: true,
@@ -38,9 +38,9 @@ const obj = {
         winOnUtil.handle(win, searchBarWin, common, globalShortcutUtil, globalData)
         const index = fileState.getLength() - 1
         if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-            win.loadURL('http://localhost:8080/#/' + (fileState.getByIndex(index).originFilePath ? config.initRoute : constant.router.edit) + '?id=' + fileState.getByIndex(index).id).then(() => {})
+            win.loadURL('http://localhost:8080/#/' + (fileState.getByIndex(index).originFilePath ? config.data.initRoute : constant.router.edit) + '?id=' + fileState.getByIndex(index).id).then(() => {})
         } else {
-            win.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), { hash: fileState.getByIndex(index).originFilePath ? config.initRoute : constant.router.edit, search: 'id=' + fileState.getByIndex(index).id }).then(() => {})
+            win.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), { hash: fileState.getByIndex(index).originFilePath ? config.data.initRoute : constant.router.edit, search: 'id=' + fileState.getByIndex(index).id }).then(() => {})
         }
     },
     show: () => {
@@ -146,12 +146,7 @@ const obj = {
 }
 
 const init = () => {
-    configWatch({
-        nameList: [],
-        handle: config => {
-            obj.shouldUpdateConfig(config)
-        }
-    })
+    config.watch([], data => { obj.shouldUpdateConfig(data) })
 }
 
 init()

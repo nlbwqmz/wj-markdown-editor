@@ -1,11 +1,11 @@
 import pathUtil from "../util/pathUtil.js";
 import fs from "fs";
-import defaultConfig from "../util/defaultConfig.js";
+import defaultConfig from "../constant/defaultConfig.js";
 import util from "../util/util.js";
+import DataWatch from "../type/dataWatch.js";
 
 const defaultConfigObj = defaultConfig.get()
 const configPath = pathUtil.getConfigPath();
-const handleList = []
 const init = () => {
   return new Promise((resolve, reject) => {
     fs.access(configPath, fs.constants.F_OK, err => {
@@ -31,26 +31,7 @@ const init = () => {
     })
   })
 }
-const config = await init()
-const proxy = new Proxy(config, {
-  get(target, name, receiver) {
-    return target[name]
-  },
-  set(target, name, newValue, receiver) {
-    if(target[name] !== newValue){
-      target[name] = newValue
-      util.debounce(() => {fs.writeFile(configPath, JSON.stringify(target), () => {})})()
-      handleList.forEach(item => {
-        if(!item.nameList || item.nameList.length === 0 ||item.nameList.indexOf(name) > -1){
-          item.handle && item.handle(util.deepCopy(target))
-        }
-      })
-    }
-    return true
-  }
-})
 
-export default proxy
-export const configWatch = handle => {
-  handleList.push(handle)
-}
+const config = new DataWatch(await init());
+config.watch([], data => util.debounce(() => {fs.writeFile(configPath, JSON.stringify(data), () => {})})())
+export default config

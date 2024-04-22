@@ -1,4 +1,4 @@
-import pathUtil from "./pathUtil.js"
+import pathUtil from "../util/pathUtil.js"
 
 const defaultConfig = {
   // 初次进入的路由

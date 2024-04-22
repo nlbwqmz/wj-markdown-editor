@@ -1,8 +1,8 @@
 import {BrowserWindow} from "electron";
 import path from "path";
-import constant from "../util/constant.js";
+import constant from "../constant/constant.js";
 import {fileURLToPath} from "url";
-import {configWatch} from "../local/config.js";
+import config from "../local/config.js";
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 let exportWin
@@ -58,12 +58,7 @@ const obj = {
 }
 
 const init = () => {
-    configWatch({
-        nameList: [],
-        handle: config => {
-            obj.shouldUpdateConfig(config)
-        }
-    })
+    config.watch([], data => { obj.shouldUpdateConfig(config) })
 }
 
 init()

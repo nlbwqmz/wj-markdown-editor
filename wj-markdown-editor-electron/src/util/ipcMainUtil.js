@@ -8,11 +8,10 @@ import pathUtil from './pathUtil.js'
 import fsUtil from './fsUtil.js'
 import axios from 'axios'
 import mime from 'mime-types'
-import defaultConfig from './defaultConfig.js'
+import defaultConfig from '../constant/defaultConfig.js'
 import webdavUtil from "./webdavUtil.js";
 import screenshotsUtil from "./screenshotsUtil.js";
 import globalShortcutUtil from "./globalShortcutUtil.js";
-import idUtil from "./idUtil.js";
 import exportWin from "../win/exportWin.js";
 import settingWin from "../win/settingWin.js";
 import aboutWin from "../win/aboutWin.js";
@@ -53,7 +52,7 @@ const uploadImage = async obj => {
         }
         list = await Promise.all(files.map(async file => {
             if(file.path){
-                const newFilePath = path.join(savePath, idUtil.createId() + '.' + mime.extension(file.type));
+                const newFilePath = path.join(savePath, util.createId() + '.' + mime.extension(file.type));
                 if(fileStateItem.type === 'local' || insertImgType === '4'){
                     fs.copyFileSync(file.path, newFilePath)
                 } else {
@@ -67,7 +66,7 @@ const uploadImage = async obj => {
                 }
                 return newFilePath
             } else if(file.base64){
-                const newFilePath = path.join(savePath, idUtil.createId() + '.' + mime.extension(file.type));
+                const newFilePath = path.join(savePath, util.createId() + '.' + mime.extension(file.type));
                 const buffer = new Buffer.from(file.base64, 'base64');
                 if(fileStateItem.type === 'local' || insertImgType === '4'){
                     fs.writeFileSync(newFilePath,  buffer)
@@ -86,7 +85,7 @@ const uploadImage = async obj => {
                     const result = await axios.get(file.url, {
                         responseType: 'arraybuffer', // 特别注意，需要加上此参数
                     });
-                    const newFilePath = path.join(savePath, idUtil.createId() + '.' + mime.extension(result.headers.get("Content-Type")));
+                    const newFilePath = path.join(savePath, util.createId() + '.' + mime.extension(result.headers.get("Content-Type")));
                     if(fileStateItem.type === 'local' || insertImgType === '4'){
                         fs.writeFileSync(newFilePath,  result.data)
                     } else {
@@ -106,18 +105,18 @@ const uploadImage = async obj => {
             }
         }))
     } else if (insertImgType === '5') { // 上传
-        if(!config.picGo.host || !config.picGo.port) {
+        if(!config.data.picGo.host || !config.data.picGo.port) {
             win.showMessage('请配置PicGo服务信息', 'error', 2, true)
             return undefined
         }
         const tempPath = pathUtil.getTempPath()
         let tempList = await Promise.all(files.map(async file => {
             if(file.path){
-                const newFilePath = path.resolve(tempPath, idUtil.createId() + '.' + mime.extension(file.type));
+                const newFilePath = path.resolve(tempPath, util.createId() + '.' + mime.extension(file.type));
                 fs.copyFileSync(file.path, newFilePath)
                 return newFilePath
             } else if(file.base64){
-                const newFilePath = path.resolve(tempPath, idUtil.createId() + '.' + mime.extension(file.type));
+                const newFilePath = path.resolve(tempPath, util.createId() + '.' + mime.extension(file.type));
                 const buffer = new Buffer.from(file.base64, 'base64');
                 fs.writeFileSync(newFilePath,  buffer)
                 return newFilePath
@@ -126,7 +125,7 @@ const uploadImage = async obj => {
                     const result = await axios.get(file.url, {
                         responseType: 'arraybuffer', // 特别注意，需要加上此参数
                     });
-                    const newFilePath = path.resolve(tempPath, idUtil.createId() + '.' + mime.extension(result.headers.get("Content-Type")));
+                    const newFilePath = path.resolve(tempPath, util.createId() + '.' + mime.extension(result.headers.get("Content-Type")));
                     fs.writeFileSync(newFilePath,  result.data)
                     return newFilePath
                 } catch (e) {
@@ -138,7 +137,7 @@ const uploadImage = async obj => {
         tempList = tempList && tempList.length > 0 ? tempList.filter(item => item !== undefined) : []
         if(tempList && tempList.length > 0) {
             let error = false
-            axios.post(`http://${config.picGo.host}:${config.picGo.port}/upload`, { list: tempList }).then(res => {
+            axios.post(`http://${config.data.picGo.host}:${config.data.picGo.port}/upload`, { list: tempList }).then(res => {
                 if(res.data.success === true){
                     win.insertScreenshotResult({ id: obj.id, list: res.data.result })
                 } else {
@@ -207,7 +206,7 @@ ipcMain.on('uploadImage', (event, obj) => {
 })
 
 ipcMain.handle('getConfig', event => {
-    return util.deepCopy(config)
+    return util.deepCopy(config.data)
 })
 
 ipcMain.on('saveToOther', (event, id) => {
@@ -233,7 +232,7 @@ ipcMain.on('closeSettingWin', () => {
 })
 
 ipcMain.on('updateConfig', (event, newConfig) => {
-    util.setByKey(newConfig, config)
+    util.setByKey(newConfig, config.data)
 })
 
 ipcMain.on('exportPdf', event => {
@@ -320,7 +319,7 @@ ipcMain.on('screenshot', (event, id, hide) => {
 })
 
 ipcMain.on('action', (event, type) => {
-    if(type === 'minimize' && config.minimizeToTray === true){
+    if(type === 'minimize' && config.data.minimizeToTray === true){
         win.hide()
     } else {
         win.instanceFuncName(type)
@@ -331,8 +330,8 @@ ipcMain.on('exit', () => {
     common.exit()
 })
 ipcMain.on('restoreDefaultSetting', event => {
-    util.setByKey(defaultConfig.get(), config)
-    settingWin.shouldUpdateConfig(util.deepCopy(config))
+    util.setByKey(defaultConfig.get(), config.data)
+    settingWin.shouldUpdateConfig(util.deepCopy(config.data))
 })
 
 ipcMain.on('openAboutWin', event => {
@@ -390,7 +389,7 @@ ipcMain.on('importSetting', event => {
                     json[key] = defaultConfigObj[key]
                 }
             }
-            util.setByKey(json, config)
+            util.setByKey(json, config.data)
             win.showMessage('导入成功', 'success')
         } catch (e) {
             win.showMessage('导入失败', 'error')
@@ -440,7 +439,7 @@ ipcMain.on('openWebdavMd', async (event, filename, basename) => {
     } else {
         const content = await webdavUtil.getFileContents(filename)
         const create = {
-            id: idUtil.createId(),
+            id: util.createId(),
             saved: true,
             content: content,
             tempContent: content,
