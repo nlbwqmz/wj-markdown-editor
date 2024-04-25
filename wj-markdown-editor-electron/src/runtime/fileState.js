@@ -16,6 +16,7 @@ const createProxy = obj => {
 
 const initFileStateList = async () => {
   const list = await lastOpened.read()
+  list.forEach(item => item.saved = true)
   if(util.isOpenOnFile()){
     const originFilePath = util.getOpenOnFilePath();
     const index = list.findIndex(item => item.originFilePath === originFilePath && item.type === 'local')
