@@ -42,7 +42,7 @@ if(!lock){
     tray.on('click', win.show)
     tray.on('double-click', win.show)
   }
-
+  app.commandLine.appendSwitch("--disable-http-cache");
   app.whenReady().then(() => {
     screenshotsUtil.init()
     common.initUpdater()

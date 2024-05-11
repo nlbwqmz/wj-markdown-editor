@@ -3,6 +3,7 @@ import path from "path";
 import constant from "../constant/constant.js";
 import {fileURLToPath} from "url";
 import config from "../local/config.js";
+import util from "../util/util.js";
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 let exportWin
@@ -25,12 +26,12 @@ const obj = {
                 printBackground: true,
                 generateTaggedPDF: true,
                 displayHeaderFooter: true,
+                generateDocumentOutline: true,
                 headerTemplate: '<span></span>',
                 footerTemplate: '<div style="font-size: 12px; text-align: center; width: 100%">第<span class="pageNumber"></span>页 共<span class="totalPages"></span>页 文档由<a target="_blank" href="https://github.com/nlbwqmz/wj-markdown-editor">wj-markdown-editor</a>导出</div>'
             }).then(buffer => {
                 exportWin.close()
                 exportSuccess && exportSuccess(buffer)
-
             }).catch(() => {
                 exportWin.close()
                 exportFail && exportFail()
@@ -58,7 +59,7 @@ const obj = {
 }
 
 const init = () => {
-    config.watch([], data => { obj.shouldUpdateConfig(config) })
+    config.watch([], data => util.debounce(() => { obj.shouldUpdateConfig(data) }, 100)() )
 }
 
 init()

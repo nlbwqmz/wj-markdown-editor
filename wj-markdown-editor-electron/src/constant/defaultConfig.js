@@ -33,7 +33,20 @@ const defaultConfig = {
     minute: 0
   },
   // 默认显示webdav
-  showWebdav: true
+  showWebdav: true,
+  watermark: {
+    enabled: true,
+    exportDate: true,
+    exportDateFormat : 'YYYY-MM-DD',
+    content: 'wj-markdown-editor',
+    rotate: -22,
+    gap: [100, 100],
+    font: {
+      color: '#5433334F',
+      fontSize: 20,
+      fontWeight: 800
+    }
+  }
 }
 export default {
   get: () => {

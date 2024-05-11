@@ -158,6 +158,50 @@
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small" style="margin-top: 20px">
           <template #title>
+            <span id="watermark">水印</span>
+          </template>
+          <a-descriptions-item label="导出水印">
+            <a-radio-group v-model:value="config.watermark.enabled" button-style="solid">
+              <a-radio-button :value="true">开启</a-radio-button>
+              <a-radio-button :value="false">关闭</a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="导出时间" v-if="config.watermark.enabled === true">
+            <a-radio-group v-model:value="config.watermark.exportDate" button-style="solid">
+              <a-radio-button :value="true">开启</a-radio-button>
+              <a-radio-button :value="false">关闭</a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="导出时间格式" v-if="config.watermark.enabled === true && config.watermark.exportDate === true">
+            <a-select v-model:value="config.watermark.exportDateFormat" style="width: 100%">
+              <a-select-option value="YYYY-MM-DD">年-月-日</a-select-option>
+              <a-select-option value="YYYY-MM-DD HH:mm:ss">年-月-日 时:分:秒</a-select-option>
+            </a-select>
+          </a-descriptions-item>
+          <a-descriptions-item label="内容" v-if="config.watermark.enabled === true">
+            <a-input v-model:value="config.watermark.content" />
+          </a-descriptions-item>
+          <a-descriptions-item label="旋转角度" v-if="config.watermark.enabled === true">
+            <a-slider v-model:value="config.watermark.rotate" :min="-180" :max="180"/>
+          </a-descriptions-item>
+          <a-descriptions-item label="间隔宽度" v-if="config.watermark.enabled === true">
+            <a-slider v-model:value="config.watermark.gap[0]" :min="10" :max="500"/>
+          </a-descriptions-item>
+          <a-descriptions-item label="间隔高度" v-if="config.watermark.enabled === true">
+            <a-slider v-model:value="config.watermark.gap[1]" :min="10" :max="500"/>
+          </a-descriptions-item>
+          <a-descriptions-item label="字体大小" v-if="config.watermark.enabled === true">
+            <a-slider v-model:value="config.watermark.font.fontSize" :min="12" :max="100"/>
+          </a-descriptions-item>
+          <a-descriptions-item label="字体粗细" v-if="config.watermark.enabled === true">
+            <a-slider v-model:value="config.watermark.font.fontWeight" :min="200" :max="1000"/>
+          </a-descriptions-item>
+          <a-descriptions-item label="字体颜色" v-if="config.watermark.enabled === true">
+            <pick-colors v-model:value="config.watermark.font.color" show-alpha/>
+          </a-descriptions-item>
+        </a-descriptions>
+        <a-descriptions bordered :column="1" size="small" style="margin-top: 20px">
+          <template #title>
             <span id="PicGo">PicGo<a-button type="link" href="https://picgo.github.io/PicGo-Doc/" target="_blank">官方网站</a-button></span>
           </template>
           <a-descriptions-item label="地址">
@@ -179,6 +223,7 @@
 
 <script setup>
 import { FolderOutlined, InfoCircleOutlined, SettingOutlined } from '@ant-design/icons-vue'
+import PickColors from 'vue-pick-colors'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import store from '@/store'
 import { ref, watch } from 'vue'
@@ -191,7 +236,8 @@ const anchorList = [
   { key: '2', href: '#view', title: '视图' },
   { key: '3', href: '#topic', title: '主题' },
   { key: '4', href: '#image', title: '图片' },
-  { key: '5', href: '#PicGo', title: 'PicGo' }
+  { key: '5', href: '#watermark', title: '水印' },
+  { key: '6', href: '#PicGo', title: 'PicGo' }
 ]
 const handleAnchorClick = (e, link) => {
   e.preventDefault()

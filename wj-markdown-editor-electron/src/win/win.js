@@ -5,6 +5,7 @@ import winOnUtil from "../util/winOnUtil.js";
 import constant from "../constant/constant.js";
 import config from "../local/config.js";
 import fileState from "../runtime/fileState.js";
+import util from "../util/util.js";
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -146,7 +147,7 @@ const obj = {
 }
 
 const init = () => {
-    config.watch([], data => { obj.shouldUpdateConfig(data) })
+    config.watch([], data => util.debounce(() => { obj.shouldUpdateConfig(data) }, 100)() )
 }
 
 init()
