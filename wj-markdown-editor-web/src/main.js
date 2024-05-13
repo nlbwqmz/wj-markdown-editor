@@ -4,7 +4,7 @@ import router from './router'
 import store from './store'
 import { config } from 'md-editor-v3'
 // 行号
-// import { lineNumbers } from '@codemirror/view'
+import { highlightActiveLine } from '@codemirror/view'
 import nodeRegisterUtil from '@/util/nodeRegisterUtil'
 
 import Antd from 'ant-design-vue'
@@ -25,6 +25,7 @@ config({
     const newExtensions = [...extensions]
     const index = newExtensions[0].value.findIndex(item => item.key === 'Ctrl-s')
     newExtensions[0].value.splice(index, 1)
+    newExtensions.push(highlightActiveLine())
     return newExtensions
   },
   markdownItConfig (md) {
