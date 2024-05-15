@@ -211,6 +211,26 @@
             <a-input-number v-model:value="config.picGo.port" :min="1" style="width: 100%"/>
           </a-descriptions-item>
         </a-descriptions>
+        <a-descriptions bordered :column="1" size="small" style="margin-top: 20px">
+          <template #title>
+            <span id="export">导出</span>
+          </template>
+          <a-descriptions-item>
+            <template #label>
+              <a-button type="link" href="https://pandoc.org/" target="_blank" style="padding-left: 0; padding-right: 0">Pandoc</a-button>
+            </template>
+            <div style="display: flex">
+              <a-input v-model:value="config.pandocPath" readonly style="flex: 1">
+                <template #addonAfter>
+                  <FolderOutlined style="cursor: pointer" @click="openDirSelectPandocPath"/>
+                </template>
+              </a-input>
+              <a-tooltip title="在pandoc目录生成模板文件wj-markdown-editor-reference.docx，用于自定义word样式。(若模板文件存在，不会重新生成。)" auto-adjust-overflow placement="top" color="#1677ff">
+                <a-button type="link" v-if="config.pandocPath" @click="generateDocxTemplate" style="padding-right: 0; padding-left: 0; margin-left: 15px">生成模板文件</a-button>
+              </a-tooltip>
+            </div>
+          </a-descriptions-item>
+        </a-descriptions>
       </div>
       <div style="padding-left: 10px">
         <a-affix :offset-top="46">
@@ -237,7 +257,8 @@ const anchorList = [
   { key: '3', href: '#topic', title: '主题' },
   { key: '4', href: '#image', title: '图片' },
   { key: '5', href: '#watermark', title: '水印' },
-  { key: '6', href: '#PicGo', title: 'PicGo' }
+  { key: '6', href: '#PicGo', title: 'PicGo' },
+  { key: '7', href: '#export', title: '导出' }
 ]
 const handleAnchorClick = (e, link) => {
   e.preventDefault()
@@ -262,6 +283,16 @@ const openDirSelect = async () => {
   if (imgSavePath) {
     config.value.imgSavePath = imgSavePath
   }
+}
+const openDirSelectPandocPath = async () => {
+  const imgSavePath = await nodeRequestUtil.openDirSelect()
+  if (imgSavePath) {
+    config.value.pandocPath = imgSavePath
+  }
+}
+
+const generateDocxTemplate = () => {
+  nodeRequestUtil.generateDocxTemplate()
 }
 </script>
 

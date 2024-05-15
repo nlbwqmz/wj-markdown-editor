@@ -1,5 +1,6 @@
 import {shell} from 'electron'
 import {ipcMain, dialog} from 'electron'
+import { exec } from 'child_process'
 import fs from 'fs'
 import globalData from './globalData.js'
 import common from './common.js'
@@ -201,6 +202,22 @@ ipcMain.handle('openDirSelect', event => {
     return settingWin.dirSelect()
 })
 
+ipcMain.on('generateDocxTemplate', () => {
+    if(config.data.pandocPath){
+        const templatePath = path.resolve(config.data.pandocPath, 'wj-markdown-editor-reference.docx');
+        fs.access(templatePath, fs.constants.F_OK, err => {
+            if(err){
+                const childProcess = exec('pandoc -o wj-markdown-editor-reference.docx --print-default-data-file reference.docx', { cwd: config.data.pandocPath });
+                childProcess.on('close', () => {
+                    shell.showItemInFolder(templatePath)
+                })
+            } else {
+                shell.showItemInFolder(templatePath)
+            }
+        })
+    }
+})
+
 ipcMain.on('uploadImage', (event, obj) => {
     uploadImage(obj)
 })
@@ -233,6 +250,63 @@ ipcMain.on('closeSettingWin', () => {
 
 ipcMain.on('updateConfig', (event, newConfig) => {
     util.setByKey(newConfig, config.data)
+})
+
+ipcMain.on('exportWord', () => {
+    const fileStateItem = fileState.getById(globalData.activeFileId)
+    if(!fileStateItem ||fileStateItem.exists === false){
+        win.showMessage('未找到当前文件', 'warning')
+        return;
+    }
+    if(!config.data.pandocPath){
+        win.showMessage('请先配置pandoc地址', 'warning')
+        return;
+    }
+    if(!fileStateItem.saved || !fileStateItem.type){
+        win.showMessage('请先保存文件', 'warning')
+        return;
+    }
+    const execute = (docxPath, p, shouldDelete) => {
+        let success = true
+        let cmd = `pandoc ${p} -o ${docxPath} --from markdown --to docx`
+        if(fsUtil.exists(path.resolve(config.data.pandocPath, 'custom-reference.docx'))){
+            cmd += ' --reference-doc=custom-reference.docx'
+        }
+        const childProcess = exec(cmd, { cwd: config.data.pandocPath });
+        childProcess.stderr.on('data', function (data) {
+            success = false
+        })
+        // 退出之后的输出
+        childProcess.on('close', function (code) {
+            if(code === 0 && success === true) {
+                win.showMessage('导出成功', 'success', 2, true)
+            } else {
+                win.showMessage('导出完成，但遇到一些未知问题。', 'warning', 10, true)
+            }
+            if(shouldDelete){
+                fs.unlink(p, () => {})
+            }
+        })
+    }
+    const docxPath = dialog.showSaveDialogSync({
+        title: "导出word",
+        buttonLabel: "导出",
+        defaultPath: path.parse(fileStateItem.fileName).name,
+        filters: [
+            {name: 'docx文件', extensions: ['docx']}
+        ]
+    })
+    if(docxPath){
+        win.showMessage('导出中...', 'loading', 0)
+        if(fileStateItem.type === 'webdav'){
+            const currentPath = path.resolve(pathUtil.getTempPath(), util.createId() + '.md')
+            fs.writeFile(currentPath, fileStateItem.tempContent, () => {
+                execute(docxPath, currentPath, true)
+            })
+        } else {
+            execute(docxPath, fileStateItem.originFilePath, false)
+        }
+    }
 })
 
 ipcMain.on('exportPdf', event => {

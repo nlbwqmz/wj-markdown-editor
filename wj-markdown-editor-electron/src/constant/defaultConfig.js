@@ -46,7 +46,8 @@ const defaultConfig = {
       fontSize: 20,
       fontWeight: 800
     }
-  }
+  },
+  pandocPath: ''
 }
 export default {
   get: () => {

@@ -1,21 +1,16 @@
 <template>
   <div style="width: 100%; display: flex; padding: 0 0 5px 5px;" class="forbid-select-drag">
-    <a-dropdown :trigger="['click']" @open-change="openChange($event, index)" v-for="(item, index) in menuList" :key="index">
+    <a-dropdown :trigger="['hover']" v-for="(item, index) in menuList" :key="index" class="forbid-select-drag" arrow placement="bottomLeft">
       <div class="menu-item">
-        <div :class="commonUtil.arrFindIndex(activeMenu, index) > -1 ? 'menu-item-content active' : 'menu-item-content'">{{ item.name }}</div>
+        <div class="menu-item-content">{{ item.label }}</div>
       </div>
       <template #overlay>
-        <a-menu>
-          <template v-for="(menu, menuIndex) in item.children" :key="menuIndex">
-            <a-menu-divider v-if="menu.type === 'divider'"/>
-            <a-menu-item v-else style="min-width: 200px" :key="menuIndex" class="forbid-select-drag">
-              <div style="display: flex;justify-content: space-between;" @click="() => { openChange(false, index); menu.click && menu.click() }">
-                <div>{{menu.name}}</div>
-                <div class="shortcuts">{{menu.shortcuts}}</div>
-              </div>
-            </a-menu-item>
-          </template>
-        </a-menu>
+        <a-menu
+          style="min-width: 200px"
+          mode="vertical"
+          :items="item.children"
+          @click="handleMenuClick"
+        />
       </template>
     </a-dropdown>
   </div>
@@ -24,57 +19,91 @@
 <script setup>
 
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { createVNode, ref } from 'vue'
+import { createVNode, h } from 'vue'
 import commonUtil from '@/util/commonUtil'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
-import { Modal } from 'ant-design-vue'
+import { Modal, Tooltip } from 'ant-design-vue'
 import store from '@/store'
+const createLabel = (label, shortcuts) => {
+  return h('div', { style: { display: 'flex', justifyContent: 'space-between' } }, [
+    h('div', {}, label),
+    h('div', { style: { paddingLeft: '20px', color: 'rgb(199,199,199)' } }, shortcuts)
+  ])
+}
 
-const activeMenu = ref([])
 const menuList = [
   {
-    name: '文件',
+    key: commonUtil.createId(),
+    label: '文件',
     children: [
       {
-        name: '新建',
-        shortcuts: 'ctrl+n',
+        key: commonUtil.createId(),
+        label: createLabel('新建', 'ctrl+n'),
         click: nodeRequestUtil.newFile
       },
       {
-        name: '保存',
-        shortcuts: 'ctrl+s',
+        key: commonUtil.createId(),
+        label: createLabel('保存', 'ctrl+s'),
         click: () => nodeRequestUtil.saveFile({ id: store.state.id })
       },
       {
-        name: '另存为',
-        shortcuts: 'ctrl+shift+s',
+        key: commonUtil.createId(),
+        label: createLabel('另存为', 'ctrl+shift+s'),
         click: nodeRequestUtil.saveToOther
       },
       {
+        key: commonUtil.createId(),
         type: 'divider'
       },
       {
-        name: '导出为PDF',
-        click: nodeRequestUtil.exportPdf
+        key: commonUtil.createId(),
+        label: '导出',
+        children: [
+          {
+            key: commonUtil.createId(),
+            label: 'PDF',
+            click: nodeRequestUtil.exportPdf
+          },
+          {
+            key: commonUtil.createId(),
+            label: h(Tooltip, { title: '暂不支持导出webdav相对路径图片', 'auto-adjust-overflow': true, placement: 'right', color: '#1677ff' }, () => [
+              h('div', {}, 'DOCX')
+            ]),
+            click: nodeRequestUtil.exportWord
+          }
+        ]
       },
+      // {
+      //   label: '导出为PDF',
+      //   click: nodeRequestUtil.exportPdf
+      // },
+      // {
+      //   label: '导出为WORD',
+      //   click: nodeRequestUtil.exportWord,
+      //   tip: '暂不支持导出webdav相对路径图片'
+      // },
       {
+        key: commonUtil.createId(),
         type: 'divider'
       },
       {
-        name: '设置',
-        shortcuts: 'ctrl+alt+s',
+        key: commonUtil.createId(),
+        label: createLabel('设置', 'ctrl+alt+s'),
         click: nodeRequestUtil.openSettingWin
       },
       {
-        name: '导出设置',
+        key: commonUtil.createId(),
+        label: '导出设置',
         click: nodeRequestUtil.exportSetting
       },
       {
-        name: '导入设置',
+        key: commonUtil.createId(),
+        label: '导入设置',
         click: nodeRequestUtil.importSetting
       },
       {
-        name: '恢复默认设置',
+        key: commonUtil.createId(),
+        label: '恢复默认设置',
         click: () => {
           Modal.confirm({
             title: '恢复默认设置',
@@ -92,35 +121,29 @@ const menuList = [
     ]
   },
   {
-    name: '视图',
+    key: commonUtil.createId(),
+    label: '视图',
     children: [
       {
-        name: '切换',
-        shortcuts: 'ctrl+shift+/',
+        label: createLabel('切换', 'ctrl+shift+/'),
         click: commonUtil.toggleView
       }
     ]
   },
   {
-    name: '帮助',
+    key: commonUtil.createId(),
+    label: '帮助',
     children: [
       {
-        name: '关于',
+        label: '关于',
         click: nodeRequestUtil.openAboutWin
       }
     ]
   }
 ]
 
-const openChange = (open, key) => {
-  const index = commonUtil.arrFindIndex(activeMenu.value, key)
-  if (open && index < 0) {
-    activeMenu.value.push(key)
-  } else {
-    if (index > -1) {
-      activeMenu.value.splice(index, 1)
-    }
-  }
+const handleMenuClick = ({ item }) => {
+  item.originItemValue.click && item.originItemValue.click()
 }
 </script>
 
@@ -140,8 +163,10 @@ const openChange = (open, key) => {
     background-color: rgb(237,237,237);
   }
 }
-.shortcuts {
-  padding-left: 20px;
-  color: rgb(199,199,199);
+:deep(.ant-dropdown-menu-item){
+  // 禁止选择
+  user-select: none;
+  // 禁止拖动
+  -webkit-user-drag: none;
 }
 </style>

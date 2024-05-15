@@ -31,8 +31,14 @@ export default {
   openDirSelect: () => {
     return window.node.openDirSelect()
   },
+  generateDocxTemplate: () => {
+    window.node.generateDocxTemplate()
+  },
   exportPdf: () => {
     window.node.exportPdf()
+  },
+  exportWord: () => {
+    window.node.exportWord()
   },
   findInPage: (searchContent) => {
     window.node.findInPage(searchContent)
