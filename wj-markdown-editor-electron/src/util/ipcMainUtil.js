@@ -268,7 +268,7 @@ ipcMain.on('exportWord', () => {
     }
     const execute = (docxPath, p, shouldDelete) => {
         let success = true
-        let cmd = `pandoc ${p} -o ${docxPath} --from markdown --to docx`
+        let cmd = `pandoc ${p} -o ${docxPath} --from markdown --to docx --resource-path="${path.dirname(p)}"`
         if(fsUtil.exists(path.resolve(config.data.pandocPath, 'custom-reference.docx'))){
             cmd += ' --reference-doc=custom-reference.docx'
         }
