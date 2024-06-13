@@ -14,13 +14,19 @@ const init = () => {
         resolve(defaultConfigObj)
       } else {
         fs.readFile(pathUtil.getConfigPath(), (err, data) => {
-          const config = JSON.parse(data.toString())
+          let config
           let flag = false
-          for(const key in defaultConfigObj){
-            if(!config.hasOwnProperty(key)){
-              flag = true
-              config[key] = defaultConfigObj[key]
+          try {
+            config = JSON.parse(data.toString())
+            for(const key in defaultConfigObj){
+              if(!config.hasOwnProperty(key)){
+                flag = true
+                config[key] = defaultConfigObj[key]
+              }
             }
+          } catch (e) {
+            config = defaultConfigObj
+            flag = true
           }
           if(flag){
             fs.writeFile(configPath, JSON.stringify(config), () => {})
