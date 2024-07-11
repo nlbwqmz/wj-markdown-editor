@@ -41,7 +41,8 @@
       "installerIcon": "./icon/favicon.ico",
       "uninstallerIcon": "./icon/favicon.ico",
       "installerHeaderIcon": "./icon/favicon.ico",
-      "perMachine": false
+      "perMachine": true,
+      "include": "./installer.nsh"
     },
     "win": {
       "artifactName": "${productName}-${platform}-${arch}-${version}.${ext}",
