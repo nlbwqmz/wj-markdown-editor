@@ -8,8 +8,9 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 let exportWin
 const obj = {
-    open: (parent, pdfPath, id, exportSuccess, exportFail) => {
+    open: (parent, pdfPath, id, type, exportSuccess, exportFail) => {
         exportWin = new BrowserWindow({
+            width: 794,
             frame: false,
             modal: true,
             parent: parent,
@@ -37,12 +38,16 @@ const obj = {
                 exportFail && exportFail()
             })
         })
+        exportWin.once('execute-export-img', base64 => {
+            exportWin.close()
+            exportSuccess && exportSuccess(Buffer.from(String(base64).split('base64,')[1], 'base64'))
+        })
         if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-            exportWin.loadURL('http://localhost:8080/#/' + constant.router.export + '?id=' + id).then(() => {})
+            exportWin.loadURL('http://localhost:8080/#/' + constant.router.export + '?id=' + id + '&type=' + type).then(() => {})
         } else {
             exportWin.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), {
                 hash: constant.router.export,
-                search: 'id=' + id
+                search: 'id=' + id + '&type=' + type
             }).then(() => {})
         }
     },
@@ -51,9 +56,9 @@ const obj = {
             exportWin.webContents.send('shouldUpdateConfig', config)
         }
     },
-    emit: eventName => {
+    emit: (eventName, ...args) => {
         if(exportWin && !exportWin.isDestroyed()) {
-            exportWin.emit(eventName)
+            exportWin.emit(eventName, ...args)
         }
     }
 }
