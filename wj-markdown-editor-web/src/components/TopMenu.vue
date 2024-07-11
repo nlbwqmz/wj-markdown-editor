@@ -62,31 +62,32 @@ const menuList = [
           {
             key: commonUtil.createId(),
             label: 'PDF',
-            click: nodeRequestUtil.exportPdf
+            click: () => nodeRequestUtil.openExportWin('pdf')
           },
           {
             key: commonUtil.createId(),
             label: 'PNG',
-            click: nodeRequestUtil.exportImage
+            click: () => nodeRequestUtil.openExportWin('png')
+          },
+          {
+            key: commonUtil.createId(),
+            label: 'JPEG',
+            click: () => nodeRequestUtil.openExportWin('jpeg')
+          },
+          {
+            key: commonUtil.createId(),
+            label: 'WEBP',
+            click: () => nodeRequestUtil.openExportWin('webp')
           },
           {
             key: commonUtil.createId(),
             label: h(Tooltip, { title: '暂不支持导出webdav相对路径图片', 'auto-adjust-overflow': true, placement: 'right', color: '#1677ff' }, () => [
               h('div', {}, 'DOCX')
             ]),
-            click: nodeRequestUtil.exportWord
+            click: () => nodeRequestUtil.executeConvertFile('word')
           }
         ]
       },
-      // {
-      //   label: '导出为PDF',
-      //   click: nodeRequestUtil.exportPdf
-      // },
-      // {
-      //   label: '导出为WORD',
-      //   click: nodeRequestUtil.exportWord,
-      //   tip: '暂不支持导出webdav相对路径图片'
-      // },
       {
         key: commonUtil.createId(),
         type: 'divider'

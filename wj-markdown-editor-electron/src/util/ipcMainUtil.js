@@ -21,6 +21,7 @@ import win from "../win/win.js";
 import config from "../local/config.js";
 import util from "./util.js";
 import fileState from "../runtime/fileState.js";
+import convertUtil from "./convertUtil.js";
 
 const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
@@ -252,135 +253,6 @@ ipcMain.on('updateConfig', (event, newConfig) => {
     util.setByKey(newConfig, config.data)
 })
 
-ipcMain.on('exportWord', () => {
-    const fileStateItem = fileState.getById(globalData.activeFileId)
-    if(!fileStateItem.tempContent){
-        win.showMessage('当前文档内容为空', 'warning')
-        return;
-    }
-    if(!fileStateItem ||fileStateItem.exists === false){
-        win.showMessage('未找到当前文件', 'warning')
-        return;
-    }
-    if(!config.data.pandocPath){
-        win.showMessage('请先配置pandoc地址', 'warning')
-        return;
-    }
-    if(!fileStateItem.saved || !fileStateItem.type){
-        win.showMessage('请先保存文件', 'warning')
-        return;
-    }
-    const execute = (docxPath, p, shouldDelete) => {
-        let success = true
-        let cmd = `pandoc ${p} -o ${docxPath} --from markdown --to docx --resource-path="${path.dirname(p)}"`
-        if(fsUtil.exists(path.resolve(config.data.pandocPath, 'wj-markdown-editor-reference.docx'))){
-            cmd += ' --reference-doc=wj-markdown-editor-reference.docx'
-        }
-        const childProcess = exec(cmd, { cwd: config.data.pandocPath });
-        childProcess.stderr.on('data', function (data) {
-            success = false
-        })
-        // 退出之后的输出
-        childProcess.on('close', function (code) {
-            if(code === 0 && success === true) {
-                win.showMessage('导出成功', 'success', 2, true)
-            } else {
-                win.showMessage('导出完成，但遇到一些未知问题。', 'warning', 10, true)
-            }
-            if(shouldDelete){
-                fs.unlink(p, () => {})
-            }
-        })
-    }
-    const docxPath = dialog.showSaveDialogSync({
-        title: "导出word",
-        buttonLabel: "导出",
-        defaultPath: path.parse(fileStateItem.fileName).name,
-        filters: [
-            {name: 'docx文件', extensions: ['docx']}
-        ]
-    })
-    if(docxPath){
-        win.showMessage('导出中...', 'loading', 0)
-        if(fileStateItem.type === 'webdav'){
-            const currentPath = path.resolve(pathUtil.getTempPath(), util.createId() + '.md')
-            fs.writeFile(currentPath, fileStateItem.tempContent, () => {
-                execute(docxPath, currentPath, true)
-            })
-        } else {
-            execute(docxPath, fileStateItem.originFilePath, false)
-        }
-    }
-})
-
-ipcMain.on('exportPdf', event => {
-    const fileStateItem = fileState.getById(globalData.activeFileId)
-    if(!fileStateItem.tempContent){
-        win.showMessage('当前文档内容为空', 'warning')
-        return;
-    }
-    if(!fileStateItem ||fileStateItem.exists === false){
-        win.showMessage('未找到当前文件', 'warning')
-        return;
-    }
-    const pdfPath = dialog.showSaveDialogSync({
-        title: "导出为PDF",
-        buttonLabel: "导出",
-        defaultPath: path.parse(fileStateItem.fileName).name,
-        filters: [
-            {name: 'pdf文件', extensions: ['pdf']}
-        ]
-    })
-    if (pdfPath) {
-        win.showMessage('导出中...', 'loading', 0)
-        exportWin.open(win.get(), pdfPath,  globalData.activeFileId, 'pdf',buffer => {
-            fs.writeFile(pdfPath, buffer, () => {
-                win.showMessage('导出成功', 'success', 2, true)
-            })
-        }, () => {
-            win.showMessage('导出失败', 'error', 2, true)
-        })
-    }
-})
-
-ipcMain.on('exportImage', event => {
-    const fileStateItem = fileState.getById(globalData.activeFileId)
-    if(!fileStateItem.tempContent){
-        win.showMessage('当前文档内容为空', 'warning')
-        return;
-    }
-    if(!fileStateItem ||fileStateItem.exists === false){
-        win.showMessage('未找到当前文件', 'warning')
-        return;
-    }
-    const imgPath = dialog.showSaveDialogSync({
-        title: "导出为图片",
-        buttonLabel: "导出",
-        defaultPath: path.parse(fileStateItem.fileName).name,
-        filters: [
-            {name: 'png文件', extensions: ['png']}
-        ]
-    })
-    if (imgPath) {
-        win.showMessage('导出中...', 'loading', 0)
-        exportWin.open(win.get(), imgPath,  globalData.activeFileId, 'img', buffer => {
-            fs.writeFile(imgPath, buffer, () => {
-                win.showMessage('导出成功', 'success', 2, true)
-            })
-        }, () => {
-            win.showMessage('导出失败', 'error', 2, true)
-        })
-    }
-})
-
-ipcMain.on('executeExportPdf', () => {
-    exportWin.emit('execute-export-pdf')
-})
-
-ipcMain.on('executeExportImg', (event, base64) => {
-    exportWin.emit('execute-export-img', base64)
-})
-
 ipcMain.on('toggleSearchBar', event => {
     searchBarWin.toggleSearchBar(win.get())
 })
@@ -415,23 +287,6 @@ ipcMain.on('screenshot', (event, id, hide) => {
     } else {
         startCapture()
     }
-    //setTimeout(() => {
-        // const childProcess =  execFile(pathUtil.getSnapShotExePath())
-        // childProcess.on('exit', (code) => {
-        //     if (code === 0 || code === 1) {
-        //         const buffer = clipboard.readImage().toPNG()
-        //         if(buffer && buffer.length > 0){
-        //             const base64 = buffer.toString('base64')
-        //             uploadImage({ id, fileList: [{ base64, type: 'image/png', isScreenshot: true }] }).then(res => {})
-        //             clipboard.clear()
-        //         }
-        //     }
-        //     if(hide === true) {
-        //         globalData.win.restore()
-        //     }
-        //     childProcess.kill()
-        // })
-    //}, 200)
 })
 
 ipcMain.on('action', (event, type) => {
@@ -590,4 +445,40 @@ ipcMain.on('checkAutoLogin', () => {
 
 ipcMain.handle('getCurrentVersion', () => {
     return app.getVersion()
+})
+
+ipcMain.on('openExportWin', (event, type) => {
+    const fileStateItem = fileState.getById(globalData.activeFileId)
+    if(!fileStateItem || !fileStateItem.tempContent){
+        win.showMessage('当前文档内容为空', 'warning')
+        return;
+    }
+    const filePath = dialog.showSaveDialogSync({
+        title: "导出为" + type,
+        buttonLabel: "导出",
+        defaultPath: path.parse(fileStateItem.fileName).name,
+        filters: [
+            {name: type + '文件', extensions: [type]}
+        ]
+    })
+    if (filePath) {
+        win.showMessage('导出中...', 'loading', 0)
+        exportWin.open(win.get(),  globalData.activeFileId, type,buffer => {
+            fs.writeFile(filePath, buffer, () => {
+                win.showMessage('导出成功', 'success', 2, true)
+            })
+        }, () => {
+            win.showMessage('导出失败', 'error', 2, true)
+        })
+    }
+})
+
+ipcMain.on('executeConvertFile', (event, type, base64) => {
+    if(type === 'pdf'){
+        exportWin.emit('execute-export-pdf')
+    } else if (type === 'word'){
+        convertUtil.convertWord()
+    } else {
+        exportWin.emit('execute-export-img', base64)
+    }
 })

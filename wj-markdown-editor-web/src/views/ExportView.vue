@@ -32,7 +32,7 @@ const id = commonUtil.getUrlParam('id')
 const type = commonUtil.getUrlParam('type')
 const showInfo = ref(false)
 onBeforeMount(async () => {
-  if (type === 'img') {
+  if (type !== 'pdf') {
     showInfo.value = true
   }
   document.getElementById('app').style.display = 'none'
@@ -51,13 +51,13 @@ const config = computed(() => {
 
 const handleHtmlChanged = commonUtil.debounce(() => {
   if (type === 'pdf') {
-    window.node?.executeExportPdf()
-  } else if (type === 'img') {
+    nodeRequestUtil.executeConvertFile('pdf')
+  } else {
     html2canvas(document.body, {
       allowTaint: true
     }).then(canvas => {
-      const base64 = canvas.toDataURL('image/png', 1)
-      window.node?.executeExportImg(base64)
+      const base64 = canvas.toDataURL(`image/${type}`, 1)
+      nodeRequestUtil.executeConvertFile(type, base64)
     })
   }
 }, 1000)

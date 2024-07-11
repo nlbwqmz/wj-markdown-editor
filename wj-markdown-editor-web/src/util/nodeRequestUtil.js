@@ -34,14 +34,11 @@ export default {
   generateDocxTemplate: () => {
     window.node.generateDocxTemplate()
   },
-  exportPdf: () => {
-    window.node.exportPdf()
+  openExportWin: type => {
+    window.node.openExportWin(type)
   },
-  exportImage: () => {
-    window.node.exportImage()
-  },
-  exportWord: () => {
-    window.node.exportWord()
+  executeConvertFile: (type, base64) => {
+    window.node.executeConvertFile(type, base64)
   },
   findInPage: (searchContent) => {
     window.node.findInPage(searchContent)

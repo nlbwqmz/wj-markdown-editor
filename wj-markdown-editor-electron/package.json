@@ -6,7 +6,7 @@
   "homepage": "https://github.com/nlbwqmz/wj-markdown-editor",
   "description": "markdown编辑器",
   "name": "wj-markdown-editor",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "main": "src/main.js",
   "license": "MIT",
   "type": "module",

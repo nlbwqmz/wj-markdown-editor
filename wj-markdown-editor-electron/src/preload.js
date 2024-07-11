@@ -40,10 +40,6 @@ const showToMain = {
   updateConfig: config => ipcRenderer.send('updateConfig', config),
   openDirSelect: () => ipcRenderer.invoke('openDirSelect'),
   generateDocxTemplate: () => ipcRenderer.send('generateDocxTemplate'),
-  exportPdf: () => ipcRenderer.send('exportPdf'),
-  exportWord: () => ipcRenderer.send('exportWord'),
-  executeExportPdf: () => ipcRenderer.send('executeExportPdf'),
-  executeExportImg: base64 => ipcRenderer.send('executeExportImg', base64),
   findInPage: (searchContent) => ipcRenderer.send('findInPage', searchContent),
   findInPageNext: (searchContent, forward) => ipcRenderer.send('findInPageNext', searchContent, forward),
   stopFindInPage: () => ipcRenderer.send('stopFindInPage'),
@@ -73,7 +69,8 @@ const showToMain = {
   checkAutoLogin: () => ipcRenderer.send('checkAutoLogin'),
   exit: () => ipcRenderer.send('exit'),
   getCurrentVersion: () => ipcRenderer.invoke('getCurrentVersion'),
-  exportImage: () => ipcRenderer.send('exportImage')
+  openExportWin: type => ipcRenderer.send('openExportWin', type),
+  executeConvertFile: (type, base64) => ipcRenderer.send('executeConvertFile', type, base64)
 }
 
 contextBridge.exposeInMainWorld('node', {

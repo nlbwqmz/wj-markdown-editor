@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 let exportWin
 const obj = {
-    open: (parent, pdfPath, id, type, exportSuccess, exportFail) => {
+    open: (parent, id, type, exportSuccess, exportFail) => {
         exportWin = new BrowserWindow({
             width: 794,
             frame: false,
