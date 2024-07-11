@@ -10,6 +10,7 @@
   "dependencies": {
     "ant-design-vue": "^4.1.1",
     "core-js": "^3.8.3",
+    "html2canvas": "^1.4.1",
     "md-editor-v3": "^4.11.3",
     "nanoid": "^5.0.6",
     "viewerjs": "^1.11.6",
