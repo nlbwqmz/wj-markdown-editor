@@ -66,6 +66,11 @@ const menuList = [
           },
           {
             key: commonUtil.createId(),
+            label: 'PNG',
+            click: nodeRequestUtil.exportImage
+          },
+          {
+            key: commonUtil.createId(),
             label: h(Tooltip, { title: '暂不支持导出webdav相对路径图片', 'auto-adjust-overflow': true, placement: 'right', color: '#1677ff' }, () => [
               h('div', {}, 'DOCX')
             ]),
