@@ -7,6 +7,7 @@
         </div>
         <div class="horizontal-vertical-center">
           <span style="font-size: 12px; padding-left: 5px">wj-markdown-editor</span>
+          <span style="font-size: 12px; padding-left: 5px">v{{version}}</span>
         </div>
       </div>
       <div class="content horizontal-vertical-center">
@@ -30,13 +31,22 @@ import close from '@/assets/icon/close.png'
 import maximize from '@/assets/icon/maximize.png'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import nodeRegisterUtil from '@/util/nodeRegisterUtil'
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import unmaximize from '@/assets/icon/unmaximize.png'
 
 const showMaximizeAction = ref(true)
+const version = ref('')
+
 const action = type => {
   nodeRequestUtil.action(type)
 }
+
+onMounted(async () => {
+  const currentVersion = await nodeRequestUtil.getCurrentVersion()
+  if (currentVersion) {
+    version.value = currentVersion
+  }
+})
 
 nodeRegisterUtil.showMaximizeAction(bool => {
   showMaximizeAction.value = bool
