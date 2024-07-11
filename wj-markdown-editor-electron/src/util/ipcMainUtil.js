@@ -545,3 +545,7 @@ ipcMain.handle('getFileStateList', () => {
 ipcMain.on('checkAutoLogin', () => {
     webdavUtil.autoLogin()
 })
+
+ipcMain.handle('getCurrentVersion', () => {
+    return app.getVersion()
+})
