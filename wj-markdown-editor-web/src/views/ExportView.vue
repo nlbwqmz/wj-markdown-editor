@@ -13,6 +13,7 @@
                 @on-html-changed="handleHtmlChanged()"
                 v-else
     ></md-preview>
+    <div v-show="showInfo" style="font-size: 12px; text-align: center; width: 100%; color: #8b949e;padding: 10px 0">图片由wj-markdown-editor导出</div>
   </Teleport>
 </template>
 
@@ -24,10 +25,16 @@ import nodeRequestUtil from '@/util/nodeRequestUtil'
 import store from '@/store'
 import commonUtil from '@/util/commonUtil'
 import dayjs from 'dayjs'
+import html2canvas from 'html2canvas'
 const content = ref()
 const editorId = commonUtil.createId()
 const id = commonUtil.getUrlParam('id')
+const type = commonUtil.getUrlParam('type')
+const showInfo = ref(false)
 onBeforeMount(async () => {
+  if (type === 'img') {
+    showInfo.value = true
+  }
   document.getElementById('app').style.display = 'none'
   const fileContent = await nodeRequestUtil.getFileContent(id)
   content.value = fileContent.content
@@ -43,7 +50,16 @@ const config = computed(() => {
 })
 
 const handleHtmlChanged = commonUtil.debounce(() => {
-  window.node?.executeExportPdf()
+  if (type === 'pdf') {
+    window.node?.executeExportPdf()
+  } else if (type === 'img') {
+    html2canvas(document.body, {
+      allowTaint: true
+    }).then(canvas => {
+      const base64 = canvas.toDataURL('image/png', 1)
+      window.node?.executeExportImg(base64)
+    })
+  }
 }, 1000)
 </script>
 
