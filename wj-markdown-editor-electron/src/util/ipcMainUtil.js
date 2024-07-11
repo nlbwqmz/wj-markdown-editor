@@ -254,6 +254,10 @@ ipcMain.on('updateConfig', (event, newConfig) => {
 
 ipcMain.on('exportWord', () => {
     const fileStateItem = fileState.getById(globalData.activeFileId)
+    if(!fileStateItem.tempContent){
+        win.showMessage('当前文档内容为空', 'warning')
+        return;
+    }
     if(!fileStateItem ||fileStateItem.exists === false){
         win.showMessage('未找到当前文件', 'warning')
         return;
@@ -311,6 +315,10 @@ ipcMain.on('exportWord', () => {
 
 ipcMain.on('exportPdf', event => {
     const fileStateItem = fileState.getById(globalData.activeFileId)
+    if(!fileStateItem.tempContent){
+        win.showMessage('当前文档内容为空', 'warning')
+        return;
+    }
     if(!fileStateItem ||fileStateItem.exists === false){
         win.showMessage('未找到当前文件', 'warning')
         return;
@@ -337,6 +345,10 @@ ipcMain.on('exportPdf', event => {
 
 ipcMain.on('exportImage', event => {
     const fileStateItem = fileState.getById(globalData.activeFileId)
+    if(!fileStateItem.tempContent){
+        win.showMessage('当前文档内容为空', 'warning')
+        return;
+    }
     if(!fileStateItem ||fileStateItem.exists === false){
         win.showMessage('未找到当前文件', 'warning')
         return;
