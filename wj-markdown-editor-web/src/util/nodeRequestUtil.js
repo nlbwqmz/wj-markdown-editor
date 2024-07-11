@@ -123,5 +123,8 @@ export default {
   },
   checkAutoLogin: () => {
     window.node.checkAutoLogin()
+  },
+  getCurrentVersion: () => {
+    return window.node.getCurrentVersion()
   }
 }
