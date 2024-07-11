@@ -70,7 +70,8 @@ const showToMain = {
   getLoginInfo: () => ipcRenderer.invoke('getLoginInfo'),
   getFileStateList: () => ipcRenderer.invoke('getFileStateList'),
   checkAutoLogin: () => ipcRenderer.send('checkAutoLogin'),
-  exit: () => ipcRenderer.send('exit')
+  exit: () => ipcRenderer.send('exit'),
+  getCurrentVersion: () => ipcRenderer.invoke('getCurrentVersion')
 }
 
 contextBridge.exposeInMainWorld('node', {
