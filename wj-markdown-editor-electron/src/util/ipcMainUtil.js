@@ -1,4 +1,4 @@
-import {shell} from 'electron'
+import {app, shell} from 'electron'
 import {ipcMain, dialog} from 'electron'
 import { exec } from 'child_process'
 import fs from 'fs'
@@ -316,7 +316,7 @@ ipcMain.on('exportPdf', event => {
         return;
     }
     const pdfPath = dialog.showSaveDialogSync({
-        title: "导出PDF",
+        title: "导出为PDF",
         buttonLabel: "导出",
         defaultPath: path.parse(fileStateItem.fileName).name,
         filters: [
@@ -325,8 +325,34 @@ ipcMain.on('exportPdf', event => {
     })
     if (pdfPath) {
         win.showMessage('导出中...', 'loading', 0)
-        exportWin.open(win.get(), pdfPath,  globalData.activeFileId, buffer => {
+        exportWin.open(win.get(), pdfPath,  globalData.activeFileId, 'pdf',buffer => {
             fs.writeFile(pdfPath, buffer, () => {
+                win.showMessage('导出成功', 'success', 2, true)
+            })
+        }, () => {
+            win.showMessage('导出失败', 'error', 2, true)
+        })
+    }
+})
+
+ipcMain.on('exportImage', event => {
+    const fileStateItem = fileState.getById(globalData.activeFileId)
+    if(!fileStateItem ||fileStateItem.exists === false){
+        win.showMessage('未找到当前文件', 'warning')
+        return;
+    }
+    const imgPath = dialog.showSaveDialogSync({
+        title: "导出为图片",
+        buttonLabel: "导出",
+        defaultPath: path.parse(fileStateItem.fileName).name,
+        filters: [
+            {name: 'png文件', extensions: ['png']}
+        ]
+    })
+    if (imgPath) {
+        win.showMessage('导出中...', 'loading', 0)
+        exportWin.open(win.get(), imgPath,  globalData.activeFileId, 'img', buffer => {
+            fs.writeFile(imgPath, buffer, () => {
                 win.showMessage('导出成功', 'success', 2, true)
             })
         }, () => {
@@ -337,6 +363,10 @@ ipcMain.on('exportPdf', event => {
 
 ipcMain.on('executeExportPdf', () => {
     exportWin.emit('execute-export-pdf')
+})
+
+ipcMain.on('executeExportImg', (event, base64) => {
+    exportWin.emit('execute-export-img', base64)
 })
 
 ipcMain.on('toggleSearchBar', event => {
