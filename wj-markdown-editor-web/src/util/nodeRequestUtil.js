@@ -37,6 +37,9 @@ export default {
   exportPdf: () => {
     window.node.exportPdf()
   },
+  exportImage: () => {
+    window.node.exportImage()
+  },
   exportWord: () => {
     window.node.exportWord()
   },
