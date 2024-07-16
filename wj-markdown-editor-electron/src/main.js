@@ -7,7 +7,6 @@ import common from './util/common.js'
 import screenshotsUtil from "./util/screenshotsUtil.js";
 import { fileURLToPath } from 'url'
 import win from "./win/win.js";
-import searchBarWin from "./win/searchBarWin.js";
 import globalShortcutUtil from "./util/globalShortcutUtil.js";
 import './util/job.js'
 import fileState from "./runtime/fileState.js";
@@ -49,7 +48,7 @@ if(!lock){
     protocolUtil.handleProtocol()
     createTray()
     Menu.setApplicationMenu(null)
-    win.open(searchBarWin, common, globalShortcutUtil, globalData)
+    win.open(common, globalShortcutUtil, globalData)
     app.on('window-all-closed', () => {
       if (process.platform !== 'darwin') app.quit()
     })

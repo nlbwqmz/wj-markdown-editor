@@ -1,5 +1,5 @@
 <template>
-  <div style="width: 100%; min-height: 100%; border-left: var(--wj-inner-border)" v-show="!loading" :id="previewId">
+  <div style="width: 100%; min-height: 100%; border-left: var(--wj-inner-border)" :id="previewId" class="preview-container">
     <div v-if="!content" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }" class="horizontal-vertical-center">
       <a-empty>
         <template #description>
@@ -69,14 +69,12 @@ const previewId = commonUtil.createId()
 const componentId = commonUtil.createId()
 const catalogShow = ref()
 const offsetTop = 103
-const loading = ref(true)
 const imgViewer = ref()
 const id = commonUtil.getUrlParam('id')
 
 onActivated(async () => {
   const fileContent = await nodeRequestUtil.getFileContent(id)
   catalogShow.value = store.state.config.catalogShow
-  loading.value = false
   if (fileContent.exists === true) {
     content.value = fileContent.content
   } else {

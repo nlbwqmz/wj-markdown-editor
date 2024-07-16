@@ -145,9 +145,31 @@
 //--------------始终显示滚动条--------------
 
 
+// 禁止选择和拖动
 .forbid-select-drag {
     // 禁止选择
     user-select: none;
     // 禁止拖动
     -webkit-user-drag: none;
+}
+
+// 自定义搜索高亮样式
+.search-mark {
+    display: inline;
+    color: black;
+    background-color: #ffff00;
+}
+
+.search-mark-highlight {
+    background-color: #ff9632
+}
+
+//CodeMirror 搜索高亮样式
+.cm-searchMatch {
+    color: black !important;
+    background-color: #ffff00 !important;
+}
+
+.cm-searchMatch-selected {
+    background-color: #ff9632 !important;
 }

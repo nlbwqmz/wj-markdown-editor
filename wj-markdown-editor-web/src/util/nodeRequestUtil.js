@@ -49,9 +49,6 @@ export default {
   stopFindInPage: () => {
     window.node.stopFindInPage()
   },
-  toggleSearchBar: () => {
-    window.node.toggleSearchBar()
-  },
   screenshot: (id, hide) => {
     window.node.screenshot(id, hide)
   },

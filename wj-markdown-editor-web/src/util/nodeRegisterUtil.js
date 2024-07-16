@@ -108,9 +108,6 @@ export default {
       })
     })
   },
-  findInPageResult: fun => {
-    window.node.findInPageResult(fun)
-  },
   showMaximizeAction: callback => {
     window.node.showMaximizeAction(callback)
   },

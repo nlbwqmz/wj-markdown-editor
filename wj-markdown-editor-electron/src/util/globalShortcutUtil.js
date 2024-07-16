@@ -2,7 +2,6 @@ import { globalShortcut } from 'electron'
 import common from "./common.js"
 import globalData from './globalData.js'
 import settingWin from "../win/settingWin.js";
-import searchBarWin from "../win/searchBarWin.js";
 import win from "../win/win.js";
 
 const shortcutList = [
@@ -35,14 +34,6 @@ const shortcutList = [
         callback: () => {
             if(win.isFocused()){
                 win.toggleView()
-            }
-        }
-    },
-    {
-        accelerator: 'Ctrl+f',
-        callback: () => {
-            if(win.isFocused()){
-                searchBarWin.toggleSearchBar(win.get())
             }
         }
     },

@@ -21,6 +21,7 @@
       </div>
     </div>
   </div>
+  <SearchBarWeb v-model="showSearchBar"/>
 </template>
 
 <style lang="less">
@@ -40,7 +41,7 @@ body {
 </style>
 <script setup>
 import TopMenu from '@/components/TopMenu.vue'
-import { computed, onBeforeMount, ref, watch } from 'vue'
+import { computed, onBeforeMount, onMounted, onUnmounted, ref, watch } from 'vue'
 import router from '@/router'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import store from '@/store'
@@ -48,7 +49,9 @@ import TopTitle from '@/components/TopTitle.vue'
 import TopTab from '@/components/TopTab.vue'
 import WebdavLoginView from '@/components/WebdavLoginView.vue'
 import WebdavFileView from '@/components/WebdavFileView.vue'
+import SearchBarWeb from '@/views/SearchBarWeb.vue'
 const showTop = ref(false)
+const showSearchBar = ref(false)
 
 watch(() => router.currentRoute.value, (newValue, olValue) => {
   showTop.value = newValue && newValue.meta && newValue.meta.showTop === true
@@ -63,4 +66,23 @@ onBeforeMount(async () => {
 })
 const showWebdav = computed(() => store.state.showWebdav)
 const webdavLogin = computed(() => store.state.webdavLogin)
+
+const handleKeyDown = event => {
+  if (router.currentRoute.value.path === '/preview') {
+    if (event.ctrlKey && event.key === 'f') {
+      showSearchBar.value = true
+    } else if (event.keyCode === 27) {
+      showSearchBar.value = false
+    }
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeyDown)
+})
+
 </script>

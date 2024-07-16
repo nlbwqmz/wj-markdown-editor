@@ -49,14 +49,6 @@ const routes = [
     }
   },
   {
-    path: '/searchBar',
-    name: 'searchBar',
-    component: () => import('../views/SearchBar.vue'),
-    meta: {
-      showTop: false
-    }
-  },
-  {
     path: '/notFound',
     name: 'notFound',
     component: () => import('../views/NotFound.vue'),

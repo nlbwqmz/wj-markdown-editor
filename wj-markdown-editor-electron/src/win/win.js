@@ -19,7 +19,7 @@ const execute = func => {
 
 const obj = {
     get: () => win,
-    open: (searchBarWin, common, globalShortcutUtil, globalData) => {
+    open: (common, globalShortcutUtil, globalData) => {
         win = new BrowserWindow({
             frame: false,
             icon: path.resolve(__dirname, '../../icon/favicon.ico'),
@@ -36,7 +36,7 @@ const obj = {
         if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
             win.webContents.openDevTools()
         }
-        winOnUtil.handle(win, searchBarWin, common, globalShortcutUtil, globalData)
+        winOnUtil.handle(win, common, globalShortcutUtil, globalData)
         const index = fileState.getLength() - 1
         if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
             win.loadURL('http://localhost:8080/#/' + (fileState.getByIndex(index).originFilePath ? config.data.initRoute : constant.router.edit) + '?id=' + fileState.getByIndex(index).id).then(() => {})

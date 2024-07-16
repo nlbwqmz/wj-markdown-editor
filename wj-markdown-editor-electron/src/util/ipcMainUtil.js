@@ -16,7 +16,6 @@ import globalShortcutUtil from "./globalShortcutUtil.js";
 import exportWin from "../win/exportWin.js";
 import settingWin from "../win/settingWin.js";
 import aboutWin from "../win/aboutWin.js";
-import searchBarWin from "../win/searchBarWin.js";
 import win from "../win/win.js";
 import config from "../local/config.js";
 import util from "./util.js";
@@ -251,10 +250,6 @@ ipcMain.on('closeSettingWin', () => {
 
 ipcMain.on('updateConfig', (event, newConfig) => {
     util.setByKey(newConfig, config.data)
-})
-
-ipcMain.on('toggleSearchBar', event => {
-    searchBarWin.toggleSearchBar(win.get())
 })
 
 ipcMain.on('findInPage', (event, searchContent) => {
