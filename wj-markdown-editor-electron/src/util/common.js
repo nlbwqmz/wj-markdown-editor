@@ -13,9 +13,11 @@ import win from "../win/win.js";
 import config from "../local/config.js";
 import fileState from "../runtime/fileState.js";
 import util from "./util.js";
+import dbUtil from "./dbUtil.js";
 
 const exit = () => {
     fsUtil.deleteFolder(pathUtil.getTempPath())
+    dbUtil.close()
     app.exit()
 }
 
@@ -63,7 +65,7 @@ export default {
         } else if (insertImgType === '3') {
             savePath = path.join(path.dirname(originFilePath), 'assets')
         } else {
-            savePath = config.data.imgSavePath
+            savePath = config.data.img_save_path
         }
         if (fileStateItem.type === 'local' || (insertImgType !== '2' && insertImgType !== '3')) {
             fsUtil.mkdirSyncWithRecursion(savePath)
@@ -72,15 +74,15 @@ export default {
     },
     getImgInsertType: (file) => {
         if (file.url) { // 通过URL 插入网络图片
-            return config.data.insertNetworkImgType
+            return config.data.insert_network_img_type
         } else if (file.path && file.isSelect) { // 通过文件选择 插入本地图片
-            return config.data.insertLocalImgType
+            return config.data.insert_local_img_type
         } else if (file.path && !file.isSelect) { // 通过粘贴板 插入本地图片
-            return config.data.insertPasteboardLocalImgType
+            return config.data.insert_pasteboard_local_img_type
         } else if (file.base64 && file.isScreenshot) { // 通过屏幕截图 插入图片
-            return config.data.insertScreenshotImgType
+            return config.data.insert_screenshot_img_type
         } else if (file.base64 && !file.isScreenshot) { // 通过粘贴板 插入网络图片
-            return config.data.insertPasteboardNetworkImgType
+            return config.data.insert_pasteboard_network_img_type
         }
     },
     checkUpdate: () => {

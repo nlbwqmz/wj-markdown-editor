@@ -32,8 +32,8 @@ export default {
         })
         browserWindow.on('resize', () => {
             const size = browserWindow.getSize();
-            config.data.winWidth = size[0]
-            config.data.winHeight = size[1]
+            config.data.win_width = size[0]
+            config.data.win_height = size[1]
 
         })
         browserWindow.on('maximize', () => {

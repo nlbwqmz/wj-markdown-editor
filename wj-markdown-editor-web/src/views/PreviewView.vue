@@ -9,7 +9,7 @@
       </a-empty>
     </div>
     <div style="width: 100%; display: flex; justify-content: center" v-if="content">
-      <div :style="{ width: `${config.previewWidth}%` }" style="display: flex; justify-content: center">
+      <div :style="{ width: `${config.preview_width}%` }" style="display: flex; justify-content: center">
         <div style="flex: 1; overflow: hidden">
           <md-preview
             :id="componentId"
@@ -17,8 +17,8 @@
             :editor-id="domId"
             :md-heading-id="commonUtil.mdHeadingId"
             no-img-zoom-in
-            :preview-theme="config.previewTheme"
-            :code-theme="config.codeTheme"
+            :preview-theme="config.preview_theme"
+            :code-theme="config.code_theme"
             @on-html-changed="handleHtmlChanged()">
           </md-preview>
         </div>
@@ -41,7 +41,7 @@
         <EyeInvisibleOutlined />
       </template>
     </a-float-button>
-    <a-float-button type="default" @click="toEdit" class="float-button" style="right: 50px" description="编辑" v-if="config.jumpRouterBtn" shape="square">
+    <a-float-button type="default" @click="toEdit" class="float-button" style="right: 50px" description="编辑" v-if="config.jump_router_btn" shape="square">
       <template #icon>
         <EditOutlined />
       </template>
@@ -74,7 +74,7 @@ const id = commonUtil.getUrlParam('id')
 
 onActivated(async () => {
   const fileContent = await nodeRequestUtil.getFileContent(id)
-  catalogShow.value = store.state.config.catalogShow
+  catalogShow.value = store.state.config.catalog_show
   if (fileContent.exists === true) {
     content.value = fileContent.content
   } else {

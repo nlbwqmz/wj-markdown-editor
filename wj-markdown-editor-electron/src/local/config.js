@@ -1,43 +1,7 @@
-import pathUtil from "../util/pathUtil.js";
-import fs from "fs";
-import defaultConfig from "../constant/defaultConfig.js";
 import util from "../util/util.js";
 import DataWatch from "../type/DataWatch.js";
+import dbUtil from "../util/dbUtil.js";
 
-const defaultConfigObj = defaultConfig.get()
-const configPath = pathUtil.getConfigPath();
-const init = () => {
-  return new Promise((resolve, reject) => {
-    fs.access(configPath, fs.constants.F_OK, err => {
-      if(err){
-        fs.writeFile(configPath, JSON.stringify(defaultConfigObj), () => {})
-        resolve(defaultConfigObj)
-      } else {
-        fs.readFile(pathUtil.getConfigPath(), (err, data) => {
-          let config
-          let flag = false
-          try {
-            config = JSON.parse(data.toString())
-            for(const key in defaultConfigObj){
-              if(!config.hasOwnProperty(key)){
-                flag = true
-                config[key] = defaultConfigObj[key]
-              }
-            }
-          } catch (e) {
-            config = defaultConfigObj
-            flag = true
-          }
-          if(flag){
-            fs.writeFile(configPath, JSON.stringify(config), () => {})
-          }
-          resolve(config)
-        })
-      }
-    })
-  })
-}
-
-const config = new DataWatch(await init());
-config.watch([], data => util.debounce(() => {fs.writeFile(configPath, JSON.stringify(data), () => {})})())
+const config = new DataWatch(await dbUtil.selectConfig());
+config.watch([], data => util.debounce(() => { dbUtil.updateAllConfig(data) })())
 export default config

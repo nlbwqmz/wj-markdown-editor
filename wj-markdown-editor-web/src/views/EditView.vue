@@ -10,8 +10,8 @@
                no-img-zoom-in
                :toolbarsExclude="['pageFullscreen', 'fullscreen', 'htmlPreview', 'github', 'image']"
                :md-heading-id="commonUtil.mdHeadingId"
-               :preview-theme="config.previewTheme"
-               :code-theme="config.codeTheme"
+               :preview-theme="config.preview_theme"
+               :code-theme="config.code_theme"
     ></md-editor>
   </div>
 
@@ -58,7 +58,7 @@
     </template>
   </a-dropdown>
 
-  <a-float-button type="default" class="float-button" @click="toPreview" style="right: 50px" description="预览" v-if="config.jumpRouterBtn" shape="square">
+  <a-float-button type="default" class="float-button" @click="toPreview" style="right: 50px" description="预览" v-if="config.jump_router_btn" shape="square">
     <template #icon>
       <EyeOutlined />
     </template>

@@ -1,15 +1,15 @@
 <template>
   <Teleport to="body">
-    <a-watermark v-bind="config.watermark" v-if="config.watermark.enabled">
+    <a-watermark v-bind="config.watermark" v-if="config.watermark_enabled">
       <md-preview :model-value="content" :editor-id="editorId" id="export"
-                  :preview-theme="config.previewTheme"
-                  :code-theme="config.codeTheme"
+                  :preview-theme="config.preview_theme"
+                  :code-theme="config.code_theme"
                   @on-html-changed="handleHtmlChanged()"
       ></md-preview>
     </a-watermark>
     <md-preview :model-value="content" :editor-id="editorId" id="export"
-                :preview-theme="config.previewTheme"
-                :code-theme="config.codeTheme"
+                :preview-theme="config.preview_theme"
+                :code-theme="config.code_theme"
                 @on-html-changed="handleHtmlChanged()"
                 v-else
     ></md-preview>
@@ -41,9 +41,19 @@ onBeforeMount(async () => {
 })
 const config = computed(() => {
   const originConfig = commonUtil.deepCopy(store.state.config)
-  if (originConfig.watermark.enabled === true) {
-    if (originConfig.watermark.exportDate === true) {
-      originConfig.watermark.content = [originConfig.watermark.content, dayjs(new Date()).format(originConfig.watermark.exportDateFormat)]
+  if (originConfig.watermark_enabled === true) {
+    originConfig.watermark = {
+      font: {
+        color: originConfig.watermark_font_color,
+        size: originConfig.watermark_font_size,
+        weight: originConfig.watermark_font_weight
+      },
+      gap: originConfig.watermark_gap,
+      rotate: originConfig.watermark_rotate,
+      content: originConfig.watermark_content
+    }
+    if (originConfig.watermark_export_date === true) {
+      originConfig.watermark.content = [originConfig.watermark.content, dayjs(new Date()).format(originConfig.watermark_export_date_format)]
     }
   }
   return originConfig

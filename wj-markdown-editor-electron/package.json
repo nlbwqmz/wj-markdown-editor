@@ -57,7 +57,9 @@
       ],
       "fileAssociations": [
         {
-          "ext": ["md"],
+          "ext": [
+            "md"
+          ],
           "name": "Markdown File"
         }
       ]
@@ -66,7 +68,9 @@
       "icon": "./icon",
       "category": "Utility",
       "artifactName": "${productName}-${platform}-${arch}-${version}.${ext}",
-      "mimeTypes": ["text/markdown"],
+      "mimeTypes": [
+        "text/markdown"
+      ],
       "target": [
         {
           "target": "deb"
@@ -77,7 +81,9 @@
       ],
       "fileAssociations": [
         {
-          "ext": ["md"],
+          "ext": [
+            "md"
+          ],
           "mimeType": "text/markdown",
           "name": "Markdown File"
         }
@@ -97,6 +103,7 @@
     "electron-updater": "^6.1.8",
     "nanoid": "^5.0.6",
     "node-machine-id": "^1.1.12",
+    "sqlite3": "^5.1.7",
     "webdav": "^5.5.0"
   }
 }

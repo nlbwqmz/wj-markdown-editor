@@ -32,11 +32,12 @@ export default {
             fs.unlinkSync(filePath)
         })
     },
-    exportSetting: (configPath, filePath, callback) => {
-        fs.copyFile(configPath, filePath, callback)
-    },
-    getJsonFileContent: filePath => {
-        return JSON.parse(fs.readFileSync(filePath).toString())
+    getJsonFileContent: (filePath, defaultJson) => {
+        try {
+            return JSON.parse(fs.readFileSync(filePath).toString())
+        } catch (e) {
+            return defaultJson
+        }
     },
     exists: filePath => {
         return fs.existsSync(filePath)

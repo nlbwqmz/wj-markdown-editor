@@ -60,7 +60,7 @@ onBeforeMount(async () => {
   nodeRequestUtil.checkAutoLogin()
   const config = await nodeRequestUtil.getConfig()
   store.commit('updateConfig', config)
-  store.commit('setShowWebdav', config.showWebdav)
+  store.commit('setShowWebdav', config.show_web_dav)
   const fileStateList = await nodeRequestUtil.getFileStateList()
   store.commit('updateFileStateList', fileStateList)
 })

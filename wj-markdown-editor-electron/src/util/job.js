@@ -53,8 +53,8 @@ const handleJob = minute => {
 }
 
 const init = ()=> {
-  handleJob(config.data.autoSave.minute)
-  config.watch(['autoSave'], data => { handleJob(data.autoSave.minute) })
+  handleJob(config.data.auto_save_minute)
+  config.watch(['auto_save_minute'], data => { handleJob(data.auto_save_minute) })
 }
 
 init()

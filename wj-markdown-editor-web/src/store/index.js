@@ -27,7 +27,7 @@ export default createStore({
         }
         return {
           id: fileState.id,
-          path: fileState.originFilePath ? ('/' + state.config.initRoute) : '/edit'
+          path: fileState.originFilePath ? ('/' + state.config.init_route) : '/edit'
         }
       })
       state.fileStateList = fileStateList

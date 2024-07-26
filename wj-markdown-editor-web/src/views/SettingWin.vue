@@ -19,13 +19,13 @@
                 <InfoCircleOutlined style="margin-left: 10px" class="tooltip-icon"/>
               </a-tooltip>
             </template>
-            <a-radio-group v-model:value="config.initRoute" button-style="solid">
+            <a-radio-group v-model:value="config.init_route" button-style="solid">
               <a-radio-button value="edit">编辑</a-radio-button>
               <a-radio-button value="preview">预览</a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item label="最小化到托盘">
-            <a-radio-group v-model:value="config.minimizeToTray" button-style="solid">
+            <a-radio-group v-model:value="config.minimize_to_tray" button-style="solid">
               <a-radio-button :value="true">是</a-radio-button>
               <a-radio-button :value="false">否</a-radio-button>
             </a-radio-group>
@@ -37,7 +37,7 @@
                 <InfoCircleOutlined style="margin-left: 10px" class="tooltip-icon"/>
               </a-tooltip>
             </template>
-            <a-select v-model:value="config.autoSave.minute" style="width: 100%">
+            <a-select v-model:value="config.auto_save_minute" style="width: 100%">
               <a-select-option :value="0">关闭</a-select-option>
               <a-select-option :value="5">5分钟</a-select-option>
               <a-select-option :value="10">10分钟</a-select-option>
@@ -51,25 +51,25 @@
             <span id="view">视图</span>
           </template>
           <a-descriptions-item label="跳转按钮">
-            <a-radio-group v-model:value="config.jumpRouterBtn" button-style="solid">
+            <a-radio-group v-model:value="config.jump_router_btn" button-style="solid">
               <a-radio-button :value="true">显示</a-radio-button>
               <a-radio-button :value="false">隐藏</a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item label="webdav">
-            <a-radio-group v-model:value="config.showWebdav" button-style="solid">
+            <a-radio-group v-model:value="config.show_web_dav" button-style="solid">
               <a-radio-button :value="true">显示</a-radio-button>
               <a-radio-button :value="false">隐藏</a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item label="默认显示目录">
-            <a-radio-group v-model:value="config.catalogShow" button-style="solid">
+            <a-radio-group v-model:value="config.catalog_show" button-style="solid">
               <a-radio-button :value="true">是</a-radio-button>
               <a-radio-button :value="false">否</a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item label="预览宽度">
-            <a-slider v-model:value="config.previewWidth" :min="10" :max="100" :tip-formatter="value => `${value}%`"/>
+            <a-slider v-model:value="config.preview_width" :min="10" :max="100" :tip-formatter="value => `${value}%`"/>
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small" style="margin-top: 20px">
@@ -77,7 +77,7 @@
             <span id="topic">主题</span>
           </template>
           <a-descriptions-item label="代码主题">
-            <a-select v-model:value="config.codeTheme" style="width: 100%">
+            <a-select v-model:value="config.code_theme" style="width: 100%">
               <a-select-option value="atom">atom</a-select-option>
               <a-select-option value="a11y">a11y</a-select-option>
               <a-select-option value="github">github</a-select-option>
@@ -89,7 +89,7 @@
             </a-select>
           </a-descriptions-item>
           <a-descriptions-item label="预览主题">
-            <a-select v-model:value="config.previewTheme" style="width: 100%">
+            <a-select v-model:value="config.preview_theme" style="width: 100%">
               <a-select-option value="default">default</a-select-option>
               <a-select-option value="github">github</a-select-option>
               <a-select-option value="vuepress">vuepress</a-select-option>
@@ -107,14 +107,14 @@
             </a-tooltip>
           </template>
           <a-descriptions-item label="图片保存位置">
-            <a-input v-model:value="config.imgSavePath" readonly>
+            <a-input v-model:value="config.img_save_path" readonly>
               <template #addonAfter>
                 <FolderOutlined style="cursor: pointer" @click="openDirSelect"/>
               </template>
             </a-input>
           </a-descriptions-item>
           <a-descriptions-item label="上传本地图片">
-            <a-select v-model:value="config.insertLocalImgType" style="width: 100%">
+            <a-select v-model:value="config.insert_local_img_type" style="width: 100%">
               <a-select-option value="1">无操作</a-select-option>
               <a-select-option value="2">复制到 ./%{filename} 文件夹</a-select-option>
               <a-select-option value="3">复制到 ./assets 文件夹</a-select-option>
@@ -123,7 +123,7 @@
             </a-select>
           </a-descriptions-item>
           <a-descriptions-item label="粘贴本地图片">
-            <a-select v-model:value="config.insertPasteboardLocalImgType" style="width: 100%">
+            <a-select v-model:value="config.insert_pasteboard_local_img_type" style="width: 100%">
               <a-select-option value="1">无操作</a-select-option>
               <a-select-option value="2">复制到 ./%{filename} 文件夹</a-select-option>
               <a-select-option value="3">复制到 ./assets 文件夹</a-select-option>
@@ -132,7 +132,7 @@
             </a-select>
           </a-descriptions-item>
           <a-descriptions-item label="上传网络图片">
-            <a-select v-model:value="config.insertNetworkImgType" style="width: 100%">
+            <a-select v-model:value="config.insert_network_img_type" style="width: 100%">
               <a-select-option value="2">复制到 ./%{filename} 文件夹</a-select-option>
               <a-select-option value="3">复制到 ./assets 文件夹</a-select-option>
               <a-select-option value="4">复制到指定文件夹</a-select-option>
@@ -140,7 +140,7 @@
             </a-select>
           </a-descriptions-item>
           <a-descriptions-item label="粘贴网络图片">
-            <a-select v-model:value="config.insertPasteboardNetworkImgType" style="width: 100%">
+            <a-select v-model:value="config.insert_pasteboard_network_img_type" style="width: 100%">
               <a-select-option value="2">复制到 ./%{filename} 文件夹</a-select-option>
               <a-select-option value="3">复制到 ./assets 文件夹</a-select-option>
               <a-select-option value="4">复制到指定文件夹</a-select-option>
@@ -148,7 +148,7 @@
             </a-select>
           </a-descriptions-item>
           <a-descriptions-item label="截图">
-            <a-select v-model:value="config.insertScreenshotImgType" style="width: 100%">
+            <a-select v-model:value="config.insert_screenshot_img_type" style="width: 100%">
               <a-select-option value="2">复制到 ./%{filename} 文件夹</a-select-option>
               <a-select-option value="3">复制到 ./assets 文件夹</a-select-option>
               <a-select-option value="4">复制到指定文件夹</a-select-option>
@@ -161,43 +161,43 @@
             <span id="watermark">水印</span>
           </template>
           <a-descriptions-item label="导出水印">
-            <a-radio-group v-model:value="config.watermark.enabled" button-style="solid">
+            <a-radio-group v-model:value="config.watermark_enabled" button-style="solid">
               <a-radio-button :value="true">开启</a-radio-button>
               <a-radio-button :value="false">关闭</a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="导出时间" v-if="config.watermark.enabled === true">
-            <a-radio-group v-model:value="config.watermark.exportDate" button-style="solid">
+          <a-descriptions-item label="导出时间" v-if="config.watermark_enabled === true">
+            <a-radio-group v-model:value="config.watermark_export_date" button-style="solid">
               <a-radio-button :value="true">开启</a-radio-button>
               <a-radio-button :value="false">关闭</a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="导出时间格式" v-if="config.watermark.enabled === true && config.watermark.exportDate === true">
-            <a-select v-model:value="config.watermark.exportDateFormat" style="width: 100%">
+          <a-descriptions-item label="导出时间格式" v-if="config.watermark_enabled === true && config.watermark_export_date === true">
+            <a-select v-model:value="config.watermark_export_date_format" style="width: 100%">
               <a-select-option value="YYYY-MM-DD">年-月-日</a-select-option>
               <a-select-option value="YYYY-MM-DD HH:mm:ss">年-月-日 时:分:秒</a-select-option>
             </a-select>
           </a-descriptions-item>
-          <a-descriptions-item label="内容" v-if="config.watermark.enabled === true">
-            <a-input v-model:value="config.watermark.content" />
+          <a-descriptions-item label="内容" v-if="config.watermark_enabled === true">
+            <a-input v-model:value="config.watermark_content" />
           </a-descriptions-item>
-          <a-descriptions-item label="旋转角度" v-if="config.watermark.enabled === true">
-            <a-slider v-model:value="config.watermark.rotate" :min="-180" :max="180"/>
+          <a-descriptions-item label="旋转角度" v-if="config.watermark_enabled === true">
+            <a-slider v-model:value="config.watermark_rotate" :min="-180" :max="180"/>
           </a-descriptions-item>
-          <a-descriptions-item label="间隔宽度" v-if="config.watermark.enabled === true">
-            <a-slider v-model:value="config.watermark.gap[0]" :min="10" :max="500"/>
+          <a-descriptions-item label="间隔宽度" v-if="config.watermark_enabled === true">
+            <a-slider v-model:value="config.watermark_gap[0]" :min="10" :max="500"/>
           </a-descriptions-item>
-          <a-descriptions-item label="间隔高度" v-if="config.watermark.enabled === true">
-            <a-slider v-model:value="config.watermark.gap[1]" :min="10" :max="500"/>
+          <a-descriptions-item label="间隔高度" v-if="config.watermark_enabled === true">
+            <a-slider v-model:value="config.watermark_gap[1]" :min="10" :max="500"/>
           </a-descriptions-item>
-          <a-descriptions-item label="字体大小" v-if="config.watermark.enabled === true">
-            <a-slider v-model:value="config.watermark.font.fontSize" :min="12" :max="100"/>
+          <a-descriptions-item label="字体大小" v-if="config.watermark_enabled === true">
+            <a-slider v-model:value="config.watermark_font_size" :min="12" :max="100"/>
           </a-descriptions-item>
-          <a-descriptions-item label="字体粗细" v-if="config.watermark.enabled === true">
-            <a-slider v-model:value="config.watermark.font.fontWeight" :min="200" :max="1000"/>
+          <a-descriptions-item label="字体粗细" v-if="config.watermark_enabled === true">
+            <a-slider v-model:value="config.watermark_font_weight" :min="200" :max="1000"/>
           </a-descriptions-item>
-          <a-descriptions-item label="字体颜色" v-if="config.watermark.enabled === true">
-            <pick-colors v-model:value="config.watermark.font.color" show-alpha/>
+          <a-descriptions-item label="字体颜色" v-if="config.watermark_enabled === true">
+            <pick-colors v-model:value="config.watermark_font_color" show-alpha/>
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small" style="margin-top: 20px">
@@ -205,10 +205,10 @@
             <span id="PicGo">PicGo<a-button type="link" href="https://picgo.github.io/PicGo-Doc/" target="_blank">官方网站</a-button></span>
           </template>
           <a-descriptions-item label="地址">
-            <a-input v-model:value="config.picGo.host"/>
+            <a-input v-model:value="config.pic_go_host"/>
           </a-descriptions-item>
           <a-descriptions-item label="端口">
-            <a-input-number v-model:value="config.picGo.port" :min="1" style="width: 100%"/>
+            <a-input-number v-model:value="config.pic_go_port" :min="1" style="width: 100%"/>
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small" style="margin-top: 20px">
@@ -220,13 +220,13 @@
               <a-button type="link" href="https://pandoc.org/" target="_blank" style="padding-left: 0; padding-right: 0">Pandoc</a-button>
             </template>
             <div style="display: flex">
-              <a-input v-model:value="config.pandocPath" readonly style="flex: 1">
+              <a-input v-model:value="config.pandoc_path" readonly style="flex: 1">
                 <template #addonAfter>
                   <FolderOutlined style="cursor: pointer" @click="openDirSelectPandocPath"/>
                 </template>
               </a-input>
               <a-tooltip title="在pandoc目录生成模板文件wj-markdown-editor-reference.docx，用于自定义word样式。(若模板文件存在，不会重新生成。)" auto-adjust-overflow placement="top" color="#1677ff">
-                <a-button type="link" v-if="config.pandocPath" @click="generateDocxTemplate" style="padding-right: 0; padding-left: 0; margin-left: 15px">生成模板文件</a-button>
+                <a-button type="link" v-if="config.pandoc_path" @click="generateDocxTemplate" style="padding-right: 0; padding-left: 0; margin-left: 15px">生成模板文件</a-button>
               </a-tooltip>
             </div>
           </a-descriptions-item>
@@ -281,13 +281,13 @@ watch(() => config.value, (newValue, oldValue) => {
 const openDirSelect = async () => {
   const imgSavePath = await nodeRequestUtil.openDirSelect()
   if (imgSavePath) {
-    config.value.imgSavePath = imgSavePath
+    config.value.img_save_path = imgSavePath
   }
 }
 const openDirSelectPandocPath = async () => {
   const imgSavePath = await nodeRequestUtil.openDirSelect()
   if (imgSavePath) {
-    config.value.pandocPath = imgSavePath
+    config.value.pandoc_path = imgSavePath
   }
 }
 

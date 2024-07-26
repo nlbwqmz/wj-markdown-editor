@@ -21,7 +21,7 @@ export default {
       win.showMessage('当前文档内容为空', 'warning')
       return;
     }
-    if(!config.data.pandocPath){
+    if(!config.data.pandoc_path){
       win.showMessage('请先配置pandoc地址', 'warning')
       return;
     }
@@ -32,10 +32,10 @@ export default {
     const execute = (docxPath, p, shouldDelete) => {
       let success = true
       let cmd = `pandoc ${p} -o ${docxPath} --from markdown --to docx --resource-path="${path.dirname(p)}"`
-      if(fsUtil.exists(path.resolve(config.data.pandocPath, 'wj-markdown-editor-reference.docx'))){
+      if(fsUtil.exists(path.resolve(config.data.pandoc_path, 'wj-markdown-editor-reference.docx'))){
         cmd += ' --reference-doc=wj-markdown-editor-reference.docx'
       }
-      const childProcess = exec(cmd, { cwd: config.data.pandocPath });
+      const childProcess = exec(cmd, { cwd: config.data.pandoc_path });
       childProcess.stderr.on('data', function (data) {
         success = false
       })

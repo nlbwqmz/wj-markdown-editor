@@ -9,7 +9,6 @@ import pathUtil from './pathUtil.js'
 import fsUtil from './fsUtil.js'
 import axios from 'axios'
 import mime from 'mime-types'
-import defaultConfig from '../constant/defaultConfig.js'
 import webdavUtil from "./webdavUtil.js";
 import screenshotsUtil from "./screenshotsUtil.js";
 import globalShortcutUtil from "./globalShortcutUtil.js";
@@ -21,6 +20,8 @@ import config from "../local/config.js";
 import util from "./util.js";
 import fileState from "../runtime/fileState.js";
 import convertUtil from "./convertUtil.js";
+import dbUtil from "./dbUtil.js";
+import defaultConfig from "../constant/defaultConfig.js";
 
 const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
@@ -106,7 +107,7 @@ const uploadImage = async obj => {
             }
         }))
     } else if (insertImgType === '5') { // 上传
-        if(!config.data.picGo.host || !config.data.picGo.port) {
+        if(!config.data.pic_go_host || !config.data.pic_go_port) {
             win.showMessage('请配置PicGo服务信息', 'error', 2, true)
             return undefined
         }
@@ -138,7 +139,7 @@ const uploadImage = async obj => {
         tempList = tempList && tempList.length > 0 ? tempList.filter(item => item !== undefined) : []
         if(tempList && tempList.length > 0) {
             let error = false
-            axios.post(`http://${config.data.picGo.host}:${config.data.picGo.port}/upload`, { list: tempList }).then(res => {
+            axios.post(`http://${config.data.pic_go_host}:${config.data.pic_go_port}/upload`, { list: tempList }).then(res => {
                 if(res.data.success === true){
                     win.insertScreenshotResult({ id: obj.id, list: res.data.result })
                 } else {
@@ -203,11 +204,11 @@ ipcMain.handle('openDirSelect', event => {
 })
 
 ipcMain.on('generateDocxTemplate', () => {
-    if(config.data.pandocPath){
-        const templatePath = path.resolve(config.data.pandocPath, 'wj-markdown-editor-reference.docx');
+    if(config.data.pandoc_path){
+        const templatePath = path.resolve(config.data.pandoc_path, 'wj-markdown-editor-reference.docx');
         fs.access(templatePath, fs.constants.F_OK, err => {
             if(err){
-                const childProcess = exec('pandoc -o wj-markdown-editor-reference.docx --print-default-data-file reference.docx', { cwd: config.data.pandocPath });
+                const childProcess = exec('pandoc -o wj-markdown-editor-reference.docx --print-default-data-file reference.docx', { cwd: config.data.pandoc_path });
                 childProcess.on('close', () => {
                     shell.showItemInFolder(templatePath)
                 })
@@ -285,7 +286,7 @@ ipcMain.on('screenshot', (event, id, hide) => {
 })
 
 ipcMain.on('action', (event, type) => {
-    if(type === 'minimize' && config.data.minimizeToTray === true){
+    if(type === 'minimize' && config.data.minimize_to_tray === true){
         win.hide()
     } else {
         win.instanceFuncName(type)
@@ -296,7 +297,9 @@ ipcMain.on('exit', () => {
     common.exit()
 })
 ipcMain.on('restoreDefaultSetting', event => {
-    util.setByKey(defaultConfig.get(), config.data)
+    for(const key in defaultConfig){
+        config.data[key] = defaultConfig[key].value
+    }
     settingWin.shouldUpdateConfig(util.deepCopy(config.data))
 })
 
@@ -331,8 +334,14 @@ ipcMain.on('exportSetting', event => {
         ]
     })
     if(filePath){
-        fsUtil.exportSetting(pathUtil.getConfigPath(), filePath, () => {
-            win.showMessage('导出成功', 'success')
+        dbUtil.selectConfig().then(config => {
+            fs.writeFile(filePath, JSON.stringify(config), err => {
+                if(err){
+                    win.showMessage('导出失败', 'error')
+                } else {
+                    win.showMessage('导出成功', 'success')
+                }
+            })
         })
     }
 })
@@ -348,11 +357,10 @@ ipcMain.on('importSetting', event => {
     })
     if(filePath && filePath.length === 1 && fsUtil.exists(filePath[0])){
         try {
-            const json = fsUtil.getJsonFileContent(filePath[0])
-            const defaultConfigObj = defaultConfig.get()
-            for(const key in defaultConfigObj){
+            const json = fsUtil.getJsonFileContent(filePath[0], {})
+            for(const key in defaultConfig){
                 if(!json.hasOwnProperty(key)){
-                    json[key] = defaultConfigObj[key]
+                    json[key] = defaultConfig[key].value
                 }
             }
             util.setByKey(json, config.data)

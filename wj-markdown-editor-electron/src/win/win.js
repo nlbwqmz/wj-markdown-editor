@@ -24,8 +24,8 @@ const obj = {
             frame: false,
             icon: path.resolve(__dirname, '../../icon/favicon.ico'),
             title: constant.title,
-            width: config.data.winWidth > 0 ? config.data.winWidth : screen.getPrimaryDisplay().workArea.width / 2,
-            height: config.data.winHeight > 0 ? config.data.winHeight : screen.getPrimaryDisplay().workArea.height / 2,
+            width: config.data.win_width > 0 ? config.data.win_width : screen.getPrimaryDisplay().workArea.width / 2,
+            height: config.data.win_height > 0 ? config.data.win_height : screen.getPrimaryDisplay().workArea.height / 2,
             show: false,
             maximizable: true,
             resizable: true,
@@ -39,9 +39,9 @@ const obj = {
         winOnUtil.handle(win, common, globalShortcutUtil, globalData)
         const index = fileState.getLength() - 1
         if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-            win.loadURL('http://localhost:8080/#/' + (fileState.getByIndex(index).originFilePath ? config.data.initRoute : constant.router.edit) + '?id=' + fileState.getByIndex(index).id).then(() => {})
+            win.loadURL('http://localhost:8080/#/' + (fileState.getByIndex(index).originFilePath ? config.data.init_route : constant.router.edit) + '?id=' + fileState.getByIndex(index).id).then(() => {})
         } else {
-            win.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), { hash: fileState.getByIndex(index).originFilePath ? config.data.initRoute : constant.router.edit, search: 'id=' + fileState.getByIndex(index).id }).then(() => {})
+            win.loadFile(path.resolve(__dirname, '../../web-dist/index.html'), { hash: fileState.getByIndex(index).originFilePath ? config.data.init_route : constant.router.edit, search: 'id=' + fileState.getByIndex(index).id }).then(() => {})
         }
     },
     show: () => {
