@@ -6,10 +6,10 @@ const isOpenOnFile = () => {
 export default {
   debounce: (fn, delay = 300) => {
     let timer = null
-    return function () {
-      timer && clearTimeout(timer)
+    return function(...args) {
+      if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
-        fn && fn()
+        fn.apply(this, args)
       }, delay)
     }
   },

@@ -64,7 +64,7 @@ const obj = {
 }
 
 const init = () => {
-    config.watch([], data => util.debounce(() => { obj.shouldUpdateConfig(data) }, 100)() )
+    config.watch([], util.debounce(data => { obj.shouldUpdateConfig(data) }, 100) )
 }
 
 init()

@@ -62,7 +62,6 @@ const showToMain = {
   webdavGetDirectoryContents: currentPath => ipcRenderer.invoke('webdavGetDirectoryContents', currentPath),
   webdavLogout: () => ipcRenderer.send('webdavLogout'),
   openWebdavMd: (filename, basename) => ipcRenderer.send('openWebdavMd', filename, basename),
-  getLoginInfo: () => ipcRenderer.invoke('getLoginInfo'),
   getFileStateList: () => ipcRenderer.invoke('getFileStateList'),
   checkAutoLogin: () => ipcRenderer.send('checkAutoLogin'),
   exit: () => ipcRenderer.send('exit'),

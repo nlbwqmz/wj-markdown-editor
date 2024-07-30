@@ -18,12 +18,6 @@ export default {
         fsUtil.mkdirSyncWithRecursion(tempPath)
         return tempPath
     },
-    getLoginInfoPath: () => {
-        return path.resolve(documentsPath, 'login_info')
-    },
-    getLastOpenedFilePath: () => {
-        return path.resolve(documentsPath, 'last_opened.json')
-    },
     getDbPath: () => {
         return path.resolve(documentsPath, 'wj-markdown-editor.db')
     }

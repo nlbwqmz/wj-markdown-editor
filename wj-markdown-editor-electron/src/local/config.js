@@ -1,7 +1,7 @@
 import util from "../util/util.js";
 import DataWatch from "../type/DataWatch.js";
-import dbUtil from "../util/dbUtil.js";
+import configDb from "../db/configDb.js";
 
-const config = new DataWatch(await dbUtil.selectConfig());
-config.watch([], data => util.debounce(() => { dbUtil.updateAllConfig(data) })())
+const config = new DataWatch(await configDb.selectConfig());
+config.watch([], util.debounce(data => configDb.updateAllConfig(data) ))
 export default config

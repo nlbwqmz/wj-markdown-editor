@@ -1,11 +1,9 @@
 import { createClient } from "webdav"
 import path from "path";
-import pathUtil from "./pathUtil.js";
-import fs from "fs";
-import fsUtil from "./fsUtil.js";
 import aesUtil from "./aesUtil.js";
 import win from "../win/win.js";
 import fileState from "../runtime/fileState.js";
+import webdavDb from "../db/webdavDb.js";
 
 let webdavClient
 
@@ -35,9 +33,9 @@ const func = {
             proxyData.autoLogin = data.autoLogin
             if(write === true){
                 if(data.autoLogin === true) {
-                    fs.writeFile(pathUtil.getLoginInfoPath(), aesUtil.encrypt(JSON.stringify(data)), () => {})
+                    webdavDb.insertWebdav({ url: data.url, username: data.username, password: aesUtil.encrypt(data.password) }).then(() => {})
                 } else {
-                    fs.writeFile(pathUtil.getLoginInfoPath(), aesUtil.encrypt(JSON.stringify({username: data.username, url: data.url})), () => {})
+                    webdavDb.removeWebdav().then(() => {})
                 }
             }
         }).catch(() => {
@@ -56,18 +54,7 @@ const func = {
         proxyData.autoLogin = false
         webdavClient = null
         proxyData.webdavLoginState = false
-        const loginInfoPath = pathUtil.getLoginInfoPath();
-        if(fsUtil.exists(loginInfoPath)){
-            fs.readFile(loginInfoPath, (err, data) => {
-                if(!err) {
-                    const str = data.toString();
-                    if(str) {
-                        const loginInfo = JSON.parse(aesUtil.decrypt(str))
-                        fs.writeFile(loginInfoPath, aesUtil.encrypt(JSON.stringify({username: loginInfo.username, url: loginInfo.url})), () => {})
-                    }
-                }
-            })
-        }
+        webdavDb.removeWebdav().then(() => {})
     },
     getFileContents: async filename => {
         try {
@@ -95,36 +82,15 @@ const func = {
         }
     },
     autoLogin: () => {
-        const loginInfoPath = pathUtil.getLoginInfoPath()
-        if(fsUtil.exists(loginInfoPath)) {
-            fs.readFile(loginInfoPath, (err, data) => {
-                if(!err) {
-                    const str = data.toString();
-                    if(str) {
-                        const loginInfo = JSON.parse(aesUtil.decrypt(str))
-                        if(loginInfo.autoLogin === true){
-                            func.login(loginInfo, false)
-                        }
-                    }
+        webdavDb.selectWebdav().then(webdav => {
+            if(webdav){
+                try {
+                    webdav.password = aesUtil.decrypt(webdav.password)
+                } catch (e) {
+                    webdavDb.removeWebdav().then(() => {})
+                    return
                 }
-            })
-        }
-    },
-    getLoginInfo: () => {
-        return new Promise((resolve, reject) => {
-            const loginInfoPath = pathUtil.getLoginInfoPath()
-            if(fsUtil.exists(loginInfoPath)) {
-                fs.readFile(loginInfoPath, (err, data) => {
-                    if(!err) {
-                        const str = data.toString();
-                        if(str) {
-                            const loginInfo = JSON.parse(aesUtil.decrypt(str))
-                            resolve({ username: loginInfo.username, url: loginInfo.url})
-                        }
-                    }
-                })
-            } else {
-                resolve()
+                func.login(webdav, false)
             }
         })
     },

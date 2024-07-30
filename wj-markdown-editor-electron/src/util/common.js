@@ -13,11 +13,11 @@ import win from "../win/win.js";
 import config from "../local/config.js";
 import fileState from "../runtime/fileState.js";
 import util from "./util.js";
-import dbUtil from "./dbUtil.js";
+import db from "../db/db.js";
 
 const exit = () => {
     fsUtil.deleteFolder(pathUtil.getTempPath())
-    dbUtil.close()
+    db.close()
     app.exit()
 }
 

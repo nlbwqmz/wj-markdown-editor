@@ -28,7 +28,8 @@
     "files": [
       "!config.json",
       "!img/**",
-      "!login_info"
+      "!login_info",
+      "!wj-markdown-editor.db"
     ],
     "nsis": {
       "oneClick": false,
@@ -36,7 +37,7 @@
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "wj-markdown-editor",
       "menuCategory": "wj-markdown-editor",
-      "deleteAppDataOnUninstall": false,
+      "deleteAppDataOnUninstall": true,
       "createDesktopShortcut": true,
       "installerIcon": "./icon/favicon.ico",
       "uninstallerIcon": "./icon/favicon.ico",

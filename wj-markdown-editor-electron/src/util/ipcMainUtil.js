@@ -20,8 +20,8 @@ import config from "../local/config.js";
 import util from "./util.js";
 import fileState from "../runtime/fileState.js";
 import convertUtil from "./convertUtil.js";
-import dbUtil from "./dbUtil.js";
 import defaultConfig from "../constant/defaultConfig.js";
+import configDb from "../db/configDb.js";
 
 const isBase64Img = files => {
     return files.find(item => item.base64) !== undefined
@@ -334,7 +334,7 @@ ipcMain.on('exportSetting', event => {
         ]
     })
     if(filePath){
-        dbUtil.selectConfig().then(config => {
+        configDb.selectConfig().then(config => {
             fs.writeFile(filePath, JSON.stringify(config), err => {
                 if(err){
                     win.showMessage('导出失败', 'error')
@@ -424,10 +424,6 @@ ipcMain.on('openWebdavMd', async (event, filename, basename) => {
         fileState.push(create)
         win.changeTab(create.id)
     }
-})
-
-ipcMain.handle('getLoginInfo', async () => {
-    return await webdavUtil.getLoginInfo()
 })
 
 ipcMain.handle('getFileStateList', () => {

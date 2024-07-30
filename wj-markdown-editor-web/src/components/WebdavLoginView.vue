@@ -56,7 +56,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { LockOutlined, UserOutlined, LinkOutlined } from '@ant-design/icons-vue'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
 import commonUtil from '@/util/commonUtil'
@@ -68,13 +68,6 @@ const formState = reactive({
   autoLogin: false
 })
 
-onMounted(async () => {
-  const loginInfo = await nodeRequestUtil.getLoginInfo()
-  if (loginInfo) {
-    formState.username = loginInfo.username
-    formState.url = loginInfo.url
-  }
-})
 const loading = ref(false)
 const disabled = computed(() => {
   return !(formState.username && formState.password && formState.url && /^http(s)?:\/\/([\w-]+\.)+[\w-]+(\/[\w- .\\/?%&=]*)?/.test(formState.url))

@@ -1,7 +1,7 @@
-import lastOpened from "../local/lastOpened.js";
 import path from "path";
 import util from "../util/util.js";
 import win from "../win/win.js";
+import openedDb from "../db/openedDb.js";
 
 let autoLogin = false
 const createProxy = obj => {
@@ -15,7 +15,14 @@ const createProxy = obj => {
 }
 
 const initFileStateList = async () => {
-  const list = await lastOpened.read()
+  const list = (await openedDb.selectOpened()).map(item => {
+    return {
+      id: item.id,
+      originFilePath: item.path,
+      fileName: item.name,
+      type: item.type
+    }
+  })
   list.forEach(item => item.saved = true)
   if(util.isOpenOnFile()){
     const originFilePath = util.getOpenOnFilePath();
@@ -62,16 +69,14 @@ const flush = () => {
       type: item.type
     }
   }))
-  util.debounce(() => {
-    lastOpened.write(fileStateList.filter(item => (autoLogin === true && item.type) || (!autoLogin && item.type === 'local')).map(item => {
-      return {
-        id: item.id,
-        originFilePath: item.originFilePath,
-        fileName: item.fileName,
-        type: item.type
-      }
-    }))
-  })()
+  openedDb.writeOpened(fileStateList.filter(item => (autoLogin === true && item.type) || (!autoLogin && item.type === 'local')).map(item => {
+    return {
+      id: item.id,
+      path: item.originFilePath,
+      name: item.fileName,
+      type: item.type
+    }
+  }))
 }
 
 const creatFileState = () => {
