@@ -67,6 +67,7 @@ const defaultConfig = {
   watermark_font_color: stringValue('#5433334F'),
   watermark_font_size: numberValue(20),
   watermark_font_weight: numberValue(800),
-  pandoc_path: stringValue('')
+  pandoc_path: stringValue(''),
+  show_code_row_number: booleanValue(false)
 }
 export default defaultConfig

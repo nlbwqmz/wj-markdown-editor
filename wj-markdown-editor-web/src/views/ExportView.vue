@@ -4,6 +4,8 @@
       <md-preview :model-value="content" :editor-id="editorId" id="export"
                   :preview-theme="config.preview_theme"
                   :code-theme="config.code_theme"
+                  :show-code-row-number="config.show_code_row_number"
+                  :code-foldable="false"
                   @on-html-changed="handleHtmlChanged()"
       ></md-preview>
     </a-watermark>
@@ -74,7 +76,7 @@ const handleHtmlChanged = commonUtil.debounce(() => {
 </script>
 
 <style lang="less" scoped>
-:deep(.code-block) {
+:deep(.md-editor-code-block) {
   white-space: pre-wrap;
 }
 :deep(.default-theme pre code span[rn-wrapper]){
@@ -86,5 +88,9 @@ const handleHtmlChanged = commonUtil.debounce(() => {
 
 :deep(.default-theme pre code) {
   border-radius: 5px;
+}
+
+:deep(.md-editor-code-head){
+  display: none !important;
 }
 </style>

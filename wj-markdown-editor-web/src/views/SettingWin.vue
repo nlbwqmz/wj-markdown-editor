@@ -98,6 +98,18 @@
               <a-select-option value="cyanosis">cyanosis</a-select-option>
             </a-select>
           </a-descriptions-item>
+          <a-descriptions-item>
+            <template #label>
+              代码行号
+              <a-tooltip title="重启生效" auto-adjust-overflow placement="right" color="#1677ff">
+                <InfoCircleOutlined style="margin-left: 10px" class="tooltip-icon"/>
+              </a-tooltip>
+            </template>
+            <a-radio-group v-model:value="config.show_code_row_number" button-style="solid">
+              <a-radio-button :value="true">显示</a-radio-button>
+              <a-radio-button :value="false">隐藏</a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small" style="margin-top: 20px">
           <template #title>

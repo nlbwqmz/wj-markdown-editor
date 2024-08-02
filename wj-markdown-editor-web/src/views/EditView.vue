@@ -12,6 +12,8 @@
                :md-heading-id="commonUtil.mdHeadingId"
                :preview-theme="config.preview_theme"
                :code-theme="config.code_theme"
+               :show-code-row-number="config.show_code_row_number"
+               :code-foldable="false"
     ></md-editor>
   </div>
 

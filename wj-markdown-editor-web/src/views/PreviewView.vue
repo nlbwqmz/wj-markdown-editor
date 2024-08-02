@@ -19,6 +19,8 @@
             no-img-zoom-in
             :preview-theme="config.preview_theme"
             :code-theme="config.code_theme"
+            :show-code-row-number="config.show_code_row_number"
+            :code-foldable="false"
             @on-html-changed="handleHtmlChanged()">
           </md-preview>
         </div>
