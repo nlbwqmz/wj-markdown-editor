@@ -17,7 +17,9 @@
             </div>
             <template #overlay>
               <a-menu>
-                <a-menu-item :key="item.id" :disabled="!item.originFilePath" @click="openFolder(item)">打开所在文件夹</a-menu-item>
+                <a-menu-item :key="openFolder + item.id" :disabled="!item.originFilePath" @click="openFolder(item)">打开所在文件夹</a-menu-item>
+                <a-menu-item :key="closeOther + item.id" :disabled="fileStateList.length === 1" @click="closeOther(item)">关闭其他</a-menu-item>
+                <a-menu-item :key="closeAll + item.id" @click="closeAll">关闭所有</a-menu-item>
               </a-menu>
             </template>
           </a-dropdown>
@@ -56,20 +58,40 @@ const handleScroll = e => {
   tabContainerRef.value.scrollLeft = tabContainerRef.value.scrollLeft + e.deltaY
 }
 const handleTabClose = item => {
-  if (item.saved === true) {
-    closeFile(item.id)
-  } else {
-    const modal = Modal.confirm({
-      centered: true,
-      title: '提示',
-      icon: createVNode(ExclamationCircleOutlined),
-      content: '当前文件未保存，是否确认关闭？',
-      footer: h('div', { style: { width: '100%', display: 'flex', justifyContent: 'right', gap: '10px', paddingTop: '10px' } }, [
-        h(Button, { onClick: () => modal.destroy() }, () => '取消'),
-        h(Button, { type: 'primary', danger: true, onClick: () => { closeFile(item.id); modal.destroy() } }, () => '直接关闭'),
-        h(Button, { type: 'primary', onClick: () => { closeFileAndSave(item.id); modal.destroy() } }, () => '保存并关闭')
-      ])
-    })
+  return new Promise((resolve, reject) => {
+    if (item.saved === true) {
+      closeFile(item.id)
+      resolve()
+    } else {
+      const modal = Modal.confirm({
+        centered: true,
+        title: '提示',
+        icon: createVNode(ExclamationCircleOutlined),
+        content: `${item.fileName}未保存，是否确认关闭？`,
+        afterClose: () => {
+          resolve()
+        },
+        footer: h('div', { style: { width: '100%', display: 'flex', justifyContent: 'right', gap: '10px', paddingTop: '10px' } }, [
+          h(Button, { onClick: () => modal.destroy() }, () => '取消'),
+          h(Button, { type: 'primary', danger: true, onClick: () => { closeFile(item.id); modal.destroy() } }, () => '直接关闭'),
+          h(Button, { type: 'primary', onClick: () => { closeFileAndSave(item.id); modal.destroy() } }, () => '保存并关闭')
+        ])
+      })
+    }
+  })
+}
+
+const closeOther = async item => {
+  const waitingCloseList = fileStateList.value.filter(fileState => fileState.id !== item.id).map(fileState => commonUtil.deepCopy(fileState))
+  for (const waitingClose of waitingCloseList) {
+    await handleTabClose(waitingClose)
+  }
+}
+
+const closeAll = async () => {
+  const waitingCloseList = commonUtil.deepCopy(fileStateList.value)
+  for (const waitingClose of waitingCloseList) {
+    await handleTabClose(waitingClose)
   }
 }
 

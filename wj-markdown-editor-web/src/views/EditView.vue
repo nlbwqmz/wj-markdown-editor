@@ -70,7 +70,7 @@
 <script setup>
 import { EyeOutlined, ScissorOutlined } from '@ant-design/icons-vue'
 import iconImg from '@/assets/icon/icon-img.png'
-import { ref, onMounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, computed, nextTick, watch, onActivated } from 'vue'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import nodeRequestUtil from '@/util/nodeRequestUtil'
@@ -97,6 +97,10 @@ const checkImgUrl = (value, blankAble) => {
     return blankAble
   }
 }
+
+onActivated(() => {
+  editorRef.value?.focus()
+})
 const insertImgTemplate = () => {
   editorRef.value?.insert(() => {
     return {
