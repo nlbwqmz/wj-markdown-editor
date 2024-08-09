@@ -1,30 +1,94 @@
 <template>
   <div style="display: flex; border: var(--wj-inner-border)">
-    <div class="horizontal-vertical-center" style="padding-left: 10px">
-      <MenuUnfoldOutlined style="cursor: pointer" v-show="!showWebdav" @click="switchShowWebdav"/>
-      <MenuFoldOutlined style="cursor: pointer" v-show="showWebdav" @click="switchShowWebdav"/>
+    <div
+      class="horizontal-vertical-center"
+      style="padding-left: 10px"
+    >
+      <MenuUnfoldOutlined
+        style="cursor: pointer"
+        v-show="!showWebdav"
+        @click="switchShowWebdav"
+      />
+      <MenuFoldOutlined
+        style="cursor: pointer"
+        v-show="showWebdav"
+        @click="switchShowWebdav"
+      />
     </div>
     <div style="flex: 1; overflow: auto">
-      <div class="container wj-hide-scrollbar" @mousewheel="handleScroll($event)" ref="tabContainerRef">
-        <div class="tab-item" v-for="(item) in fileStateList" :key="item.id">
+      <div
+        class="container wj-hide-scrollbar"
+        @mousewheel="handleScroll($event)"
+        ref="tabContainerRef"
+      >
+        <div
+          class="tab-item"
+          v-for="(item) in fileStateList"
+          :key="item.id"
+        >
           <a-dropdown :trigger="['contextmenu']">
-            <div class="tab-name horizontal-vertical-center" @click="go(item.id)" :class="id === item.id ? 'active': ''">
-              <img :src="cloudImg" alt="" style="width: 16px; height: 16px; margin-right: 5px" v-if="item.type === 'webdav'">
-              <img :src="localImg" alt="" style="width: 12px; height: 12px; margin-right: 5px" v-else-if="item.type === 'local'">
-              <img :src="unknownImg" alt="" style="width: 12px; height: 12px; margin-right: 5px" v-else>
+            <div
+              class="tab-name horizontal-vertical-center"
+              @click="go(item.id)"
+              :class="id === item.id ? 'active': ''"
+            >
+              <img
+                :src="cloudImg"
+                alt=""
+                style="width: 16px; height: 16px; margin-right: 5px"
+                v-if="item.type === 'webdav'"
+              >
+              <img
+                :src="localImg"
+                alt=""
+                style="width: 12px; height: 12px; margin-right: 5px"
+                v-else-if="item.type === 'local'"
+              >
+              <img
+                :src="unknownImg"
+                alt=""
+                style="width: 12px; height: 12px; margin-right: 5px"
+                v-else
+              >
               <span class="text-ellipsis">{{ item.fileName }}</span>
-              <span v-show="item.saved === false" style="color: #ff4d4f">*</span>
+              <span
+                v-show="item.saved === false"
+                style="color: #ff4d4f"
+              >*</span>
             </div>
             <template #overlay>
               <a-menu>
-                <a-menu-item :key="openFolder + item.id" :disabled="!item.originFilePath" @click="openFolder(item)">打开所在文件夹</a-menu-item>
-                <a-menu-item :key="closeOther + item.id" :disabled="fileStateList.length === 1" @click="closeOther(item)">关闭其他</a-menu-item>
-                <a-menu-item :key="closeAll + item.id" @click="closeAll">关闭所有</a-menu-item>
+                <a-menu-item
+                  :key="openFolder + item.id"
+                  :disabled="!item.originFilePath"
+                  @click="openFolder(item)"
+                >
+                  打开所在文件夹
+                </a-menu-item>
+                <a-menu-item
+                  :key="closeOther + item.id"
+                  :disabled="fileStateList.length === 1"
+                  @click="closeOther(item)"
+                >
+                  关闭其他
+                </a-menu-item>
+                <a-menu-item
+                  :key="closeAll + item.id"
+                  @click="closeAll"
+                >
+                  关闭所有
+                </a-menu-item>
               </a-menu>
             </template>
           </a-dropdown>
-          <div class="tab-close horizontal-vertical-center" @click="handleTabClose(item)">
-            <img :src="close" alt="">
+          <div
+            class="tab-close horizontal-vertical-center"
+            @click="handleTabClose(item)"
+          >
+            <img
+              :src="close"
+              alt=""
+            >
           </div>
         </div>
       </div>

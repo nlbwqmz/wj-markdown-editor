@@ -15,11 +15,34 @@
         <div class="space"></div>
       </div>
       <div class="right forbid-select-drag">
-        <div class="img-div horizontal-vertical-center" @click="props.action.find(item => item.key === 'minimize').click" v-if="props.action.findIndex(item => item.key === 'minimize') > -1"><img :src="minimize" alt="minimize" class="forbid-select-drag"></div>
-        <div class="img-div horizontal-vertical-center close-img-div" @click="props.action.find(item => item.key === 'close').click" v-if="props.action.findIndex(item => item.key === 'close') > -1"><img :src="close" alt="close" class="forbid-select-drag"></div>
+        <div
+          class="img-div horizontal-vertical-center"
+          @click="props.action.find(item => item.key === 'minimize').click"
+          v-if="props.action.findIndex(item => item.key === 'minimize') > -1"
+        >
+          <img
+            :src="minimize"
+            alt="minimize"
+            class="forbid-select-drag"
+          >
+        </div>
+        <div
+          class="img-div horizontal-vertical-center close-img-div"
+          @click="props.action.find(item => item.key === 'close').click"
+          v-if="props.action.findIndex(item => item.key === 'close') > -1"
+        >
+          <img
+            :src="close"
+            alt="close"
+            class="forbid-select-drag"
+          >
+        </div>
       </div>
     </div>
-    <div class="container wj-scrollbar-small" id="wj-modal-container">
+    <div
+      class="container wj-scrollbar-small"
+      id="wj-modal-container"
+    >
       <slot></slot>
     </div>
   </div>

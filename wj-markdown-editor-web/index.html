@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="/favicon.ico">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wj-markdown-editor</title>
+  </head>
+  <body>
+  <div id="startup-loading" style="width: 100vw; height: 100vh; position: absolute; left: 0; top: 0; z-index: 10000; background-color: white; display:flex; align-items:center; justify-content:center;">
+      <img src="favicon.ico" alt="" style="max-width: 256px; max-height: 256px; width: calc(100vw * 0.3); height: calc(100vw * 0.3)">
+  </div>
+  <script>
+      if(window.location.href.indexOf('searchBar') > -1 || window.location.href.indexOf('export') > -1){
+          document.getElementById('startup-loading').remove()
+      } else {
+          document.addEventListener("DOMContentLoaded", () => {
+              const startupLoading = document.getElementById('startup-loading')
+              if (startupLoading) {
+                  startupLoading.addEventListener('animationend', () => {
+                      startupLoading.remove()
+                  }, { once: true })
+                  startupLoading.style.animation = 'startup-load-leave 0.5s linear forwards'
+              }
+          });
+          // window.onload = function () {
+          //   const startupLoading = document.getElementById('startup-loading')
+          //   if (startupLoading) {
+          //     startupLoading.addEventListener('animationend', () => {
+          //       startupLoading.remove()
+          //     }, { once: true })
+          //     startupLoading.style.animation = 'startup-load-leave 0.5s linear forwards'
+          //   }
+          // }
+      }
+  </script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+  <style>
+      @keyframes startup-load-leave {
+          from {
+              opacity: 1;
+          }
+          to {
+              opacity: 0;
+          }
+      }
+  </style>
+</html>

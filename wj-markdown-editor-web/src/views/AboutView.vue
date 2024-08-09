@@ -6,27 +6,81 @@
     <template #title>
       <span>关于</span>
     </template>
-    <a-alert type="warning" style="margin-bottom: 10px" show-icon>
+    <a-alert
+      type="warning"
+      style="margin-bottom: 10px"
+      show-icon
+    >
       <template #message>
         <span style="font-size: 12px"><span style="font-weight: bold">便携版</span>暂不支持自动升级，需手动下载，解压后直接替换根目录即可。</span>
       </template>
     </a-alert>
-    <a-descriptions bordered :column="1" size="small">
+    <a-descriptions
+      bordered
+      :column="1"
+      size="small"
+    >
       <a-descriptions-item label="程序名">
-        <span>{{name}}</span>
-        <a-button type="link" href="https://github.com/nlbwqmz/wj-markdown-editor" target="_blank">源码地址</a-button>
-        <a-button type="link" href="https://github.com/nlbwqmz/wj-markdown-editor/releases" target="_blank">下载地址</a-button>
-        <a-button type="link" href="https://github.com/nlbwqmz/wj-markdown-editor/issues" danger target="_blank">问题和建议</a-button>
+        <span>{{ name }}</span>
+        <a-button
+          type="link"
+          href="https://github.com/nlbwqmz/wj-markdown-editor"
+          target="_blank"
+        >
+          源码地址
+        </a-button>
+        <a-button
+          type="link"
+          href="https://github.com/nlbwqmz/wj-markdown-editor/releases"
+          target="_blank"
+        >
+          下载地址
+        </a-button>
+        <a-button
+          type="link"
+          href="https://github.com/nlbwqmz/wj-markdown-editor/issues"
+          danger
+          target="_blank"
+        >
+          问题和建议
+        </a-button>
       </a-descriptions-item>
       <a-descriptions-item label="当前版本">
-        <span>{{version}}</span>
-        <a-button type="link" :loading="checking" @click="checkUpdate" v-if="!downloading">检查更新</a-button>
+        <span>{{ version }}</span>
+        <a-button
+          type="link"
+          :loading="checking"
+          @click="checkUpdate"
+          v-if="!downloading"
+        >
+          检查更新
+        </a-button>
       </a-descriptions-item>
       <a-descriptions-item label="最新版本">
-        <span :style="checkInfo && checkInfo.success === false ? { color: 'red' } : {}">{{newVersion}}</span>
-        <a-button type="link" :href="`https://github.com/nlbwqmz/wj-markdown-editor/releases/tag/${checkInfo.version}`" target="_blank" v-if="checkInfo && checkInfo.version">更新日志</a-button>
-        <a-button type="link" @click="executeDownload" v-if="!downloading && checkInfo && checkInfo.version && checkInfo.version !== version && !downloadFinish">立即下载</a-button>
-        <a-button type="link" @click="cancelDownload" v-if="downloading && !downloadFinish" danger>取消下载</a-button>
+        <span :style="checkInfo && checkInfo.success === false ? { color: 'red' } : {}">{{ newVersion }}</span>
+        <a-button
+          type="link"
+          :href="`https://github.com/nlbwqmz/wj-markdown-editor/releases/tag/${checkInfo.version}`"
+          target="_blank"
+          v-if="checkInfo && checkInfo.version"
+        >
+          更新日志
+        </a-button>
+        <a-button
+          type="link"
+          @click="executeDownload"
+          v-if="!downloading && checkInfo && checkInfo.version && checkInfo.version !== version && !downloadFinish"
+        >
+          立即下载
+        </a-button>
+        <a-button
+          type="link"
+          @click="cancelDownload"
+          v-if="downloading && !downloadFinish"
+          danger
+        >
+          取消下载
+        </a-button>
         <a-popconfirm
           v-if="downloadFinish"
           title="请先保存文件，安装后程序将重启，确认继续？"
@@ -34,11 +88,16 @@
           cancel-text="取消"
           @confirm="executeUpdate"
         >
-          <a-button type="link">立即安装</a-button>
+          <a-button type="link">
+            立即安装
+          </a-button>
         </a-popconfirm>
       </a-descriptions-item>
       <a-descriptions-item label="下载进度">
-        <a-progress :percent="percent" v-if="downloading || downloadFinish"/>
+        <a-progress
+          :percent="percent"
+          v-if="downloading || downloadFinish"
+        />
         <span v-else>-</span>
       </a-descriptions-item>
     </a-descriptions>

@@ -1,19 +1,36 @@
 <template>
-  <div class="search-bar-container" v-show="props.modelValue">
+  <div
+    class="search-bar-container"
+    v-show="props.modelValue"
+  >
     <div class="search-bar">
       <div class="title horizontal-vertical-center">
         搜索
       </div>
-      <input v-model="searchContent" ref="inputRef"/>
-      <div class="horizontal-vertical-center result">{{result.activeMatchOrdinal}}/{{result.matches}}</div>
+      <input
+        v-model="searchContent"
+        ref="inputRef"
+      />
+      <div class="horizontal-vertical-center result">
+        {{ result.activeMatchOrdinal }}/{{ result.matches }}
+      </div>
       <div class="action horizontal-vertical-center">
-        <div class="icon" @click="handleSearchBarUp">
-          <UpOutlined :style="result.matches < 1 ? { color: 'rgba(0, 0, 0, 0.05)' } : {}"/>
+        <div
+          class="icon"
+          @click="handleSearchBarUp"
+        >
+          <UpOutlined :style="result.matches < 1 ? { color: 'rgba(0, 0, 0, 0.05)' } : {}" />
         </div>
-        <div class="icon" @click="handleSearchBarDown">
-          <DownOutlined :style="result.matches < 1 ? { color: 'rgba(0, 0, 0, 0.05)' } : {}"/>
+        <div
+          class="icon"
+          @click="handleSearchBarDown"
+        >
+          <DownOutlined :style="result.matches < 1 ? { color: 'rgba(0, 0, 0, 0.05)' } : {}" />
         </div>
-        <div class="icon" @click="closeSearchBar">
+        <div
+          class="icon"
+          @click="closeSearchBar"
+        >
           <CloseOutlined />
         </div>
       </div>

@@ -1,27 +1,38 @@
 <template>
   <div style="display: flex; flex-direction: column;width: 100%; height: 100%;">
     <div v-show="showTop">
-      <top-title/>
-      <top-menu/>
+      <top-title />
+      <top-menu />
     </div>
     <div style="flex: 1; display: flex; width: 100%; overflow: hidden">
-      <div style="width: 300px; border-top: var(--wj-inner-border)" v-if="showTop" v-show="showWebdav">
-        <webdav-login-view v-if="!webdavLogin"/>
-        <webdav-file-view v-if="webdavLogin"/>
+      <div
+        style="width: 300px; border-top: var(--wj-inner-border)"
+        v-if="showTop"
+        v-show="showWebdav"
+      >
+        <webdav-login-view v-if="!webdavLogin" />
+        <webdav-file-view v-if="webdavLogin" />
       </div>
       <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden">
-        <top-tab v-if="showTop"/>
-        <div style="flex: 1; overflow: auto" id="main" class="wj-scrollbar">
+        <top-tab v-if="showTop" />
+        <div
+          style="flex: 1; overflow: auto"
+          id="main"
+          class="wj-scrollbar"
+        >
           <router-view v-slot="{ Component }">
             <keep-alive :max="100">
-              <component :is="Component" :key="$route.fullPath"/>
+              <component
+                :is="Component"
+                :key="$route.fullPath"
+              />
             </keep-alive>
           </router-view>
         </div>
       </div>
     </div>
   </div>
-  <SearchBarWeb v-model="showSearchBar"/>
+  <SearchBarWeb v-model="showSearchBar" />
 </template>
 
 <style lang="less">

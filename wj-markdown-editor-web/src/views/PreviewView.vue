@@ -1,15 +1,36 @@
 <template>
-  <div style="width: 100%; min-height: 100%; border-left: var(--wj-inner-border)" :id="previewId" class="preview-container">
-    <div v-if="!content" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }" class="horizontal-vertical-center">
+  <div
+    style="width: 100%; min-height: 100%; border-left: var(--wj-inner-border)"
+    :id="previewId"
+    class="preview-container"
+  >
+    <div
+      v-if="!content"
+      :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }"
+      class="horizontal-vertical-center"
+    >
       <a-empty>
         <template #description>
-          <p style="color: rgba(0, 0, 0, 0.25)">暂无文本</p>
-          <a-button type="link" @click="toEdit">去编辑</a-button>
+          <p style="color: rgba(0, 0, 0, 0.25)">
+            暂无文本
+          </p>
+          <a-button
+            type="link"
+            @click="toEdit"
+          >
+            去编辑
+          </a-button>
         </template>
       </a-empty>
     </div>
-    <div style="width: 100%; display: flex; justify-content: center" v-if="content">
-      <div :style="{ width: `${config.preview_width}%` }" style="display: flex; justify-content: center">
+    <div
+      style="width: 100%; display: flex; justify-content: center"
+      v-if="content"
+    >
+      <div
+        :style="{ width: `${config.preview_width}%` }"
+        style="display: flex; justify-content: center"
+      >
         <div style="flex: 1; overflow: hidden">
           <md-preview
             :id="componentId"
@@ -21,29 +42,70 @@
             :code-theme="config.code_theme"
             :show-code-row-number="config.show_code_row_number"
             :code-foldable="false"
-            @on-html-changed="handleHtmlChanged()">
+            @on-html-changed="handleHtmlChanged()"
+          >
           </md-preview>
         </div>
-        <div v-if="catalogShow" style="max-width: 300px; min-width: 200px;" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
-          <a-affix :offset-top="offsetTop" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
-            <div style="border-left: var(--wj-inner-border);overflow: auto" class="wj-scrollbar-hover" :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }">
-              <md-catalog :editor-id="domId" :scrollElement="scrollElement" :scroll-element-offset-top="offsetTop" :md-heading-id="commonUtil.mdHeadingId"/>
+        <div
+          v-if="catalogShow"
+          style="max-width: 300px; min-width: 200px;"
+          :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }"
+        >
+          <a-affix
+            :offset-top="offsetTop"
+            :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }"
+          >
+            <div
+              style="border-left: var(--wj-inner-border);overflow: auto"
+              class="wj-scrollbar-hover"
+              :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }"
+            >
+              <md-catalog
+                :editor-id="domId"
+                :scroll-element="scrollElement"
+                :scroll-element-offset-top="offsetTop"
+                :md-heading-id="commonUtil.mdHeadingId"
+              />
             </div>
           </a-affix>
         </div>
       </div>
     </div>
-    <a-float-button type="default" @click="catalogShow = true" class="float-button" style="right: 50px; bottom: 100px " description="目录" shape="square" v-if="content && !catalogShow">
+    <a-float-button
+      type="default"
+      @click="catalogShow = true"
+      class="float-button"
+      style="right: 50px; bottom: 100px "
+      description="目录"
+      shape="square"
+      v-if="content && !catalogShow"
+    >
       <template #icon>
         <EyeOutlined />
       </template>
     </a-float-button>
-    <a-float-button type="default" @click="catalogShow = false" class="float-button" style="right: 50px; bottom: 100px " description="目录" shape="square" v-if="content && catalogShow">
+    <a-float-button
+      type="default"
+      @click="catalogShow = false"
+      class="float-button"
+      style="right: 50px; bottom: 100px "
+      description="目录"
+      shape="square"
+      v-if="content && catalogShow"
+    >
       <template #icon>
         <EyeInvisibleOutlined />
       </template>
     </a-float-button>
-    <a-float-button type="default" @click="toEdit" class="float-button" style="right: 50px" description="编辑" v-if="config.jump_router_btn" shape="square">
+    <a-float-button
+      type="default"
+      @click="toEdit"
+      class="float-button"
+      style="right: 50px"
+      description="编辑"
+      v-if="config.jump_router_btn"
+      shape="square"
+    >
       <template #icon>
         <EditOutlined />
       </template>

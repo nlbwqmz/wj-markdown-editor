@@ -3,23 +3,64 @@
     <div class="left electron-drag">
       <div style="display: flex; justify-content: left">
         <div class="horizontal-vertical-center">
-          <img :src="logo" alt="logo"/>
+          <img
+            :src="logo"
+            alt="logo"
+          />
         </div>
         <div class="horizontal-vertical-center">
           <span style="font-size: 12px; padding-left: 5px">wj-markdown-editor</span>
-          <span style="font-size: 12px; padding-left: 5px">v{{version}}</span>
+          <span style="font-size: 12px; padding-left: 5px">v{{ version }}</span>
         </div>
       </div>
       <div class="content horizontal-vertical-center">
-<!--        <span class="text-ellipsis" style="direction: rtl">{{content}}</span>-->
-<!--        <span v-show="!saved" style="color: red">*</span>-->
+        <!--        <span class="text-ellipsis" style="direction: rtl">{{content}}</span>-->
+        <!--        <span v-show="!saved" style="color: red">*</span>-->
       </div>
     </div>
     <div class="right forbid-select-drag">
-      <div class="img-div horizontal-vertical-center" @click="action('minimize')"><img :src="minimize" alt="minimize" class="forbid-select-drag"></div>
-      <div class="img-div horizontal-vertical-center" @click="action('unmaximize')" v-show="!showMaximizeAction"><img :src="unmaximize" alt="unmaximize" class="forbid-select-drag"></div>
-      <div class="img-div horizontal-vertical-center" @click="action('maximize')" v-show="showMaximizeAction"><img :src="maximize" alt="maximize" class="forbid-select-drag"></div>
-      <div class="img-div horizontal-vertical-center close-img-div" @click="action('close')"><img :src="close" alt="close" class="forbid-select-drag"></div>
+      <div
+        class="img-div horizontal-vertical-center"
+        @click="action('minimize')"
+      >
+        <img
+          :src="minimize"
+          alt="minimize"
+          class="forbid-select-drag"
+        >
+      </div>
+      <div
+        class="img-div horizontal-vertical-center"
+        @click="action('unmaximize')"
+        v-show="!showMaximizeAction"
+      >
+        <img
+          :src="unmaximize"
+          alt="unmaximize"
+          class="forbid-select-drag"
+        >
+      </div>
+      <div
+        class="img-div horizontal-vertical-center"
+        @click="action('maximize')"
+        v-show="showMaximizeAction"
+      >
+        <img
+          :src="maximize"
+          alt="maximize"
+          class="forbid-select-drag"
+        >
+      </div>
+      <div
+        class="img-div horizontal-vertical-center close-img-div"
+        @click="action('close')"
+      >
+        <img
+          :src="close"
+          alt="close"
+          class="forbid-select-drag"
+        >
+      </div>
     </div>
   </div>
 </template>

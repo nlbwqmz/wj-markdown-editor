@@ -1,8 +1,20 @@
 <template>
-  <div style="width: 100%; display: flex; padding: 0 0 5px 5px;" class="forbid-select-drag">
-    <a-dropdown :trigger="['hover']" v-for="(item, index) in menuList" :key="index" class="forbid-select-drag" arrow placement="bottomLeft">
+  <div
+    style="width: 100%; display: flex; padding: 0 0 5px 5px;"
+    class="forbid-select-drag"
+  >
+    <a-dropdown
+      :trigger="['hover']"
+      v-for="(item, index) in menuList"
+      :key="index"
+      class="forbid-select-drag"
+      arrow
+      placement="bottomLeft"
+    >
       <div class="menu-item">
-        <div class="menu-item-content">{{ item.label }}</div>
+        <div class="menu-item-content">
+          {{ item.label }}
+        </div>
       </div>
       <template #overlay>
         <a-menu
