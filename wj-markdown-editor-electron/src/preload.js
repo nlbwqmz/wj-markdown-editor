@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer  } = require('electron')
+const { contextBridge, ipcRenderer } = require('electron')
 
 // 主进程调用渲染进程
 const mainToShow = {
@@ -21,10 +21,10 @@ const mainToShow = {
   loginState: callback => ipcRenderer.on('loginState', (_event, webdavLoginState) => callback(webdavLoginState)),
   hasNewVersion: callback => ipcRenderer.on('hasNewVersion', (_event) => callback()),
   openWebdavPath: callback => ipcRenderer.on('openWebdavPath', (_event, p) => callback(p)),
-  confirmExit: callback => ipcRenderer.on('confirmExit', (_event) => callback()),
+  confirmExit: callback => ipcRenderer.on('confirmExit', (_event) => callback())
 }
 
-//渲染进程调用主进程
+// 渲染进程调用主进程
 const showToMain = {
   // 获取文件信息
   getFileContent: id => ipcRenderer.invoke('getFileContent', id),

@@ -1,27 +1,27 @@
-import {app, Menu, Tray} from 'electron'
-import path from "path"
-import globalData from "./util/globalData.js"
+import { app, Menu, Tray } from 'electron'
+import path from 'path'
+import globalData from './util/globalData.js'
 import protocolUtil from './util/protocolUtil.js'
 import './util/ipcMainUtil.js'
 import common from './util/common.js'
-import screenshotsUtil from "./util/screenshotsUtil.js";
+import screenshotsUtil from './util/screenshotsUtil.js'
 import { fileURLToPath } from 'url'
-import win from "./win/win.js";
-import globalShortcutUtil from "./util/globalShortcutUtil.js";
+import win from './win/win.js'
+import globalShortcutUtil from './util/globalShortcutUtil.js'
 import './util/job.js'
-import fileState from "./runtime/fileState.js";
-import util from "./util/util.js";
+import fileState from './runtime/fileState.js'
+import util from './util/util.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const lock = app.requestSingleInstanceLock({ fileInfo: util.deepCopy(fileState.getByIndex(fileState.getLength() - 1)) })
 
-if(!lock){
+if (!lock) {
   app.quit()
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
-    if(additionalData.fileInfo && additionalData.fileInfo.originFilePath){
+    if (additionalData.fileInfo && additionalData.fileInfo.originFilePath) {
       const origin = fileState.find(item => item.originFilePath === additionalData.fileInfo.originFilePath && item.type === additionalData.fileInfo.type)
-      if(origin){
+      if (origin) {
         win.changeTab(origin.id)
       } else {
         fileState.push(additionalData.fileInfo)
@@ -41,7 +41,7 @@ if(!lock){
     tray.on('click', win.show)
     tray.on('double-click', win.show)
   }
-  app.commandLine.appendSwitch("--disable-http-cache");
+  app.commandLine.appendSwitch('--disable-http-cache')
   app.whenReady().then(() => {
     screenshotsUtil.init()
     common.initUpdater()
@@ -54,6 +54,3 @@ if(!lock){
     })
   })
 }
-
-
-

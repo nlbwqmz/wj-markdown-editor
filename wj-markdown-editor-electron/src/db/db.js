@@ -1,8 +1,8 @@
-import Sqlite3 from "sqlite3";
-import pathUtil from "../util/pathUtil.js";
+import Sqlite3 from 'sqlite3'
+import pathUtil from '../util/pathUtil.js'
 
 const createConnection = () => {
-  return new Sqlite3.Database(pathUtil.getDbPath());
+  return new Sqlite3.Database(pathUtil.getDbPath())
 }
 
 const db = createConnection()
@@ -14,7 +14,7 @@ export default {
   run: (sql, params) => {
     return new Promise((resolve, reject) => {
       db.run(sql, params, err => {
-        if(err){
+        if (err) {
           reject(err)
         } else {
           resolve()
@@ -25,7 +25,7 @@ export default {
   get: (sql, params) => {
     return new Promise((resolve, reject) => {
       db.get(sql, params, (err, row) => {
-        if(err){
+        if (err) {
           reject(err)
         } else {
           resolve(row)
@@ -36,9 +36,9 @@ export default {
   all: (sql, params) => {
     return new Promise((resolve, reject) => {
       db.all(sql, params, (err, rows) => {
-        if(err){
+        if (err) {
           reject(err)
-        } else if(rows){
+        } else if (rows) {
           resolve(rows)
         } else {
           resolve([])

@@ -1,4 +1,4 @@
-import db from "./db.js";
+import db from './db.js'
 
 const createTable = async () => {
   await db.run('create table if not exists wj_markdown_editor_webdav (url varchar(512), username varchar(512), password varchar(512))')
@@ -16,9 +16,9 @@ export default {
   },
   selectWebdav: async () => {
     const rows = await db.all('select * from wj_markdown_editor_webdav')
-    if(rows && Array.isArray(rows) &&rows.length > 0) {
+    if (rows && Array.isArray(rows) && rows.length > 0) {
       return rows[0]
     }
     return undefined
-  },
+  }
 }

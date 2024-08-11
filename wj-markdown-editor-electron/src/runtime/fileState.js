@@ -1,12 +1,12 @@
-import path from "path";
-import util from "../util/util.js";
-import win from "../win/win.js";
-import openedDb from "../db/openedDb.js";
+import path from 'path'
+import util from '../util/util.js'
+import win from '../win/win.js'
+import openedDb from '../db/openedDb.js'
 
 let autoLogin = false
 const createProxy = obj => {
   return new Proxy(obj, {
-    set(target, name, newValue, receiver) {
+    set (target, name, newValue, receiver) {
       target[name] = newValue
       flush()
       return true
@@ -23,11 +23,13 @@ const initFileStateList = async () => {
       type: item.type
     }
   })
-  list.forEach(item => item.saved = true)
-  if(util.isOpenOnFile()){
-    const originFilePath = util.getOpenOnFilePath();
+  list.forEach(item => {
+    item.saved = true
+  })
+  if (util.isOpenOnFile()) {
+    const originFilePath = util.getOpenOnFilePath()
     const index = list.findIndex(item => item.originFilePath === originFilePath && item.type === 'local')
-    if(index > -1){
+    if (index > -1) {
       list.splice(index, 1)
     }
     list.push({
@@ -35,13 +37,13 @@ const initFileStateList = async () => {
       saved: true,
       content: '',
       tempContent: '',
-      originFilePath: originFilePath,
+      originFilePath,
       fileName: path.basename(originFilePath),
       type: 'local',
       loaded: false
     })
   }
-  if(list.length === 0){
+  if (list.length === 0) {
     list.push({
       id: util.createId(),
       saved: true,
@@ -57,7 +59,6 @@ const initFileStateList = async () => {
 }
 
 const fileStateList = [...await initFileStateList()]
-
 
 const flush = () => {
   win.updateFileStateList(fileStateList.map(item => {
@@ -93,7 +94,7 @@ const creatFileState = () => {
 
 export default {
   get: filter => {
-    if(filter){
+    if (filter) {
       return fileStateList.filter(filter)
     }
     return fileStateList
@@ -124,13 +125,13 @@ export default {
   },
   clearAndPushNew: () => {
     fileStateList.splice(0, fileStateList.length)
-    const item = creatFileState();
+    const item = creatFileState()
     fileStateList.push(item)
     flush()
     return item
   },
   pushNew: () => {
-    const item = creatFileState();
+    const item = creatFileState()
     fileStateList.push(item)
     flush()
     return item

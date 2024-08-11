@@ -1,4 +1,4 @@
-import pathUtil from "../util/pathUtil.js"
+import pathUtil from '../util/pathUtil.js'
 
 const stringValue = value => {
   return {
