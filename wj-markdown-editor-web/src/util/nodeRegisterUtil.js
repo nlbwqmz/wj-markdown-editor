@@ -57,7 +57,7 @@ export default {
                * @return deviationEnd   插入后选中内容鼠标结束位置，默认：0
                */
               return {
-                targetValue: `![](${item})\n`,
+                targetValue: `![](<${item}>)\n`,
                 select: false,
                 deviationStart: 0,
                 deviationEnd: 0
