@@ -1,0 +1,89 @@
+.wj-scrollbar::-webkit-scrollbar{
+  display: revert;
+  width: 6px;
+  height: 6px;
+  //background-color: rgb(20, 19, 19);
+}
+/*滚动条里面轨道*/
+.wj-scrollbar::-webkit-scrollbar-track{
+  background-color: #e2e2e2;
+}
+
+/*滚动条的样式*/
+.wj-scrollbar::-webkit-scrollbar-thumb{
+  border-radius: 4px;
+  background-color: #0000004d;
+}
+
+.wj-scrollbar::-webkit-scrollbar-thumb:hover{
+  background-color: #00000059;
+}
+
+.wj-scrollbar::-webkit-scrollbar-thumb:active{
+  background-color: #00000061;
+}
+
+.wj-scrollbar-hide::-webkit-scrollbar{
+  display: revert;
+  width: 0;
+  height: 0;
+}
+
+
+//// 始终显示滚动条
+//.cm-scroller {
+//  overflow-y: scroll;
+//}
+//
+//.cm-scroller::-webkit-scrollbar{
+//  display: revert;
+//  width: 6px;
+//  height: 6px;
+//  //background-color: rgb(20, 19, 19);
+//}
+///*滚动条里面轨道*/
+//.cm-scroller::-webkit-scrollbar-track{
+//  background-color: #e2e2e2;
+//}
+//
+///*滚动条的样式*/
+//.cm-scroller::-webkit-scrollbar-thumb{
+//  border-radius: 4px;
+//  background-color: #0000004d;
+//}
+//
+//.cm-scroller::-webkit-scrollbar-thumb:hover{
+//  background-color: #00000059;
+//}
+//
+//.cm-scroller::-webkit-scrollbar-thumb:active{
+//  background-color: #00000061;
+//}
+
+
+//.cm-autocompletion-scrollbar {
+//  ul::-webkit-scrollbar{
+//    display: revert;
+//    width: 6px;
+//    height: 6px;
+//    //background-color: rgb(20, 19, 19);
+//  }
+//  /*滚动条里面轨道*/
+//  ul::-webkit-scrollbar-track{
+//    background-color: #e2e2e2;
+//  }
+//
+//  /*滚动条的样式*/
+//  ul::-webkit-scrollbar-thumb{
+//    border-radius: 4px;
+//    background-color: #0000004d;
+//  }
+//
+//  ul::-webkit-scrollbar-thumb:hover{
+//    background-color: #00000059;
+//  }
+//
+//  ul::-webkit-scrollbar-thumb:active{
+//    background-color: #00000061;
+//  }
+//}

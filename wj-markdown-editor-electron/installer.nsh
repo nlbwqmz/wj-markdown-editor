@@ -8,4 +8,7 @@
 ;卸载时清除
 !macro customUninstall
    DeleteRegKey HKCR ".md\ShellNew"
+   ${ifNot} ${isUpdated}
+      RMDir /r "$PROFILE\Documents\wj-markdown-editor"
+   ${endif}
 !macroend

@@ -1,28 +1,27 @@
 import { fileURLToPath, URL } from 'node:url'
-import eslint from 'vite-plugin-eslint'
+import vue from '@vitejs/plugin-vue'
+import UnoCSS from 'unocss/vite'
 
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: './',
   plugins: [
     vue(),
-    eslint({
-      lintOnStart: true
-    })
+    UnoCSS(),
   ],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
   },
   build: {
-    base: './',
     outDir: '../wj-markdown-editor-electron/web-dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    target: 'esnext',
   },
   server: {
-    port: 8080
-  }
+    port: 8080,
+  },
 })

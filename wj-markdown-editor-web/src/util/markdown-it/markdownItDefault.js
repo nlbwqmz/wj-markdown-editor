@@ -1,0 +1,89 @@
+import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
+// import MarkdownItTextualUml from 'markdown-it-textual-uml'
+import MarkdownItMermaid from '@/util/markdown-it/markdownItMermaid.js'
+import MarkdownItKatex from '@vscode/markdown-it-katex'
+import hljs from 'highlight.js'
+import MarkdownIt from 'markdown-it'
+import MarkdownItAnchor from 'markdown-it-anchor'
+import MarkdownItContainer from 'markdown-it-container'
+import MarkdownItDefList from 'markdown-it-deflist'
+import MarkdownItGitHubAlerts from 'markdown-it-github-alerts'
+import MarkdownItIns from 'markdown-it-ins'
+import MarkdownItMark from 'markdown-it-mark'
+import MarkdownItSub from 'markdown-it-sub'
+import MarkdownItSup from 'markdown-it-sup'
+import MarkdownItTaskLists from 'markdown-it-task-lists'
+
+const md = new MarkdownIt({
+  html: true,
+  linkify: true,
+  breaks: true,
+  typographer: true,
+  xhtmlOut: true,
+  highlight(str, lang) {
+    try {
+      return `<pre class="hljs"><code>${
+        lang && hljs.getLanguage(lang) ? hljs.highlight(str, { language: lang, ignoreIllegals: true }).value : hljs.highlightAuto(str).value
+      }</code></pre>`
+    } catch (e) {
+      console.error(e)
+    }
+    return `<pre class="hljs"><code>${md.utils.escapeHtml(str)}</code></pre>`
+  },
+})
+md.use(MarkdownItSup)
+  .use(MarkdownItSub)
+  .use(MarkdownItDefList)
+  .use(MarkdownItIns)
+  .use(MarkdownItMark)
+  .use(MarkdownItTaskLists)
+  .use(MarkdownItGitHubAlerts)
+  .use(MarkdownItKatex, { throwOnError: false })
+  .use(MarkdownItMermaid)
+  .use(MarkdownItAnchor)
+
+// ------------ 给本地图片加上自定义协议 ------------
+md.renderer.rules.image = (tokens, idx, options, env, slf) => {
+  const token = tokens[idx]
+  // "alt" attr MUST be set, even if empty. Because it's mandatory and
+  // should be placed on proper position for tests.
+  //
+  // Replace content with actual value
+  token.attrs[token.attrIndex('alt')][1] = slf.renderInlineAsText(token.children, options, env)
+  if (token.attrs) {
+    const srcIndex = token.attrs.findIndex(item => item && item[0] === 'src')
+    if (srcIndex > -1) {
+      const src = token.attrs[srcIndex][1]
+      if (src) {
+        if (!src.match('^http') && !src.match('^data')) {
+          token.attrs[srcIndex][1] = decodeURIComponent(`wj:///${src}`)
+        }
+      }
+    }
+  }
+  return slf.renderToken(tokens, idx, options)
+}
+// ------------ 给链接加上_blank ------------
+const defaultRender = md.renderer.rules.link_open || function (tokens, idx, options, env, self) {
+  return self.renderToken(tokens, idx, options)
+}
+md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
+  // If you are sure other plugins can't add `target` - drop check below
+  const aIndex = tokens[idx].attrIndex('target')
+  if (aIndex < 0) {
+    // add new attribute
+    tokens[idx].attrPush(['target', '_blank'])
+  } else {
+    // replace value of existing attr
+    tokens[idx].attrs[aIndex][1] = '_blank'
+  }
+  // pass token to default renderer.
+  return defaultRender(tokens, idx, options, env, self)
+}
+
+markdownItContainerUtil.createContainerPlugin(md, ['info', 'warning', 'danger', 'tip', 'important', 'details'])
+  .forEach((containerPlugin) => {
+    md.use(MarkdownItContainer, containerPlugin.type, containerPlugin)
+  })
+
+export default md

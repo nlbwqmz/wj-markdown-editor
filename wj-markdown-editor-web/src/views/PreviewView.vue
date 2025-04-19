@@ -1,179 +1,99 @@
-<template>
-  <div
-    style="width: 100%; min-height: 100%; border-left: var(--wj-inner-border)"
-    :id="previewId"
-    class="preview-container"
-  >
-    <div
-      v-if="!content"
-      :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }"
-      class="horizontal-vertical-center"
-    >
-      <a-empty>
-        <template #description>
-          <p style="color: rgba(0, 0, 0, 0.25)">
-            暂无文本
-          </p>
-          <a-button
-            type="link"
-            @click="toEdit"
-          >
-            去编辑
-          </a-button>
-        </template>
-      </a-empty>
-    </div>
-    <div
-      style="width: 100%; display: flex; justify-content: center"
-      v-if="content"
-    >
-      <div
-        :style="{ width: `${config.preview_width}%` }"
-        style="display: flex; justify-content: center"
-      >
-        <div style="flex: 1; overflow: hidden">
-          <md-preview
-            :id="componentId"
-            :model-value="content"
-            :editor-id="domId"
-            :md-heading-id="commonUtil.mdHeadingId"
-            no-img-zoom-in
-            :preview-theme="config.preview_theme"
-            :code-theme="config.code_theme"
-            :show-code-row-number="config.show_code_row_number"
-            :code-foldable="false"
-            @on-html-changed="handleHtmlChanged()"
-          >
-          </md-preview>
-        </div>
-        <div
-          v-if="catalogShow"
-          style="max-width: 300px; min-width: 200px;"
-          :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }"
-        >
-          <a-affix
-            :offset-top="offsetTop"
-            :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }"
-          >
-            <div
-              style="border-left: var(--wj-inner-border);overflow: auto"
-              class="wj-scrollbar-hover"
-              :style="{ height: `calc(100vh - ${offsetTop + 1}px)` }"
-            >
-              <md-catalog
-                :editor-id="domId"
-                :scroll-element="scrollElement"
-                :scroll-element-offset-top="offsetTop"
-                :md-heading-id="commonUtil.mdHeadingId"
-              />
-            </div>
-          </a-affix>
-        </div>
-      </div>
-    </div>
-    <a-float-button
-      type="default"
-      @click="catalogShow = true"
-      class="float-button"
-      style="right: 50px; bottom: 100px "
-      description="目录"
-      shape="square"
-      v-if="content && !catalogShow"
-    >
-      <template #icon>
-        <EyeOutlined />
-      </template>
-    </a-float-button>
-    <a-float-button
-      type="default"
-      @click="catalogShow = false"
-      class="float-button"
-      style="right: 50px; bottom: 100px "
-      description="目录"
-      shape="square"
-      v-if="content && catalogShow"
-    >
-      <template #icon>
-        <EyeInvisibleOutlined />
-      </template>
-    </a-float-button>
-    <a-float-button
-      type="default"
-      @click="toEdit"
-      class="float-button"
-      style="right: 50px"
-      description="编辑"
-      v-if="config.jump_router_btn"
-      shape="square"
-    >
-      <template #icon>
-        <EditOutlined />
-      </template>
-    </a-float-button>
-  </div>
-</template>
-
 <script setup>
-import { MdCatalog, MdPreview } from 'md-editor-v3'
-import 'md-editor-v3/lib/preview.css'
-import { computed, onActivated, ref } from 'vue'
-import nodeRequestUtil from '@/util/nodeRequestUtil'
-import store from '@/store'
-import { EditOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons-vue'
+import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
+import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
+import { useCommonStore } from '@/stores/counter.js'
+import sendUtil from '@/util/channel/sendUtil.js'
+import Split from 'split-grid'
+import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import commonUtil from '@/util/commonUtil'
-import 'viewerjs/dist/viewer.css'
-import Viewer from 'viewerjs'
 
 const router = useRouter()
-const content = ref()
-const scrollElement = document.getElementById('main')
-const domId = commonUtil.createId()
-const previewId = commonUtil.createId()
-const componentId = commonUtil.createId()
-const catalogShow = ref()
-const offsetTop = 103
-const imgViewer = ref()
-const id = commonUtil.getUrlParam('id')
+
+const content = ref('')
+const anchorList = ref([])
+let splitInstance
+const gutterRef = ref()
+const previewContainerRef = ref()
+const menuVisible = ref(false)
+const menuController = ref(false)
+const previewContainer = ref()
+
+onMounted(() => {
+  menuVisible.value = useCommonStore().config.menuVisible
+})
+
+const previewWidth = computed(() => useCommonStore().config.previewWidth)
+
+watch(() => menuVisible.value, (newValue) => {
+  if (newValue) {
+    menuController.value = true
+    nextTick(() => {
+      splitInstance = Split({
+        columnGutters: [{ track: 1, element: gutterRef.value }],
+        // 最小尺寸
+        minSize: 200,
+        // 自动吸附距离
+        snapOffset: 0,
+      })
+    })
+  } else {
+    splitInstance.destroy(true)
+    previewContainer.value.style['grid-template-columns'] = ''
+    menuController.value = false
+  }
+})
 
 onActivated(async () => {
-  const fileContent = await nodeRequestUtil.getFileContent(id)
-  catalogShow.value = store.state.config.catalog_show
-  if (fileContent.exists === true) {
-    content.value = fileContent.content
-  } else {
-    router.push({ path: '/notFound', query: { id } }).then(() => {})
+  content.value = await sendUtil.send({ event: 'get-temp-content' })
+  if (!content.value) {
+    anchorList.value = []
   }
 })
-const handleHtmlChanged = commonUtil.debounce(() => {
-  if (imgViewer.value) {
-    imgViewer.value.update()
-  } else {
-    imgViewer.value = new Viewer(document.getElementById(previewId), {
-      title: false,
-      toolbar: {
-        zoomIn: true,
-        zoomOut: true,
-        oneToOne: true,
-        reset: true,
-        prev: true,
-        next: true,
-        rotateLeft: true,
-        rotateRight: true,
-        flipHorizontal: true,
-        flipVertical: true
-      },
-      container: document.getElementById(previewId)
-    })
-  }
-})
-const config = computed(() => store.state.config)
 
-const toEdit = () => {
-  router.push({ path: '/edit', query: { id } })
+function toEdit() {
+  router.push({
+    name: 'editor',
+  })
+}
+
+function onAnchorChange(changedAnchorList) {
+  anchorList.value = changedAnchorList
 }
 </script>
 
-<style scoped lang="less">
+<template>
+  <a-tooltip v-if="menuController === false" placement="right" color="#1677ff">
+    <template #title>
+      <span>目录</span>
+    </template>
+    <div class="absolute left-0 top-2 z-10 cursor-pointer bg-gray-200 p-1 op-60 hover:op-100" @click="() => { menuVisible = true }">
+      <div class="i-tabler:menu-deep" />
+    </div>
+  </a-tooltip>
+  <div ref="previewContainer" class="allow-search grid h-full w-full overflow-hidden b-t-1 b-t-gray-200 b-t-solid" :class="menuController ? 'grid-cols-[200px_2px_1fr]' : 'grid-cols-[1fr]'">
+    <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewContainerRef" :close="() => { menuVisible = false }" class="b-r-1 b-r-gray-200 b-r-solid" />
+    <div v-if="menuController" ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
+    <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto p-4">
+      <div class="h-full w-full flex justify-center">
+        <div class="h-full w-full" :style="{ width: `${previewWidth}%` }">
+          <MarkdownPreview :content="content" @anchor-change="onAnchorChange" />
+        </div>
+      </div>
+    </div>
+    <div v-else class="h-full flex items-center justify-center">
+      <a-empty>
+        <template #description>
+          <span>
+            文档内容为空
+          </span>
+        </template>
+        <a-button type="primary" ghost @click="toEdit">
+          去编辑
+        </a-button>
+      </a-empty>
+    </div>
+  </div>
+</template>
 
+<style scoped lang="scss">
 </style>

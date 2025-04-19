@@ -1,56 +1,48 @@
-import { app, Menu, Tray } from 'electron'
-import path from 'path'
-import globalData from './util/globalData.js'
+import { app, Menu } from 'electron'
+import configUtil from './data/configUtil.js'
+import sendUtil from './util/channel/sendUtil.js'
+import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
-import './util/ipcMainUtil.js'
-import common from './util/common.js'
-import screenshotsUtil from './util/screenshotsUtil.js'
-import { fileURLToPath } from 'url'
-import win from './win/win.js'
-import globalShortcutUtil from './util/globalShortcutUtil.js'
-import './util/job.js'
-import fileState from './runtime/fileState.js'
-import util from './util/util.js'
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const lock = app.requestSingleInstanceLock({ fileInfo: util.deepCopy(fileState.getByIndex(fileState.getLength() - 1)) })
+import updateUtil from './util/updateUtil.js'
+import screenshotsUtil from './util/win/screenshotsUtil.js'
+import winInfoUtil from './util/win/winInfoUtil.js'
+import './util/channel/ipcMainUtil.js'
+
+app.commandLine.appendSwitch('--disable-http-cache')
+
+/**
+ * 是否通过文件打开
+ */
+function isOpenOnFile() {
+  return Boolean(process.argv && process.argv.length > 0 && /.*\.md$/.test(process.argv[process.argv.length - 1]))
+}
+
+/**
+ * 如果通过打开 获取文件路径
+ */
+function getOpenOnFilePath() {
+  return isOpenOnFile() ? process.argv[process.argv.length - 1] : null
+}
+
+const lock = app.requestSingleInstanceLock({ filePath: getOpenOnFilePath() })
 
 if (!lock) {
   app.quit()
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
-    if (additionalData.fileInfo && additionalData.fileInfo.originFilePath) {
-      const origin = fileState.find(item => item.originFilePath === additionalData.fileInfo.originFilePath && item.type === additionalData.fileInfo.type)
-      if (origin) {
-        win.changeTab(origin.id)
-      } else {
-        fileState.push(additionalData.fileInfo)
-        win.changeTab(additionalData.fileInfo.id)
-      }
-    }
-    common.winShow()
+    winInfoUtil.createNew(additionalData.filePath).then(() => {})
   })
-
-  const createTray = () => {
-    const tray = new Tray(path.resolve(__dirname, '../icon/256x256.png'))
-    const contextMenu = Menu.buildFromTemplate([
-      { label: '打开', type: 'normal', click: win.show },
-      { label: '退出', type: 'normal', click: win.close }
-    ])
-    tray.setContextMenu(contextMenu)
-    tray.on('click', win.show)
-    tray.on('double-click', win.show)
-  }
-  app.commandLine.appendSwitch('--disable-http-cache')
-  app.whenReady().then(() => {
-    screenshotsUtil.init()
-    common.initUpdater()
-    protocolUtil.handleProtocol()
-    createTray()
+  logUtil.init()
+  app.whenReady().then(async () => {
     Menu.setApplicationMenu(null)
-    win.open(common, globalShortcutUtil, globalData)
-    app.on('window-all-closed', () => {
-      if (process.platform !== 'darwin') app.quit()
+    await configUtil.initConfig((config) => {
+      winInfoUtil.getAll().forEach((item) => {
+        sendUtil.send(item.win, { event: 'update-config', data: config })
+      })
     })
+    protocolUtil.handleProtocol()
+    await winInfoUtil.createNew(getOpenOnFilePath())
+    screenshotsUtil.init()
+    updateUtil.initUpdater()
   })
 }
