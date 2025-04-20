@@ -14,7 +14,7 @@ import { keymap } from '@codemirror/view'
 import { Form } from 'ant-design-vue'
 import { EditorView } from 'codemirror'
 import Split from 'split-grid'
-import { createVNode, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { createVNode, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: {
@@ -56,7 +56,7 @@ let editorView
 const editorRef = ref()
 const previewRef = ref()
 const isComposing = ref(false)
-const scrolling = ref(false)
+const scrolling = ref({ editor: false, preview: false })
 const keymapCompartment = new Compartment()
 const menuVisible = ref(false)
 const editorContainer = ref()
@@ -113,38 +113,189 @@ function onInsertImgNetwork() {
 //   }
 // }
 
-// 同步滚动逻辑
-function syncScroll(sourceType) {
-  if (scrolling.value) {
+// 按比例同步滚动逻辑
+// function syncScroll(sourceType) {
+//   if (scrolling.value) {
+//     return
+//   }
+//   scrolling.value = true
+//   // 获取滚动信息
+//   const [source, target] = sourceType === 'editor'
+//     ? [editorView.scrollDOM, previewRef.value]
+//     : [previewRef.value, editorView.scrollDOM]
+//
+//   // 计算滚动比例
+//   const ratio = source.scrollTop / (source.scrollHeight - source.clientHeight)
+//   const targetScrollTop = ratio * (target.scrollHeight - target.clientHeight)
+//
+//   // 同步到目标
+//   if (sourceType === 'editor') {
+//     previewRef.value.scrollTo({ top: targetScrollTop })
+//   } else {
+//     editorView.scrollDOM.scrollTo({ top: targetScrollTop })
+//   }
+//   requestAnimationFrame(() => {
+//     scrolling.value = false
+//   })
+// }
+
+// 查找匹配行号的元素
+function findPreviewElement(lineNumber) {
+  const elements = previewRef.value.querySelectorAll('[data-line-start]')
+  const waiting = []
+  for (const element of elements) {
+    const start = +element.dataset.lineStart
+    const end = +element.dataset.lineEnd || start
+    if (lineNumber >= start && lineNumber <= end) {
+      waiting.push({ element, start, end })
+    }
+  }
+  if (waiting.length === 0) {
+    return null
+  }
+  waiting.sort((a, b) => (a.end - a.start) - (b.end - b.start))
+  return waiting[0].element
+}
+
+let checkScrollCallbackTimer
+
+function checkScrollTop(element, top, callback) {
+  checkScrollCallbackTimer && clearTimeout(checkScrollCallbackTimer)
+  checkScrollCallbackTimer = setTimeout(() => {
+    top = Math.max(0, top)
+    top = Math.min(element.scrollHeight - element.clientHeight, top)
+    if (Math.abs(element.scrollTop - top) < 1) {
+      callback && callback()
+    } else {
+      checkScrollTop(element, top, callback)
+    }
+  }, 100)
+}
+
+function syncEditorToPreview() {
+  if (scrolling.value.preview) {
     return
   }
-  scrolling.value = true
-  // 获取滚动信息
-  const [source, target] = sourceType === 'editor'
-    ? [editorView.scrollDOM, previewRef.value]
-    : [previewRef.value, editorView.scrollDOM]
+  // const scrollTop = editorView.scrollDOM.scrollTop;
+  // const block = editorView.lineBlockAtHeight(scrollTop);
+  // const lineNumber = editorView.state.doc.lineAt(block.from).number;
+  //
+  // console.error('lineNumber', lineNumber)
+  // // 查找预览元素并滚动
+  // const targetElement = findPreviewElement(lineNumber);
+  // if (targetElement && previewRef.value) {
+  //   const elementTop = targetElement.offsetTop;
+  //   targetElement.scrollIntoView({behavior: 'smooth'})
+  //   // previewRef.value.scrollTo({
+  //   //   top: elementTop - previewRef.value.offsetTop,
+  //   //   behavior: 'smooth' // 添加平滑滚动效果
+  //   // });
+  // }
+  // 获取编辑器滚动位置和可视区域高度
+  const scrollTop = editorView.scrollDOM.scrollTop
 
-  // 计算滚动比例
-  const ratio = source.scrollTop / (source.scrollHeight - source.clientHeight)
-  const targetScrollTop = ratio * (target.scrollHeight - target.clientHeight)
+  // 获取滚动位置对应的行块信息
+  const topBlock = editorView.lineBlockAtHeight(scrollTop)
 
-  // 同步到目标
-  if (sourceType === 'editor') {
-    previewRef.value.scrollTo({ top: targetScrollTop })
-  } else {
-    editorView.scrollDOM.scrollTo({ top: targetScrollTop })
+  // 计算当前行块的滚动比例
+  const lineHeight = topBlock.height
+  const scrollOffsetInLine = scrollTop - topBlock.top
+  const scrollRatio = scrollOffsetInLine / lineHeight
+
+  // 找到对应的预览元素
+  const lineNumber = editorView.state.doc.lineAt(topBlock.from).number
+  const previewElement = findPreviewElement(lineNumber)
+
+  if (previewElement && previewRef.value) {
+    // 计算预览元素的对应滚动位置
+    const elementTop = previewElement.offsetTop
+    const elementHeight = previewElement.getBoundingClientRect().height
+
+    // 根据比例调整目标位置
+    const targetScrollTop = elementTop + (elementHeight * scrollRatio)
+    scrolling.value.editor = true
+    // 平滑滚动到目标位置
+    previewRef.value.scrollTo({
+      top: targetScrollTop,
+      behavior: 'smooth',
+    })
+    checkScrollTop(previewRef.value, targetScrollTop, () => {
+      scrolling.value.editor = false
+    })
   }
-  requestAnimationFrame(() => {
-    scrolling.value = false
-  })
 }
+
+// 根据滚动位置查找元素
+function findElementAtPreviewScroll(scrollTop) {
+  const elements = Array.from(previewRef.value.querySelectorAll('[data-line-start]'))
+  let target = elements[0]
+  for (const element of elements) {
+    if (element.offsetTop <= scrollTop) {
+      target = element
+    } else {
+      break
+    }
+  }
+  return target
+}
+
+function syncPreviewToEditor() {
+  if (scrolling.value.editor) {
+    return
+  }
+  const previewScrollTop = previewRef.value.scrollTop
+
+  // 找到当前预览滚动位置对应的元素
+  const element = findElementAtPreviewScroll(previewScrollTop)
+  if (element && element.dataset.lineStart) {
+    const lineNumber = +element.dataset.lineStart
+
+    // 计算元素内滚动比例
+    const elementTop = element.offsetTop
+    const elementScrollOffset = previewScrollTop - elementTop
+    const scrollRatio = elementScrollOffset / element.offsetHeight
+
+    // 找到编辑器的对应行
+    const line = editorView.state.doc.line(lineNumber)
+    const block = editorView.lineBlockAt(line.from)
+
+    // 根据比例计算编辑器滚动位置
+    const targetScrollTop = block.top + (block.height * scrollRatio)
+    scrolling.value.preview = true
+    // 平滑滚动编辑器
+    editorView.scrollDOM.scrollTo({
+      top: targetScrollTop,
+      behavior: 'smooth',
+    })
+    checkScrollTop(editorView.scrollDOM, targetScrollTop, () => {
+      scrolling.value.preview = false
+    })
+  }
+}
+
+function onEditorWheel(e) {
+  // e.deltaY > 0 表示往下滚动；且滚动条已到达底端
+  if (e.deltaY > 0 && editorView.scrollDOM.scrollHeight === editorView.scrollDOM.scrollTop + editorView.scrollDOM.clientHeight) {
+    e.preventDefault()
+    previewRef.value.scrollBy({ top: e.deltaY, behavior: 'smooth' })
+  }
+}
+
+onBeforeUnmount(() => {
+  // 编辑器滚动监听
+  editorView.scrollDOM.removeEventListener('wheel', onEditorWheel)
+  editorView.scrollDOM.removeEventListener('scroll', syncEditorToPreview)
+  // 预览区滚动监听
+  previewRef.value.removeEventListener('scroll', syncPreviewToEditor)
+})
 
 // 绑定事件
 function bindEvents() {
   // 编辑器滚动监听
-  editorView.scrollDOM.addEventListener('scroll', () => syncScroll('editor'))
+  editorView.scrollDOM.addEventListener('wheel', onEditorWheel)
+  editorView.scrollDOM.addEventListener('scroll', syncEditorToPreview)
   // 预览区滚动监听
-  previewRef.value.addEventListener('scroll', () => syncScroll('preview'))
+  previewRef.value.addEventListener('scroll', syncPreviewToEditor)
 }
 
 // function updateEditorContent(newContent) {
@@ -531,7 +682,7 @@ watch(() => menuVisible.value, (newValue) => {
         :popover="item.popover"
       />
     </div>
-    <div ref="editorContainer" class="grid w-full overflow-hidden" :class="menuController ? 'grid-cols-[1fr_2px_1fr_2px_200px]' : 'grid-cols-[1fr_2px_1fr]'">
+    <div ref="editorContainer" class="grid w-full overflow-hidden" :class="menuController ? 'grid-cols-[1fr_2px_1fr_2px_0.4fr]' : 'grid-cols-[1fr_2px_1fr]'">
       <div ref="editorRef" class="h-full overflow-auto" />
       <div ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <div

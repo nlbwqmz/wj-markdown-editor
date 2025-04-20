@@ -82,7 +82,6 @@ function renderActiveMarkHighlight() {
   const markList = document.querySelectorAll('.search-mark')
   let executed = false
   markIndexGroup.value[result.value.current - 1].forEach((index) => {
-    console.error(markList.item(index))
     markList.item(index).classList.add('search-mark-highlight')
     if (executed === false) {
       markList.item(index).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })

@@ -66,7 +66,6 @@ function addImageListener() {
   if (imageDomList.length > 0) {
     for (let i = 0; i < imageDomList.length; i++) {
       const item = imageDomList.item(i)
-      console.error(item)
       item.dataset.index = String(i)
       item.style.cursor = 'pointer'
       srcList.push(item.src)

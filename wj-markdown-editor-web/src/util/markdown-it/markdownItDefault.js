@@ -81,6 +81,19 @@ md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
   return defaultRender(tokens, idx, options, env, self)
 }
 
+// 添加原始文本对应的行号区域
+md.core.ruler.push('line_number', (state) => {
+  state.tokens.forEach((token) => {
+    if (token.type.endsWith('_open') && token.map) {
+      // 闭开区间
+      const [start, end] = token.map;
+      // 用户可见的行号从 1 开始，且闭开区间需转换为闭区间
+      token.attrSet('data-line-start', String(start + 1));
+      token.attrSet('data-line-end', String(end));
+    }
+  });
+});
+
 markdownItContainerUtil.createContainerPlugin(md, ['info', 'warning', 'danger', 'tip', 'important', 'details'])
   .forEach((containerPlugin) => {
     md.use(MarkdownItContainer, containerPlugin.type, containerPlugin)

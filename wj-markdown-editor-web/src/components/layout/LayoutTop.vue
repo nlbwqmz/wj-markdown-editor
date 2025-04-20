@@ -75,10 +75,10 @@ onBeforeMount(async () => {
         <div class="i-tabler:minus" />
       </div>
       <div v-show="!isMaximize" class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="maximize">
-        <div class="i-tabler:window-maximize" />
+        <div class="i-tabler:crop-1-1" />
       </div>
       <div v-show="isMaximize" class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="restore">
-        <div class="i-tabler:window-minimize" />
+        <div class="i-tabler:layers-subtract" />
       </div>
       <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-red" @click="close">
         <div class="i-tabler:x" />

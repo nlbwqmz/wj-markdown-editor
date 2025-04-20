@@ -13,7 +13,6 @@ function dateCompletion(context) {
         section: '时间',
         apply: (view, completion, from, to) => {
           const insert = dayjs().format('YYYY-MM-DD')
-          console.error(from, to, insert)
           view.dispatch({
             changes: { from, to, insert },
           })
@@ -28,7 +27,6 @@ function dateCompletion(context) {
         section: '时间',
         apply: (view, completion, from, to) => {
           const insert = dayjs().format('YYYY-MM-DD HH:mm:ss')
-          console.error(from, to, insert)
           view.dispatch({
             changes: { from, to, insert },
           })
