@@ -3,7 +3,6 @@ import { useCommonStore } from '@/stores/counter.js'
 import sendUtil from '@/util/channel/sendUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
 import dayjs from 'dayjs'
-import { innerHTML } from 'diffhtml'
 import mermaid from 'mermaid'
 import { onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
@@ -211,11 +210,7 @@ function refreshPreview(doc) {
     }
   })
   // 使用临时元素来更新，防止一些attribute没有映射到property上
-  if (false) {
-    innerHTML(previewRef.value, tempElement, { disableMutationObserver: false })
-  } else {
-    updateDOM(previewRef.value, tempElement)
-  }
+  updateDOM(previewRef.value, tempElement)
 
   // const checkboxList = previewRef.value.querySelectorAll('input[type=checkbox]')
   // for (const checkboxListElement of checkboxList) {
