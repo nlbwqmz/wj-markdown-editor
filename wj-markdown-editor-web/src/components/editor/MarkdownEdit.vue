@@ -172,25 +172,19 @@ function checkScrollTop(element, top, callback) {
   }, 100)
 }
 
+function getTotalLineHeight(start, end) {
+  let height = 0
+  while (start <= end) {
+    height += editorView.lineBlockAt(editorView.state.doc.line(start).from).height
+    start++
+  }
+  return height
+}
+
 function syncEditorToPreview() {
   if (scrolling.value.preview) {
     return
   }
-  // const scrollTop = editorView.scrollDOM.scrollTop;
-  // const block = editorView.lineBlockAtHeight(scrollTop);
-  // const lineNumber = editorView.state.doc.lineAt(block.from).number;
-  //
-  // console.error('lineNumber', lineNumber)
-  // // 查找预览元素并滚动
-  // const targetElement = findPreviewElement(lineNumber);
-  // if (targetElement && previewRef.value) {
-  //   const elementTop = targetElement.offsetTop;
-  //   targetElement.scrollIntoView({behavior: 'smooth'})
-  //   // previewRef.value.scrollTo({
-  //   //   top: elementTop - previewRef.value.offsetTop,
-  //   //   behavior: 'smooth' // 添加平滑滚动效果
-  //   // });
-  // }
   // 获取编辑器滚动位置和可视区域高度
   const scrollTop = editorView.scrollDOM.scrollTop
 
@@ -198,15 +192,24 @@ function syncEditorToPreview() {
   const topBlock = editorView.lineBlockAtHeight(scrollTop)
 
   // 计算当前行块的滚动比例
-  const lineHeight = topBlock.height
-  const scrollOffsetInLine = scrollTop - topBlock.top
-  const scrollRatio = scrollOffsetInLine / lineHeight
+  let totalLineHeight
+  let scrollOffsetInLine
 
   // 找到对应的预览元素
   const lineNumber = editorView.state.doc.lineAt(topBlock.from).number
   const previewElement = findPreviewElement(lineNumber)
 
   if (previewElement && previewRef.value) {
+    const startLineNumber = +previewElement.dataset.lineStart
+    const endLineNumber = +previewElement.dataset.lineEnd
+    if (startLineNumber === endLineNumber) {
+      totalLineHeight = topBlock.height
+      scrollOffsetInLine = scrollTop - topBlock.top
+    } else {
+      totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
+      scrollOffsetInLine = startLineNumber === lineNumber ? scrollTop - topBlock.top : getTotalLineHeight(startLineNumber, lineNumber - 1) + scrollTop - topBlock.top
+    }
+    const scrollRatio = scrollOffsetInLine / totalLineHeight
     // 计算预览元素的对应滚动位置
     const elementTop = previewElement.offsetTop
     const elementHeight = previewElement.getBoundingClientRect().height
@@ -248,7 +251,8 @@ function syncPreviewToEditor() {
   // 找到当前预览滚动位置对应的元素
   const element = findElementAtPreviewScroll(previewScrollTop)
   if (element && element.dataset.lineStart) {
-    const lineNumber = +element.dataset.lineStart
+    const startLineNumber = +element.dataset.lineStart
+    const endLineNumber = +element.dataset.lineEnd
 
     // 计算元素内滚动比例
     const elementTop = element.offsetTop
@@ -256,11 +260,12 @@ function syncPreviewToEditor() {
     const scrollRatio = elementScrollOffset / element.offsetHeight
 
     // 找到编辑器的对应行
-    const line = editorView.state.doc.line(lineNumber)
-    const block = editorView.lineBlockAt(line.from)
+    const startLine = editorView.state.doc.line(startLineNumber)
+    const totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
+    const block = editorView.lineBlockAt(startLine.from)
 
     // 根据比例计算编辑器滚动位置
-    const targetScrollTop = block.top + (block.height * scrollRatio)
+    const targetScrollTop = block.top + (totalLineHeight * scrollRatio)
     scrolling.value.preview = true
     // 平滑滚动编辑器
     editorView.scrollDOM.scrollTo({

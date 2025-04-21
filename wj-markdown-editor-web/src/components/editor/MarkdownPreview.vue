@@ -127,6 +127,74 @@ function pushAnchorList() {
   }
 }
 
+function updateDOM(oldNode, newNode) {
+  // 节点类型不同直接替换
+  if (oldNode.nodeType !== newNode.nodeType || oldNode.nodeName !== newNode.nodeName) {
+    const clonedNewNode = newNode.cloneNode(true)
+    oldNode.replaceWith(clonedNewNode)
+    return
+  }
+
+  // 处理文本节点
+  if (oldNode.nodeType === Node.TEXT_NODE || oldNode.nodeType === Node.COMMENT_NODE) {
+    if (oldNode.textContent !== newNode.textContent) {
+      oldNode.textContent = newNode.textContent
+    }
+    return
+  }
+
+  // 元素节点属性比对
+  const oldAttributes = oldNode.attributes
+  const newAttributes = newNode.attributes
+  const newAttrMap = {}
+
+  // 构建新属性字典
+  for (const { name, value } of newAttributes) {
+    newAttrMap[name] = value
+  }
+
+  // 删除旧属性
+  for (const { name } of oldAttributes) {
+    if (!(name in newAttrMap)) {
+      oldNode.removeAttribute(name)
+    }
+  }
+
+  // 设置/更新属性
+  for (const { name, value } of newAttributes) {
+    if (oldNode.getAttribute(name) !== value) {
+      oldNode.setAttribute(name, value)
+    }
+  }
+
+  // 处理子节点（优化部分）
+  const oldChildren = Array.from(oldNode.childNodes)
+  const newChildren = Array.from(newNode.childNodes)
+  const commonLength = Math.min(oldChildren.length, newChildren.length)
+
+  // 第一步：更新共同范围内的子节点
+  for (let i = 0; i < commonLength; i++) {
+    updateDOM(oldChildren[i], newChildren[i])
+  }
+
+  // 第二步：处理多余旧子节点（从后往前删除）
+  if (oldChildren.length > newChildren.length) {
+    for (let i = oldChildren.length - 1; i >= newChildren.length; i--) {
+      // 动态获取当前子节点
+      if (oldNode.childNodes[i]) {
+        oldNode.removeChild(oldNode.childNodes[i])
+      }
+    }
+  }
+
+  // 第三步：添加新增子节点
+  if (newChildren.length > oldChildren.length) {
+    for (let i = oldChildren.length; i < newChildren.length; i++) {
+      oldNode.appendChild(newChildren[i].cloneNode(true))
+    }
+  }
+}
+
 function refreshPreview(doc) {
   removeImageListener()
   let shouldRefreshMermaid = false
@@ -137,16 +205,18 @@ function refreshPreview(doc) {
     const mermaidNode = previewRef.value.querySelector(`[data-code='${mermaidElement.dataset.code}']`)
     if (mermaidNode) {
       mermaidElement.classList.replace('mermaid', 'mermaid-cache')
-      mermaidElement.innerHTML = ''
-      mermaidNode.childNodes.forEach((child) => {
-        mermaidElement.appendChild(child)
-      })
+      mermaidElement.innerHTML = mermaidNode.innerHTML
     } else {
       shouldRefreshMermaid = true
     }
   })
   // 使用临时元素来更新，防止一些attribute没有映射到property上
-  innerHTML(previewRef.value, tempElement, { disableMutationObserver: false })
+  if (false) {
+    innerHTML(previewRef.value, tempElement, { disableMutationObserver: false })
+  } else {
+    updateDOM(previewRef.value, tempElement)
+  }
+
   // const checkboxList = previewRef.value.querySelectorAll('input[type=checkbox]')
   // for (const checkboxListElement of checkboxList) {
   //   if (checkboxListElement.getAttribute('checked') !== null) {
@@ -180,7 +250,9 @@ onBeforeRouteLeave(() => {
 
 <template>
   <a-watermark v-bind="config && config.watermark && config.watermark.enabled && (!isPreview || (isPreview && config.watermark.previewEnabled)) ? config.watermark : {}">
-    <div ref="previewRef" class="pos-relative w-full" :class="`code-theme-${codeTheme} preview-theme-${previewTheme}`" />
+    <div class="pos-relative w-full" :class="`code-theme-${codeTheme} preview-theme-${previewTheme}`">
+      <div ref="previewRef" class="w-full" />
+    </div>
   </a-watermark>
   <div class="hidden">
     <a-image-preview-group :preview="{ getContainer: getImagePreviewContainer, visible: imagePreviewVisible, onVisibleChange: (visible) => { imagePreviewVisible = visible }, current: imagePreviewCurrentIndex }">

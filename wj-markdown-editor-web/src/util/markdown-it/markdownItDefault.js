@@ -1,8 +1,7 @@
-import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
 // import MarkdownItTextualUml from 'markdown-it-textual-uml'
-import MarkdownItMermaid from '@/util/markdown-it/markdownItMermaid.js'
+import MarkdownItCodeBlock from '@/util/markdown-it/markdownItCodeBlock.js'
+import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
 import MarkdownItKatex from '@vscode/markdown-it-katex'
-import hljs from 'highlight.js'
 import MarkdownIt from 'markdown-it'
 import MarkdownItAnchor from 'markdown-it-anchor'
 import MarkdownItContainer from 'markdown-it-container'
@@ -20,16 +19,6 @@ const md = new MarkdownIt({
   breaks: true,
   typographer: true,
   xhtmlOut: true,
-  highlight(str, lang) {
-    try {
-      return `<pre class="hljs"><code>${
-        lang && hljs.getLanguage(lang) ? hljs.highlight(str, { language: lang, ignoreIllegals: true }).value : hljs.highlightAuto(str).value
-      }</code></pre>`
-    } catch (e) {
-      console.error(e)
-    }
-    return `<pre class="hljs"><code>${md.utils.escapeHtml(str)}</code></pre>`
-  },
 })
 md.use(MarkdownItSup)
   .use(MarkdownItSub)
@@ -39,7 +28,7 @@ md.use(MarkdownItSup)
   .use(MarkdownItTaskLists)
   .use(MarkdownItGitHubAlerts)
   .use(MarkdownItKatex, { throwOnError: false })
-  .use(MarkdownItMermaid)
+  .use(MarkdownItCodeBlock)
   .use(MarkdownItAnchor)
 
 // ------------ 给本地图片加上自定义协议 ------------
@@ -84,15 +73,15 @@ md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
 // 添加原始文本对应的行号区域
 md.core.ruler.push('line_number', (state) => {
   state.tokens.forEach((token) => {
-    if (token.type.endsWith('_open') && token.map) {
+    if (token.map && !['thead_open', 'tr_open', 'tbody_open'].includes(token.type)) {
       // 闭开区间
-      const [start, end] = token.map;
+      const [start, end] = token.map
       // 用户可见的行号从 1 开始，且闭开区间需转换为闭区间
-      token.attrSet('data-line-start', String(start + 1));
-      token.attrSet('data-line-end', String(end));
+      token.attrSet('data-line-start', String(start + 1))
+      token.attrSet('data-line-end', String(end))
     }
-  });
-});
+  })
+})
 
 markdownItContainerUtil.createContainerPlugin(md, ['info', 'warning', 'danger', 'tip', 'important', 'details'])
   .forEach((containerPlugin) => {
