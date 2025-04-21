@@ -23,6 +23,29 @@
   background-color: #00000061;
 }
 
+.wj-scrollbar{
+  *::-webkit-scrollbar{
+    display: revert;
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track{
+    background-color: #e2e2e2;
+  }
+  *::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background-color: #0000004d;
+  }
+  *::-webkit-scrollbar-thumb:hover{
+    background-color: #00000059;
+  }
+  *::-webkit-scrollbar-thumb:active{
+    background-color: #00000061;
+  }
+  //background-color: rgb(20, 19, 19);
+}
+
+
 .wj-scrollbar-hide::-webkit-scrollbar{
   display: revert;
   width: 0;

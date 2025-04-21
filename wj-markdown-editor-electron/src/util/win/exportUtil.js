@@ -56,8 +56,7 @@ async function doExport(winInfo, data) {
     let buffer
     if (data.type === 'PNG' || data.type === 'JPEG') {
       const height = await exportWin.webContents.executeJavaScript(`document.documentElement.scrollHeight`)
-      // 高度加2个像素 如果高度刚好相等还是会显示滚动条
-      exportWin.setSize(exportWin.getSize()[0], height + 8)
+      exportWin.setSize(exportWin.getSize()[0], height)
       // 等待调整布局
       await new Promise(resolve => setTimeout(resolve, 500))
       const image = await exportWin.webContents.capturePage()

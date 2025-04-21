@@ -246,7 +246,7 @@ onBeforeRouteLeave(() => {
 <template>
   <a-watermark v-bind="config && config.watermark && config.watermark.enabled && (!isPreview || (isPreview && config.watermark.previewEnabled)) ? config.watermark : {}">
     <div class="pos-relative w-full" :class="`code-theme-${codeTheme} preview-theme-${previewTheme}`">
-      <div ref="previewRef" class="w-full" />
+      <div ref="previewRef" class="wj-scrollbar w-full" />
     </div>
   </a-watermark>
   <div class="hidden">

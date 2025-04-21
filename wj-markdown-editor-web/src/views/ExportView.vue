@@ -29,6 +29,8 @@ function waitingExport(type, filePath) {
 
 onBeforeMount(async () => {
   content.value = await sendUtil.send({ event: 'get-temp-content' })
+  // 隐藏滚动条 （一次性页面 直接设置即可）防止打印出滚动条
+  document.body.classList.add('wj-scrollbar-hide')
 })
 function onRefreshComplete() {
   const type = route.query.type
@@ -45,7 +47,7 @@ watch(() => useCommonStore().config.theme, (newValue) => {
 </script>
 
 <template>
-  <div class="h-full w-full p-4">
+  <div class="w-full p-4">
     <MarkdownPreview v-if="content" :content="content" :is-preview="false" :code-theme="theme.code" :preview-theme="theme.preview" @refresh-complete="onRefreshComplete" />
   </div>
 </template>
