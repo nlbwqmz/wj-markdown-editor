@@ -2,11 +2,10 @@
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import sendUtil from '@/util/channel/sendUtil.js'
+import commonUtil from '@/util/commonUtil.js'
 import { onBeforeMount, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
 
 const content = ref('')
-const route = useRoute()
 
 function allImagesLoaded() {
   const images = document.querySelectorAll('img')
@@ -28,19 +27,20 @@ function waitingExport(type, filePath) {
 }
 
 onBeforeMount(async () => {
-  content.value = await sendUtil.send({ event: 'get-temp-content' })
+  const data = await sendUtil.send({ event: 'get-file-info' })
+  content.value = data.content
   // 隐藏滚动条 （一次性页面 直接设置即可）防止打印出滚动条
   document.body.classList.add('wj-scrollbar-hide')
 })
 function onRefreshComplete() {
-  const type = route.query.type
-  const filePath = route.query.filePath
+  const type = commonUtil.getUrlParam('type')
+  const filePath = commonUtil.getUrlParam('filePath')
   waitingExport(type, filePath)
 }
 const theme = ref({ code: '', preview: '' })
 watch(() => useCommonStore().config.theme, (newValue) => {
   theme.value = {
-    code: newValue.codeTheme,
+    code: newValue.code,
     preview: newValue.preview,
   }
 }, { immediate: true, deep: true })

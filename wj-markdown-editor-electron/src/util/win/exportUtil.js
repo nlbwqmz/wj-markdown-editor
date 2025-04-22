@@ -78,8 +78,8 @@ async function doExport(winInfo, data) {
     }
     await fs.writeFile(data.filePath, buffer)
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '导出成功', duration: 3, key: loadingKey } })
-    // eslint-disable-next-line unused-imports/no-unused-vars
   } catch (e) {
+    console.error('导出失败', e)
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: '导出失败', duration: 3, key: loadingKey } })
   } finally {
     exportWin.close()

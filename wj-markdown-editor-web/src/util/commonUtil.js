@@ -1,3 +1,4 @@
+import router from '@/router/index.js'
 import { message } from 'ant-design-vue'
 import { nanoid } from 'nanoid'
 import { h } from 'vue'
@@ -38,8 +39,17 @@ function debounce(func, wait, immediate = false) {
   }
 }
 
+function getUrlParam(name) {
+  if (router.currentRoute.value.query[name]) {
+    return router.currentRoute.value.query[name]
+  }
+  const searchParams = new URL(window.location.href).searchParams
+  return searchParams.get(name)
+}
+
 export default {
   createId,
+  getUrlParam,
   initMessageConfig: () => {
     message.config({
       top: '150px',

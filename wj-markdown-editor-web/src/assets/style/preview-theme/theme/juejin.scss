@@ -90,6 +90,14 @@ $line-space: 22px;
     }
   }
 
+  pre:not(.hljs) {
+    background: #f8f8f8;
+    > code {
+      color: #333;
+      background: #f8f8f8;
+    }
+  }
+
   a {
     text-decoration: none;
     color: #0269c8;

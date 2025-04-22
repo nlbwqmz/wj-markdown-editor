@@ -26,7 +26,7 @@ async function checkUpdate(winAllList) {
     return { finish: true, success: true, version: newVersion }
   }
   return new Promise((resolve) => {
-    axios.get('https://api.github.com/repos/nlbwqmz/wj-markdown-editor/releases/latest').then((res) => {
+    axios.get('https://api.github.com/repos/nlbwqmz/wj-markdown-editor/releases/latest', { headers: { 'User-Agent': 'wj-markdown-editor' } }).then((res) => {
       const versionLatest = res.data.tag_name
       autoUpdater.setFeedURL(`https://github.com/nlbwqmz/wj-markdown-editor/releases/download/${versionLatest}`)
       autoUpdater.checkForUpdates().then((res) => {

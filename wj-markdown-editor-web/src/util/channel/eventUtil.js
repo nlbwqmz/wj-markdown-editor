@@ -12,6 +12,13 @@ export default {
     })
   },
   on: () => {
+    eventEmit.on('save-success', (data) => {
+      window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
+      useCommonStore().$patch({
+        fileName: data.fileName,
+        saved: data.saved,
+      })
+    })
     eventEmit.on('has-new-version', (flag) => {
       useCommonStore().hasNewVersion = flag
     })

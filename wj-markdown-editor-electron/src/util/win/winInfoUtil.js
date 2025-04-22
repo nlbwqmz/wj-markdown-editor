@@ -28,10 +28,12 @@ function findByWin(win) {
 
 export default {
   createNew: async (filePath) => {
-    const find = winInfoList.find(item => item.path = winInfoList)
-    if (find) {
-      find.win.show()
-      return
+    if (filePath) {
+      const find = winInfoList.find(item => item.path === filePath)
+      if (find) {
+        find.win.show()
+        return
+      }
     }
     const id = commonUtil.createId()
     const workAreaSize = screen.getPrimaryDisplay().workAreaSize
@@ -72,7 +74,6 @@ export default {
     })
     // 通过默认浏览器打开链接
     win.webContents.setWindowOpenHandler((details) => {
-      console.log(details)
       shell.openExternal(details.url).then(() => {})
       return { action: 'deny' }
     })
@@ -96,11 +97,11 @@ export default {
       callback({ requestHeaders: details.requestHeaders })
     })
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-      win.loadURL(`http://localhost:8080/#/editor`).then(() => {
+      win.loadURL(content ? `http://localhost:8080/#/preview` : 'http://localhost:8080/#/editor').then(() => {
         win.webContents.openDevTools({ mode: 'undocked' })
       })
     } else {
-      win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: 'editor' }).then(() => {})
+      win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: content ? 'preview' : 'editor' }).then(() => {})
     }
   },
   getWinInfo: (win) => {

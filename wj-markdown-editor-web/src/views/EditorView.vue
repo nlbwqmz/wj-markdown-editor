@@ -1,7 +1,6 @@
 <script setup>
 import MarkdownEdit from '@/components/editor/MarkdownEdit.vue'
 import { useCommonStore } from '@/stores/counter.js'
-import eventEmit from '@/util/channel/eventEmit.js'
 import sendUtil from '@/util/channel/sendUtil.js'
 import { onMounted, ref, watch } from 'vue'
 
@@ -21,9 +20,6 @@ function updateFileInfo(data) {
   })
 }
 onMounted(async () => {
-  eventEmit.on('save-success', (data) => {
-    updateFileInfo(data)
-  })
   const data = await sendUtil.send({ event: 'get-file-info' })
   updateFileInfo(data)
 })

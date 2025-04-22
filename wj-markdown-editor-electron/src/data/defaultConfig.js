@@ -4,7 +4,7 @@ export default {
   imgNetwork: '4',
   imgAbsolutePath: '',
   imgRelativePath: 'assets',
-  menuVisible: false,
+  menuVisible: true,
   previewWidth: 80,
   watermark: {
     enabled: false,

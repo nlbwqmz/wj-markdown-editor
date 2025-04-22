@@ -101,7 +101,6 @@ const handlerList = {
       winInfo.content = winInfo.tempContent
       sendUtil.send(winInfo.win, { event: 'save-success', data: {
         fileName: path.basename(winInfo.path),
-        content: winInfo.content,
         saved: true,
       } })
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '保存成功' } })
@@ -112,16 +111,13 @@ const handlerList = {
   'get-file-info': (winInfo) => {
     return {
       fileName: winInfo.path ? path.basename(winInfo.path) : 'Unnamed',
-      content: winInfo.content,
+      content: winInfo.tempContent,
       saved: winInfo.content === winInfo.tempContent,
     }
   },
   'file-content-update': (winInfo, content) => {
     winInfo.tempContent = content
     sendUtil.send(winInfo.win, { event: 'file-is-saved', data: winInfo.tempContent === winInfo.content })
-  },
-  'get-temp-content': (winInfo) => {
-    return winInfo.tempContent
   },
   'create-new': () => {
     winInfoUtil.createNew().then(() => {})

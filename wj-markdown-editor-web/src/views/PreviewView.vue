@@ -4,7 +4,7 @@ import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import sendUtil from '@/util/channel/sendUtil.js'
 import Split from 'split-grid'
-import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
+import { nextTick, onActivated, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -17,12 +17,15 @@ const previewContainerRef = ref()
 const menuVisible = ref(false)
 const menuController = ref(false)
 const previewContainer = ref()
+const config = ref({})
+
+watch(() => useCommonStore().config, (newValue) => {
+  config.value = newValue
+}, { deep: true, immediate: true })
 
 onMounted(() => {
   menuVisible.value = useCommonStore().config.menuVisible
 })
-
-const previewWidth = computed(() => useCommonStore().config.previewWidth)
 
 watch(() => menuVisible.value, (newValue) => {
   if (newValue) {
@@ -44,7 +47,13 @@ watch(() => menuVisible.value, (newValue) => {
 })
 
 onActivated(async () => {
-  content.value = await sendUtil.send({ event: 'get-temp-content' })
+  const data = await sendUtil.send({ event: 'get-file-info' })
+  content.value = data.content
+  window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
+  useCommonStore().$patch({
+    fileName: data.fileName,
+    saved: data.saved,
+  })
   if (!content.value) {
     anchorList.value = []
   }
@@ -73,10 +82,10 @@ function onAnchorChange(changedAnchorList) {
   <div ref="previewContainer" class="allow-search grid h-full w-full overflow-hidden b-t-1 b-t-gray-200 b-t-solid" :class="menuController ? 'grid-cols-[200px_2px_1fr]' : 'grid-cols-[1fr]'">
     <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewContainerRef" :close="() => { menuVisible = false }" class="b-r-1 b-r-gray-200 b-r-solid" />
     <div v-if="menuController" ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
-    <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto p-4">
+    <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">
-        <div class="h-full w-full" :style="{ width: `${previewWidth}%` }">
-          <MarkdownPreview :content="content" @anchor-change="onAnchorChange" />
+        <div class="h-full w-full" :style="{ width: `${config.previewWidth}%` }">
+          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" @anchor-change="onAnchorChange" />
         </div>
       </div>
     </div>
