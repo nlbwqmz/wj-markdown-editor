@@ -4,11 +4,11 @@
 
 [下载地址](https://github.com/nlbwqmz/wj-markdown-editor/releases)
 
-[问题及建议](https://github.com/nlbwqmz/wj-markdown-editor/issues)
+[反馈地址](https://github.com/nlbwqmz/wj-markdown-editor/issues)
 
 ## 简介
 
-一款支持**webdav**的开源桌面端**markdown**编辑器，支持`windows`、`linux`系统。
+一款开源桌面端**markdown**编辑器，支持`windows`系统。
 
 ![GitHub Release](https://img.shields.io/github/v/release/nlbwqmz/wj-markdown-editor)
 
@@ -24,19 +24,18 @@
 
 #### 编辑
 
-![](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/aGniiEkLVZiEM7BIKirgmD.png)
+![editor.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/wjud8UPDvvADd8_85JwRgl-.png>)
 
 #### 预览
 
-![](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/aZ9HGcHpayZ-0mvN4_-WcE.png)
+![preview.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/wjiZxl_C7XTbySNrBR9tx_T.png>)
 
 #### 设置
 
-![](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/alEugkja_S_ugcFD5bO8wJ.png)
+![setting.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/wjbzIRFu1dnSI0QWsRjN0Aw.png>)
 
 ## 特性
 
-- **支持webdav同步**
 - 支持本地MD文件打开
 - 支持图片粘贴上传、截图（支持涂鸦、框选等）上传等，细粒度控制图片保存方式
 - 图片预览支持放大、旋转等
@@ -44,12 +43,21 @@
 - 自动保存
 - 自定义预览宽度
 - 目录提取
-- **支持导出为PDF、DOCX、图片**
+- **支持导出为PDF、图片**
 
 ## 注意
-- **便携版**暂不支持自动升级，需手动下载，解压后直接替换根目录即可。
+- **便携版**不支持自动升级，需手动下载，解压后直接替换根目录即可。
 
 ## 更新记录
+
+#### 2.0.0
+
+**全新版本**
+
+1. 支持自定义快捷键
+2. 内置图床工具（当前版本支持github、smms）
+3. 取消webdav支持（可自行挂载到本地）
+4. 取消多tab支持
 
 #### 1.4.5
 
