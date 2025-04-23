@@ -72,7 +72,7 @@ const handlerList = {
     shell.showItemInFolder(winInfo.path)
   },
   'save-other': async (winInfo) => {
-    const otherPath = dialog.showSaveDialogSync({
+    let otherPath = dialog.showSaveDialogSync({
       title: '另存为',
       buttonLabel: '另存为',
       filters: [
@@ -80,6 +80,11 @@ const handlerList = {
       ],
     })
     if (otherPath) {
+      // 自动添加后缀
+      const extname = path.extname(otherPath)
+      if (!extname || extname.toLowerCase() !== '.md') {
+        otherPath += '.md'
+      }
       await fs.promises.writeFile(otherPath, winInfo.tempContent)
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '另存为成功' } })
     } else {
@@ -97,6 +102,11 @@ const handlerList = {
       })
     }
     if (winInfo.path) {
+      // 自动添加后缀
+      const extname = path.extname(winInfo.path)
+      if (!extname || extname.toLowerCase() !== '.md') {
+        winInfo.path += '.md'
+      }
       await fs.promises.writeFile(winInfo.path, winInfo.tempContent)
       winInfo.content = winInfo.tempContent
       sendUtil.send(winInfo.win, { event: 'save-success', data: {

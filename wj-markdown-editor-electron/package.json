@@ -6,7 +6,7 @@
   "homepage": "https://github.com/nlbwqmz/wj-markdown-editor",
   "description": "markdown编辑器",
   "name": "wj-markdown-editor",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "main": "src/main.js",
   "license": "MIT",
   "type": "module",
@@ -60,6 +60,31 @@
           "ext": [
             "md"
           ],
+          "name": "Markdown File"
+        }
+      ]
+    },
+    "linux": {
+      "icon": "./icon",
+      "category": "Utility",
+      "artifactName": "${productName}-${platform}-${arch}-${version}.${ext}",
+      "mimeTypes": [
+        "text/markdown"
+      ],
+      "target": [
+        {
+          "target": "deb"
+        },
+        {
+          "target": "rpm"
+        }
+      ],
+      "fileAssociations": [
+        {
+          "ext": [
+            "md"
+          ],
+          "mimeType": "text/markdown",
           "name": "Markdown File"
         }
       ]
