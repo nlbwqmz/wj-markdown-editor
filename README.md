@@ -8,7 +8,7 @@
 
 ## 简介
 
-一款开源桌面端**markdown**编辑器，支持`windows`系统。
+一款开源桌面端**markdown**编辑器，支持`windows`、`linux`系统。
 
 ![GitHub Release](https://img.shields.io/github/v/release/nlbwqmz/wj-markdown-editor)
 
@@ -49,6 +49,11 @@
 - **便携版**不支持自动升级，需手动下载，解压后直接替换根目录即可。
 
 ## 更新记录
+
+#### 2.0.1
+
+1. 优化部分功能
+2. 添加 linux 系统 md 文件关联
 
 #### 2.0.0
 
