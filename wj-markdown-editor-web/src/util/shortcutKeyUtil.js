@@ -93,6 +93,9 @@ const webShortcutKeyHandler = {
   createNew: () => {
     sendUtil.send({ event: 'create-new' }).then(() => {})
   },
+  openFile: () => {
+    sendUtil.send({ event: 'open-file' }).then(() => {})
+  },
   switchView: () => {
     if (router.currentRoute.value.name === 'editor') {
       router.push({ name: 'preview' }).then(() => {})

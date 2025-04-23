@@ -181,6 +181,16 @@ function getTotalLineHeight(start, end) {
   return height
 }
 
+// 获取指定滚动容器内元素到容器顶部的距离（包含滚动偏移）
+function getElementToTopDistance(targetElement, containerElement) {
+  // 获取元素和容器的位置信息
+  const trRect = targetElement.getBoundingClientRect()
+  const containerRect = containerElement.getBoundingClientRect()
+
+  // 计算相对位置（考虑容器边框和滚动位置）
+  return trRect.top - containerRect.top - containerElement.clientTop + containerElement.scrollTop
+}
+
 function syncEditorToPreview() {
   if (scrolling.value.preview) {
     return
@@ -198,7 +208,6 @@ function syncEditorToPreview() {
   // 找到对应的预览元素
   const lineNumber = editorView.state.doc.lineAt(topBlock.from).number
   const previewElement = findPreviewElement(lineNumber)
-
   if (previewElement && previewRef.value) {
     const startLineNumber = +previewElement.dataset.lineStart
     const endLineNumber = +previewElement.dataset.lineEnd
@@ -211,7 +220,9 @@ function syncEditorToPreview() {
     }
     const scrollRatio = scrollOffsetInLine / totalLineHeight
     // 计算预览元素的对应滚动位置
-    const elementTop = previewElement.offsetTop
+    // const elementTop = previewElement.offsetTop
+    // 使用offsetTop某些标签会有问题（tr、tbody等表格标签）
+    const elementTop = getElementToTopDistance(previewElement, previewRef.value)
     const elementHeight = previewElement.getBoundingClientRect().height
 
     // 根据比例调整目标位置

@@ -12,6 +12,12 @@ export default {
     })
   },
   on: () => {
+    eventEmit.on('always-on-top-changed', (isAlwaysOnTop) => {
+      useCommonStore().isAlwaysOnTop = isAlwaysOnTop
+    })
+    eventEmit.on('file-is-saved', (data) => {
+      useCommonStore().saved = data
+    })
     eventEmit.on('save-success', (data) => {
       window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
       useCommonStore().$patch({

@@ -23,6 +23,13 @@ function updateMenuList() {
         },
         {
           key: commonUtil.createId(),
+          label: commonUtil.createLabel('打开', getKeymapByShortcutKeyId('openFile')),
+          click: () => {
+            shortcutKeyUtil.getWebShortcutKeyHandler('openFile', true)
+          },
+        },
+        {
+          key: commonUtil.createId(),
           label: commonUtil.createLabel('保存', getKeymapByShortcutKeyId('save')),
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('save', true)

@@ -27,6 +27,11 @@ function openAbout() {
 const fileName = computed(() => useCommonStore().fileName)
 const saved = computed(() => useCommonStore().saved)
 const isMaximize = computed(() => useCommonStore().isMaximize)
+const isAlwaysOnTop = computed(() => useCommonStore().isAlwaysOnTop)
+
+function alwaysOnTop(flag) {
+  sendUtil.send({ event: 'always-on-top', data: flag })
+}
 
 const appInfo = ref({ name: 'wj-markdown-editor', version: '' })
 
@@ -69,6 +74,22 @@ onBeforeMount(async () => {
         </template>
         <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="openFolder">
           <div class="i-tabler:folder-open" />
+        </div>
+      </a-tooltip>
+      <a-tooltip v-if="!isAlwaysOnTop" placement="bottom" color="#1677ff">
+        <template #title>
+          <span>置顶</span>
+        </template>
+        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="alwaysOnTop(true)">
+          <div class="i-tabler:pin" />
+        </div>
+      </a-tooltip>
+      <a-tooltip v-if="isAlwaysOnTop" placement="bottom" color="#1677ff">
+        <template #title>
+          <span>取消置顶</span>
+        </template>
+        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="alwaysOnTop(false)">
+          <div class="i-tabler:pinned-off" />
         </div>
       </a-tooltip>
       <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="minimize">

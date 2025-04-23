@@ -73,7 +73,7 @@ md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
 // 添加原始文本对应的行号区域
 md.core.ruler.push('line_number', (state) => {
   state.tokens.forEach((token) => {
-    if (token.map && !['thead_open', 'tr_open', 'tbody_open'].includes(token.type)) {
+    if (token.map) {
       // 闭开区间
       const [start, end] = token.map
       // 用户可见的行号从 1 开始，且闭开区间需转换为闭区间

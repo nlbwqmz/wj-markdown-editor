@@ -44,6 +44,9 @@ const handlerList = {
   'restore': (winInfo) => {
     winInfo.win.restore()
   },
+  'always-on-top': (winInfo, isAlwaysOnTop) => {
+    winInfo.win.setAlwaysOnTop(isAlwaysOnTop)
+  },
   'close': (winInfo) => {
     winInfo.win.close()
   },
@@ -131,6 +134,27 @@ const handlerList = {
   },
   'create-new': () => {
     winInfoUtil.createNew().then(() => {})
+  },
+  'open-file': (winInfo) => {
+    const filePath = dialog.showOpenDialogSync({
+      title: '打开markdown文件',
+      buttonLabel: '选择',
+      properties: ['openFile'],
+      filters: [
+        { name: 'markdown文件', extensions: ['md'] },
+      ],
+    })
+    if (filePath && filePath.length > 0) {
+      if (path.extname(filePath[0]) === '.md') {
+        winInfoUtil.createNew(filePath[0]).then(() => {
+          if (!winInfo.path && winInfo.content === winInfo.tempContent) {
+            winInfo.win.close()
+          }
+        })
+      } else {
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '请选择markdown文件' } })
+      }
+    }
   },
   'get-config': () => {
     return configUtil.getConfig()

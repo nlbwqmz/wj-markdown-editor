@@ -72,6 +72,9 @@ export default {
     win.on('maximize', () => {
       sendUtil.send(win, { event: 'window-size', data: { isMaximize: true } })
     })
+    win.on('always-on-top-changed', (event, isAlwaysOnTop) => {
+      sendUtil.send(win, { event: 'always-on-top-changed', data: isAlwaysOnTop })
+    })
     // 通过默认浏览器打开链接
     win.webContents.setWindowOpenHandler((details) => {
       shell.openExternal(details.url).then(() => {})

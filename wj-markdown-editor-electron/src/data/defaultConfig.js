@@ -26,10 +26,18 @@ export default {
   },
   shortcutKeyList: [
     {
-      index: 1,
+      index: -1,
       id: 'createNew',
       name: '新建',
       keymap: 'Ctrl+n',
+      enabled: true,
+      type: 'web',
+    },
+    {
+      index: 1,
+      id: 'openFile',
+      name: '打开',
+      keymap: 'Ctrl+o',
       enabled: true,
       type: 'web',
     },

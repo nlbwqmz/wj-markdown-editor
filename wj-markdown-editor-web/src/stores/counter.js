@@ -1,4 +1,3 @@
-import eventEmit from '@/util/channel/eventEmit.js'
 import sendUtil from '@/util/channel/sendUtil.js'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -8,21 +7,13 @@ const configData = await sendUtil.send({ event: 'get-config' })
 
 const useCommonStore = defineStore('common', () => {
   const fileName = ref('')
-  const content = ref('')
-  const saved = ref(false)
+  const saved = ref(true)
   const isMaximize = ref(false)
   const config = ref(configData)
   const searchBarVisible = ref(false)
   const hasNewVersion = ref(false)
-  return { fileName, content, saved, isMaximize, config, searchBarVisible, hasNewVersion }
-}, {
-  persist: {
-    storage: sessionStorage,
-  },
-})
-
-eventEmit.on('file-is-saved', (data) => {
-  useCommonStore().saved = data
+  const isAlwaysOnTop = ref(false)
+  return { fileName, saved, isMaximize, config, searchBarVisible, hasNewVersion, isAlwaysOnTop }
 })
 
 export { useCommonStore }
