@@ -58,7 +58,6 @@ function initUpdater() {
     autoUpdater.autoInstallOnAppQuit = false
     autoUpdater.on('checking-for-update', () => {})
     autoUpdater.on('download-progress', (progressInfo) => {
-      console.info('progressInfo', progressInfo)
       if (aboutWinTemp) {
         sendUtil.send(aboutWinTemp, { event: 'download-update-progress', data: { percent: progressInfo.percent, bytesPerSecond: progressInfo.bytesPerSecond } })
       }
