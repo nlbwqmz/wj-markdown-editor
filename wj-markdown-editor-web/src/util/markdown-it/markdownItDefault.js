@@ -45,7 +45,7 @@ md.renderer.rules.image = (tokens, idx, options, env, slf) => {
       const src = token.attrs[srcIndex][1]
       if (src) {
         if (!src.match('^http') && !src.match('^data')) {
-          token.attrs[srcIndex][1] = decodeURIComponent(`wj:///${src}`)
+          token.attrs[srcIndex][1] = `wj:///${src.startsWith('.') ? encodeURIComponent(src) : src}`
         }
       }
     }

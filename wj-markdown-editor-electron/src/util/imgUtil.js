@@ -134,22 +134,28 @@ export default {
       }
     }
 
-    // 后续操作
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '图片保存成功', duration: 3, key: loadingKey } })
+
+    // 保存带绝对路径
     if (type === '2') {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '图片保存成功', duration: 3, key: loadingKey } })
       return { name: data.name, path: imgSavePath }
     }
 
-    if (type === '3' || type === '4') {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '图片保存成功', duration: 3, key: loadingKey } })
-      const relativePath = await getRelativePath(winInfo, config, config.imgLocal)
+    // 保存到文件名路径
+    if (type === '3') {
+      return { name: data.name, path: `${path.basename(winInfo.path, path.extname(winInfo.path))}/${path.basename(imgSavePath)}` }
+    }
+
+    // 保存到相对路径
+    if (type === '4') {
       if (config.imgRelativePath) {
-        return { name: data.name, path: path.relative(path.resolve(relativePath, '../'.repeat(commonUtil.getParentPathLevel(config.imgRelativePath))), imgSavePath) }
+        return { name: data.name, path: `${config.imgRelativePath}/${path.basename(imgSavePath)}` }
       } else {
-        return { name: data.name, path: path.relative(relativePath, imgSavePath) }
+        return { name: data.name, path: path.basename(imgSavePath) }
       }
     }
 
+    // 上传到图床
     if (type === '5') {
       try {
         sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: '正在上传图片', duration: 0, key: loadingKey } })

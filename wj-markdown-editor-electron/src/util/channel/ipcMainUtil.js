@@ -59,7 +59,7 @@ const handlerList = {
       if (!data.startsWith('wj:///')) {
         return
       }
-      const filePath = data.replace('wj:///', '')
+      const filePath = decodeURIComponent(data.replace('wj:///', ''))
       const isAbsolute = path.isAbsolute(filePath)
       if (!isAbsolute && !winInfo.path) {
         return // 如果是相对路径且 winInfo.path 为空，直接返回

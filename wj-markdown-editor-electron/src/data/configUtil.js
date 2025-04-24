@@ -30,7 +30,7 @@ function validateConfig(configTemp, defaultConfigTemp) {
 
   // 修正快捷键index
   configTemp.shortcutKeyList.forEach((item) => {
-    const defaultShortcutKey = defaultConfigTemp.find(temp => temp.id === item.id)
+    const defaultShortcutKey = defaultConfigTemp.shortcutKeyList.find(temp => temp.id === item.id)
     if (defaultShortcutKey) {
       item.index = defaultShortcutKey.index
     }
