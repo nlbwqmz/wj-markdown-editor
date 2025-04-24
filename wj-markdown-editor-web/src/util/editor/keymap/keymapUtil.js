@@ -54,19 +54,26 @@ const dynamicKeymap = {
   'editor-image-template': (editorView) => { editorUtil.image(editorView) },
   'editor-screenshot': (editorView) => { editorUtil.screenshot(editorView, false) },
   'editor-screenshot-hide': (editorView) => { editorUtil.screenshot(editorView, true) },
+  'editor-focus-line': () => {},
 }
 
 export default {
-  createKeymap: (shortcutKeyList) => {
+  createKeymap: (shortcutKeyList, overrideHandler) => {
     const keymapList = [...fixedKeymap]
     for (const shortcutKeyId in dynamicKeymap) {
       const shortcutKey = shortcutKeyList.find(item => item.id === shortcutKeyId && item.enabled === true)
       if (shortcutKey && shortcutKey.keymap) {
+        let run
+        if (overrideHandler && overrideHandler[shortcutKeyId]) {
+          run = overrideHandler[shortcutKeyId]
+        } else {
+          run = dynamicKeymap[shortcutKeyId]
+        }
         keymapList.push({
           key: shortcutKey.keymap.replaceAll('+', '-'),
           preventDefault: true,
           stopPropagation: true,
-          run: dynamicKeymap[shortcutKeyId],
+          run,
         })
       }
     }

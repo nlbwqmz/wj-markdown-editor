@@ -191,6 +191,58 @@ function getElementToTopDistance(targetElement, containerElement) {
   return trRect.top - containerRect.top - containerElement.clientTop + containerElement.scrollTop
 }
 
+function jumpToTargetLine() {
+  // 找到对应的预览元素
+  const main = editorView.state.selection.main
+  const line = editorView.state.doc.lineAt(main.to)
+  const lineNumber = line.number
+  const previewElement = findPreviewElement(lineNumber)
+  if (previewElement && previewRef.value) {
+    const startLineNumber = +previewElement.dataset.lineStart
+    const endLineNumber = +previewElement.dataset.lineEnd
+    let targetScrollTop
+    if (startLineNumber === endLineNumber) {
+      targetScrollTop = getElementToTopDistance(previewElement, previewRef.value)
+    } else {
+      const totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
+      const offsetHeight = getTotalLineHeight(startLineNumber, lineNumber - 1)
+      const scrollRatio = offsetHeight / totalLineHeight
+      const elementTop = getElementToTopDistance(previewElement, previewRef.value)
+      const elementHeight = previewElement.getBoundingClientRect().height
+      // 根据比例调整目标位置
+      targetScrollTop = elementTop + (elementHeight * scrollRatio)
+    }
+    // 平滑滚动到目标位置
+    previewRef.value.scrollTo({
+      top: targetScrollTop,
+      behavior: 'smooth',
+    })
+  }
+}
+
+/* function jumpToTargetLine(line) {
+  if (scrolling.value.preview) {
+    return
+  }
+  // 找到对应的预览元素
+  const lineNumber = line.number
+  console.error(lineNumber)
+  const previewElement = findPreviewElement(lineNumber)
+  if (previewElement && previewRef.value) {
+    // 使用offsetTop某些标签会有问题（tr、tbody等表格标签）
+    const targetScrollTop = getElementToTopDistance(previewElement, previewRef.value)
+    scrolling.value.editor = true
+    // 平滑滚动到目标位置
+    previewRef.value.scrollTo({
+      top: targetScrollTop,
+      behavior: 'smooth',
+    })
+    checkScrollTop(previewRef.value, targetScrollTop, () => {
+      scrolling.value.editor = false
+    })
+  }
+} */
+
 function syncEditorToPreview() {
   if (scrolling.value.preview) {
     return
@@ -266,9 +318,9 @@ function syncPreviewToEditor() {
     const endLineNumber = +element.dataset.lineEnd
 
     // 计算元素内滚动比例
-    const elementTop = element.offsetTop
+    const elementTop = getElementToTopDistance(element, previewRef.value)
     const elementScrollOffset = previewScrollTop - elementTop
-    const scrollRatio = elementScrollOffset / element.offsetHeight
+    const scrollRatio = elementScrollOffset / element.getBoundingClientRect().height
 
     // 找到编辑器的对应行
     const startLine = editorView.state.doc.line(startLineNumber)
@@ -321,10 +373,15 @@ function bindEvents() {
 //   editorView.dispatch(transaction)
 // }
 
-function refresh() {
+const refresh = commonUtil.debounce(() => {
   const doc = editorView.state.doc.toString()
   emits('update:modelValue', doc)
-}
+}, 100)
+
+// function refresh() {
+//   const doc = editorView.state.doc.toString()
+//   emits('update:modelValue', doc)
+// }
 
 function pasteOrDrop(event, view, types, files) {
   if (types.includes('Files')) {
@@ -353,7 +410,7 @@ function pasteOrDrop(event, view, types, files) {
 }
 
 function refreshKeymap() {
-  return keymapUtil.createKeymap(shortcutKeyList.value)
+  return keymapUtil.createKeymap(shortcutKeyList.value, { 'editor-focus-line': jumpToTargetLine })
 }
 
 onMounted(() => {
@@ -632,6 +689,12 @@ function refreshToolbarList() {
       icon: 'i-tabler:arrow-forward-up',
       shortcutKey: 'Ctrl+y',
       action: () => { editorUtil.redo(editorView) },
+    },
+    focusLine: {
+      label: '跳转到目标行',
+      icon: 'i-tabler:focus-2',
+      shortcutKey: getKeymapByShortcutKeyId('editor-focus-line'),
+      action: jumpToTargetLine,
     },
     menuVisible: {
       label: '目录',

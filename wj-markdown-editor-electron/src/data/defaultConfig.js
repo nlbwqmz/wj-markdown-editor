@@ -257,6 +257,14 @@ export default {
       enabled: true,
       type: 'editor',
     },
+    {
+      index: 8,
+      id: 'editor-focus-line',
+      name: '跳转到目标行',
+      keymap: 'Ctrl+j',
+      enabled: true,
+      type: 'editor',
+    },
   ],
   imageBed: {
     uploader: 'github', // 代表当前的默认上传图床为 SM.MS,
