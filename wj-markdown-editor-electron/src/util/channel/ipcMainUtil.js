@@ -1,7 +1,8 @@
-import * as fs from 'node:fs'
 import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
+import recent from '../../data/recent.js'
 import imgUtil from '../imgUtil.js'
 import updateUtil from '../updateUtil.js'
 import aboutUtil from '../win/aboutUtil.js'
@@ -88,7 +89,7 @@ const handlerList = {
       if (!extname || extname.toLowerCase() !== '.md') {
         otherPath += '.md'
       }
-      await fs.promises.writeFile(otherPath, winInfo.tempContent)
+      await fs.writeFile(otherPath, winInfo.tempContent)
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '另存为成功' } })
     } else {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '已取消另存为' } })
@@ -110,7 +111,8 @@ const handlerList = {
       if (!extname || extname.toLowerCase() !== '.md') {
         winInfo.path += '.md'
       }
-      await fs.promises.writeFile(winInfo.path, winInfo.tempContent)
+      await recent.add(winInfo.path)
+      await fs.writeFile(winInfo.path, winInfo.tempContent)
       winInfo.content = winInfo.tempContent
       sendUtil.send(winInfo.win, { event: 'save-success', data: {
         fileName: path.basename(winInfo.path),
@@ -135,24 +137,32 @@ const handlerList = {
   'create-new': () => {
     winInfoUtil.createNew().then(() => {})
   },
-  'open-file': (winInfo) => {
-    const filePath = dialog.showOpenDialogSync({
-      title: '打开markdown文件',
-      buttonLabel: '选择',
-      properties: ['openFile'],
-      filters: [
-        { name: 'markdown文件', extensions: ['md'] },
-      ],
-    })
-    if (filePath && filePath.length > 0) {
-      if (path.extname(filePath[0]) === '.md') {
-        winInfoUtil.createNew(filePath[0]).then(() => {
-          if (!winInfo.path && winInfo.content === winInfo.tempContent) {
-            winInfo.win.close()
-          }
-        })
-      } else {
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '请选择markdown文件' } })
+  'open-file': async (winInfo, targetPath) => {
+    if (targetPath) {
+      if (await fs.pathExists(targetPath)) {
+        await winInfoUtil.createNew(targetPath)
+        return true
+      }
+      return false
+    } else {
+      const filePath = dialog.showOpenDialogSync({
+        title: '打开markdown文件',
+        buttonLabel: '选择',
+        properties: ['openFile'],
+        filters: [
+          { name: 'markdown文件', extensions: ['md'] },
+        ],
+      })
+      if (filePath && filePath.length > 0) {
+        if (path.extname(filePath[0]) === '.md') {
+          winInfoUtil.createNew(filePath[0]).then(() => {
+            if (!winInfo.path && winInfo.content === winInfo.tempContent) {
+              winInfo.win.close()
+            }
+          })
+        } else {
+          sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '请选择markdown文件' } })
+        }
       }
     }
   },
@@ -193,6 +203,7 @@ const handlerList = {
   },
   'user-update-config': async (winInfo, data) => {
     await configUtil.setConfig(data)
+    await recent.setMax(data.recentMax)
   },
   'app-info': () => {
     return { name: 'wj-markdown-editor', version: app.getVersion() }
@@ -214,6 +225,15 @@ const handlerList = {
   },
   'execute-update': () => {
     updateUtil.executeUpdate()
+  },
+  'recent-clear': () => {
+    recent.clear().then(() => {})
+  },
+  'recent-remove': (winInfo, data) => {
+    recent.remove(data).then(() => {})
+  },
+  'get-recent-list': () => {
+    return recent.get()
   },
 }
 

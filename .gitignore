@@ -35,6 +35,7 @@ build/
 ### VS Code ###
 .vscode/
 config.json
+recent.json
 TempImg/
 
 wj-markdown-editor-electron/img/

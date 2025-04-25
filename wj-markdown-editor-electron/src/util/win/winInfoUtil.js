@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, screen, shell } from 'electron'
 import fs from 'fs-extra'
+import recent from '../../data/recent.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
 import updateUtil from '../updateUtil.js'
@@ -29,6 +30,9 @@ function findByWin(win) {
 export default {
   createNew: async (filePath) => {
     if (filePath) {
+      if (await fs.pathExists(filePath)) {
+        await recent.add(filePath)
+      }
       const find = winInfoList.find(item => item.path === filePath)
       if (find) {
         find.win.show()

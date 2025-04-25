@@ -6,6 +6,8 @@ export default {
   imgRelativePath: 'assets',
   menuVisible: true,
   previewWidth: 80,
+  openRecent: true,
+  recentMax: 10,
   watermark: {
     enabled: false,
     previewEnabled: true,

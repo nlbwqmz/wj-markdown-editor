@@ -3,12 +3,73 @@ import { useCommonStore } from '@/stores/counter.js'
 import sendUtil from '@/util/channel/sendUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
-import { ref, watch } from 'vue'
+import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { Modal } from 'ant-design-vue'
+import { createVNode, onBeforeMount, ref, watch } from 'vue'
 
 const menuList = ref([])
-const shortcutKeyList = ref([])
+const shortcutKeyList = ref(useCommonStore().config.shortcutKeyList)
+const recentList = ref(useCommonStore().recentList)
+
+function createRecentListVNode() {
+  return recentList.value.map((item) => {
+    return {
+      key: commonUtil.createId(),
+      label: commonUtil.createRecentLabel(item.path, item.name),
+      click: () => {
+        sendUtil.send({ event: 'open-file', data: item.path }).then((exits) => {
+          if (exits === false) {
+            Modal.confirm({
+              title: '提示',
+              icon: createVNode(ExclamationCircleOutlined),
+              content: '当前文件不存在，是否移除历史记录？',
+              okText: '确认',
+              cancelText: '取消',
+              onOk: () => {
+                sendUtil.send({ event: 'recent-remove', data: item.path })
+              },
+            })
+          }
+        })
+      },
+    }
+  })
+}
+
+onBeforeMount(() => {
+  updateMenuList()
+})
 
 function updateMenuList() {
+  const recentList = createRecentListVNode()
+  if (recentList.length === 0) {
+    recentList.push({
+      key: commonUtil.createId(),
+      label: '无',
+      click: () => {},
+    })
+  } else {
+    recentList.unshift({
+      key: commonUtil.createId(),
+      type: 'divider',
+    })
+    recentList.unshift({
+      key: commonUtil.createId(),
+      label: '清空最近历史',
+      click: () => {
+        Modal.confirm({
+          title: '提示',
+          icon: createVNode(ExclamationCircleOutlined),
+          content: '确认清空所有历史记录？',
+          okText: '确认',
+          cancelText: '取消',
+          onOk: () => {
+            sendUtil.send({ event: 'recent-clear' })
+          },
+        })
+      },
+    })
+  }
   menuList.value = [
     {
       key: commonUtil.createId(),
@@ -20,6 +81,11 @@ function updateMenuList() {
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('createNew', true)
           },
+        },
+        {
+          key: commonUtil.createId(),
+          label: '最近',
+          children: recentList,
         },
         {
           key: commonUtil.createId(),
@@ -110,7 +176,11 @@ function updateMenuList() {
 watch(() => useCommonStore().config.shortcutKeyList, (newValue) => {
   shortcutKeyList.value = newValue
   updateMenuList()
-}, { deep: true, immediate: true })
+}, { deep: true })
+watch(() => useCommonStore().recentList, (newValue) => {
+  recentList.value = newValue
+  updateMenuList()
+}, { deep: true })
 
 function getKeymapByShortcutKeyId(id) {
   const shortcutKey = shortcutKeyList.value.find(item => item.id === id && item.enabled === true)

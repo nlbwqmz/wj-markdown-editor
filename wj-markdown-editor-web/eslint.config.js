@@ -10,6 +10,7 @@ export default antfu({
   },
   rules: {
     'style/brace-style': 'off',
+    'antfu/no-top-level-await': 'off',
   },
   ignores: ['public/**'],
 })

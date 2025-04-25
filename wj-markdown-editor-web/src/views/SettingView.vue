@@ -11,6 +11,7 @@ import PickColors from 'vue-pick-colors'
 const config = ref()
 
 const anchorList = [
+  { key: '-1', href: '#general', title: '常规' },
   { key: '0', href: '#view', title: '视图' },
   { key: '1', href: '#image', title: '图片' },
   { key: '2', href: '#imageBed', title: '图床' },
@@ -138,6 +139,24 @@ function reset() {
     </template>
     <div v-if="config" class="w-full flex gap-2 p-2 p-t-0">
       <div class="w-full flex flex-1 flex-col">
+        <a-descriptions bordered :column="1" size="small">
+          <template #title>
+            <span id="general">常规</span>
+          </template>
+          <a-descriptions-item label="打开最近一次记录">
+            <a-radio-group v-model:value="config.openRecent" button-style="solid">
+              <a-radio-button :value="true">
+                是
+              </a-radio-button>
+              <a-radio-button :value="false">
+                否
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="最近历史记录数量">
+            <a-input-number v-model:value="config.recentMax" :min="0" :max="50" class="w-full" />
+          </a-descriptions-item>
+        </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
             <span id="view">视图</span>
@@ -402,7 +421,7 @@ function reset() {
 
 <style scoped lang="scss">
 :deep(.ant-descriptions-item-label) {
-  width: 120px;
+  width: 150px;
 }
 :deep(.ant-anchor-wrapper) {
   padding-block-start: revert;

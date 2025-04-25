@@ -18,6 +18,11 @@ export default {
     eventEmit.on('file-is-saved', (data) => {
       useCommonStore().saved = data
     })
+    eventEmit.on('update-recent', (data) => {
+      useCommonStore().$patch({
+        recentList: data,
+      })
+    })
     eventEmit.on('save-success', (data) => {
       window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
       useCommonStore().$patch({

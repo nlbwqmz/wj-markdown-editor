@@ -1,7 +1,9 @@
 import router from '@/router/index.js'
-import { message } from 'ant-design-vue'
+import sendUtil from '@/util/channel/sendUtil.js'
+import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
 import { nanoid } from 'nanoid'
-import { h } from 'vue'
+import { createVNode, h } from 'vue'
 
 const createId = () => `wj${nanoid()}`
 
@@ -62,6 +64,31 @@ export default {
     return h('div', { style: { display: 'flex', justifyContent: 'space-between' } }, [
       h('div', {}, label),
       h('div', { style: { paddingLeft: '20px', color: 'rgb(199,199,199)' } }, shortcuts),
+    ])
+  },
+  createRecentLabel: (path, name) => {
+    return h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+      h('div', {}, name),
+      h('div', {
+        style: { marginLeft: '20px', color: 'rgb(199,199,199)' },
+        class: ['i-tabler:x'],
+        onMouseenter: (e) => { e.target.style.color = 'black' },
+        onMouseleave: (e) => { e.target.style.color = 'rgb(199,199,199)' },
+        onClick: (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          Modal.confirm({
+            title: '提示',
+            icon: createVNode(ExclamationCircleOutlined),
+            content: `确认移除当前历史记录（${name}）？`,
+            okText: '确认',
+            cancelText: '取消',
+            onOk: () => {
+              sendUtil.send({ event: 'recent-remove', data: path }).then(() => {})
+            },
+          })
+        },
+      }),
     ])
   },
   debounce,

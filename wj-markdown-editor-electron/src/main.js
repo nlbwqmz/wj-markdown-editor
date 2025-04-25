@@ -1,5 +1,6 @@
 import { app, Menu } from 'electron'
 import configUtil from './data/configUtil.js'
+import recent from './data/recent.js'
 import sendUtil from './util/channel/sendUtil.js'
 import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
@@ -40,8 +41,20 @@ if (!lock) {
         sendUtil.send(item.win, { event: 'update-config', data: config })
       })
     })
+    await recent.initRecent(configUtil.getConfig().recentMax, (recentList) => {
+      winInfoUtil.getAll().forEach((item) => {
+        sendUtil.send(item.win, { event: 'update-recent', data: recentList })
+      })
+    })
     protocolUtil.handleProtocol()
-    await winInfoUtil.createNew(getOpenOnFilePath())
+    let openOnFilePath = getOpenOnFilePath()
+    if (!openOnFilePath && configUtil.getConfig().openRecent) {
+      const recentList = recent.get()
+      if (recentList && recentList.length > 0) {
+        openOnFilePath = recentList[0].path
+      }
+    }
+    await winInfoUtil.createNew(openOnFilePath)
     screenshotsUtil.init()
     updateUtil.initUpdater()
   })

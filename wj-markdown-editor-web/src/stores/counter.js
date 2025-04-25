@@ -2,8 +2,8 @@ import sendUtil from '@/util/channel/sendUtil.js'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-// eslint-disable-next-line antfu/no-top-level-await
 const configData = await sendUtil.send({ event: 'get-config' })
+const recentListData = await sendUtil.send({ event: 'get-recent-list' })
 
 const useCommonStore = defineStore('common', () => {
   const fileName = ref('')
@@ -13,7 +13,8 @@ const useCommonStore = defineStore('common', () => {
   const searchBarVisible = ref(false)
   const hasNewVersion = ref(false)
   const isAlwaysOnTop = ref(false)
-  return { fileName, saved, isMaximize, config, searchBarVisible, hasNewVersion, isAlwaysOnTop }
+  const recentList = ref(recentListData)
+  return { fileName, saved, isMaximize, config, searchBarVisible, hasNewVersion, isAlwaysOnTop, recentList }
 })
 
 export { useCommonStore }
