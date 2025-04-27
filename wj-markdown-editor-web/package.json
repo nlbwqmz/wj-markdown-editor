@@ -13,6 +13,7 @@
     "@codemirror/language-data": "^6.5.1",
     "@codemirror/view": "6.27.0",
     "@iconify-json/tabler": "^1.2.16",
+    "@mdit/plugin-img-size": "^0.16.0",
     "@vscode/markdown-it-katex": "^1.1.1",
     "ant-design-vue": "^4.2.6",
     "codemirror": "^6.0.1",

@@ -73,7 +73,7 @@ const codeThemeList = [
   'xt256',
 ]
 
-const previewThemeList = ['github-light', 'juejin', 'smart-blue', 'vuepress', 'mk-cute', 'cyanosis', 'scrolls']
+const previewThemeList = ['github-light', 'juejin', 'smart-blue', 'vuepress', 'mk-cute', 'cyanosis', 'scrolls', 'markdown-here']
 
 export default {
   codeThemeList,

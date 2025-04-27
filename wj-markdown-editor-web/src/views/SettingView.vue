@@ -143,6 +143,27 @@ function reset() {
           <template #title>
             <span id="general">常规</span>
           </template>
+          <a-descriptions-item>
+            <template #label>
+              <div class="flex items-center gap-1">
+                <span>启动页</span>
+                <a-tooltip placement="top" color="#1677ff">
+                  <template #title>
+                    有内容时生效
+                  </template>
+                  <div class="i-tabler:info-circle font-size-4 color-[rgb(199,199,199)] hover:color-black" />
+                </a-tooltip>
+              </div>
+            </template>
+            <a-radio-group v-model:value="config.startPage" button-style="solid">
+              <a-radio-button value="editor">
+                编辑
+              </a-radio-button>
+              <a-radio-button value="preview">
+                预览
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
           <a-descriptions-item label="打开最近一次记录">
             <a-radio-group v-model:value="config.openRecent" button-style="solid">
               <a-radio-button :value="true">

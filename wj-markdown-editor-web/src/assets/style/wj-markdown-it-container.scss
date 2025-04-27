@@ -43,13 +43,15 @@
   gap: 0.5rem;
   margin-bottom: 1rem;
   .wj-markdown-it-container-title {
+    display: flex;
+    align-items: center;
     &:before {
       content: " ";
       position: absolute;
       inset-inline-start: 0;
-      width: 1.25em;
-      height: 1.25em;
-      font-size: 1.25em;
+      width: 1em;
+      height: 1em;
+      font-size: 1em;
       background-color: currentColor;
       mask-image: var(--wj-markup-container-icon);
       mask-position: 50%;
@@ -59,7 +61,7 @@
     font-weight: 500;
     position: relative;
     color: var(--wj-markup-container-title-color);
-    padding-inline-start: 1.75em;
+    padding-inline-start: 1.5em;
   }
   .wj-markdown-it-container-content {
     *:first-child {

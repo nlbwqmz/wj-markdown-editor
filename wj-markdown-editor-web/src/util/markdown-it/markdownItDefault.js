@@ -1,6 +1,7 @@
 // import MarkdownItTextualUml from 'markdown-it-textual-uml'
 import MarkdownItCodeBlock from '@/util/markdown-it/markdownItCodeBlock.js'
 import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
+import { imgSize } from '@mdit/plugin-img-size'
 import MarkdownItKatex from '@vscode/markdown-it-katex'
 import MarkdownIt from 'markdown-it'
 import MarkdownItAnchor from 'markdown-it-anchor'
@@ -30,6 +31,7 @@ md.use(MarkdownItSup)
   .use(MarkdownItKatex, { throwOnError: false })
   .use(MarkdownItCodeBlock)
   .use(MarkdownItAnchor)
+  .use(imgSize)
 
 // ------------ 给本地图片加上自定义协议 ------------
 md.renderer.rules.image = (tokens, idx, options, env, slf) => {

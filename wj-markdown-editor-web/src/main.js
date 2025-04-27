@@ -18,6 +18,10 @@ import '@/assets/style/code-theme/code-theme.scss'
 // 预览主题
 import '@/assets/style/preview-theme/preview-theme.scss'
 import '@/assets/style/antd.scss'
+// markdown-it-github-alerts
+import 'markdown-it-github-alerts/styles/github-base.css'
+import 'markdown-it-github-alerts/styles/github-colors-light.css'
+
 import '@/assets/style/search.scss'
 
 const app = createApp(App)

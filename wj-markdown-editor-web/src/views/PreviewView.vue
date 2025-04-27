@@ -79,8 +79,8 @@ function onAnchorChange(changedAnchorList) {
     <template #title>
       <span>目录</span>
     </template>
-    <div class="absolute left-0 top-2 z-10 cursor-pointer bg-gray-200 p-1 op-60 hover:op-100" @click="() => { menuVisible = true }">
-      <div class="i-tabler:menu-deep" />
+    <div class="absolute left-0 top-2 z-10 flex cursor-pointer items-center bg-gray-200 p-1 op-60 hover:op-100" @click="() => { menuVisible = true }">
+      <div class="i-tabler:menu-2" />
     </div>
   </a-tooltip>
   <div

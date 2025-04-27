@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, screen, shell } from 'electron'
 import fs from 'fs-extra'
+import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
@@ -104,11 +105,11 @@ export default {
       callback({ requestHeaders: details.requestHeaders })
     })
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-      win.loadURL(content ? `http://localhost:8080/#/preview` : 'http://localhost:8080/#/editor').then(() => {
+      win.loadURL(content ? `http://localhost:8080/#/${configUtil.getConfig().startPage}` : 'http://localhost:8080/#/editor').then(() => {
         win.webContents.openDevTools({ mode: 'undocked' })
       })
     } else {
-      win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: content ? 'preview' : 'editor' }).then(() => {})
+      win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: content ? configUtil.getConfig().startPage : 'editor' }).then(() => {})
     }
   },
   getWinInfo: (win) => {

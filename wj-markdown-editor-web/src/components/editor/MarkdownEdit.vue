@@ -698,12 +698,12 @@ function refreshToolbarList() {
     },
     menuVisible: {
       label: '目录',
-      icon: 'i-tabler:menu-deep',
+      icon: 'i-tabler:menu-2',
       action: () => { menuVisible.value = !menuVisible.value },
     },
     save: {
       label: '保存',
-      icon: 'i-tabler:device-ipad-horizontal-check',
+      icon: 'i-tabler:file-check',
       shortcutKey: 'Ctrl+s',
       action: () => { emits('save', editorView.state.doc.toString()) },
     },
