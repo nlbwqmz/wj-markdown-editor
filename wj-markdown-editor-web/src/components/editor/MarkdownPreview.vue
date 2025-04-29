@@ -1,8 +1,5 @@
 <script setup>
-import { useCommonStore } from '@/stores/counter.js'
-import sendUtil from '@/util/channel/sendUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
-import dayjs from 'dayjs'
 import mermaid from 'mermaid'
 import { onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
@@ -12,10 +9,6 @@ const props = defineProps({
     type: String,
     default: () => '',
   },
-  isPreview: {
-    type: Boolean,
-    default: () => true,
-  },
   codeTheme: {
     type: String,
     default: () => 'atom-one-dark',
@@ -24,20 +17,13 @@ const props = defineProps({
     type: String,
     default: () => 'github-light',
   },
+  watermark: {
+    type: Object,
+    default: () => null,
+  },
 })
 
-const emits = defineEmits(['refreshComplete', 'anchorChange'])
-
-const config = ref()
-
-watch(() => useCommonStore().config, (newValue) => {
-  const temp = JSON.parse(JSON.stringify(newValue))
-  temp.watermark.content = temp.watermark.content ? temp.watermark.content : 'wj-markdown-editor'
-  if (temp.watermark.dateEnabled === true) {
-    temp.watermark.content = [temp.watermark.content, dayjs(new Date()).format(temp.watermark.datePattern)]
-  }
-  config.value = temp
-}, { deep: true, immediate: true })
+const emits = defineEmits(['refreshComplete', 'anchorChange', 'imageContextmenu'])
 
 const previewRef = ref()
 
@@ -53,7 +39,7 @@ function onImageClick(e) {
 
 function onImageContextmenu(e) {
   const src = e.target.src
-  sendUtil.send({ event: 'open-folder', data: src })
+  emits('imageContextmenu', src)
 }
 
 /**
@@ -244,7 +230,7 @@ onBeforeRouteLeave(() => {
 </script>
 
 <template>
-  <a-watermark v-bind="config && config.watermark && config.watermark.enabled && (!isPreview || (isPreview && config.watermark.previewEnabled)) ? config.watermark : {}">
+  <a-watermark v-bind="watermark && watermark.enabled ? watermark : {}">
     <!-- 使用伪元素防止首个子元素导致margin塌陷 -->
     <div class="pos-relative w-full p-2 before:table before:content-['']" :class="`code-theme-${codeTheme} preview-theme-${previewTheme}`">
       <div ref="previewRef" class="wj-scrollbar w-full" />

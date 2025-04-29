@@ -3,6 +3,7 @@ import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import sendUtil from '@/util/channel/sendUtil.js'
 import commonUtil from '@/util/commonUtil.js'
+import dayjs from 'dayjs'
 import { onBeforeMount, ref, watch } from 'vue'
 
 const content = ref('')
@@ -37,18 +38,24 @@ function onRefreshComplete() {
   const filePath = commonUtil.getUrlParam('filePath')
   waitingExport(type, filePath)
 }
-const theme = ref({ code: '', preview: '' })
-watch(() => useCommonStore().config.theme, (newValue) => {
-  theme.value = {
-    code: newValue.code,
-    preview: newValue.preview,
+const config = ref()
+const watermark = ref()
+
+watch(() => useCommonStore().config, (newValue) => {
+  // 水印
+  const tempWatermark = JSON.parse(JSON.stringify(newValue.watermark))
+  tempWatermark.content = tempWatermark.content ? tempWatermark.content : 'wj-markdown-editor'
+  if (tempWatermark.dateEnabled === true) {
+    tempWatermark.content = [tempWatermark.content, dayjs(new Date()).format(tempWatermark.datePattern)]
   }
-}, { immediate: true, deep: true })
+  watermark.value = tempWatermark
+  config.value = newValue
+}, { deep: true, immediate: true })
 </script>
 
 <template>
   <div class="w-full p-4">
-    <MarkdownPreview v-if="content" :content="content" :is-preview="false" :code-theme="theme.code" :preview-theme="theme.preview" @refresh-complete="onRefreshComplete" />
+    <MarkdownPreview v-if="content" :content="content" :watermark="watermark" :code-theme="config.theme.code" :preview-theme="config.theme.preview" @refresh-complete="onRefreshComplete" />
   </div>
 </template>
 

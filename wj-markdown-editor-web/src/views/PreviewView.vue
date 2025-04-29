@@ -3,6 +3,7 @@ import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import sendUtil from '@/util/channel/sendUtil.js'
+import dayjs from 'dayjs'
 import Split from 'split-grid'
 import { nextTick, onActivated, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -20,7 +21,17 @@ const previewContainer = ref()
 const config = ref({})
 const ready = ref(false)
 
+const watermark = ref()
+
 watch(() => useCommonStore().config, (newValue) => {
+  // 水印
+  const tempWatermark = JSON.parse(JSON.stringify(newValue.watermark))
+  tempWatermark.content = tempWatermark.content ? tempWatermark.content : 'wj-markdown-editor'
+  if (tempWatermark.dateEnabled === true) {
+    tempWatermark.content = [tempWatermark.content, dayjs(new Date()).format(tempWatermark.datePattern)]
+  }
+  tempWatermark.enabled = tempWatermark.enabled && tempWatermark.previewEnabled
+  watermark.value = tempWatermark
   config.value = newValue
 }, { deep: true, immediate: true })
 
@@ -72,6 +83,10 @@ function toEdit() {
 function onAnchorChange(changedAnchorList) {
   anchorList.value = changedAnchorList
 }
+
+function onImageContextmenu(src) {
+  sendUtil.send({ event: 'open-folder', data: src })
+}
 </script>
 
 <template>
@@ -93,7 +108,7 @@ function onAnchorChange(changedAnchorList) {
     <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">
         <div class="h-full w-full" :style="{ width: `${config.previewWidth}%` }">
-          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" @anchor-change="onAnchorChange" />
+          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" @anchor-change="onAnchorChange" @image-contextmenu="onImageContextmenu" />
         </div>
       </div>
     </div>

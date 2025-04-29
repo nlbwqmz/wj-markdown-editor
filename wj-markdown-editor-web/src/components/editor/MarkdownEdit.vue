@@ -33,9 +33,13 @@ const props = defineProps({
     type: String,
     default: () => 'github-light',
   },
+  watermark: {
+    type: Object,
+    default: () => null,
+  },
 })
 
-const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange'])
+const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange', 'imageContextmenu'])
 const toolbarList = ref([])
 const shortcutKeyList = ref([])
 let splitInstance
@@ -743,6 +747,10 @@ watch(() => menuVisible.value, (newValue) => {
     menuController.value = false
   }
 })
+
+function onImageContextmenu(src) {
+  emits('imageContextmenu', src)
+}
 </script>
 
 <template>
@@ -769,7 +777,7 @@ watch(() => menuVisible.value, (newValue) => {
         class="wj-scrollbar allow-search h-full p-2"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
       >
-        <MarkdownPreview :content="props.modelValue" :code-theme="codeTheme" :preview-theme="previewTheme" @anchor-change="onAnchorChange" />
+        <MarkdownPreview :content="props.modelValue" :code-theme="codeTheme" :preview-theme="previewTheme" :watermark="watermark" @anchor-change="onAnchorChange" @image-contextmenu="onImageContextmenu" />
       </div>
       <div v-if="menuController" ref="gutterMenuRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewRef" :close="() => { menuVisible = false }" />
