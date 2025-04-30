@@ -114,13 +114,9 @@
     margin: 0;
     font-size: .85em;
     padding: 0.165em 0.5em;
-  }
-
-  p {
-    code {
-      background-color: rgba(27,31,35,.05);
-      color: #476582;
-    }
+    background-color: rgba(27,31,35,.05);
+    color: #476582;
+    box-decoration-break: clone;
   }
 
   pre {
@@ -130,6 +126,8 @@
     line-height: 1.7;
     border-radius: 8px;
     > code {
+      color: inherit;
+      background-color: inherit;
       padding: 20px 24px;
       font-size: $font-size;
       word-break: normal;

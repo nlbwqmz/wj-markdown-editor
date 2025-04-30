@@ -725,7 +725,8 @@
   margin: 0;
   word-break: normal;
   white-space: pre;
-  background: transparent;
+  background-color: inherit;
+  color: inherit;
   border: 0;
 }
 
@@ -751,6 +752,10 @@
 .preview-theme-github-light pre:not(.hljs) {
   color: #1f2328;
   background-color: #f6f8fa;
+}
+
+.preview-theme-github-light code {
+  box-decoration-break: clone;
 }
 
 .preview-theme-github-light pre code,

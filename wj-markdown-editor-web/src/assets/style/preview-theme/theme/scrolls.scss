@@ -113,13 +113,9 @@
     overflow-x: auto;
     font-size: 0.87em;
     padding: 0.065em 0.4em;
-  }
-
-  p {
-    code {
-      background: #f6efde;
-      color: #b69454;
-    }
+    background: #f6efde;
+    color: #b69454;
+    box-decoration-break: clone;
   }
 
   pre {
@@ -140,6 +136,8 @@
       background-size: 40px;
     }
     > code {
+      color: inherit;
+      background-color: inherit;
       font-size: 12px;
       padding: 15px 12px;
       margin: 0;

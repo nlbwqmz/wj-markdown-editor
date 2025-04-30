@@ -171,13 +171,9 @@
     overflow-x: auto;
     padding: 0.24em 0.46em;
     margin: 0 4px;
-  }
-
-  p {
-    code {
-      background-color: $code-bg-color;
-      color: $code-color;
-    }
+    background-color: $code-bg-color;
+    color: $code-color;
+    box-decoration-break: clone;
   }
 
   pre {
@@ -186,6 +182,8 @@
     line-height: 1.75;
     border-radius: 10px;
     > code {
+      color: inherit;
+      background-color: inherit;
       font-family: $monospace-font;
       font-size: 12px;
       border-radius: 10px;

@@ -242,17 +242,13 @@
   code {
     padding: 0.065em 0.4em;
     font-family: $monospace-font;
-    font-size: 0.87em;
+    font-size: 0.9em;
     word-break: break-word;
     overflow-x: auto;
     border-radius: 2px;
-  }
-
-  p {
-    code {
-      color: var(--cyanosis-code-color);
-      background-color: var(--cyanosis-code-bg-color);
-    }
+    color: var(--cyanosis-code-color);
+    background-color: var(--cyanosis-code-bg-color);
+    box-decoration-break: clone;
   }
 
   pre {
@@ -261,10 +257,12 @@
     position: relative;
     line-height: 1.75;
     > code {
+      color: inherit;
+      background-color: inherit;
       display: block;
       padding: 16px 12px;
       margin: 0;
-      font-size: 12px;
+      font-size: 14px;
       word-break: normal;
       overflow-x: auto;
       &::-webkit-scrollbar {
@@ -326,7 +324,7 @@
 
   table {
     display: inline-block !important;
-    font-size: 12px;
+    font-size: 14px;
     width: auto;
     max-width: 100%;
     overflow: auto;
@@ -337,7 +335,7 @@
     thead {
       color: #000;
       text-align: left;
-      font-size: 14px;
+      font-size: 16px;
       background: #f6f6f6;
     }
 

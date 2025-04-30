@@ -58,12 +58,6 @@ $line-space: 22px;
     margin-top: 32px;
     margin-bottom: 32px;
   }
-  p {
-    code {
-      background-color: #fff5f5;
-      color: #ff502c;
-    }
-  }
 
   code {
     font-family: $monospace-font;
@@ -72,6 +66,9 @@ $line-space: 22px;
     overflow-x: auto;
     font-size: 0.87em;
     padding: 0.065em 0.4em;
+    background-color: #fff5f5;
+    color: #ff502c;
+    box-decoration-break: clone;
   }
 
   pre {
@@ -81,6 +78,7 @@ $line-space: 22px;
     line-height: 1.75;
     border-radius: 6px;
     > code {
+      background-color: inherit;
       font-size: 12px;
       padding: 15px 12px;
       margin: 0;

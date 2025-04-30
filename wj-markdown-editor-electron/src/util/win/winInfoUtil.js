@@ -82,7 +82,28 @@ export default {
     })
     // 通过默认浏览器打开链接
     win.webContents.setWindowOpenHandler((details) => {
-      shell.openExternal(details.url).then(() => {})
+      const url = details.url
+      if (url.match('^http')) {
+        shell.openExternal(url).then(() => {})
+      } else if (url.match('^wj:///')) {
+        const filePath = decodeURIComponent(url.slice('wj:///'.length))
+        if (path.isAbsolute(filePath)) {
+          shell.showItemInFolder(filePath)
+        } else {
+          const winInfo = winInfoList.find(item => item.id === id)
+          if (winInfo.path) {
+            const fullPath = path.resolve(path.dirname(winInfo.path), filePath)
+            fs.pathExists(fullPath).then((exists) => {
+              if (exists) {
+                shell.showItemInFolder(fullPath)
+              } else {
+                sendUtil.send(win, { event: 'message', data: { type: 'warning', content: '未找到文件' } })
+              }
+            }).catch(() => {})
+          }
+        }
+      }
+
       return { action: 'deny' }
     })
     win.on('close', (e) => {

@@ -774,7 +774,7 @@ function onImageContextmenu(src) {
       <div ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <div
         ref="previewRef"
-        class="wj-scrollbar allow-search h-full p-2"
+        class="allow-search wj-scrollbar h-full p-2"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
       >
         <MarkdownPreview :content="props.modelValue" :code-theme="codeTheme" :preview-theme="previewTheme" :watermark="watermark" @anchor-change="onAnchorChange" @image-contextmenu="onImageContextmenu" />

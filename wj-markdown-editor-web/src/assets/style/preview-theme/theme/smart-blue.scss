@@ -158,6 +158,8 @@
   word-break: normal;
   display: block;
   overflow-x: auto;
+  color: inherit;
+  background-color: inherit;
 }
 
 .preview-theme-smart-blue {
@@ -175,15 +177,9 @@
   overflow-x: auto;
   font-size: .87em;
   padding: .065em .4em;
-}
-
-.preview-theme-smart-blue {
-  p {
-    code {
-      background-color: #fff5f5;
-      color: #ff502c;
-    }
-  }
+  background-color: #fff5f5;
+  color: #ff502c;
+  box-decoration-break: clone;
 }
 
 /* 表格 */
