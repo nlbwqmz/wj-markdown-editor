@@ -235,6 +235,9 @@ const handlerList = {
   'get-recent-list': () => {
     return recent.get()
   },
+  'file-upload': (winInfo, filePath) => {
+    return { name: path.basename(filePath), path: filePath }
+  },
 }
 
 ipcMain.handle('sendToMain', async (event, json) => {

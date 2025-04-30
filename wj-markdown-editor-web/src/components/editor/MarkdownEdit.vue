@@ -66,8 +66,8 @@ const menuVisible = ref(false)
 const editorContainer = ref()
 const anchorList = ref([])
 
-function insertImageToEditor(fileInfo) {
-  if (fileInfo) {
+function insertImageToEditor(imageInfo) {
+  if (imageInfo) {
     const to = editorView.state.selection.main.to
     // 如果当前行不为空的话，则需要使用换行符
     let wrap = false
@@ -75,8 +75,24 @@ function insertImageToEditor(fileInfo) {
     if (line.from !== line.to) {
       wrap = true
     }
-    const insert = `${wrap === true ? '\n' : ''}![${fileInfo.name}](<${fileInfo.path}>)`
+    const insert = `${wrap === true ? '\n' : ''}![${imageInfo.name}](<${imageInfo.path}>)`
 
+    editorView.dispatch({
+      changes: {
+        from: to,
+        to,
+        insert,
+      },
+      selection: { anchor: to + insert.length },
+    })
+  }
+}
+
+function insertFileToEditor(fileInfo) {
+  if (fileInfo) {
+    const to = editorView.state.selection.main.to
+    // 如果当前行不为空的话，则需要使用换行符
+    const insert = `[${fileInfo.name}](<${fileInfo.path}>)`
     editorView.dispatch({
       changes: {
         from: to,
@@ -406,6 +422,11 @@ function pasteOrDrop(event, view, types, files) {
           insertImageToEditor(fileInfo)
         }
         reader.readAsDataURL(file)
+      } else {
+        const filePath = window.node.getWebFilePath(file)
+        sendUtil.send({ event: 'file-upload', data: filePath }).then((fileInfo) => {
+          insertFileToEditor(fileInfo)
+        }).catch(() => {})
       }
     }
     // emits('upload', clipboardData.files, uploadCallback())
