@@ -1,6 +1,6 @@
 <script setup>
 import OtherLayout from '@/components/layout/OtherLayout.vue'
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import constant from '@/util/constant.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
@@ -13,10 +13,11 @@ const config = ref()
 const anchorList = [
   { key: '-1', href: '#general', title: '常规' },
   { key: '0', href: '#view', title: '视图' },
-  { key: '1', href: '#image', title: '图片' },
-  { key: '2', href: '#imageBed', title: '图床' },
-  { key: '3', href: '#shortcut', title: '快捷键' },
-  { key: '4', href: '#watermark', title: '水印' },
+  { key: '1', href: '#file', title: '文件' },
+  { key: '3', href: '#image', title: '图片' },
+  { key: '4', href: '#imageBed', title: '图床' },
+  { key: '5', href: '#shortcut', title: '快捷键' },
+  { key: '6', href: '#watermark', title: '水印' },
 ]
 
 const imageBedUploaderList = ref([
@@ -32,7 +33,7 @@ function getAnchorContainer() {
 }
 
 watch(() => config.value, (newValue) => {
-  sendUtil.send({ event: 'user-update-config', data: JSON.parse(JSON.stringify(newValue)) })
+  channelUtil.send({ event: 'user-update-config', data: JSON.parse(JSON.stringify(newValue)) })
 }, { deep: true })
 
 // 是否显示图片绝对路径
@@ -46,7 +47,7 @@ const showImgRelativePath = computed(() => {
 })
 onMounted(async () => {
   window.document.title = '设置'
-  config.value = await sendUtil.send({ event: 'get-config' })
+  config.value = await channelUtil.send({ event: 'get-config' })
 })
 
 const disallowedShortcutKeys = ['Backspace', 'Alt+ArrowLeft', 'Alt+ArrowRight', 'Alt+ArrowUp', 'Shift+Alt+ArrowUp', 'Alt+ArrowDown', 'Shift+Alt+ArrowDown', 'Escape', 'Ctrl+Enter', 'Alt+l', 'Ctrl+i', 'Ctrl+[', 'Ctrl+]', 'Ctrl+Alt+\\', 'Shift+Ctrl+k', 'Shift+Ctrl+\\', 'Ctrl+/', 'Alt+A', 'Ctrl+m', 'ArrowLeft', 'Ctrl+ArrowLeft', 'ArrowRight', 'Ctrl+ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'Ctrl+Home', 'End', 'Ctrl+End', 'Enter', 'Ctrl+a', 'Backspace', 'Delete', 'Ctrl+Backspace', 'Ctrl+Delete', 'Ctrl+f', 'F3', 'Ctrl+g', 'Escape', 'Ctrl+Shift+l', 'Ctrl+Alt+g', 'Ctrl+d', 'Ctrl+z', 'Ctrl+y', 'Ctrl+u', 'Alt+u', 'Ctrl+Space', 'Escape', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Enter', 'Tab', 'Ctrl+c', 'Ctrl+v']
@@ -94,14 +95,19 @@ function onShortcutKeyFocus(e, shortcutKey) {
  * 选择图片绝对路径
  */
 async function openDirSelect() {
-  config.value.imgAbsolutePath = await sendUtil.send({ event: 'open-dir-select' })
+  config.value.imgAbsolutePath = await channelUtil.send({ event: 'open-dir-select' })
+}
+
+// 选择文件绝对路径
+async function openFileDirSelect() {
+  config.value.fileAbsolutePath = await channelUtil.send({ event: 'open-dir-select' })
 }
 
 function settingMinimize() {
-  sendUtil.send({ event: 'setting-minimize' })
+  channelUtil.send({ event: 'setting-minimize' })
 }
 function settingClose() {
-  sendUtil.send({ event: 'setting-close' })
+  channelUtil.send({ event: 'setting-close' })
 }
 function reset() {
   Modal.confirm({
@@ -112,7 +118,7 @@ function reset() {
     cancelText: '取消',
     centered: true,
     onOk: async () => {
-      config.value = await sendUtil.send({ event: 'get-default-config' })
+      config.value = await channelUtil.send({ event: 'get-default-config' })
       return true
     },
   })
@@ -218,6 +224,40 @@ function reset() {
               :min="20"
               :max="100"
             />
+          </a-descriptions-item>
+        </a-descriptions>
+        <a-descriptions bordered :column="1" size="small">
+          <template #title>
+            <span id="file">文件</span>
+          </template>
+          <a-descriptions-item label="文件">
+            <a-select
+              v-model:value="config.fileMode"
+              class="w-full"
+            >
+              <a-select-option value="2">
+                保存到绝对路径
+              </a-select-option>
+              <a-select-option value="3">
+                保存到 ./%{filename} 文件夹
+              </a-select-option>
+              <a-select-option value="4">
+                保存到相对路径
+              </a-select-option>
+            </a-select>
+          </a-descriptions-item>
+          <a-descriptions-item v-if="config.fileMode === '2'" label="绝对路径">
+            <a-input
+              v-model:value="config.fileAbsolutePath"
+              readonly
+            >
+              <template #addonAfter>
+                <div class="i-tabler:folder cursor-pointer" @click="openFileDirSelect" />
+              </template>
+            </a-input>
+          </a-descriptions-item>
+          <a-descriptions-item v-if="config.fileMode === '4'" label="相对路径">
+            <a-input v-model:value="config.fileRelativePath" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">

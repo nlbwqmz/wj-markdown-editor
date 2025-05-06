@@ -75,15 +75,15 @@ async function createLocalSavePath(winInfo, data, config) {
   const imageSaveType = data.mode === 'local' ? config.imgLocal : config.imgNetwork
   // 绝对路径
   if (imageSaveType === '2') {
-    return path.resolve(config.imgAbsolutePath, `${commonUtil.createId()}${path.extname(data.name)}`)
+    return path.resolve(config.imgAbsolutePath, `${commonUtil.createUniqueFileName(data.name)}`)
   }
   // 上传到图床
   if (imageSaveType === '5') {
-    return path.resolve(app.getPath('temp'), 'wj-markdown-editor', `${commonUtil.createId()}${path.extname(data.name)}`)
+    return path.resolve(app.getPath('temp'), 'wj-markdown-editor', `${commonUtil.createUniqueFileName(data.name)}`)
   }
 
   const relativePath = await getRelativePath(winInfo, config, imageSaveType)
-  return path.resolve(relativePath, `${commonUtil.createId()}${path.extname(data.name)}`)
+  return path.resolve(relativePath, `${commonUtil.createUniqueFileName(data.name)}`)
 }
 
 // 1：无操作（只有网络图片支持） 2: 保存到绝对路径 3：保存到 ./%{filename} 文件夹 4：保存到相对路径 5：上传到图床

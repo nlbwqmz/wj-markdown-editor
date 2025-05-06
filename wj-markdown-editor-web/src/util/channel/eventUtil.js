@@ -1,6 +1,6 @@
 import { useCommonStore } from '@/stores/counter.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
-import sendUtil from '@/util/channel/sendUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { Button, message, Modal } from 'ant-design-vue'
 import { createVNode, h } from 'vue'
@@ -60,7 +60,7 @@ export default {
             type: 'primary',
             danger: true,
             onClick: () => {
-              sendUtil.send({ event: 'force-close' }).then(() => {})
+              channelUtil.send({ event: 'force-close' }).then(() => {})
               modal.destroy() },
           }, () => '直接退出'),
         ]),

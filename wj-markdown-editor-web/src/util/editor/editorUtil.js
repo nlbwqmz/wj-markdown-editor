@@ -1,4 +1,4 @@
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import { redo, undo } from '@codemirror/commands'
 
 /**
@@ -282,7 +282,7 @@ function imageLocal(editorView) {
         const reader = new FileReader()
         reader.onload = async function (event) {
           // 直接获取 Base64 的 DataURL 格式
-          const fileInfo = await sendUtil.send({
+          const fileInfo = await channelUtil.send({
             event: 'upload-image',
             data: {
               mode: 'local',
@@ -302,7 +302,7 @@ function imageLocal(editorView) {
 }
 
 async function screenshot(editorView, hide) {
-  const fileInfo = await sendUtil.send({ event: 'screenshot', data: { hide } })
+  const fileInfo = await channelUtil.send({ event: 'screenshot', data: { hide } })
   insertImageToEditor(editorView, fileInfo)
 }
 

@@ -1,5 +1,5 @@
 import router from '@/router/index.js'
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 
 /**
  * 按键映射 与codemirror的快捷键映射规则保持一致
@@ -91,10 +91,10 @@ const keyMappings = {
 
 const webShortcutKeyHandler = {
   createNew: () => {
-    sendUtil.send({ event: 'create-new' }).then(() => {})
+    channelUtil.send({ event: 'create-new' }).then(() => {})
   },
   openFile: () => {
-    sendUtil.send({ event: 'open-file' }).then(() => {})
+    channelUtil.send({ event: 'open-file' }).then(() => {})
   },
   switchView: () => {
     if (router.currentRoute.value.name === 'editor') {
@@ -104,13 +104,13 @@ const webShortcutKeyHandler = {
     }
   },
   save: () => {
-    sendUtil.send({ event: 'save' }).then(() => {})
+    channelUtil.send({ event: 'save' }).then(() => {})
   },
   saveOther: () => {
-    sendUtil.send({ event: 'save-other' }).then(() => {})
+    channelUtil.send({ event: 'save-other' }).then(() => {})
   },
   setting: () => {
-    sendUtil.send({ event: 'open-setting' }).then(() => {})
+    channelUtil.send({ event: 'open-setting' }).then(() => {})
   },
 }
 

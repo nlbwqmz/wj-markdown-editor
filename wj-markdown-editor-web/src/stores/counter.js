@@ -1,9 +1,9 @@
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const configData = await sendUtil.send({ event: 'get-config' })
-const recentListData = await sendUtil.send({ event: 'get-recent-list' })
+const configData = await channelUtil.send({ event: 'get-config' })
+const recentListData = await channelUtil.send({ event: 'get-recent-list' })
 
 const useCommonStore = defineStore('common', () => {
   const fileName = ref('')

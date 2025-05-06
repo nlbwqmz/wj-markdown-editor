@@ -2,7 +2,7 @@
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import dayjs from 'dayjs'
 import Split from 'split-grid'
 import { nextTick, onActivated, onMounted, ref, watch } from 'vue'
@@ -59,7 +59,7 @@ watch(() => menuVisible.value, (newValue) => {
 })
 
 onActivated(async () => {
-  const data = await sendUtil.send({ event: 'get-file-info' })
+  const data = await channelUtil.send({ event: 'get-file-info' })
   content.value = data.content
   nextTick(() => {
     ready.value = true
@@ -85,7 +85,7 @@ function onAnchorChange(changedAnchorList) {
 }
 
 function onImageContextmenu(src) {
-  sendUtil.send({ event: 'open-folder', data: src })
+  channelUtil.send({ event: 'open-folder', data: src })
 }
 </script>
 

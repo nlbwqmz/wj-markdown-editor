@@ -4,6 +4,10 @@ export default {
   imgNetwork: '4',
   imgAbsolutePath: '',
   imgRelativePath: 'assets',
+  // 2: 保存到绝对路径 3：保存到 ./%{filename} 文件夹 4：保存到相对路径
+  fileMode: '4',
+  fileAbsolutePath: '',
+  fileRelativePath: 'assets',
   menuVisible: true,
   previewWidth: 80,
   startPage: 'preview',

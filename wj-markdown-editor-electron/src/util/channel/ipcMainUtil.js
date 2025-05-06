@@ -3,6 +3,8 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
+import commonUtil from '../commonUtil.js'
+import fileUploadUtil from '../fileUploadUtil.js'
 import imgUtil from '../imgUtil.js'
 import updateUtil from '../updateUtil.js'
 import aboutUtil from '../win/aboutUtil.js'
@@ -60,7 +62,7 @@ const handlerList = {
       if (!data.startsWith('wj:///')) {
         return
       }
-      const filePath = decodeURIComponent(data.replace('wj:///', ''))
+      const filePath = decodeURIComponent(commonUtil.hexToString(data.replace('wj:///', '')))
       const isAbsolute = path.isAbsolute(filePath)
       if (!isAbsolute && !winInfo.path) {
         return // 如果是相对路径且 winInfo.path 为空，直接返回
@@ -236,7 +238,7 @@ const handlerList = {
     return recent.get()
   },
   'file-upload': (winInfo, filePath) => {
-    return { name: path.basename(filePath), path: filePath }
+    return fileUploadUtil.save(winInfo, filePath, configUtil.getConfig())
   },
 }
 

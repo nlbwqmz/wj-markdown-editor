@@ -1,3 +1,4 @@
+import commonUtil from '@/util/commonUtil.js'
 // import MarkdownItTextualUml from 'markdown-it-textual-uml'
 import MarkdownItCodeBlock from '@/util/markdown-it/markdownItCodeBlock.js'
 import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
@@ -47,7 +48,7 @@ md.renderer.rules.image = (tokens, idx, options, env, slf) => {
       const src = token.attrs[srcIndex][1]
       if (src) {
         if (!src.match('^http') && !src.match('^data')) {
-          token.attrs[srcIndex][1] = `wj:///${src.startsWith('.') ? encodeURIComponent(src) : src}`
+          token.attrs[srcIndex][1] = `wj:///${commonUtil.stringToHex(src)}`
         }
       }
     }
@@ -74,7 +75,7 @@ md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
     // add new attribute
     const href = tokens[idx].attrs[hrefIndex][1]
     if (href && !href.match('^http')) {
-      tokens[idx].attrs[hrefIndex][1] = `wj:///${href.startsWith('.') ? encodeURIComponent(href) : href}`
+      tokens[idx].attrs[hrefIndex][1] = `wj:///${commonUtil.stringToHex(href)}`
     }
   }
   // pass token to default renderer.

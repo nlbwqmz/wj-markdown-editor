@@ -1,7 +1,7 @@
 <script setup>
 import MarkdownEdit from '@/components/editor/MarkdownEdit.vue'
 import { useCommonStore } from '@/stores/counter.js'
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import dayjs from 'dayjs'
 import { onMounted, ref, watch } from 'vue'
 
@@ -11,7 +11,7 @@ const ready = ref(false)
 const watermark = ref()
 const config = ref()
 function save() {
-  sendUtil.send({ event: 'save' })
+  channelUtil.send({ event: 'save' })
 }
 function updateFileInfo(data) {
   content.value = data.content
@@ -23,12 +23,12 @@ function updateFileInfo(data) {
   })
 }
 onMounted(async () => {
-  const data = await sendUtil.send({ event: 'get-file-info' })
+  const data = await channelUtil.send({ event: 'get-file-info' })
   updateFileInfo(data)
 })
 watch(() => content.value, (newValue, oldValue) => {
   if (newValue !== oldValue) {
-    sendUtil.send({ event: 'file-content-update', data: newValue })
+    channelUtil.send({ event: 'file-content-update', data: newValue })
   }
 })
 
@@ -45,7 +45,7 @@ watch(() => useCommonStore().config, (newValue) => {
 }, { deep: true, immediate: true })
 
 function onImageContextmenu(src) {
-  sendUtil.send({ event: 'open-folder', data: src })
+  channelUtil.send({ event: 'open-folder', data: src })
 }
 </script>
 

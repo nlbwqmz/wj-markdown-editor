@@ -1,27 +1,27 @@
 <script setup>
 import log from '@/assets/img/logo.png'
 import { useCommonStore } from '@/stores/counter.js'
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import { computed, onBeforeMount, ref } from 'vue'
 
 function minimize() {
-  sendUtil.send({ event: 'minimize' })
+  channelUtil.send({ event: 'minimize' })
 }
 function maximize() {
-  sendUtil.send({ event: 'maximize' })
+  channelUtil.send({ event: 'maximize' })
 }
 function restore() {
-  sendUtil.send({ event: 'restore' })
+  channelUtil.send({ event: 'restore' })
 }
 function close() {
-  sendUtil.send({ event: 'close' })
+  channelUtil.send({ event: 'close' })
 }
 function openFolder() {
-  sendUtil.send({ event: 'open-folder' })
+  channelUtil.send({ event: 'open-folder' })
 }
 
 function openAbout() {
-  sendUtil.send({ event: 'open-about' })
+  channelUtil.send({ event: 'open-about' })
 }
 
 const fileName = computed(() => useCommonStore().fileName)
@@ -30,7 +30,7 @@ const isMaximize = computed(() => useCommonStore().isMaximize)
 const isAlwaysOnTop = computed(() => useCommonStore().isAlwaysOnTop)
 
 function alwaysOnTop(flag) {
-  sendUtil.send({ event: 'always-on-top', data: flag })
+  channelUtil.send({ event: 'always-on-top', data: flag })
 }
 
 const appInfo = ref({ name: 'wj-markdown-editor', version: '' })
@@ -38,7 +38,7 @@ const appInfo = ref({ name: 'wj-markdown-editor', version: '' })
 const hasNewVersion = computed(() => useCommonStore().hasNewVersion)
 
 onBeforeMount(async () => {
-  const info = await sendUtil.send({ event: 'app-info' })
+  const info = await channelUtil.send({ event: 'app-info' })
   appInfo.value.name = info.name
   appInfo.value.version = `v${info.version}`
 })

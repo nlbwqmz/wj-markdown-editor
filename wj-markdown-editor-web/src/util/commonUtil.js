@@ -1,5 +1,5 @@
 import router from '@/router/index.js'
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { nanoid } from 'nanoid'
@@ -49,7 +49,19 @@ function getUrlParam(name) {
   return searchParams.get(name)
 }
 
+function stringToHex(str) {
+  let hex = ''
+  for (let i = 0; i < str.length; i++) {
+    const charCode = str.charCodeAt(i)
+    const hexValue = charCode.toString(16)
+    // 确保每个字符是两位十六进制表示
+    hex += hexValue.padStart(2, '0')
+  }
+  return hex
+}
+
 export default {
+  stringToHex,
   createId,
   getUrlParam,
   initMessageConfig: () => {
@@ -84,7 +96,7 @@ export default {
             okText: '确认',
             cancelText: '取消',
             onOk: () => {
-              sendUtil.send({ event: 'recent-remove', data: path }).then(() => {})
+              channelUtil.send({ event: 'recent-remove', data: path }).then(() => {})
             },
           })
         },

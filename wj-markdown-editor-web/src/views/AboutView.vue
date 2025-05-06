@@ -1,22 +1,22 @@
 <script setup>
 import logo from '@/assets/img/logo.png'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
+import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
-import sendUtil from '@/util/channel/sendUtil.js'
 import { computed, onMounted, ref } from 'vue'
 
 const appInfo = ref({})
 
 onMounted(async () => {
   window.document.title = '关于'
-  appInfo.value = await sendUtil.send({ event: 'get-app-info' })
+  appInfo.value = await channelUtil.send({ event: 'get-app-info' })
 })
 
 function aboutMinimize() {
-  sendUtil.send({ event: 'about-minimize' })
+  channelUtil.send({ event: 'about-minimize' })
 }
 function aboutClose() {
-  sendUtil.send({ event: 'about-close' })
+  channelUtil.send({ event: 'about-close' })
 }
 
 const downloading = ref(false)
@@ -43,25 +43,25 @@ async function checkUpdate() {
   percent.value = 0
   checkInfo.value = undefined
   downloadFinish.value = false
-  checkInfo.value = await sendUtil.send({ event: 'check-update' })
+  checkInfo.value = await channelUtil.send({ event: 'check-update' })
   checking.value = false
 }
 //
 function executeDownload() {
   percent.value = 0
   downloading.value = true
-  sendUtil.send({ event: 'download-update' })
+  channelUtil.send({ event: 'download-update' })
 }
 
 function cancelDownload() {
   downloading.value = false
   downloadFinish.value = false
   percent.value = 0
-  sendUtil.send({ event: 'cancel-download-update' })
+  channelUtil.send({ event: 'cancel-download-update' })
 }
 
 function executeUpdate() {
-  sendUtil.send({ event: 'execute-update' })
+  channelUtil.send({ event: 'execute-update' })
 }
 
 onMounted(() => {

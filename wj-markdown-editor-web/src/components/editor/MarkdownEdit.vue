@@ -4,7 +4,7 @@ import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import TableShape from '@/components/TableShape.vue'
 import { useCommonStore } from '@/stores/counter.js'
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import editorExtensionUtil from '@/util/editor/editorExtensionUtil.js'
 import editorUtil from '@/util/editor/editorUtil.js'
@@ -107,7 +107,7 @@ function insertFileToEditor(fileInfo) {
 function onInsertImgNetwork() {
   validate().then(async () => {
     imageNetworkModel.value = false
-    const fileInfo = await sendUtil.send({
+    const fileInfo = await channelUtil.send({
       event: 'upload-image',
       data: {
         mode: 'network',
@@ -410,7 +410,7 @@ function pasteOrDrop(event, view, types, files) {
       if (file.type && file.type.startsWith('image/')) {
         const reader = new FileReader()
         reader.onload = async function (event) {
-          const fileInfo = await sendUtil.send({
+          const fileInfo = await channelUtil.send({
             event: 'upload-image',
             data: {
               mode: 'local',
@@ -423,8 +423,8 @@ function pasteOrDrop(event, view, types, files) {
         }
         reader.readAsDataURL(file)
       } else {
-        const filePath = window.node.getWebFilePath(file)
-        sendUtil.send({ event: 'file-upload', data: filePath }).then((fileInfo) => {
+        const filePath = channelUtil.getWebFilePath(file)
+        channelUtil.send({ event: 'file-upload', data: filePath }).then((fileInfo) => {
           insertFileToEditor(fileInfo)
         }).catch(() => {})
       }
@@ -702,6 +702,25 @@ function refreshToolbarList() {
           action: () => { editorUtil.screenshot(editorView, true) },
         },
       ],
+    },
+    file: {
+      label: '文件',
+      icon: 'i-tabler:file',
+      action: () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.addEventListener('change', (event) => {
+          if (event.target && event.target.files && event.target.files.length > 0) {
+            const file = event.target.files[0]
+            const filePath = channelUtil.getWebFilePath(file)
+            channelUtil.send({ event: 'file-upload', data: filePath }).then((fileInfo) => {
+              insertFileToEditor(fileInfo)
+            }).catch(() => {})
+          }
+        })
+        input.click()
+        editorView.focus()
+      },
     },
     undo: {
       label: '撤销',

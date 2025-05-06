@@ -1,6 +1,6 @@
 <script setup>
 import { useCommonStore } from '@/stores/counter.js'
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
@@ -17,7 +17,7 @@ function createRecentListVNode() {
       key: commonUtil.createId(),
       label: commonUtil.createRecentLabel(item.path, item.name),
       click: () => {
-        sendUtil.send({ event: 'open-file', data: item.path }).then((exits) => {
+        channelUtil.send({ event: 'open-file', data: item.path }).then((exits) => {
           if (exits === false) {
             Modal.confirm({
               title: '提示',
@@ -26,7 +26,7 @@ function createRecentListVNode() {
               okText: '确认',
               cancelText: '取消',
               onOk: () => {
-                sendUtil.send({ event: 'recent-remove', data: item.path })
+                channelUtil.send({ event: 'recent-remove', data: item.path })
               },
             })
           }
@@ -64,7 +64,7 @@ function updateMenuList() {
           okText: '确认',
           cancelText: '取消',
           onOk: () => {
-            sendUtil.send({ event: 'recent-clear' })
+            channelUtil.send({ event: 'recent-clear' })
           },
         })
       },
@@ -119,17 +119,17 @@ function updateMenuList() {
             {
               key: commonUtil.createId(),
               label: 'PDF',
-              click: () => { sendUtil.send({ event: 'export-start', data: 'PDF' }) },
+              click: () => { channelUtil.send({ event: 'export-start', data: 'PDF' }) },
             },
             {
               key: commonUtil.createId(),
               label: 'PNG',
-              click: () => { sendUtil.send({ event: 'export-start', data: 'PNG' }) },
+              click: () => { channelUtil.send({ event: 'export-start', data: 'PNG' }) },
             },
             {
               key: commonUtil.createId(),
               label: 'JPEG',
-              click: () => { sendUtil.send({ event: 'export-start', data: 'JPEG' }) },
+              click: () => { channelUtil.send({ event: 'export-start', data: 'JPEG' }) },
             },
           ],
         },
@@ -165,7 +165,7 @@ function updateMenuList() {
         {
           label: '关于',
           click: () => {
-            sendUtil.send({ event: 'open-about' }).then(() => {})
+            channelUtil.send({ event: 'open-about' }).then(() => {})
           },
         },
       ],

@@ -1,7 +1,7 @@
 <script setup>
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
-import sendUtil from '@/util/channel/sendUtil.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import dayjs from 'dayjs'
 import { onBeforeMount, ref, watch } from 'vue'
@@ -21,14 +21,14 @@ function allImagesLoaded() {
 
 function waitingExport(type, filePath) {
   if (allImagesLoaded() === true) {
-    sendUtil.send({ event: 'export-end', data: { type, filePath } })
+    channelUtil.send({ event: 'export-end', data: { type, filePath } })
   } else {
     setTimeout(() => waitingExport(type, filePath), 1000)
   }
 }
 
 onBeforeMount(async () => {
-  const data = await sendUtil.send({ event: 'get-file-info' })
+  const data = await channelUtil.send({ event: 'get-file-info' })
   content.value = data.content
   // 隐藏滚动条 （一次性页面 直接设置即可）防止打印出滚动条
   document.body.classList.add('wj-scrollbar-hide')

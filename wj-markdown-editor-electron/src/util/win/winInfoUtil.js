@@ -86,7 +86,7 @@ export default {
       if (url.match('^http')) {
         shell.openExternal(url).then(() => {})
       } else if (url.match('^wj:///')) {
-        const filePath = decodeURIComponent(url.slice('wj:///'.length))
+        const filePath = decodeURIComponent(commonUtil.hexToString(url.slice('wj:///'.length)))
         if (path.isAbsolute(filePath)) {
           shell.showItemInFolder(filePath)
         } else {
