@@ -1,4 +1,5 @@
 import channelUtil from '@/util/channel/channelUtil.js'
+import commonUtil from '@/util/commonUtil.js'
 import { redo, undo } from '@codemirror/commands'
 
 /**
@@ -308,7 +309,7 @@ async function screenshot(editorView, hide) {
 
 function alertContainer(editorView, type) {
   const main = editorView.state.selection.main
-  const prefix = `\n> [!${type.toUpperCase()}]\n> `
+  const prefix = `\n> [!${commonUtil.upperCaseFirst(type)}]\n> `
   const insert = main.empty ? prefix : `${prefix}${editorView.state.doc.slice(main.from, main.to)}`
   editorView.dispatch({
     changes: {
@@ -323,7 +324,7 @@ function alertContainer(editorView, type) {
 
 function container(editorView, type) {
   const main = editorView.state.selection.main
-  const prefix = `\n::: ${type.toUpperCase()}\n`
+  const prefix = `\n::: ${commonUtil.upperCaseFirst(type)}\n`
   const suffix = `\n:::`
   const insert = main.empty ? `${prefix}${suffix}` : `${prefix}${editorView.state.doc.slice(main.from, main.to)}${suffix}`
   editorView.dispatch({

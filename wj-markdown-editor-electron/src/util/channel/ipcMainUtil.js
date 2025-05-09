@@ -142,7 +142,11 @@ const handlerList = {
   'open-file': async (winInfo, targetPath) => {
     if (targetPath) {
       if (await fs.pathExists(targetPath)) {
-        await winInfoUtil.createNew(targetPath)
+        winInfoUtil.createNew(targetPath).then(() => {
+          if (!winInfo.path && winInfo.content === winInfo.tempContent) {
+            winInfo.win.close()
+          }
+        })
         return true
       }
       return false

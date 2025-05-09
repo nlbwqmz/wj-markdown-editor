@@ -60,6 +60,15 @@ function stringToHex(str) {
   return hex
 }
 
+function upperCaseFirst(str) {
+  if (!str) {
+    return ''
+  } else if (str.length === 1) {
+    return str.toUpperCase()
+  }
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
+}
+
 export default {
   stringToHex,
   createId,
@@ -104,4 +113,5 @@ export default {
     ])
   },
   debounce,
+  upperCaseFirst,
 }

@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'
+import schedule from 'node-schedule'
 import semver from 'semver'
 import sendUtil from './channel/sendUtil.js'
 
@@ -52,7 +53,7 @@ async function checkUpdate(winAllList) {
   })
 }
 
-function initUpdater() {
+function initUpdater(getAllWinInfoFunc) {
   if (app.isPackaged) {
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = false
@@ -66,6 +67,9 @@ function initUpdater() {
       if (aboutWinTemp) {
         sendUtil.send(aboutWinTemp, { event: 'update-error', data: { finish: true, success: false, message: '处理失败，请检查网络。' } })
       }
+    })
+    schedule.scheduleJob('0 0,10,20,30,40,50 * * * *', async () => {
+      await checkUpdate(getAllWinInfoFunc())
     })
   }
 }

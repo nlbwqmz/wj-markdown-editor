@@ -56,6 +56,6 @@ if (!lock) {
     }
     await winInfoUtil.createNew(openOnFilePath)
     screenshotsUtil.init()
-    updateUtil.initUpdater()
+    updateUtil.initUpdater(() => winInfoUtil.getAll())
   })
 }
