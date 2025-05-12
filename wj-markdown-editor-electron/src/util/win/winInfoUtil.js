@@ -29,11 +29,10 @@ function findByWin(win) {
 }
 
 export default {
-  createNew: async (filePath) => {
-    if (filePath) {
-      if (await fs.pathExists(filePath)) {
-        await recent.add(filePath)
-      }
+  createNew: async (filePath, isRecent = false) => {
+    const exists = filePath && await fs.pathExists(filePath)
+    if (exists) {
+      await recent.add(filePath)
       const find = winInfoList.find(item => item.path === filePath)
       if (find) {
         find.win.show()
@@ -57,13 +56,15 @@ export default {
         preload: path.resolve(__dirname, '../../preload.js'),
       },
     })
-    const content = filePath && await fs.pathExists(filePath) ? await fs.readFile(filePath, 'utf-8') : ''
+    const content = exists ? await fs.readFile(filePath, 'utf-8') : ''
     winInfoList.push({
       id,
       win,
       content,
       tempContent: content,
       path: filePath || null,
+      exists,
+      isRecent,
     })
     win.once('ready-to-show', () => {
       win.show()

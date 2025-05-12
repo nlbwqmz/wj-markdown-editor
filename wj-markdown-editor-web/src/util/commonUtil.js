@@ -1,7 +1,7 @@
 import router from '@/router/index.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { message, Modal } from 'ant-design-vue'
+import { message, Modal, Tooltip } from 'ant-design-vue'
 import { nanoid } from 'nanoid'
 import { createVNode, h } from 'vue'
 
@@ -88,7 +88,7 @@ export default {
     ])
   },
   createRecentLabel: (path, name) => {
-    return h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+    return h(Tooltip, { placement: 'right', color: '#1677ff', title: path }, () => h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
       h('div', {}, name),
       h('div', {
         style: { marginLeft: '20px', color: 'rgb(199,199,199)' },
@@ -110,8 +110,20 @@ export default {
           })
         },
       }),
-    ])
+    ]))
   },
   debounce,
   upperCaseFirst,
+  recentFileNotExists: (filePath) => {
+    Modal.confirm({
+      title: '提示',
+      icon: createVNode(ExclamationCircleOutlined),
+      content: `文件(${filePath})不存在，是否移除历史记录？`,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: () => {
+        channelUtil.send({ event: 'recent-remove', data: filePath }).then(() => {})
+      },
+    })
+  },
 }

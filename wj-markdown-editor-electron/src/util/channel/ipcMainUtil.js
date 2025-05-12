@@ -127,9 +127,12 @@ const handlerList = {
   },
   'get-file-info': (winInfo) => {
     return {
-      fileName: winInfo.path ? path.basename(winInfo.path) : 'Unnamed',
+      fileName: winInfo.path && winInfo.exists ? path.basename(winInfo.path) : 'Unnamed',
       content: winInfo.tempContent,
       saved: winInfo.content === winInfo.tempContent,
+      path: winInfo.path,
+      exists: winInfo.exists,
+      isRecent: winInfo.isRecent,
     }
   },
   'file-content-update': (winInfo, content) => {

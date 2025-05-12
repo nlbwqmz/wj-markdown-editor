@@ -2,6 +2,7 @@
 import MarkdownEdit from '@/components/editor/MarkdownEdit.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import commonUtil from '@/util/commonUtil.js'
 import dayjs from 'dayjs'
 import { onMounted, ref, watch } from 'vue'
 
@@ -14,6 +15,9 @@ function save() {
   channelUtil.send({ event: 'save' })
 }
 function updateFileInfo(data) {
+  if (data.isRecent && !data.exists) {
+    commonUtil.recentFileNotExists(data.path)
+  }
   content.value = data.content
   ready.value = true
   window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName

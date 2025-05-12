@@ -17,18 +17,9 @@ function createRecentListVNode() {
       key: commonUtil.createId(),
       label: commonUtil.createRecentLabel(item.path, item.name),
       click: () => {
-        channelUtil.send({ event: 'open-file', data: item.path }).then((exits) => {
-          if (exits === false) {
-            Modal.confirm({
-              title: '提示',
-              icon: createVNode(ExclamationCircleOutlined),
-              content: '当前文件不存在，是否移除历史记录？',
-              okText: '确认',
-              cancelText: '取消',
-              onOk: () => {
-                channelUtil.send({ event: 'recent-remove', data: item.path })
-              },
-            })
+        channelUtil.send({ event: 'open-file', data: item.path }).then((exists) => {
+          if (exists === false) {
+            commonUtil.recentFileNotExists(item.path)
           }
         })
       },

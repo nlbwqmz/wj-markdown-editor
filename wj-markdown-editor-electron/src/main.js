@@ -47,14 +47,15 @@ if (!lock) {
       })
     })
     protocolUtil.handleProtocol()
-    let openOnFilePath = getOpenOnFilePath()
-    if (!openOnFilePath && configUtil.getConfig().openRecent) {
+    const openOnFilePath = getOpenOnFilePath()
+    if (openOnFilePath) {
+      await winInfoUtil.createNew(openOnFilePath)
+    } else if (configUtil.getConfig().openRecent) {
       const recentList = recent.get()
       if (recentList && recentList.length > 0) {
-        openOnFilePath = recentList[0].path
+        await winInfoUtil.createNew(recentList[0].path, true)
       }
     }
-    await winInfoUtil.createNew(openOnFilePath)
     screenshotsUtil.init()
     updateUtil.initUpdater(() => winInfoUtil.getAll())
   })
