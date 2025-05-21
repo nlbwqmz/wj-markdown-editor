@@ -1,6 +1,6 @@
 import hljs from 'highlight.js'
 
-const listLanguages = hljs.listLanguages().concat(['vue'])
+const listLanguages = hljs.listLanguages().concat(['vue', 'mermaid'])
 function codeBlockCompletion(context) {
   const word = context.matchBefore(/^`{1,3}[a-z0-9]*/i)
   if (word) {

@@ -745,6 +745,11 @@ function refreshToolbarList() {
       icon: 'i-tabler:menu-2',
       action: () => { menuVisible.value = !menuVisible.value },
     },
+    prettier: {
+      label: '美化',
+      icon: 'i-tabler:circle-letter-p',
+      action: () => { editorUtil.doPrettier(editorView) },
+    },
     save: {
       label: '保存',
       icon: 'i-tabler:file-check',

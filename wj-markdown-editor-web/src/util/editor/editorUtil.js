@@ -1,6 +1,8 @@
 import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import { redo, undo } from '@codemirror/commands'
+import * as markdownParser from 'prettier/parser-markdown'
+import * as prettier from 'prettier/standalone'
 
 /**
  * 获取选中的行号
@@ -338,6 +340,72 @@ function container(editorView, type) {
   editorView.focus(editorView)
 }
 
+const GITHUB_ALERT_REGEX = /(^> \[![A-Z]+\][^\n]*(?:\n> [^\n]*)*)/gim
+
+function doPrettier(editorView) {
+  const content = editorView.state.doc.toString()
+
+  // 1. 预处理：不格式化GitHub Alert
+  const preprocessed = content.replace(
+    GITHUB_ALERT_REGEX,
+    '<!-- prettier-ignore-start -->\n$1\n<!-- prettier-ignore-end -->\n',
+  )
+
+  // 2. 执行 Prettier 格式化
+  prettier.format(preprocessed, {
+    parser: 'markdown',
+    plugins: [markdownParser],
+    tabWidth: 2,
+    useTabs: true,
+    printWidth: Infinity,
+    proseWrap: 'preserve',
+  }).then((formatted) => {
+    // 3. 移除临时注释
+    const final = formatted.replace(
+      /<!-- prettier-ignore-(start|end) -->\n?/g,
+      '',
+    )
+
+    // 4. 更新编辑器内容
+    const transaction = editorView.state.update({
+      changes: { from: 0, to: content.length, insert: final },
+    })
+    editorView.dispatch(transaction)
+  })
+}
+
+// function doPrettier(editorView) {
+//   const content = editorView.state.doc.toString()
+//
+//   // 1. 不格式化引用块（防止GitHub Alert被错误美化）
+//   const preprocessed = content.replace(
+//     /(^> .*$)/gm,
+//     '<!-- prettier-ignore-start -->\n$1\n<!-- prettier-ignore-end -->',
+//   )
+//
+//   console.error('preprocessed', preprocessed)
+//
+//   // 2. 执行 Prettier 格式化
+//   prettier.format(preprocessed, {
+//     parser: 'markdown',
+//     plugins: [markdownParser],
+//     printWidth: 80,
+//     tabWidth: 2,
+//   }).then((formatted) => {
+//     // 3. 移除临时注释
+//     const final = formatted.replace(
+//       /<!-- prettier-ignore-start -->\n([\s\S]*?)\n<!-- prettier-ignore-end -->/g,
+//       '$1',
+//     )
+//
+//     // 4. 更新编辑器内容
+//     const transaction = editorView.state.update({
+//       changes: { from: 0, to: content.length, insert: final },
+//     })
+//     editorView.dispatch(transaction)
+//   })
+// }
+
 export default {
   insertTable,
   bold: (editorView) => { inlineCommand(editorView, '**') },
@@ -354,6 +422,7 @@ export default {
   taskList: (editorView) => { lineCommand(editorView, '- [ ] ') },
   undo: (editorView) => { undo(editorView) },
   redo: (editorView) => { redo(editorView) },
+  doPrettier: (editorView) => { doPrettier(editorView) },
   blockCode: (editorView) => { blockCode(editorView) },
   link: (editorView) => { link(editorView) },
   mark: (editorView) => { inlineCommand(editorView, '==') },
