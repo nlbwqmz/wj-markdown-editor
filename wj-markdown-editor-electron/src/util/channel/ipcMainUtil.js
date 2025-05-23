@@ -9,6 +9,7 @@ import imgUtil from '../imgUtil.js'
 import updateUtil from '../updateUtil.js'
 import aboutUtil from '../win/aboutUtil.js'
 import exportUtil from '../win/exportUtil.js'
+import guideUtil from '../win/guideUtil.js'
 import screenshotsUtil from '../win/screenshotsUtil.js'
 import settingUtil from '../win/settingUtil.js'
 import winInfoUtil from '../win/winInfoUtil.js'
@@ -30,6 +31,7 @@ const handlerList = {
   ...settingUtil.channel,
   ...exportUtil.channel,
   ...aboutUtil.channel,
+  ...guideUtil.channel,
   'open-dir-select': () => {
     const dirList = dialog.showOpenDialogSync({
       title: '选择文件夹',

@@ -1,0 +1,19 @@
+.markdown-it-text-color {
+  color: var(--markdown-it-text-color);
+  * {
+    color: var(--markdown-it-text-color) !important;
+  }
+}
+
+.markdown-it-text-color-gradient {
+  background: var(--markdown-it-text-color) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+  * {
+    background: var(--markdown-it-text-color) !important;
+    -webkit-background-clip: text  !important;
+    background-clip: text  !important;
+    color: transparent  !important;
+  }
+}

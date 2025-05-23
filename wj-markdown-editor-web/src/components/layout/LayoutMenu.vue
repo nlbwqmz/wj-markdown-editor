@@ -154,6 +154,12 @@ function updateMenuList() {
       label: '帮助',
       children: [
         {
+          label: '示例',
+          click: () => {
+            channelUtil.send({ event: 'open-guide' }).then(() => {})
+          },
+        },
+        {
           label: '关于',
           click: () => {
             channelUtil.send({ event: 'open-about' }).then(() => {})

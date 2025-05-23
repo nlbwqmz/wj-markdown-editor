@@ -12,7 +12,7 @@ defineProps({
   },
   close: {
     type: Function,
-    default: () => {},
+    default: null,
   },
 })
 
@@ -33,11 +33,11 @@ const onActiveAnchorChanged = commonUtil.debounce(() => {
 
 <template>
   <div class="h-full w-full flex flex-col overflow-hidden">
-    <div class="flex items-center justify-between b-b-1 b-b-gray-200 b-b-solid p-2 font-size-3 color-gray-500">
+    <div class="flex items-center b-b-1 b-b-gray-200 b-b-solid p-2 font-size-3 color-gray-500" :class="close ? 'justify-between' : 'justify-center'">
       <div class="select-none">
         目录
       </div>
-      <div class="i-tabler:x cursor-pointer" @click="close" />
+      <div v-if="close" class="i-tabler:x cursor-pointer" @click="close" />
     </div>
     <div class="wj-scrollbar relative h-0 h-full flex-1 overflow-y-auto p-l-4 p-r-4">
       <div v-if="!anchorList || anchorList.length === 0" class="h-full flex items-center justify-center">

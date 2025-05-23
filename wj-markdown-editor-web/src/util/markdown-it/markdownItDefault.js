@@ -2,6 +2,7 @@ import commonUtil from '@/util/commonUtil.js'
 // import MarkdownItTextualUml from 'markdown-it-textual-uml'
 import MarkdownItCodeBlock from '@/util/markdown-it/markdownItCodeBlock.js'
 import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
+import markdownItTextColor from '@/util/markdown-it/markdownItTextColor.js'
 import { imgSize } from '@mdit/plugin-img-size'
 import MarkdownItKatex from '@vscode/markdown-it-katex'
 import MarkdownIt from 'markdown-it'
@@ -33,6 +34,85 @@ md.use(MarkdownItSup)
   .use(MarkdownItCodeBlock)
   .use(MarkdownItAnchor)
   .use(imgSize)
+  // .use(MarkdownItForInline, 'text_color', 'text', (tokens, idx) => {
+  //   const content = tokens[idx].content
+  //   const regex = /\{([^}]+)\}\(([^)]+)\)/g
+  //   let lastIndex = 0
+  //   let match
+  //
+  //   // 创建新的HTML token数组替换原内容
+  //   const newTokens = []
+  //
+  //   // eslint-disable-next-line no-cond-assign
+  //   while ((match = regex.exec(content)) !== null) {
+  //     // 添加未匹配的文本作为普通text token
+  //     if (lastIndex < match.index) {
+  //       newTokens.push({
+  //         type: 'text',
+  //         content: content.slice(lastIndex, match.index),
+  //       })
+  //     }
+  //     const color = match[1].trim()
+  //     const text = match[2]
+  //
+  //     if (color.includes('linear-gradient')) {
+  //       newTokens.push({
+  //         type: 'html_inline', // 关键：标记为HTML类型
+  //         content: `<span style="background:  ${color};
+  //                   -webkit-background-clip: text;
+  //                   background-clip: text;
+  //                   color: transparent;">${text}</span>`,
+  //       })
+  //     } else {
+  //       newTokens.push({
+  //         type: 'html_inline', // 关键：标记为HTML类型
+  //         content: `<span style="color:${color}">${text}</span>`,
+  //       })
+  //     }
+  //
+  //     lastIndex = match.index + match[0].length
+  //   }
+  //
+  //   // 添加剩余文本
+  //   if (lastIndex < content.length) {
+  //     newTokens.push({
+  //       type: 'text',
+  //       content: content.slice(lastIndex),
+  //     })
+  //   }
+  //
+  //   // 替换原token
+  //   tokens.splice(idx, 1, ...newTokens)
+  // })
+
+markdownItTextColor(md)
+
+// md.inline.ruler.push('text_color', (state, silent) => {
+//   const start = state.pos
+//
+//   if (state.src.charCodeAt(start) !== 0x7B)
+//     return false
+//   const match = state.src.slice(start).match(/^\{([^}]+)\}\(([^)]+)\)/)
+//   if (!match)
+//     return false
+//
+//   if (!silent) {
+//     const token = state.push('html_inline', '', 0)
+//     const color = match[1].trim()
+//     const text = match[2]
+//     if (color.includes('linear-gradient')) {
+//       token.content = `<span style="background:  ${color};
+//               -webkit-background-clip: text;
+//               background-clip: text;
+//               color: transparent;">${text}</span>`
+//     } else {
+//       token.content = `<span style="color:${match[1]}">${match[2]}</span>`
+//     }
+//   }
+//
+//   state.pos += match[0].length
+//   return true
+// })
 
 // ------------ 给本地图片加上自定义协议 ------------
 md.renderer.rules.image = (tokens, idx, options, env, slf) => {

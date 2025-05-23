@@ -14,7 +14,8 @@ import { keymap } from '@codemirror/view'
 import { Form } from 'ant-design-vue'
 import { EditorView } from 'codemirror'
 import Split from 'split-grid'
-import { createVNode, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { createVNode, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { ColorPicker } from 'vue3-colorpicker'
 
 const props = defineProps({
   modelValue: {
@@ -526,6 +527,71 @@ function getKeymapByShortcutKeyId(id) {
   }
   return ''
 }
+
+/**
+ * 处理字符串指定范围内的颜色标记
+ * @param {string} originalStr 原始字符串
+ * @param {string} color 颜色值(如"red"或"#ff0000")
+ * @param {number} startIndex 开始坐标
+ * @param {number} endIndex 结束坐标
+ * @returns {string} 处理后的字符串
+ */
+function applyColorToRange(originalStr, color, startIndex, endIndex) {
+  // 检查坐标是否有效
+  if (startIndex < 0 || endIndex > originalStr.length || startIndex > endIndex) {
+    throw new Error('Invalid range coordinates')
+  }
+
+  // 提取目标子字符串
+  const targetSubstring = originalStr.substring(startIndex, endIndex)
+
+  // 检查是否已被颜色语法包裹
+  const colorSyntaxRegex = /^\{([^}]+)\}\(([^)]+)\)$/
+  const isWrapped = colorSyntaxRegex.test(targetSubstring)
+
+  // 处理不同情况
+  if (isWrapped) {
+    // 情况1：已被包裹，只修改颜色值
+    const match = targetSubstring.match(colorSyntaxRegex)
+    const newWrapped = `{${color}}(${match[2]})`
+    return (
+      originalStr.substring(0, startIndex)
+      + newWrapped
+      + originalStr.substring(endIndex)
+    )
+  } else {
+    // 情况2：未被包裹，添加颜色语法
+    const newWrapped = `{${color}}(${targetSubstring})`
+    return (
+      originalStr.substring(0, startIndex)
+      + newWrapped
+      + originalStr.substring(endIndex)
+    )
+  }
+}
+
+function onTextColorChange(color) {
+  const main = editorView.state.selection.main
+  if (main.from === main.to) {
+    return
+  }
+  const fromLine = editorView.state.doc.lineAt(main.from)
+  const toLine = editorView.state.doc.lineAt(main.to)
+  if (fromLine.number !== toLine.number) {
+    return
+  }
+  const lineText = fromLine.text
+  const convertedText = applyColorToRange(lineText, color, main.from - fromLine.from, main.to - fromLine.from)
+  editorView.dispatch({
+    changes: {
+      from: fromLine.from,
+      to: fromLine.to,
+      insert: convertedText,
+    },
+    selection: { anchor: main.from, head: fromLine.from + convertedText.length - (fromLine.to - main.to) },
+  })
+}
+
 function refreshToolbarList() {
   const defaultToolbar = {
     bold: {
@@ -739,6 +805,17 @@ function refreshToolbarList() {
       icon: 'i-tabler:focus-2',
       shortcutKey: getKeymapByShortcutKeyId('editor-focus-line'),
       action: jumpToTargetLine,
+    },
+    textColor: {
+      label: '文字颜色',
+      icon: 'i-tabler:color-picker',
+      popover: createVNode(ColorPicker, {
+        'is-widget': true,
+        'picker-type': 'chrome',
+        'use-type': 'both',
+        'onPureColorChange': onTextColorChange,
+        'onGradientColorChange': onTextColorChange,
+      }, { extra: () => h('div', {}, '选中文字颜色语法文本直接更改颜色。') }),
     },
     menuVisible: {
       label: '目录',

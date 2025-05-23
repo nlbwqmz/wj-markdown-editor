@@ -13,6 +13,8 @@ import 'ant-design-vue/dist/reset.css'
 import 'katex/dist/katex.min.css'
 import '@/assets/style/scroll.scss'
 import '@/assets/style/wj-markdown-it-container.scss'
+import '@/assets/style/wj-markdown-it-text-color.scss'
+import 'vue3-colorpicker/style.css'
 // 代码主题
 import '@/assets/style/code-theme/code-theme.scss'
 // 预览主题
