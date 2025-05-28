@@ -17,7 +17,6 @@ export default {
       e.preventDefault()
     })
     screenshots.on('ok', (e, buffer, bounds) => {
-      // eslint-disable-next-line node/prefer-global/buffer
       onOk && onOk(Buffer.from(buffer).toString('base64'), bounds)
       finish()
     })

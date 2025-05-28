@@ -64,7 +64,7 @@ onBeforeMount(async () => {
         <template #title>
           <span>新版本</span>
         </template>
-        <div class="bouncing h-8 w-8 flex items-center justify-center color-red hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="openAbout">
+        <div class="bouncing h-8 w-8 flex items-center justify-center color-red hover:cursor-pointer hover:bg-bg-hover" @click="openAbout">
           <div class="i-tabler:arrow-bar-up" />
         </div>
       </a-tooltip>
@@ -72,7 +72,7 @@ onBeforeMount(async () => {
         <template #title>
           <span>打开文件位置</span>
         </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="openFolder">
+        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="openFolder">
           <div class="i-tabler:folder-open" />
         </div>
       </a-tooltip>
@@ -80,7 +80,7 @@ onBeforeMount(async () => {
         <template #title>
           <span>置顶</span>
         </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="alwaysOnTop(true)">
+        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="alwaysOnTop(true)">
           <div class="i-tabler:pin" />
         </div>
       </a-tooltip>
@@ -88,17 +88,17 @@ onBeforeMount(async () => {
         <template #title>
           <span>取消置顶</span>
         </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="alwaysOnTop(false)">
+        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="alwaysOnTop(false)">
           <div class="i-tabler:pinned-off" />
         </div>
       </a-tooltip>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="minimize">
+      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="minimize">
         <div class="i-tabler:minus" />
       </div>
-      <div v-show="!isMaximize" class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="maximize">
+      <div v-show="!isMaximize" class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="maximize">
         <div class="i-tabler:crop-1-1" />
       </div>
-      <div v-show="isMaximize" class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="restore">
+      <div v-show="isMaximize" class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="restore">
         <div class="i-tabler:layers-subtract" />
       </div>
       <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-red" @click="close">

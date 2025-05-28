@@ -8,7 +8,7 @@
   $color-border: #eaecef;
   $color-background: #f3f5f7;
 
-  $color-code-bg: rgba(27,31,35,.05);;
+  $color-code-bg: rgba(27,31,35,.05);
 
   // Font
   $font-size-sm: 12px;
@@ -28,6 +28,15 @@
   $table-header-bg: $color;
   $table-row-bg: #f6f8fa;
 
+  @at-root [theme='dark'] & {
+    $color-text: var(--wj-markdown-text-primary);
+    $color-background: rgba(171,178,191, .2);
+    code {
+      color: var(--wj-markdown-text-primary);
+      background-color: $color-background;
+    }
+  }
+
 
   // ================ Mixins ================
   @mixin Font {
@@ -44,6 +53,8 @@
   word-break: break-word;
   line-height: $line-height;
   overflow-x: hidden;
+
+
 
   // Title
   h1,

@@ -84,17 +84,17 @@ export default {
   createLabel: (label, shortcuts) => {
     return h('div', { style: { display: 'flex', justifyContent: 'space-between' } }, [
       h('div', {}, label),
-      h('div', { style: { paddingLeft: '20px', color: 'rgb(199,199,199)' } }, shortcuts),
+      h('div', { style: { paddingLeft: '20px', color: 'rgb(160,160,160)' } }, shortcuts),
     ])
   },
   createRecentLabel: (path, name) => {
     return h(Tooltip, { placement: 'right', color: '#1677ff', title: path }, () => h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
       h('div', {}, name),
       h('div', {
-        style: { marginLeft: '20px', color: 'rgb(199,199,199)' },
+        style: { marginLeft: '20px', color: 'rgb(160,160,160)' },
         class: ['i-tabler:x'],
         onMouseenter: (e) => { e.target.style.color = 'black' },
-        onMouseleave: (e) => { e.target.style.color = 'rgb(199,199,199)' },
+        onMouseleave: (e) => { e.target.style.color = 'rgb(160,160,160)' },
         onClick: (e) => {
           e.preventDefault()
           e.stopPropagation()

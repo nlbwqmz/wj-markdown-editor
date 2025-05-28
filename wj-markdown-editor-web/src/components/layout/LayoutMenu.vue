@@ -4,8 +4,8 @@ import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { Modal } from 'ant-design-vue'
-import { createVNode, onBeforeMount, ref, watch } from 'vue'
+import { Modal, Tooltip } from 'ant-design-vue'
+import { createVNode, h, onBeforeMount, ref, watch } from 'vue'
 
 const menuList = ref([])
 const shortcutKeyList = ref(useCommonStore().config.shortcutKeyList)
@@ -109,7 +109,9 @@ function updateMenuList() {
           children: [
             {
               key: commonUtil.createId(),
-              label: 'PDF',
+              label: h(Tooltip, { 'title': '不支持暗黑模式', 'auto-adjust-overflow': true, 'placement': 'right', 'color': '#1677ff' }, () => [
+                h('div', {}, 'PDF'),
+              ]),
               click: () => { channelUtil.send({ event: 'export-start', data: 'PDF' }) },
             },
             {
@@ -199,13 +201,12 @@ function handleMenuClick({ item }) {
     <a-dropdown
       v-for="(item, index) in menuList"
       :key="index"
-      :trigger="['hover']"
       class="select-none"
       arrow
       placement="bottomLeft"
     >
       <div class="cursor-pointer font-size-3.5">
-        <div class="m-r-1 rounded-1 p-1 hover:bg-[rgb(237,237,237)]">
+        <div class="m-r-1 rounded-1 p-1 hover:bg-bg-hover">
           {{ item.label }}
         </div>
       </div>

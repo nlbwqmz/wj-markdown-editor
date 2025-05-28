@@ -28,8 +28,10 @@ export default {
     },
   },
   theme: {
+    // 全局主题 light dark
+    global: 'light',
     code: 'atom-one-dark',
-    preview: 'github-light',
+    preview: 'github',
   },
   shortcutKeyList: [
     {

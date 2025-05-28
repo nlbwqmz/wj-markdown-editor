@@ -6,7 +6,7 @@ import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { computed, createVNode, h, onMounted, ref, watch } from 'vue'
-import PickColors from 'vue-pick-colors'
+import { ColorPicker } from 'vue3-colorpicker'
 
 const config = ref()
 
@@ -132,11 +132,11 @@ function reset() {
         <template #title>
           <span>恢复默认设置</span>
         </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="reset">
+        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="reset">
           <div class="i-tabler:settings-off" />
         </div>
       </a-tooltip>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="settingMinimize">
+      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="settingMinimize">
         <div class="i-tabler:minus" />
       </div>
       <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-red" @click="settingClose">
@@ -157,7 +157,7 @@ function reset() {
                   <template #title>
                     有内容时生效
                   </template>
-                  <div class="i-tabler:info-circle font-size-4 color-[rgb(199,199,199)] hover:color-black" />
+                  <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
                 </a-tooltip>
               </div>
             </template>
@@ -181,20 +181,30 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item label="最近历史记录数量">
-            <a-input-number v-model:value="config.recentMax" :min="0" :max="50" class="w-full" />
+            <a-input-number v-model:value="config.recentMax" :min="0" :max="50" class="w-full" :controls="false" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
             <span id="view">视图</span>
           </template>
-          <a-descriptions-item label="默认显示菜单">
+          <a-descriptions-item label="默认显示大纲">
             <a-radio-group v-model:value="config.menuVisible" button-style="solid">
               <a-radio-button :value="true">
                 是
               </a-radio-button>
               <a-radio-button :value="false">
                 否
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="全局主题">
+            <a-radio-group v-model:value="config.theme.global" button-style="solid">
+              <a-radio-button value="light">
+                明亮
+              </a-radio-button>
+              <a-radio-button value="dark">
+                暗黑
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
@@ -459,10 +469,7 @@ function reset() {
             />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" label="字体颜色">
-            <PickColors
-              v-model:value="config.watermark.font.color"
-              show-alpha
-            />
+            <ColorPicker v-model:pure-color="config.watermark.font.color" format="rgb" shape="square" picker-type="chrome" />
           </a-descriptions-item>
         </a-descriptions>
       </div>

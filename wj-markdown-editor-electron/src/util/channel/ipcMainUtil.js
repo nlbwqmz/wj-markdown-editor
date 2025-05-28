@@ -249,6 +249,9 @@ const handlerList = {
   'file-upload': (winInfo, filePath) => {
     return fileUploadUtil.save(winInfo, filePath, configUtil.getConfig())
   },
+  'get-global-theme': () => {
+    return configUtil.getConfig().theme.global
+  },
 }
 
 ipcMain.handle('sendToMain', async (event, json) => {

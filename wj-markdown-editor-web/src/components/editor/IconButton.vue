@@ -36,12 +36,12 @@ function handleMenuClick({ item }) {
 </script>
 
 <template>
-  <a-popover v-if="popover && isVNode(popover)" placement="bottom">
+  <a-popover v-if="popover && isVNode(popover)" placement="bottom" color="var(--wj-markdown-bg-tertiary)">
     <template #content>
       <CommonVNode :content="popover" />
     </template>
     <div
-      class="h-6 w-6 flex cursor-pointer items-center justify-center border-rd p-0.5 font-size-4.5 color-gray-500 hover:bg-gray-100"
+      class="h-6 w-6 flex cursor-pointer items-center justify-center border-rd p-0.5 font-size-4.5 text-text-secondary hover:bg-bg-hover"
     >
       <a-tooltip placement="topLeft" color="#1677ff">
         <template #title>
@@ -63,7 +63,7 @@ function handleMenuClick({ item }) {
     placement="bottom"
   >
     <div
-      class="h-6 w-6 flex cursor-pointer items-center justify-center border-rd p-0.5 font-size-4.5 color-gray-500 hover:bg-gray-100"
+      class="h-6 w-6 flex cursor-pointer items-center justify-center border-rd p-0.5 font-size-4.5 text-text-secondary hover:bg-bg-hover"
     >
       <a-tooltip placement="topLeft" color="#1677ff">
         <template #title>
@@ -86,7 +86,7 @@ function handleMenuClick({ item }) {
   </a-dropdown>
   <div
     v-else
-    class="h-6 w-6 flex cursor-pointer items-center justify-center border-rd p-0.5 font-size-4.5 color-gray-500 hover:bg-gray-100"
+    class="h-6 w-6 flex cursor-pointer items-center justify-center border-rd p-0.5 font-size-4.5 text-text-secondary hover:bg-bg-hover"
     @click="action"
   >
     <a-tooltip placement="topLeft" color="#1677ff">

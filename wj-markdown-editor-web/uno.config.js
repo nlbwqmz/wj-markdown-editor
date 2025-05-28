@@ -13,4 +13,20 @@ export default defineConfig({
       },
     }),
   ],
+  theme: {
+    // ...
+    colors: {
+      text: {
+        primary: 'var(--wj-markdown-text-primary)',
+        secondary: 'var(--wj-markdown-text-secondary)',
+      },
+      bg: {
+        primary: 'var(--wj-markdown-bg-primary)',
+        hover: 'var(--wj-markdown-bg-hover)',
+      },
+      border: {
+        primary: 'var(--wj-markdown-border-primary)',
+      },
+    },
+  },
 })

@@ -5,7 +5,11 @@ import sendUtil from './util/channel/sendUtil.js'
 import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
 import updateUtil from './util/updateUtil.js'
+import aboutUtil from './util/win/aboutUtil.js'
+import exportUtil from './util/win/exportUtil.js'
+import guideUtil from './util/win/guideUtil.js'
 import screenshotsUtil from './util/win/screenshotsUtil.js'
+import settingUtil from './util/win/settingUtil.js'
 import winInfoUtil from './util/win/winInfoUtil.js'
 import './util/channel/ipcMainUtil.js'
 
@@ -40,6 +44,18 @@ if (!lock) {
       winInfoUtil.getAll().forEach((item) => {
         sendUtil.send(item.win, { event: 'update-config', data: config })
       })
+      if (aboutUtil.get()) {
+        sendUtil.send(aboutUtil.get(), { event: 'update-config', data: config })
+      }
+      if (exportUtil.get()) {
+        sendUtil.send(exportUtil.get(), { event: 'update-config', data: config })
+      }
+      if (guideUtil.get()) {
+        sendUtil.send(guideUtil.get(), { event: 'update-config', data: config })
+      }
+      if (settingUtil.get()) {
+        sendUtil.send(settingUtil.get(), { event: 'update-config', data: config })
+      }
     })
     await recent.initRecent(configUtil.getConfig().recentMax, (recentList) => {
       winInfoUtil.getAll().forEach((item) => {
@@ -54,7 +70,11 @@ if (!lock) {
       const recentList = recent.get()
       if (recentList && recentList.length > 0) {
         await winInfoUtil.createNew(recentList[0].path, true)
+      } else {
+        await winInfoUtil.createNew(null)
       }
+    } else {
+      await winInfoUtil.createNew(null)
     }
     screenshotsUtil.init()
     updateUtil.initUpdater(() => winInfoUtil.getAll())

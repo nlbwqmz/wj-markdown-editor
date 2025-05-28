@@ -10,6 +10,7 @@ import editorExtensionUtil from '@/util/editor/editorExtensionUtil.js'
 import editorUtil from '@/util/editor/editorUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
 import { Compartment } from '@codemirror/state'
+import { oneDark } from '@codemirror/theme-one-dark'
 import { keymap } from '@codemirror/view'
 import { Form } from 'ant-design-vue'
 import { EditorView } from 'codemirror'
@@ -25,6 +26,10 @@ const props = defineProps({
   plugins: {
     type: Array,
     default: () => [],
+  },
+  theme: {
+    type: String,
+    default: () => 'light',
   },
   codeTheme: {
     type: String,
@@ -63,9 +68,22 @@ const previewRef = ref()
 const isComposing = ref(false)
 const scrolling = ref({ editor: false, preview: false })
 const keymapCompartment = new Compartment()
+const themeCompartment = new Compartment()
 const menuVisible = ref(false)
 const editorContainer = ref()
 const anchorList = ref([])
+
+watch(() => props.theme, (newValue) => {
+  if (newValue === 'dark') {
+    editorView.dispatch({
+      effects: themeCompartment.reconfigure([oneDark]),
+    })
+  } else {
+    editorView.dispatch({
+      effects: themeCompartment.reconfigure([]),
+    })
+  }
+})
 
 function insertImageToEditor(imageInfo) {
   if (imageInfo) {
@@ -453,6 +471,7 @@ onMounted(() => {
     doc: props.modelValue,
     lineWrapping: true,
     extensions: [
+      themeCompartment.of(props.theme === 'dark' ? [oneDark] : []),
       keymapCompartment.of(keymap.of(keymapList)),
       ...editorExtensionUtil.getDefault(),
       EditorView.updateListener.of((update) => { // 监听更新
@@ -818,7 +837,7 @@ function refreshToolbarList() {
       }, { extra: () => h('div', {}, '选中文字颜色语法文本直接更改颜色。') }),
     },
     menuVisible: {
-      label: '目录',
+      label: '大纲',
       icon: 'i-tabler:menu-2',
       action: () => { menuVisible.value = !menuVisible.value },
     },
@@ -877,10 +896,10 @@ function onImageContextmenu(src) {
 
 <template>
   <div
-    class="grid grid-rows-[auto_1fr] grid-cols-1 h-full w-full border border-gray-200 border-solid"
+    class="grid grid-rows-[auto_1fr] grid-cols-1 h-full w-full"
   >
     <div
-      class="w-full flex flex-wrap items-center justify-start flex-gap2 border-b-1 border-b-gray-200 border-b-solid p-1"
+      class="w-full flex flex-wrap items-center justify-start flex-gap2 border-b-1 border-t-1 border-b-border-primary border-t-border-primary border-b-solid border-t-solid p-1"
     >
       <IconButton
         v-for="(item, index) in toolbarList" :key="index" :icon="item.icon"

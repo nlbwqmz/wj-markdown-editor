@@ -44,7 +44,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col overflow-hidden">
+  <div class="h-full w-full flex flex-col overflow-hidden bg-bg-primary text-text-primary">
     <LayoutTop />
     <LayoutMenu />
     <div class="h-0 flex-1 overflow-hidden">

@@ -1,6 +1,15 @@
 $monospace-font: Menlo, Monaco, Consolas, 'Courier New', monospace;
 $line-space: 22px;
 
+:root[theme='dark'] {
+  .preview-theme-juejin {
+    color: var(--wj-markdown-text-primary);
+    code {
+      background-color: rgba(171,178,191, .2);
+    }
+  }
+}
+
 .preview-theme-juejin {
   word-break: break-word;
   line-height: 1.75;

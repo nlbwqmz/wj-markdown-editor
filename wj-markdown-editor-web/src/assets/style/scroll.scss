@@ -6,7 +6,7 @@
 }
 /*滚动条里面轨道*/
 .wj-scrollbar::-webkit-scrollbar-track{
-  background-color: #e2e2e2;
+  background-color: var(--wj-markdown-scroll-bg);
 }
 
 /*滚动条的样式*/
@@ -27,10 +27,11 @@
   *::-webkit-scrollbar{
     display: revert;
     width: 6px;
+
     height: 6px;
   }
   *::-webkit-scrollbar-track{
-    background-color: #e2e2e2;
+    background-color: var(--wj-markdown-scroll-bg);
   }
   *::-webkit-scrollbar-thumb {
     border-radius: 4px;

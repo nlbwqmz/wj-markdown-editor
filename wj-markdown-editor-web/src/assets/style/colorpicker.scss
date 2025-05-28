@@ -1,0 +1,13 @@
+.vc-colorpicker--container {
+  background-color: var(--wj-markdown-bg-tertiary);
+  color: var(--wj-markdown-text-primary);
+  .vc-colorPicker__record {
+    .color-list {
+      .color-item {
+        border-radius: 0;
+        border: none;
+      }
+    }
+  }
+}
+

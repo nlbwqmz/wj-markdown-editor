@@ -40,7 +40,7 @@ export default {
       })
       if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
         guideWin.loadURL('http://localhost:8080/#/guide').then(() => {
-          guideWin.webContents.openDevTools({ mode: 'undocked' })
+          // guideWin.webContents.openDevTools({ mode: 'undocked' })
         })
       } else {
         guideWin.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: 'guide' }).then(() => {})

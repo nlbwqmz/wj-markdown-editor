@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="">
+<html lang="" theme="light">
   <head>
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
@@ -12,14 +12,14 @@
       style="
         width: 100vw;
         height: 100vh;
-        position: absolute;
+        position: fixed;
         left: 0;
         top: 0;
         z-index: 10000;
-        background-color: white;
         display: flex;
         align-items: center;
         justify-content: center;
+        visibility: hidden;
       "
   >
     <img
@@ -29,21 +29,26 @@
     />
   </div>
   <script>
+
     if (window.location.href.indexOf('searchBar') > -1 || window.location.href.indexOf('export') > -1) {
       document.getElementById('startup-loading').remove()
     } else {
-      document.addEventListener('DOMContentLoaded', () => {
-        const startupLoading = document.getElementById('startup-loading')
-        if (startupLoading) {
-          startupLoading.addEventListener(
-              'animationend',
-              () => {
-                startupLoading.remove()
-              },
-              { once: true },
-          )
-          startupLoading.style.animation = 'startup-load-leave 0.5s linear forwards'
-        }
+      window.node.sendToMain({ event: 'get-global-theme' }).then(globalTheme => {
+          if(globalTheme === 'dark'){
+              document.getElementById('startup-loading').style.backgroundColor = 'rgb(40,44,52)'
+          }
+          document.getElementById('startup-loading').style.visibility = 'visible'
+          document.addEventListener('DOMContentLoaded', () => {
+              const startupLoading = document.getElementById('startup-loading')
+              if (startupLoading) {
+                  startupLoading.children[0].style.animation = 'startup-load-leave 0.8s linear forwards'
+                  startupLoading.children[0].addEventListener(
+                      'animationend',
+                      () => {startupLoading.remove()},
+                      { once: true },
+                  )
+              }
+          })
       })
     }
   </script>
@@ -53,7 +58,7 @@
   <style>
     @keyframes startup-load-leave {
       from {
-        opacity: 1;
+        opacity: 100;
       }
       to {
         opacity: 0;

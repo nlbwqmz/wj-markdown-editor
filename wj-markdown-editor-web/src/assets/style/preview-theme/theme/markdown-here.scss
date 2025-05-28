@@ -1,3 +1,18 @@
+:root[theme='dark'] {
+  .preview-theme-markdown-here {
+    code {
+      color: var(--wj-markdown-text-primary);
+      background-color: var(--wj-markdown-bg-hover);
+    }
+    pre {
+      code {
+        color: unset;
+        background-color: unset;
+      }
+    }
+  }
+
+}
 .preview-theme-markdown-here {
   font-size: 16px;
   line-height: 1.8em;

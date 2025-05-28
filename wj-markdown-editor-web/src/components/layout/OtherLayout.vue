@@ -10,7 +10,7 @@ const props = defineProps({
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col overflow-hidden">
+  <div class="h-full w-full flex flex-col overflow-hidden bg-bg-primary text-text-primary">
     <div class="w-full flex items-center overflow-hidden">
       <div class="electron-drag flex items-center gap-1 p-2">
         <div :class="props.icon" />

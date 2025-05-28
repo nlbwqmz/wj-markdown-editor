@@ -25,6 +25,11 @@
   font-size: 15px;
   overflow-x: hidden;
   color: #333;
+
+  @at-root [theme='dark'] & {
+    color: var(--wj-markdown-text-primary);
+  }
+
   h1,
   h2,
   h3,

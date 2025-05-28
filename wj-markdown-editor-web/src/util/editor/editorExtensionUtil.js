@@ -58,7 +58,7 @@ const fixedExtension = [
     },
     /* 滚动条里面轨道 */
     '*::-webkit-scrollbar-track': {
-      backgroundColor: '#e2e2e2',
+      backgroundColor: 'var(--wj-markdown-scroll-bg)',
     },
     /* 滚动条的样式 */
     '*::-webkit-scrollbar-thumb': {

@@ -26,6 +26,9 @@ import 'markdown-it-github-alerts/styles/github-colors-light.css'
 
 import '@/assets/style/search.scss'
 
+import '@/assets/style/global-theme/global-theme.scss'
+import '@/assets/style/colorpicker.scss'
+
 const app = createApp(App)
 
 app.use(createPinia())

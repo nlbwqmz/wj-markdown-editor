@@ -22,6 +22,7 @@ function createExportWin(winInfo, type) {
   const filePath = dialog.showSaveDialogSync({
     title: `导出为${type.toLowerCase()}`,
     buttonLabel: '导出',
+    defaultPath: winInfo.path ? path.basename(winInfo.path, path.extname(winInfo.path)) : '',
     filters: [
       { name: `${type.toLowerCase()}文件`, extensions: [type.toLowerCase()] },
     ],
@@ -43,7 +44,7 @@ function createExportWin(winInfo, type) {
     })
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
       exportWin.loadURL(`http://localhost:8080/#/export?type=${type}&filePath=${filePath}`).then(() => {
-        exportWin.webContents.openDevTools({ mode: 'undocked' })
+        // exportWin.webContents.openDevTools({ mode: 'undocked' })
       })
     } else {
       exportWin.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: 'export', search: `type=${type}&filePath=${filePath}` }).then(() => {})
@@ -89,6 +90,7 @@ async function doExport(winInfo, data) {
 }
 
 export default {
+  get: () => exportWin,
   channel: {
     'export-start': createExportWin,
     'export-end': doExport,

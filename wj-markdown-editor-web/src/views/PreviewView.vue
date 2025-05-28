@@ -92,18 +92,18 @@ function onImageContextmenu(src) {
 <template>
   <a-tooltip v-if="menuController === false" placement="right" color="#1677ff">
     <template #title>
-      <span>目录</span>
+      <span>大纲</span>
     </template>
-    <div class="absolute left-0 top-2 z-10 flex cursor-pointer items-center bg-gray-200 p-1 op-60 hover:op-100" @click="() => { menuVisible = true }">
+    <div class="absolute left-0 z-10 flex cursor-pointer items-center p-1 op-60 hover:op-100" @click="() => { menuVisible = true }">
       <div class="i-tabler:menu-2" />
     </div>
   </a-tooltip>
   <div
     v-show="ready" ref="previewContainer"
-    class="allow-search grid h-full w-full overflow-hidden b-t-1 b-t-gray-200 b-t-solid"
+    class="allow-search grid h-full w-full overflow-hidden b-t-1 b-t-border-primary b-t-solid"
     :class="menuController ? 'grid-cols-[200px_2px_1fr]' : 'grid-cols-[1fr]'"
   >
-    <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewContainerRef" :close="() => { menuVisible = false }" class="b-r-1 b-r-gray-200 b-r-solid" />
+    <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewContainerRef" :close="() => { menuVisible = false }" class="b-r-1 b-r-border-primary b-r-solid" />
     <div v-if="menuController" ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
     <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">

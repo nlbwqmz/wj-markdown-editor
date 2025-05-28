@@ -1,3 +1,4 @@
+// 图片预览
 .ant-image-preview-root {
   .ant-image-preview-wrap{
     position: absolute;
@@ -9,3 +10,188 @@
     position: absolute;
   }
 }
+
+:root[theme=dark] {
+  // 锚点链接文字颜色
+  .ant-anchor-link-title:not(.ant-anchor-link-title-active) {
+    color: var(--wj-markdown-text-primary) !important;
+  }
+
+  // 描述列表文字颜色
+  .ant-descriptions-item-label, .ant-descriptions-title, .ant-descriptions-item-content {
+    color: var(--wj-markdown-text-primary) !important;
+  }
+
+  // 描述列表 边框
+  .ant-descriptions.ant-descriptions-bordered{
+    .ant-descriptions-view {
+      border: 1px solid var(--wj-markdown-border-primary);
+    }
+    .ant-descriptions-row{
+      border-bottom: 1px solid var(--wj-markdown-border-primary);
+    }
+    .ant-descriptions-row:last-child {
+      border-bottom: none;
+    }
+    .ant-descriptions-item-content, .ant-descriptions-item-label {
+      border-inline-end: 1px solid var(--wj-markdown-border-primary);
+    }
+    .ant-descriptions-item-content:last-child {
+      border-inline-end: none;
+    }
+  }
+
+  // input slot
+  .ant-input-group{
+    .ant-input-group-addon {
+      background-color: var(--wj-markdown-bg-secondary);
+      border-color: var(--wj-markdown-bg-secondary);
+    }
+  }
+
+  // input 聚焦样式
+  .ant-input:focus, .ant-input-focused {
+    //border-color: blue;
+  }
+
+  // 锚点链接轨道颜色
+  .ant-anchor-wrapper:not(.ant-anchor-wrapper-horizontal) {
+    .ant-anchor::before {
+      border-inline-start: 2px solid var(--wj-markdown-bg-secondary);
+    }
+  }
+
+  // 滑块轨道
+  .ant-slider {
+    .ant-slider-rail {
+      background-color: var(--wj-markdown-bg-secondary);
+    }
+  }
+
+  // 下拉菜单背景颜色
+  .ant-dropdown .ant-dropdown-menu, .ant-dropdown-menu-submenu .ant-dropdown-menu, .ant-dropdown .ant-dropdown-arrow::before {
+    background-color: var(--wj-markdown-bg-tertiary);
+  }
+
+  // 下拉菜单文字颜色
+  .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item, .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-item, .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-submenu-title, .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-submenu-title {
+    color: var(--wj-markdown-text-primary);
+  }
+
+  // 多级下拉 箭头颜色
+  .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item .ant-dropdown-menu-submenu-expand-icon .ant-dropdown-menu-submenu-arrow-icon,
+  .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-item .ant-dropdown-menu-submenu-expand-icon .ant-dropdown-menu-submenu-arrow-icon,
+  .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-submenu-title .ant-dropdown-menu-submenu-expand-icon .ant-dropdown-menu-submenu-arrow-icon,
+  .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-submenu-title .ant-dropdown-menu-submenu-expand-icon .ant-dropdown-menu-submenu-arrow-icon {
+    color: var(--wj-markdown-text-tertiary);
+  }
+
+  // 下拉菜单 hover 样式
+  .ant-dropdown-menu-item:hover, .ant-dropdown-menu-submenu-title:hover {
+    border-radius: 4px;
+    background-color: var(--wj-markdown-bg-hover) !important;
+  }
+
+  // 下拉菜单 hover 样式 （有下级）
+  .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item-divider,
+  .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-item-divider,
+  .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-submenu-title-divider,
+  .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-submenu-title-divider {
+    background-color: var(--wj-markdown-bg-secondary);
+  }
+
+
+  // 单选框组
+  .ant-radio-button-wrapper {
+    transition: none !important;
+    &:not(:first-child)::before {
+      display: none;
+    }
+    &:not(.ant-radio-button-wrapper-checked) {
+      color: var(--wj-markdown-text-primary);
+      background-color: var(--wj-markdown-bg-secondary);
+      border-color: var(--wj-markdown-bg-secondary);
+    }
+    &:first-child {
+      border-inline-start: var(--wj-markdown-bg-secondary);
+    }
+  }
+  // 数字输入框
+  .ant-input-number {
+    &:not(.ant-input-number-focused):not(:hover) {
+      border-color: var(--wj-markdown-bg-secondary);
+    }
+    background-color: var(--wj-markdown-bg-secondary);
+    color: var(--wj-markdown-text-primary);
+    .ant-input-number-input {
+      color: var(--wj-markdown-text-primary);
+    }
+  }
+
+  // 下拉选择框
+  .ant-select:not(.ant-select-customize-input){
+    .ant-select-selector {
+      background-color: var(--wj-markdown-bg-secondary);
+      border: 1px solid var(--wj-markdown-bg-secondary);
+    }
+  }
+
+  .ant-select {
+    * {
+      color: var(--wj-markdown-text-primary) !important;
+    }
+  }
+  .ant-select-dropdown {
+    background-color: var(--wj-markdown-bg-tertiary);
+    .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+      background-color: var(--wj-markdown-bg-hover)
+    }
+    .ant-select-item {
+      color: var(--wj-markdown-text-primary) !important;
+      &:hover {
+        background-color: var(--wj-markdown-bg-hover);
+      }
+    }
+  }
+
+  .ant-input {
+    color: var(--wj-markdown-text-primary);
+    background-color: var(--wj-markdown-bg-secondary);
+    &:not(:focus):not(:hover) {
+      border-color: var(--wj-markdown-bg-secondary);
+    }
+    &::placeholder {
+      color: rgba(255,255,255, .1);
+    }
+  }
+
+  .ant-input-password {
+    color: var(--wj-markdown-text-primary);
+    background-color: var(--wj-markdown-bg-secondary);
+    &:not(:focus):not(:hover) {
+      border-color: var(--wj-markdown-bg-secondary);
+    }
+  }
+
+  .ant-modal {
+    .ant-modal-content {
+      background-color: var(--wj-markdown-bg-tertiary);
+    }
+    .ant-modal-confirm-title {
+      color: var(--wj-markdown-text-primary);
+    }
+    .ant-modal-confirm-content {
+      color: var(--wj-markdown-text-primary);
+    }
+  }
+
+  .ant-btn.ant-btn-default {
+    border-color: var(--wj-markdown-bg-secondary);
+    background-color: var(--wj-markdown-bg-secondary);
+    color: var(--wj-markdown-text-primary);
+  }
+}
+
+
+
+

@@ -20,6 +20,9 @@ function allImagesLoaded() {
 }
 
 function waitingExport(type, filePath) {
+  if (type === 'PDF' && document.documentElement.getAttribute('theme') !== 'light') {
+    document.documentElement.setAttribute('theme', 'light')
+  }
   if (allImagesLoaded() === true) {
     channelUtil.send({ event: 'export-end', data: { type, filePath } })
   } else {
@@ -36,6 +39,13 @@ onBeforeMount(async () => {
 function onRefreshComplete() {
   const type = commonUtil.getUrlParam('type')
   const filePath = commonUtil.getUrlParam('filePath')
+  // 展开details
+  const detailsAll = document.querySelectorAll('details')
+  if (detailsAll) {
+    for (const item of detailsAll) {
+      item.open = true
+    }
+  }
   waitingExport(type, filePath)
 }
 const config = ref()
@@ -54,7 +64,7 @@ watch(() => useCommonStore().config, (newValue) => {
 </script>
 
 <template>
-  <div class="w-full p-4">
+  <div class="w-full">
     <MarkdownPreview v-if="content" :content="content" :watermark="watermark" :code-theme="config.theme.code" :preview-theme="config.theme.preview" @refresh-complete="onRefreshComplete" />
   </div>
 </template>

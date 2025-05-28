@@ -86,7 +86,7 @@ onMounted(() => {
 <template>
   <OtherLayout icon="i-tabler:info-circle" name="关于">
     <template #action>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-[rgb(237,237,237)]" @click="aboutMinimize">
+      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="aboutMinimize">
         <div class="i-tabler:minus" />
       </div>
       <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-red" @click="aboutClose">

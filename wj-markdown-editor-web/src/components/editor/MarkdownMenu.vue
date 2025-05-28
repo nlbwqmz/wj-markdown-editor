@@ -33,9 +33,9 @@ const onActiveAnchorChanged = commonUtil.debounce(() => {
 
 <template>
   <div class="h-full w-full flex flex-col overflow-hidden">
-    <div class="flex items-center b-b-1 b-b-gray-200 b-b-solid p-2 font-size-3 color-gray-500" :class="close ? 'justify-between' : 'justify-center'">
+    <div class="flex items-center b-b-1 b-b-border-primary b-b-solid p-2 font-size-3 text-text-primary" :class="close ? 'justify-between' : 'justify-center'">
       <div class="select-none">
-        目录
+        大纲
       </div>
       <div v-if="close" class="i-tabler:x cursor-pointer" @click="close" />
     </div>
@@ -43,7 +43,7 @@ const onActiveAnchorChanged = commonUtil.debounce(() => {
       <div v-if="!anchorList || anchorList.length === 0" class="h-full flex items-center justify-center">
         <a-empty>
           <template #description>
-            <span class="color-gray-500">暂无目录</span>
+            <span class="color-gray-500">暂无大纲</span>
           </template>
         </a-empty>
       </div>

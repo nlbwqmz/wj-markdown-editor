@@ -129,7 +129,7 @@
   @include transitionColor();
   @include LightAndDark();
 
-  &.__dark{
+  @at-root [theme='dark'] & {
     @include LightAndDark(true);
   }
 
@@ -431,10 +431,8 @@
   details {
     & > summary {
       outline: none;
-      color: var(--cyanosis-title-color);
       font-size: 20px;
       font-weight: bolder;
-      border-bottom: 1px solid var(--cyanosis-border-color);
       cursor: pointer;
     }
 

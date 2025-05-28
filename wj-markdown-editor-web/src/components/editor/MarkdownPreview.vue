@@ -78,7 +78,7 @@ function removeImageListener() {
 const latestAnchorList = ref([])
 
 /**
- * 解析目录并推送
+ * 解析大纲并推送
  */
 function pushAnchorList() {
   const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'))
