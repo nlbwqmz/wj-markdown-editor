@@ -8,6 +8,7 @@ import { computed, onMounted, ref } from 'vue'
 const appInfo = ref({})
 
 onMounted(async () => {
+  document.documentElement.style.fontSize = '16px'
   window.document.title = '关于'
   appInfo.value = await channelUtil.send({ event: 'get-app-info' })
 })

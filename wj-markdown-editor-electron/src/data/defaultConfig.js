@@ -10,6 +10,7 @@ export default {
   fileRelativePath: 'assets',
   menuVisible: true,
   previewWidth: 80,
+  fontSize: 16,
   startPage: 'preview',
   openRecent: true,
   recentMax: 10,

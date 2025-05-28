@@ -48,10 +48,10 @@ onBeforeMount(async () => {
   <div class="w-full flex items-center overflow-hidden">
     <div class="electron-drag flex items-center gap-1 p-2">
       <img :src="log" alt="logo" class="h-4 w-4">
-      <div class="flex items-center justify-center font-size-3">
+      <div class="flex items-center justify-center font-size-3.5">
         <span>{{ appInfo.name }}</span>
       </div>
-      <div class="flex items-center justify-center font-size-3">
+      <div class="flex items-center justify-center font-size-3.5">
         <span>{{ appInfo.version }}</span>
       </div>
     </div>

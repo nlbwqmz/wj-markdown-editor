@@ -10,6 +10,9 @@ import { ColorPicker } from 'vue3-colorpicker'
 
 const config = ref()
 
+// 用于更新字体大小时，刷新锚点组件
+const anchorKey = ref(1)
+
 const anchorList = [
   { key: '-1', href: '#general', title: '常规' },
   { key: '0', href: '#view', title: '视图' },
@@ -48,6 +51,9 @@ const showImgRelativePath = computed(() => {
 onMounted(async () => {
   window.document.title = '设置'
   config.value = await channelUtil.send({ event: 'get-config' })
+  watch(() => config.value.fontSize, () => {
+    anchorKey.value++
+  })
 })
 
 const disallowedShortcutKeys = ['Backspace', 'Alt+ArrowLeft', 'Alt+ArrowRight', 'Alt+ArrowUp', 'Shift+Alt+ArrowUp', 'Alt+ArrowDown', 'Shift+Alt+ArrowDown', 'Escape', 'Ctrl+Enter', 'Alt+l', 'Ctrl+i', 'Ctrl+[', 'Ctrl+]', 'Ctrl+Alt+\\', 'Shift+Ctrl+k', 'Shift+Ctrl+\\', 'Ctrl+/', 'Alt+A', 'Ctrl+m', 'ArrowLeft', 'Ctrl+ArrowLeft', 'ArrowRight', 'Ctrl+ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'Ctrl+Home', 'End', 'Ctrl+End', 'Enter', 'Ctrl+a', 'Backspace', 'Delete', 'Ctrl+Backspace', 'Ctrl+Delete', 'Ctrl+f', 'F3', 'Ctrl+g', 'Escape', 'Ctrl+Shift+l', 'Ctrl+Alt+g', 'Ctrl+d', 'Ctrl+z', 'Ctrl+y', 'Ctrl+u', 'Alt+u', 'Ctrl+Space', 'Escape', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Enter', 'Tab', 'Ctrl+c', 'Ctrl+v']
@@ -233,6 +239,13 @@ function reset() {
               v-model:value="config.previewWidth"
               :min="20"
               :max="100"
+            />
+          </a-descriptions-item>
+          <a-descriptions-item label="字体大小">
+            <a-slider
+              v-model:value="config.fontSize"
+              :min="14"
+              :max="28"
             />
           </a-descriptions-item>
         </a-descriptions>
@@ -474,9 +487,10 @@ function reset() {
         </a-descriptions>
       </div>
       <div>
-        <a-affix :offset-top="50">
+        <a-affix :key="anchorKey" :offset-top="50">
           <a-anchor
             :affix="false"
+            :wrapper-style="{ width: 'fit-content' }"
             :items="anchorList"
             :get-container="getAnchorContainer"
             @click="(e) => { e.preventDefault() }"

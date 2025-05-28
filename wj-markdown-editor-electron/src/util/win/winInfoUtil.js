@@ -50,7 +50,7 @@ export default {
       resizable: true,
       width: workAreaSize.width / 4 * 3,
       height: workAreaSize.height / 4 * 3,
-      minWidth: 400,
+      minWidth: 800,
       minHeight: 600,
       webPreferences: {
         preload: path.resolve(__dirname, '../../preload.js'),

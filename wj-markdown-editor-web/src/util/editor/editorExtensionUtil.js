@@ -37,7 +37,7 @@ const fixedExtension = [
   EditorView.theme({
     '&': {
       height: '100%',
-      fontSize: '14px',
+      fontSize: '1rem',
     },
     '.cm-line': {
       fontFamily: 'source-code-pro,Menlo,Monaco,Consolas,Courier New,monospace', // 字体

@@ -5,7 +5,6 @@ import commonUtil from './commonUtil.js'
 
 function createLocalSavePath(winInfo, filePath, config) {
   const uniqueFileName = commonUtil.createUniqueFileName(filePath)
-  console.error('config.fileMode', config.fileMode, config.fileMode === '4')
   if (config.fileMode === '2') { // 绝对路径
     return path.resolve(config.fileAbsolutePath, uniqueFileName)
   }

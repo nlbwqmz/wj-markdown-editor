@@ -33,7 +33,7 @@ const onActiveAnchorChanged = commonUtil.debounce(() => {
 
 <template>
   <div class="h-full w-full flex flex-col overflow-hidden">
-    <div class="flex items-center b-b-1 b-b-border-primary b-b-solid p-2 font-size-3 text-text-primary" :class="close ? 'justify-between' : 'justify-center'">
+    <div class="flex items-center b-b-1 b-b-border-primary b-b-solid p-2 font-size-3.5 text-text-primary" :class="close ? 'justify-between' : 'justify-center'">
       <div class="select-none">
         大纲
       </div>

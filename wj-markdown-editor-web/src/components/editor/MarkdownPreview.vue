@@ -221,7 +221,7 @@ onMounted(() => {
 })
 
 function getImagePreviewContainer() {
-  const container = document.getElementById('layout-container')
+  const container = document.getElementById('layout-container') || document.getElementById('wj-other-layout-container')
   return container || document.body
 }
 onBeforeRouteLeave(() => {
