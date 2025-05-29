@@ -1,7 +1,7 @@
 import editorUtil from '@/util/editor/editorUtil.js'
 import { completionKeymap, startCompletion } from '@codemirror/autocomplete'
 import { defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { openSearchPanel, searchKeymap } from '@codemirror/search'
+// import { openSearchPanel, searchKeymap } from '@codemirror/search'
 
 const fixedKeymap = [
   {
@@ -12,22 +12,12 @@ const fixedKeymap = [
   },
   // ...closeBracketsKeymap,
   ...defaultKeymap,
-  ...searchKeymap,
+  // ...searchKeymap,
   ...historyKeymap,
   // ...foldKeymap,
   ...completionKeymap,
   // ...lintKeymap,
   indentWithTab,
-  // 阻止冒泡到全局快捷键
-  {
-    key: 'Ctrl-f',
-    preventDefault: true,
-    stopPropagation: true,
-    run: (view) => {
-      openSearchPanel(view)
-      return true
-    },
-  },
 ]
 
 const dynamicKeymap = {

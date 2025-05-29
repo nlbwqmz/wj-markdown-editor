@@ -12,7 +12,7 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
-import { highlightSelectionMatches } from '@codemirror/search'
+import { highlightSelectionMatches, search } from '@codemirror/search'
 import { EditorState } from '@codemirror/state'
 import {
   crosshairCursor,
@@ -33,6 +33,8 @@ const fixedExtension = [
   drawSelection(),
   dropCursor(),
   indentOnInput(),
+  search(),
+  highlightSelectionMatches(),
   markdown({ codeLanguages: languages }),
   EditorView.theme({
     '&': {
@@ -50,6 +52,11 @@ const fixedExtension = [
     },
     '.cm-scroller': {
       overflowY: 'scroll',
+    },
+    // 自定义搜索框依赖于原生的搜索框组件 设置原生搜索框不显示 若height不设置为0，会导致切换上一个或者下一个匹配项时，高度计算不正确，不能保证匹配项在可视区域
+    '.cm-panels:has(.cm-search.cm-panel)': {
+      height: 0,
+      overflow: 'hidden',
     },
     '*::-webkit-scrollbar': {
       display: 'revert',
@@ -88,7 +95,6 @@ const dynamicExtension = [
   rectangularSelection(),
   crosshairCursor(),
   highlightActiveLine(),
-  highlightSelectionMatches(),
   lineNumbers(),
   EditorView.lineWrapping,
 ]

@@ -2,10 +2,9 @@
 import LayoutContainer from '@/components/layout/LayoutContainer.vue'
 import LayoutMenu from '@/components/layout/LayoutMenu.vue'
 import LayoutTop from '@/components/layout/LayoutTop.vue'
-import SearchBar from '@/components/SearchBar.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 
 function findShortcutKeyId(keymap) {
   const shortcutKeyList = useCommonStore().config.shortcutKeyList
@@ -21,18 +20,12 @@ function findShortcutKeyId(keymap) {
 function onKeydown(e) {
   if (shortcutKeyUtil.isShortcutKey(e)) {
     const shortcutKey = shortcutKeyUtil.getShortcutKey(e)
-    if (shortcutKey === 'Ctrl+f') { // 搜索在编辑器和web都有需特殊处理
-      useCommonStore().searchBarVisible = !useCommonStore().searchBarVisible
-    } else {
-      const shortcutKeyId = findShortcutKeyId(shortcutKey)
-      if (shortcutKeyId) {
-        shortcutKeyUtil.getWebShortcutKeyHandler(shortcutKeyId, true)
-      }
+    const shortcutKeyId = findShortcutKeyId(shortcutKey)
+    if (shortcutKeyId) {
+      shortcutKeyUtil.getWebShortcutKeyHandler(shortcutKeyId, true)
     }
   }
 }
-
-const searchBarVisible = computed(() => useCommonStore().searchBarVisible)
 
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
@@ -51,5 +44,4 @@ onBeforeUnmount(() => {
       <LayoutContainer />
     </div>
   </div>
-  <SearchBar v-if="searchBarVisible" />
 </template>

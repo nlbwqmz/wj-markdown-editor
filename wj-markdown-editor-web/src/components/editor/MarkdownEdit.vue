@@ -1,4 +1,5 @@
 <script setup>
+import EditorSearchBar from '@/components/editor/EditorSearchBar.vue'
 import IconButton from '@/components/editor/IconButton.vue'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
@@ -15,7 +16,7 @@ import { keymap } from '@codemirror/view'
 import { Form } from 'ant-design-vue'
 import { EditorView } from 'codemirror'
 import Split from 'split-grid'
-import { createVNode, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, createVNode, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ColorPicker } from 'vue3-colorpicker'
 
 const props = defineProps({
@@ -49,6 +50,11 @@ const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange'
 const toolbarList = ref([])
 const shortcutKeyList = ref([])
 let splitInstance
+const editorSearchBarVisible = computed(() => useCommonStore().editorSearchBarVisible)
+
+function onEditorSearchBarClose() {
+  useCommonStore().editorSearchBarVisible = false
+}
 
 const useForm = Form.useForm
 
@@ -454,7 +460,21 @@ function pasteOrDrop(event, view, types, files) {
 }
 
 function refreshKeymap() {
-  return keymapUtil.createKeymap(shortcutKeyList.value, { 'editor-focus-line': jumpToTargetLine })
+  const searchKeymap = {
+    key: 'Ctrl-f',
+    preventDefault: true,
+    stopPropagation: true,
+    run: () => {
+      if (useCommonStore().searchBarVisible === true) {
+        useCommonStore().searchBarVisible = false
+      }
+      useCommonStore().editorSearchBarVisible = !useCommonStore().editorSearchBarVisible
+      return true
+    },
+  }
+  const keymapList = keymapUtil.createKeymap(shortcutKeyList.value, { 'editor-focus-line': jumpToTargetLine })
+  keymapList.push(searchKeymap)
+  return keymapList
 }
 
 onMounted(() => {
@@ -921,7 +941,7 @@ function onImageContextmenu(src) {
         <MarkdownPreview :content="props.modelValue" :code-theme="codeTheme" :preview-theme="previewTheme" :watermark="watermark" @anchor-change="onAnchorChange" @image-contextmenu="onImageContextmenu" />
       </div>
       <div v-if="menuController" ref="gutterMenuRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
-      <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewRef" :close="() => { menuVisible = false }" />
+      <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewRef" :close="() => { menuVisible = false }" class="allow-search" />
     </div>
     <a-modal v-model:open="imageNetworkModel" title="网络图片" ok-text="确定" cancel-text="取消" centered destroy-on-close @ok="onInsertImgNetwork">
       <a-form
@@ -944,6 +964,7 @@ function onImageContextmenu(src) {
         </a-form-item>
       </a-form>
     </a-modal>
+    <EditorSearchBar v-if="editorSearchBarVisible" :editor-view="editorView" @close="onEditorSearchBarClose" />
   </div>
 </template>
 

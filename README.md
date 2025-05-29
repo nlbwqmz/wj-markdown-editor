@@ -13,6 +13,7 @@
 ## 特性
 
 - 支持本地MD文件打开
+- 支持暗黑模式
 - 精准同步滚动
 - 支持公式、流程图
 - 支持Github Alert、Container、文字颜色
@@ -29,20 +30,37 @@
 
 ### 编辑
 
-![editor.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/wjud8UPDvvADd8_85JwRgl-.png>)
+![light_home.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagelight_home_p_fbiT.png>)
+
+![dark_home.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagedark_home_F5yOu4.png>)
 
 ### 预览
 
-![preview.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/wjiZxl_C7XTbySNrBR9tx_T.png>)
+![preview_light.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagepreview_light_dr6YJF.png>)
+
+![preview_dark.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagepreview_dark_sg7gLg.png>)
 
 ### 设置
 
-![setting.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/wjbzIRFu1dnSI0QWsRjN0Aw.png>)
+![setting_light.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagesetting_light_HvFPeg.png>)
+
+![setting_dark.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagesetting_dark_iOVisC.png>)
+
+### 示例
+
+![demo_light.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagedemo_light_MG_RpR.png>)
+
+![demo_dark.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagedemo_dark_pyswx9.png>)
 
 ## 注意
 - **便携版**不支持自动升级，需手动下载，解压后直接替换根目录即可。
 
 ## 更新记录
+
+### 2.8.0
+
+1. 优化搜索/替换功能。
+2. 优化预览样式。
 
 ### 2.7.0
 

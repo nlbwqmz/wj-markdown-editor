@@ -91,7 +91,7 @@
 /* 无序列表内容 */
 .preview-theme-smart-blue li {
   line-height: 2;
-  color: #595959;
+  color: var(--wj-markdown-text-primary);
   margin-bottom: 0;
   list-style: inherit;
 }

@@ -11,10 +11,11 @@ const useCommonStore = defineStore('common', () => {
   const isMaximize = ref(false)
   const config = ref(configData)
   const searchBarVisible = ref(false)
+  const editorSearchBarVisible = ref(false)
   const hasNewVersion = ref(false)
   const isAlwaysOnTop = ref(false)
   const recentList = ref(recentListData)
-  return { fileName, saved, isMaximize, config, searchBarVisible, hasNewVersion, isAlwaysOnTop, recentList }
+  return { fileName, saved, isMaximize, config, searchBarVisible, hasNewVersion, isAlwaysOnTop, recentList, editorSearchBarVisible }
 })
 
 export { useCommonStore }

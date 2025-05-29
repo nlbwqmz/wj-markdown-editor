@@ -149,7 +149,7 @@ function reset() {
         <div class="i-tabler:x" />
       </div>
     </template>
-    <div v-if="config" class="w-full flex gap-2 p-2 p-t-0">
+    <div v-if="config" class="allow-search w-full flex gap-2 p-2 p-t-0">
       <div class="w-full flex flex-1 flex-col">
         <a-descriptions bordered :column="1" size="small">
           <template #title>

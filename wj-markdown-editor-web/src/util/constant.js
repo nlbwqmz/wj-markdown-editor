@@ -75,7 +75,11 @@ const codeThemeList = [
 
 const previewThemeList = ['github', 'juejin', 'smart-blue', 'vuepress', 'mk-cute', 'cyanosis', 'scrolls', 'markdown-here']
 
+//  禁止使用搜索功能的路由名称
+const notAllowedSearchRouteNameList = ['about', 'export']
+
 export default {
   codeThemeList,
   previewThemeList,
+  notAllowedSearchRouteNameList,
 }

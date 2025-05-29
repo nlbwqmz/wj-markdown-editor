@@ -163,37 +163,37 @@ function onCloseSearchBar() {
 <template>
   <div
     ref="searchBarRef"
-    class="fixed right-20 top-10 z-100 h-16 flex gap-2 b-1 b-[rgba(0,0,0,0.3)] rounded-2 b-solid bg-white p-2 font-size-4 shadow-[rgba(0,0,0,0.35)_0_5px_15px]"
+    class="fixed right-20 top-10 z-100 h-14 flex gap-1 b-1 b-border-primary rounded-2 b-solid bg-bg-primary p-2 font-size-3.5 text-text-primary shadow-[rgba(0,0,0,0.35)_0_5px_15px]"
     :style="{
       transform: `translate(${modalPos.x}px, ${modalPos.y}px)`,
     }"
   >
-    <div class="flex select-none items-center justify-center p-l-1 p-r-1 color-gray-500" :style="{ cursor: isDragging ? 'grabbing' : 'grab' }" @mousedown="startDrag">
+    <div class="flex select-none items-center justify-center text-text-primary" :style="{ cursor: isDragging ? 'grabbing' : 'grab' }" @mousedown="startDrag">
       搜索
     </div>
     <input
       ref="inputRef"
       v-model="searchOption.content"
-      class="h-full w-30 b-b-1 b-b-gray-200 b-none b-b-solid outline-none"
+      class="h-full w-30 b-b-1 b-b-border-primary b-none b-b-solid bg-bg-primary outline-none"
     >
-    <div class="h-full flex items-center font-size-5 color-gray-500">
-      <div class="cursor-pointer rounded-1 p-1 hover:bg-gray-200" :class="searchOption.caseSensitive ? 'bg-gray-200' : ''" @click="searchOption.caseSensitive = !searchOption.caseSensitive">
+    <div class="h-full flex items-center font-size-4.5 color-gray-500">
+      <div class="cursor-pointer rounded-1 p-1 hover:bg-bg-hover" :class="searchOption.caseSensitive ? 'bg-bg-hover' : ''" @click="searchOption.caseSensitive = !searchOption.caseSensitive">
         <div class="i-tabler:letter-case" />
       </div>
     </div>
-    <div class="bo h-full b-r-1 b-r-gray-200 b-r-solid" />
+    <div class="h-full b-r-1 b-r-border-primary b-r-solid" />
     <div class="w-16 flex select-none items-center justify-center color-gray-500">
       {{ result.current }}/{{ result.total }}
     </div>
-    <div class="bo h-full b-r-1 b-r-gray-200 b-r-solid" />
-    <div class="h-full flex items-center font-size-5 color-gray-500">
-      <div class="cursor-pointer rounded-1 p-1 hover:bg-gray-200" @click="handleSearchBarUp">
+    <div class="h-full b-r-1 b-r-border-primary b-r-solid" />
+    <div class="h-full flex items-center font-size-4.5 color-gray-500">
+      <div class="cursor-pointer rounded-1 p-1 hover:bg-bg-hover" @click="handleSearchBarUp">
         <div class="i-tabler:chevron-up" />
       </div>
-      <div class="cursor-pointer rounded-1 p-1 hover:bg-gray-200" @click="handleSearchBarDown">
+      <div class="cursor-pointer rounded-1 p-1 hover:bg-bg-hover" @click="handleSearchBarDown">
         <div class="i-tabler:chevron-down" />
       </div>
-      <div class="cursor-pointer rounded-1 p-1 hover:bg-gray-200" @click="onCloseSearchBar">
+      <div class="cursor-pointer rounded-1 p-1 hover:bg-bg-hover" @click="onCloseSearchBar">
         <div class="i-tabler:x" />
       </div>
     </div>

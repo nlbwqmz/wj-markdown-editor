@@ -28,6 +28,7 @@ import '@/assets/style/search.scss'
 
 import '@/assets/style/global-theme/global-theme.scss'
 import '@/assets/style/colorpicker.scss'
+import '@/assets/style/codemirror.scss'
 
 const app = createApp(App)
 

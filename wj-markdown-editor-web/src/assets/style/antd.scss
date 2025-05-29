@@ -190,6 +190,9 @@
     border-color: var(--wj-markdown-bg-secondary);
     background-color: var(--wj-markdown-bg-secondary);
     color: var(--wj-markdown-text-primary);
+    &:hover {
+      background-color: var(--wj-markdown-bg-hover)
+    }
   }
 }
 
