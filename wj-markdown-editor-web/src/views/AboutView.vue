@@ -3,7 +3,9 @@ import logo from '@/assets/img/logo.png'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
-import { computed, onMounted, ref } from 'vue'
+import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { Modal } from 'ant-design-vue'
+import { computed, createVNode, onMounted, ref } from 'vue'
 
 const appInfo = ref({})
 
@@ -62,7 +64,16 @@ function cancelDownload() {
 }
 
 function executeUpdate() {
-  channelUtil.send({ event: 'execute-update' })
+  Modal.confirm({
+    title: '提示',
+    icon: createVNode(ExclamationCircleOutlined),
+    content: '当前操作不会校验文件是否保存，请确保文件已保存，安装后程序将重启，确认继续？',
+    okText: '确认',
+    cancelText: '取消',
+    onOk: () => {
+      channelUtil.send({ event: 'execute-update' })
+    },
+  })
 }
 
 onMounted(() => {
@@ -172,17 +183,9 @@ onMounted(() => {
           >
             取消下载
           </a-button>
-          <a-popconfirm
-            v-if="downloadFinish"
-            title="当前操作不会校验文件是否保存，请确保文件已保存，安装后程序将重启，确认继续？"
-            ok-text="确认"
-            cancel-text="取消"
-            @confirm="executeUpdate"
-          >
-            <a-button type="link">
-              立即安装
-            </a-button>
-          </a-popconfirm>
+          <a-button v-if="downloadFinish" type="link" @click="executeUpdate">
+            立即安装
+          </a-button>
         </a-descriptions-item>
         <a-descriptions-item label="下载进度">
           <a-progress

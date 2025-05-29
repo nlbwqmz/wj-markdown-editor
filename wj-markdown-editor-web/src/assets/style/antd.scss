@@ -175,6 +175,12 @@
   }
 
   .ant-modal {
+    .ant-modal-header {
+      background-color: var(--wj-markdown-bg-tertiary);
+      .ant-modal-title {
+        color: var(--wj-markdown-text-primary);
+      }
+    }
     .ant-modal-content {
       background-color: var(--wj-markdown-bg-tertiary);
     }
@@ -184,6 +190,13 @@
     .ant-modal-confirm-content {
       color: var(--wj-markdown-text-primary);
     }
+    .ant-modal-close {
+      color: var(--wj-markdown-text-primary);
+
+      &:hover {
+        background-color: var(--wj-markdown-bg-hover);
+      }
+    }
   }
 
   .ant-btn.ant-btn-default {
@@ -192,6 +205,23 @@
     color: var(--wj-markdown-text-primary);
     &:hover {
       background-color: var(--wj-markdown-bg-hover)
+    }
+  }
+
+  .ant-progress {
+    .ant-progress-inner {
+      background-color: var(--wj-markdown-bg-secondary);
+    }
+    .ant-progress-text {
+      color: var(--wj-markdown-text-primary);
+    }
+  }
+
+  .ant-form-item {
+    .ant-form-item-label {
+      >label {
+        color: var(--wj-markdown-text-primary);
+      }
     }
   }
 }

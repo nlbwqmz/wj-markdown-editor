@@ -38,7 +38,7 @@ export default {
       })
       if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
         aboutWin.loadURL('http://localhost:8080/#/about').then(() => {
-          // aboutWin.webContents.openDevTools({ mode: 'undocked' })
+          aboutWin.webContents.openDevTools({ mode: 'undocked' })
         })
       } else {
         aboutWin.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: 'about' }).then(() => {})
