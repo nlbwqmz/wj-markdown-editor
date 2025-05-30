@@ -61,21 +61,17 @@ watch(() => searchOption.value, () => {
 
 function onFindPrevious() {
   findPrevious(props.editorView)
-  props.editorView.focus()
 }
 function onFindNext() {
   findNext(props.editorView)
-  props.editorView.focus()
 }
 
 function onReplace() {
   replaceNext(props.editorView)
-  props.editorView.focus()
 }
 
 function onReplaceAll() {
   replaceAll(props.editorView)
-  props.editorView.focus()
 }
 
 function onCloseSearchBar() {
@@ -137,6 +133,7 @@ function stopDrag() {
           ref="inputRef"
           v-model="searchOption.search"
           class="h-full w-30 b-b-1 b-b-border-primary b-none b-b-solid bg-bg-primary outline-none"
+          @keydown.enter="onFindNext"
         >
         <div class="h-full flex items-center gap-1 font-size-4.5 color-gray-500">
           <div class="cursor-pointer rounded-1 p-1 hover:bg-bg-hover" :class="searchOption.caseSensitive ? 'bg-bg-hover' : ''" @click="searchOption.caseSensitive = !searchOption.caseSensitive">
@@ -169,6 +166,7 @@ function stopDrag() {
         <input
           v-model="searchOption.replace"
           class="h-full w-30 b-b-1 b-b-border-primary b-none b-b-solid bg-bg-primary outline-none"
+          @keydown.enter="onReplace"
         >
         <a-button @click="onReplace">
           替换
