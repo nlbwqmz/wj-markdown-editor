@@ -13,7 +13,7 @@ import {
 } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { highlightSelectionMatches, search } from '@codemirror/search'
-import { EditorState } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import {
   crosshairCursor,
   drawSelection,
@@ -34,7 +34,6 @@ const fixedExtension = [
   dropCursor(),
   indentOnInput(),
   search(),
-  highlightSelectionMatches(),
   markdown({ codeLanguages: languages }),
   EditorView.theme({
     '&': {
@@ -67,6 +66,9 @@ const fixedExtension = [
     '*::-webkit-scrollbar-track': {
       backgroundColor: 'var(--wj-markdown-scroll-bg)',
     },
+    '*::-webkit-scrollbar-corner': {
+      backgroundColor: 'var(--wj-markdown-scroll-bg)',
+    },
     /* 滚动条的样式 */
     '*::-webkit-scrollbar-thumb': {
       borderRadius: '4px',
@@ -84,27 +86,46 @@ const fixedExtension = [
       completionHandler,
     ],
   }),
-]
-
-const dynamicExtension = [
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-  bracketMatching(),
-  closeBrackets(),
   EditorState.allowMultipleSelections.of(true),
   highlightSpecialChars(),
   rectangularSelection(),
   crosshairCursor(),
-  highlightActiveLine(),
-  lineNumbers(),
-  EditorView.lineWrapping,
 ]
 
 const editorExtensionUtil = {
   getDefault: () => {
     return [
       ...fixedExtension,
-      ...dynamicExtension,
     ]
+  },
+  getDynamicExtension: () => {
+    return {
+      lineNumbers: {
+        extension: [lineNumbers()],
+        compartment: new Compartment(),
+      },
+      lineWrapping: {
+        extension: [EditorView.lineWrapping],
+        compartment: new Compartment(),
+      },
+      highlightActiveLine: {
+        extension: [highlightActiveLine()],
+        compartment: new Compartment(),
+      },
+      highlightSelectionMatches: {
+        extension: [highlightSelectionMatches()],
+        compartment: new Compartment(),
+      },
+      bracketMatching: {
+        extension: [bracketMatching()],
+        compartment: new Compartment(),
+      },
+      closeBrackets: {
+        extension: [closeBrackets()],
+        compartment: new Compartment(),
+      },
+    }
   },
 }
 

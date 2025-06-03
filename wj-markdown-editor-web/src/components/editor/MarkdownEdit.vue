@@ -24,10 +24,6 @@ const props = defineProps({
     type: String,
     default: () => '',
   },
-  plugins: {
-    type: Array,
-    default: () => [],
-  },
   theme: {
     type: String,
     default: () => 'light',
@@ -44,6 +40,10 @@ const props = defineProps({
     type: Object,
     default: () => null,
   },
+  extension: {
+    type: Object,
+    default: () => undefined,
+  },
 })
 
 const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange', 'imageContextmenu'])
@@ -51,6 +51,7 @@ const toolbarList = ref([])
 const shortcutKeyList = ref([])
 let splitInstance
 const editorSearchBarVisible = computed(() => useCommonStore().editorSearchBarVisible)
+const dynamicExtension = editorExtensionUtil.getDynamicExtension()
 
 function onEditorSearchBarClose() {
   useCommonStore().editorSearchBarVisible = false
@@ -78,6 +79,7 @@ const themeCompartment = new Compartment()
 const menuVisible = ref(false)
 const editorContainer = ref()
 const anchorList = ref([])
+const editorScrollTop = ref(0)
 
 watch(() => props.theme, (newValue) => {
   if (newValue === 'dark') {
@@ -90,6 +92,20 @@ watch(() => props.theme, (newValue) => {
     })
   }
 })
+
+watch(() => props.extension, (newValue) => {
+  for (const key in dynamicExtension) {
+    if (!newValue || newValue[key] !== false) {
+      editorView.dispatch({
+        effects: dynamicExtension[key].compartment.reconfigure(dynamicExtension[key].extension),
+      })
+    } else {
+      editorView.dispatch({
+        effects: dynamicExtension[key].compartment.reconfigure([]),
+      })
+    }
+  }
+}, { deep: true })
 
 function insertImageToEditor(imageInfo) {
   if (imageInfo) {
@@ -292,6 +308,12 @@ function syncEditorToPreview() {
   if (scrolling.value.preview) {
     return
   }
+
+  // 若竖向滚动条值没改变则表示横向滚动 直接跳过
+  if (editorScrollTop.value === editorView.scrollDOM.scrollTop) {
+    editorScrollTop.value = editorView.scrollDOM.scrollTop
+    return
+  }
   // 获取编辑器滚动位置和可视区域高度
   const scrollTop = editorView.scrollDOM.scrollTop
 
@@ -387,8 +409,15 @@ function syncPreviewToEditor() {
 }
 
 function onEditorWheel(e) {
+  // 按住shift表示横向滚动，跳过
+  if (e.shiftKey === true) {
+    return
+  }
   // e.deltaY > 0 表示往下滚动；且滚动条已到达底端
-  if (e.deltaY > 0 && editorView.scrollDOM.scrollHeight === editorView.scrollDOM.scrollTop + editorView.scrollDOM.clientHeight) {
+  // e.deltaY < 0 表示往上滚动；且滚动条已到到顶端
+  if ((e.deltaY > 0 && editorView.scrollDOM.scrollHeight === editorView.scrollDOM.scrollTop + editorView.scrollDOM.clientHeight)
+    || (e.deltaY < 0 && editorView.scrollDOM.scrollTop === 0)
+  ) {
     e.preventDefault()
     previewRef.value.scrollBy({ top: e.deltaY, behavior: 'smooth' })
   }
@@ -487,6 +516,12 @@ onMounted(() => {
     // 自动吸附距离
     snapOffset: 0,
   })
+  const dynamicExtensionList = []
+  for (const key in dynamicExtension) {
+    if (!props.extension || props.extension[key] !== false) {
+      dynamicExtensionList.push(dynamicExtension[key].compartment.of(dynamicExtension[key].extension))
+    }
+  }
   editorView = new EditorView({
     doc: props.modelValue,
     lineWrapping: true,
@@ -494,6 +529,7 @@ onMounted(() => {
       themeCompartment.of(props.theme === 'dark' ? [oneDark] : []),
       keymapCompartment.of(keymap.of(keymapList)),
       ...editorExtensionUtil.getDefault(),
+      ...dynamicExtensionList,
       EditorView.updateListener.of((update) => { // 监听更新
         if (update.docChanged && isComposing.value === false) { // 检查文档是否发生变化
           refresh()

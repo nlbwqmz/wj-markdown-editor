@@ -16,7 +16,8 @@ const anchorKey = ref(1)
 const anchorList = [
   { key: '-1', href: '#general', title: '常规' },
   { key: '0', href: '#view', title: '视图' },
-  { key: '1', href: '#file', title: '文件' },
+  { key: '1', href: '#editor', title: '编辑器' },
+  { key: '2', href: '#file', title: '文件' },
   { key: '3', href: '#image', title: '图片' },
   { key: '4', href: '#imageBed', title: '图床' },
   { key: '5', href: '#shortcut', title: '快捷键' },
@@ -247,6 +248,82 @@ function reset() {
               :min="14"
               :max="28"
             />
+          </a-descriptions-item>
+        </a-descriptions>
+        <a-descriptions bordered :column="1" size="small">
+          <template #title>
+            <span id="editor">编辑器</span>
+          </template>
+          <a-descriptions-item label="行号">
+            <a-radio-group v-model:value="config.editorExtension.lineNumbers" button-style="solid">
+              <a-radio-button :value="true">
+                是
+              </a-radio-button>
+              <a-radio-button :value="false">
+                否
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="自动换行">
+            <a-radio-group v-model:value="config.editorExtension.lineWrapping" button-style="solid">
+              <a-radio-button :value="true">
+                是
+              </a-radio-button>
+              <a-radio-button :value="false">
+                否
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="高亮选中行">
+            <a-radio-group v-model:value="config.editorExtension.highlightActiveLine" button-style="solid">
+              <a-radio-button :value="true">
+                是
+              </a-radio-button>
+              <a-radio-button :value="false">
+                否
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item>
+            <template #label>
+              <div class="flex items-center gap-1">
+                <span>突出匹配文本</span>
+                <a-tooltip placement="top" color="#1677ff">
+                  <template #title>
+                    突出显示与所选内容匹配的文本。
+                  </template>
+                  <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
+                </a-tooltip>
+              </div>
+            </template>
+            <a-radio-group v-model:value="config.editorExtension.highlightSelectionMatches" button-style="solid">
+              <a-radio-button :value="true">
+                是
+              </a-radio-button>
+              <a-radio-button :value="false">
+                否
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="突出匹配括号">
+            <a-radio-group v-model:value="config.editorExtension.bracketMatching" button-style="solid">
+              <a-radio-button :value="true">
+                是
+              </a-radio-button>
+              <a-radio-button :value="false">
+                否
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="自动闭合括号">
+            <a-radio-group v-model:value="config.editorExtension.closeBrackets" button-style="solid">
+              <a-radio-button :value="true">
+                是
+              </a-radio-button>
+              <a-radio-button :value="false">
+                否
+              </a-radio-button>
+            </a-radio-group>
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">

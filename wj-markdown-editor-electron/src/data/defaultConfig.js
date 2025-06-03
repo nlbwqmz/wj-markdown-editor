@@ -14,6 +14,14 @@ export default {
   startPage: 'preview',
   openRecent: true,
   recentMax: 10,
+  editorExtension: {
+    lineNumbers: true,
+    lineWrapping: true,
+    highlightActiveLine: true,
+    highlightSelectionMatches: true,
+    bracketMatching: true,
+    closeBrackets: true,
+  },
   watermark: {
     enabled: false,
     previewEnabled: true,
