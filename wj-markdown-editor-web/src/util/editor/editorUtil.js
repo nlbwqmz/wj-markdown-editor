@@ -251,6 +251,34 @@ function image(editorView) {
   editorView.focus()
 }
 
+function video(editorView) {
+  const main = editorView.state.selection.main
+  const insert = '!video()'
+  editorView.dispatch({
+    changes: {
+      from: main.to,
+      to: main.to,
+      insert,
+    },
+    selection: { anchor: main.to + 7 },
+  })
+  editorView.focus()
+}
+
+function audio(editorView) {
+  const main = editorView.state.selection.main
+  const insert = '!audio()'
+  editorView.dispatch({
+    changes: {
+      from: main.to,
+      to: main.to,
+      insert,
+    },
+    selection: { anchor: main.to + 7 },
+  })
+  editorView.focus()
+}
+
 function insertImageToEditor(editorView, fileInfo) {
   if (fileInfo) {
     const to = editorView.state.selection.main.to
@@ -301,6 +329,35 @@ function imageLocal(editorView) {
     })
     input.click()
   }
+  editorView.focus()
+}
+
+function audioOrVideoLocal(editorView, accept, insertConvert) {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = accept
+  input.addEventListener('change', (event) => {
+    if (event.target && event.target.files && event.target.files.length > 0) {
+      const file = event.target.files[0]
+      const filePath = channelUtil.getWebFilePath(file)
+      channelUtil.send({ event: 'file-upload', data: filePath }).then((fileInfo) => {
+        if (fileInfo) {
+          const to = editorView.state.selection.main.to
+          // 如果当前行不为空的话，则需要使用换行符
+          const insert = insertConvert(fileInfo.path)
+          editorView.dispatch({
+            changes: {
+              from: to,
+              to,
+              insert,
+            },
+            selection: { anchor: to + insert.length },
+          })
+        }
+      }).catch(() => {})
+    }
+  })
+  input.click()
   editorView.focus()
 }
 
@@ -374,38 +431,6 @@ function doPrettier(editorView) {
   })
 }
 
-// function doPrettier(editorView) {
-//   const content = editorView.state.doc.toString()
-//
-//   // 1. 不格式化引用块（防止GitHub Alert被错误美化）
-//   const preprocessed = content.replace(
-//     /(^> .*$)/gm,
-//     '<!-- prettier-ignore-start -->\n$1\n<!-- prettier-ignore-end -->',
-//   )
-//
-//   console.error('preprocessed', preprocessed)
-//
-//   // 2. 执行 Prettier 格式化
-//   prettier.format(preprocessed, {
-//     parser: 'markdown',
-//     plugins: [markdownParser],
-//     printWidth: 80,
-//     tabWidth: 2,
-//   }).then((formatted) => {
-//     // 3. 移除临时注释
-//     const final = formatted.replace(
-//       /<!-- prettier-ignore-start -->\n([\s\S]*?)\n<!-- prettier-ignore-end -->/g,
-//       '$1',
-//     )
-//
-//     // 4. 更新编辑器内容
-//     const transaction = editorView.state.update({
-//       changes: { from: 0, to: content.length, insert: final },
-//     })
-//     editorView.dispatch(transaction)
-//   })
-// }
-
 export default {
   insertTable,
   bold: (editorView) => { inlineCommand(editorView, '**') },
@@ -428,6 +453,10 @@ export default {
   mark: (editorView) => { inlineCommand(editorView, '==') },
   image: (editorView) => { image(editorView) },
   imageLocal: (editorView) => { imageLocal(editorView) },
+  video: (editorView) => { video(editorView) },
+  videoLocal: (editorView) => { audioOrVideoLocal(editorView, 'video/*', filePath => `!video(${filePath})`) },
+  audio: (editorView) => { audio(editorView) },
+  audioLocal: (editorView) => { audioOrVideoLocal(editorView, 'audio/*', filePath => `!audio(${filePath})`) },
   screenshot: (editorView, hide) => { screenshot(editorView, hide).then(() => {}) },
   alertContainer: (editorView, type) => { alertContainer(editorView, type) },
   container: (editorView, type) => { container(editorView, type) },

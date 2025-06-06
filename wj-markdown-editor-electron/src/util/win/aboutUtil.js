@@ -28,6 +28,9 @@ export default {
           preload: path.resolve(__dirname, '../../preload.js'),
         },
       })
+      aboutWin.on('closed', () => {
+        aboutWin = null
+      })
       // 通过默认浏览器打开链接
       aboutWin.webContents.setWindowOpenHandler((details) => {
         shell.openExternal(details.url).then(() => {})

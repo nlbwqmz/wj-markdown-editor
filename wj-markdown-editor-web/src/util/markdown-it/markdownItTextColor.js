@@ -1,3 +1,6 @@
+/**
+ * 文字颜色
+ */
 export default function (md) {
   md.inline.ruler.push('text_color', (state, silent) => {
     const start = state.pos

@@ -1,11 +1,11 @@
 import alertCompletion from '@/util/editor/completion/alertCompletion.js'
 import codeBlockCompletion from '@/util/editor/completion/codeBlockCompletion.js'
+import CommonCompletion from '@/util/editor/completion/CommonCompletion.js'
 import containerCompletion from '@/util/editor/completion/containerCompletion.js'
-import dateCompletion from '@/util/editor/completion/dateCompletion.js'
 import headingCompletion from '@/util/editor/completion/headingCompletion.js'
 import tableCompletion from '@/util/editor/completion/tableCompletion.js'
 
-const handlerList = [tableCompletion, codeBlockCompletion, headingCompletion, dateCompletion, containerCompletion, alertCompletion]
+const handlerList = [CommonCompletion, tableCompletion, codeBlockCompletion, headingCompletion, containerCompletion, alertCompletion]
 
 function autocompletionHandler(context) {
   const word = context.matchBefore(/\w*/)

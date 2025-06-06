@@ -116,12 +116,7 @@ const handlerList = {
         winInfo.path += '.md'
       }
       await recent.add(winInfo.path)
-      await fs.writeFile(winInfo.path, winInfo.tempContent)
-      winInfo.content = winInfo.tempContent
-      sendUtil.send(winInfo.win, { event: 'save-success', data: {
-        fileName: path.basename(winInfo.path),
-        saved: true,
-      } })
+      await winInfoUtil.save(winInfo)
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '保存成功' } })
     } else {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '已取消保存' } })
@@ -254,10 +249,30 @@ const handlerList = {
   },
 }
 
+const handlerListSync = {
+  'convert-to-absolute-path': (winInfo, filePath) => {
+    if (path.isAbsolute(filePath)) {
+      return filePath
+    }
+    if (winInfo.path) {
+      return path.resolve(path.dirname(winInfo.path), filePath)
+    }
+    return null
+  },
+}
+
 ipcMain.handle('sendToMain', async (event, json) => {
   if (handlerList[json.event]) {
     const win = BrowserWindow.fromWebContents(event.sender)
     return await handlerList[json.event](winInfoUtil.getWinInfo(win) || winInfoUtil.getWinInfo(win.getParentWindow()), json.data)
   }
   return false
+})
+
+ipcMain.on('sendToMainSync', (event, json) => {
+  if (handlerListSync[json.event]) {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    event.returnValue = handlerListSync[json.event](winInfoUtil.getWinInfo(win) || winInfoUtil.getWinInfo(win.getParentWindow()), json.data)
+  }
+  event.returnValue = null
 })

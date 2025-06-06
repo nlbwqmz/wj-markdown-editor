@@ -33,6 +33,9 @@ export default {
           preload: path.resolve(__dirname, '../../preload.js'),
         },
       })
+      settingWin.once('closed', () => {
+        settingWin = null
+      })
       // 通过默认浏览器打开链接
       settingWin.webContents.setWindowOpenHandler((details) => {
         shell.openExternal(details.url).then(() => {})
@@ -43,7 +46,7 @@ export default {
       })
       if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
         settingWin.loadURL('http://localhost:8080/#/setting').then(() => {
-          // settingWin.webContents.openDevTools({ mode: 'undocked' })
+          settingWin.webContents.openDevTools({ mode: 'undocked' })
         })
       } else {
         settingWin.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: 'setting' }).then(() => {})

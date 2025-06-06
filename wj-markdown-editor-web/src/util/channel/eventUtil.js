@@ -53,16 +53,23 @@ export default {
         centered: true,
         title: '提示',
         icon: createVNode(ExclamationCircleOutlined),
-        content: `${useCommonStore().fileName}未保存，是否直接退出？`,
+        content: createVNode('div', {}, [
+          h('span', { style: { fontWeight: 'bold' } }, useCommonStore().fileName),
+          h('span', {}, '存在未保存的修改，是否确认退出？建议启用自动保存功能以避免数据丢失。'),
+        ]),
         footer: h('div', { style: { width: '100%', display: 'flex', justifyContent: 'right', gap: '10px', paddingTop: '10px' } }, [
           h(Button, { onClick: () => modal.destroy() }, () => '取消'),
+          h(Button, { type: 'primary', onClick: () => {
+            modal.destroy()
+            channelUtil.send({ event: 'open-setting' }).then(() => {})
+          } }, () => '打开设置'),
           h(Button, {
             type: 'primary',
             danger: true,
             onClick: () => {
               channelUtil.send({ event: 'force-close' }).then(() => {})
               modal.destroy() },
-          }, () => '直接退出'),
+          }, () => '确认退出'),
         ]),
       })
     })

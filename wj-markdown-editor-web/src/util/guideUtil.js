@@ -1,11 +1,30 @@
 import codeGuideImg from '@/assets/img/guide/Code.webp'
 import containerGuideImg from '@/assets/img/guide/Container.webp'
-import currentDateGuideImg from '@/assets/img/guide/CurrentDate.webp'
 import githubAlertGuideImg from '@/assets/img/guide/GithubAlert.webp'
+import tableGuideImg from '@/assets/img/guide/Table.webp'
 import textColorGuideImg from '@/assets/img/guide/TextColor.webp'
 
 const content = `
 # 示例
+
+::: Tip
+可使用工具栏快捷操作。
+:::
+
+## 通用自动完成
+
+> [!Important] 提示
+> 需要使用\`/\`激活。
+
+|   类别   |                    提示词                     |
+| :------: | :-------------------------------------------: |
+|   音频   |  ['audio', 'yp', 'yinpin', '音频', '!audio']  |
+|   视频   |  ['video', 'sp', 'shipin', '视频', '!video']  |
+|   日期   |        ['date', 'rq', 'riqi', '日期']         |
+|   时间   | ['datetime', 'sj', 'shijian', 'time', '时间'] |
+|   图片   |       ['image', 'tp', 'tupian', '图片']       |
+|   链接   |       ['link', 'lj', 'lianjie', '链接']       |
+| 文字颜色 |  ['color', 'text', 'ys', 'wzys', '文字颜色']  |
 
 ## 提示
 
@@ -168,15 +187,19 @@ Container.
 
 <img src="${codeGuideImg}" alt="Code"/>
 
-## 当前时间
+## 表格
 
-<img src="${currentDateGuideImg}" alt="CurrentDate"/>
+<img src="${tableGuideImg}" alt="Table"/>
+
+## 视频
+
+\`!video(链接)\`
+
+## 音频
+
+\`!audio(链接)\`
 
 ## 文字颜色
-
-::: Tip
-可使用工具栏快捷操作。
-:::
 
 <img src="${textColorGuideImg}" alt="TextColor"/>
 

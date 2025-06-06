@@ -281,29 +281,6 @@ function jumpToTargetLine() {
   }
 }
 
-/* function jumpToTargetLine(line) {
-  if (scrolling.value.preview) {
-    return
-  }
-  // 找到对应的预览元素
-  const lineNumber = line.number
-  console.error(lineNumber)
-  const previewElement = findPreviewElement(lineNumber)
-  if (previewElement && previewRef.value) {
-    // 使用offsetTop某些标签会有问题（tr、tbody等表格标签）
-    const targetScrollTop = getElementToTopDistance(previewElement, previewRef.value)
-    scrolling.value.editor = true
-    // 平滑滚动到目标位置
-    previewRef.value.scrollTo({
-      top: targetScrollTop,
-      behavior: 'smooth',
-    })
-    checkScrollTop(previewRef.value, targetScrollTop, () => {
-      scrolling.value.editor = false
-    })
-  }
-} */
-
 function syncEditorToPreview() {
   if (scrolling.value.preview) {
     return
@@ -863,6 +840,34 @@ function refreshToolbarList() {
         editorView.focus()
       },
     },
+    video: {
+      label: '视频',
+      icon: 'i-tabler:video',
+      menuList: [
+        {
+          label: '插入模板',
+          action: () => { editorUtil.video(editorView) },
+        },
+        {
+          label: '本地视频',
+          action: () => { editorUtil.videoLocal(editorView) },
+        },
+      ],
+    },
+    audio: {
+      label: '音频',
+      icon: 'i-tabler:device-audio-tape',
+      menuList: [
+        {
+          label: '插入模板',
+          action: () => { editorUtil.audio(editorView) },
+        },
+        {
+          label: '本地音频',
+          action: () => { editorUtil.audioLocal(editorView) },
+        },
+      ],
+    },
     undo: {
       label: '撤销',
       icon: 'i-tabler:arrow-back-up',
@@ -875,12 +880,6 @@ function refreshToolbarList() {
       shortcutKey: 'Ctrl+y',
       action: () => { editorUtil.redo(editorView) },
     },
-    focusLine: {
-      label: '跳转到目标行',
-      icon: 'i-tabler:focus-2',
-      shortcutKey: getKeymapByShortcutKeyId('editor-focus-line'),
-      action: jumpToTargetLine,
-    },
     textColor: {
       label: '文字颜色',
       icon: 'i-tabler:color-picker',
@@ -891,6 +890,12 @@ function refreshToolbarList() {
         'onPureColorChange': onTextColorChange,
         'onGradientColorChange': onTextColorChange,
       }, { extra: () => h('div', {}, '选中文字颜色语法文本直接更改颜色。') }),
+    },
+    focusLine: {
+      label: '跳转到目标行',
+      icon: 'i-tabler:focus-2',
+      shortcutKey: getKeymapByShortcutKeyId('editor-focus-line'),
+      action: jumpToTargetLine,
     },
     menuVisible: {
       label: '大纲',

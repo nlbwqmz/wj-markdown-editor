@@ -30,6 +30,9 @@ export default {
           preload: path.resolve(__dirname, '../../preload.js'),
         },
       })
+      guideWin.on('closed', () => {
+        guideWin = null
+      })
       // 通过默认浏览器打开链接
       guideWin.webContents.setWindowOpenHandler((details) => {
         shell.openExternal(details.url).then(() => {})

@@ -8,6 +8,8 @@ export default {
   fileMode: '4',
   fileAbsolutePath: '',
   fileRelativePath: 'assets',
+  // 可选值 blur(窗口失焦) close(窗口关闭)
+  autoSave: [],
   menuVisible: true,
   previewWidth: 80,
   fontSize: 16,

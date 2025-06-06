@@ -29,6 +29,17 @@ const imageBedUploaderList = ref([
   { value: 'smms', name: 'SM.MS' },
 ])
 
+const autoSaveOptionList = ref([
+  {
+    label: '窗口失焦时',
+    value: 'blur',
+  },
+  {
+    label: '窗口关闭时',
+    value: 'close',
+  },
+])
+
 const codeThemeList = constant.codeThemeList
 const previewThemeList = constant.previewThemeList
 
@@ -160,7 +171,7 @@ function reset() {
             <template #label>
               <div class="flex items-center gap-1">
                 <span>启动页</span>
-                <a-tooltip placement="top" color="#1677ff">
+                <a-tooltip placement="topRight" color="#1677ff">
                   <template #title>
                     有内容时生效
                   </template>
@@ -189,6 +200,20 @@ function reset() {
           </a-descriptions-item>
           <a-descriptions-item label="最近历史记录数量">
             <a-input-number v-model:value="config.recentMax" :min="0" :max="50" class="w-full" :controls="false" />
+          </a-descriptions-item>
+          <a-descriptions-item>
+            <template #label>
+              <div class="flex items-center gap-1">
+                <span>自动保存</span>
+                <a-tooltip placement="topRight" color="#1677ff">
+                  <template #title>
+                    仅当文件保存路径存在时生效
+                  </template>
+                  <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
+                </a-tooltip>
+              </div>
+            </template>
+            <a-checkbox-group v-model:value="config.autoSave" :options="autoSaveOptionList" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
@@ -288,9 +313,9 @@ function reset() {
             <template #label>
               <div class="flex items-center gap-1">
                 <span>突出匹配文本</span>
-                <a-tooltip placement="top" color="#1677ff">
+                <a-tooltip placement="topRight" color="#1677ff">
                   <template #title>
-                    突出显示与所选内容匹配的文本。
+                    突出显示与所选内容匹配的文本
                   </template>
                   <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
                 </a-tooltip>

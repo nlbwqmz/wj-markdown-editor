@@ -28,6 +28,15 @@ function findByWin(win) {
   return winInfoList.find(item => item.win === win)
 }
 
+async function save(winInfo) {
+  await fs.writeFile(winInfo.path, winInfo.tempContent)
+  winInfo.content = winInfo.tempContent
+  sendUtil.send(winInfo.win, { event: 'save-success', data: {
+    fileName: path.basename(winInfo.path),
+    saved: true,
+  } })
+}
+
 export default {
   createNew: async (filePath, isRecent = false) => {
     const exists = filePath && await fs.pathExists(filePath)
@@ -53,6 +62,7 @@ export default {
       minWidth: 800,
       minHeight: 600,
       webPreferences: {
+        webSecurity: false,
         preload: path.resolve(__dirname, '../../preload.js'),
       },
     })
@@ -107,8 +117,11 @@ export default {
 
       return { action: 'deny' }
     })
-    win.on('close', (e) => {
+    win.on('close', async (e) => {
       const winInfo = findByWin(win)
+      if (winInfo.path && configUtil.getConfig().autoSave.includes('close') && winInfo.content !== winInfo.tempContent) {
+        await save(winInfo)
+      }
       if (winInfo.forceClose !== true) {
         if (winInfo.content !== winInfo.tempContent) {
           sendUtil.send(win, { event: 'unsaved' })
@@ -119,16 +132,22 @@ export default {
       deleteEditorWin(id)
       checkWinList()
     })
+    win.on('blur', () => {
+      const winInfo = findByWin(win)
+      if (winInfo.path && configUtil.getConfig().autoSave.includes('blur') && winInfo.content !== winInfo.tempContent) {
+        save(winInfo)
+      }
+    })
     // 在请求自定义协议（wj）时，添加自定义请求头（X-Window-ID）标识窗口ID，用于获取相对路径的图片、文件等
     win.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
-      if (details.url.startsWith('wj:///')) {
+      if (details.url.startsWith('wj:') || details.url.startsWith('wj-stream:')) {
         details.requestHeaders['X-Window-ID'] = id
       }
       callback({ requestHeaders: details.requestHeaders })
     })
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
       win.loadURL(content ? `http://localhost:8080/#/${configUtil.getConfig().startPage}` : 'http://localhost:8080/#/editor').then(() => {
-        win.webContents.openDevTools({ mode: 'undocked' })
+        // win.webContents.openDevTools({ mode: 'undocked' })
       })
     } else {
       win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: content ? configUtil.getConfig().startPage : 'editor' }).then(() => {})
@@ -143,4 +162,5 @@ export default {
   getAll: () => {
     return winInfoList
   },
+  save,
 }

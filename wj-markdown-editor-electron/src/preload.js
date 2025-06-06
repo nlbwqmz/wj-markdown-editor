@@ -10,6 +10,7 @@ const showToMain = {
   sendToMain: json => ipcRenderer.invoke('sendToMain', json),
   // 只能在渲染进程中使用 通过web端file对象获取绝对路径
   getWebFilePath: file => webUtils.getPathForFile(file),
+  sendToMainSync: json => ipcRenderer.sendSync('sendToMainSync', json),
 }
 
 contextBridge.exposeInMainWorld('node', {

@@ -37,7 +37,7 @@ function tableCompletion(context) {
       suggestions.push({
         label: `${rows}${symbol}${cols + i}`,
         type: 'text',
-        section: '表格',
+        section: '表格（行x列）',
         apply: (view, completion, from, to) => {
           editorUtil.insertTable(view, rows, cols + i, from, to)
         },
