@@ -22,6 +22,7 @@ const anchorList = [
   { key: '4', href: '#imageBed', title: '图床' },
   { key: '5', href: '#shortcut', title: '快捷键' },
   { key: '6', href: '#watermark', title: '水印' },
+  { key: '7', href: '#export', title: '导出' },
 ]
 
 const imageBedUploaderList = ref([
@@ -585,6 +586,37 @@ function reset() {
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" label="字体颜色">
             <ColorPicker v-model:pure-color="config.watermark.font.color" format="rgb" shape="square" picker-type="chrome" />
+          </a-descriptions-item>
+        </a-descriptions>
+        <a-descriptions bordered :column="1" size="small">
+          <template #title>
+            <span id="export">导出</span>
+          </template>
+          <a-descriptions-item label="PDF页码">
+            <a-radio-group v-model:value="config.export.pdf.footer.pageNumber" button-style="solid">
+              <a-radio-button :value="true">
+                是
+              </a-radio-button>
+              <a-radio-button :value="false">
+                否
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item label="PDF页脚">
+            <a-textarea
+              v-model:value="config.export.pdf.footer.content"
+              spellcheck="false"
+              placeholder="支持html标签"
+              auto-size
+            />
+          </a-descriptions-item>
+          <a-descriptions-item label="PDF页头">
+            <a-textarea
+              v-model:value="config.export.pdf.header.content"
+              spellcheck="false"
+              placeholder="支持html标签"
+              auto-size
+            />
           </a-descriptions-item>
         </a-descriptions>
       </div>

@@ -16,6 +16,17 @@ export default {
   startPage: 'preview',
   openRecent: true,
   recentMax: 10,
+  export: {
+    pdf: {
+      footer: {
+        pageNumber: true,
+        content: '文档由<a target="_blank" href="https://github.com/nlbwqmz/wj-markdown-editor">wj-markdown-editor</a>导出',
+      },
+      header: {
+        content: '',
+      },
+    },
+  },
   editorExtension: {
     lineNumbers: true,
     lineWrapping: true,

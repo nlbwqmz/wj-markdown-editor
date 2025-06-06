@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BrowserWindow, dialog } from 'electron'
 import fs from 'fs-extra'
+import configUtil from '../../data/configUtil.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
 
@@ -67,14 +68,18 @@ async function doExport(winInfo, data) {
         buffer = image.toJPEG(100)
       }
     } else if (data.type === 'PDF') {
+      const config = configUtil.getConfig()
+      const pageNumber = config.export.pdf.footer.pageNumber
+      const footer = config.export.pdf.footer.content
+      const header = config.export.pdf.header.content
       buffer = await exportWin.webContents.printToPDF({
         pageSize: 'A4',
         printBackground: true,
         generateTaggedPDF: true,
-        displayHeaderFooter: true,
+        displayHeaderFooter: Boolean(pageNumber || footer || header),
         generateDocumentOutline: true,
-        headerTemplate: '<span></span>',
-        footerTemplate: '<div style="font-size: 12px; text-align: center; width: 100%">第<span class="pageNumber"></span>页 共<span class="totalPages"></span>页 文档由<a target="_blank" href="https://github.com/nlbwqmz/wj-markdown-editor">wj-markdown-editor</a>导出</div>',
+        headerTemplate: `<div style="font-size: 12px; text-align: center; width: 100%">${header}</div>`,
+        footerTemplate: `<div style="font-size: 12px; text-align: center; width: 100%">${pageNumber === true ? '第<span class="pageNumber"></span>页 共<span class="totalPages"></span>页 ' : ''}${footer}</div>`,
       })
     }
     await fs.writeFile(data.filePath, buffer)
