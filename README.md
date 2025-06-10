@@ -32,27 +32,19 @@
 
 ### 编辑
 
-![light_home.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagelight_home_p_fbiT.png>)
-
-![dark_home.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagedark_home_F5yOu4.png>)
+![edit_done.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/edit_done_dKVmHx.png>)
 
 ### 预览
 
-![preview_light.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagepreview_light_dr6YJF.png>)
-
-![preview_dark.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagepreview_dark_sg7gLg.png>)
+![preview_done.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/preview_done_Lu_VHD.png>)
 
 ### 设置
 
-![setting_light.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagesetting_light_HvFPeg.png>)
-
-![setting_dark.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagesetting_dark_iOVisC.png>)
+![setting_done.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/setting_done_mk6OCb.png>)
 
 ### 示例
 
-![demo_light.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagedemo_light_MG_RpR.png>)
-
-![demo_dark.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/imagedemo_dark_pyswx9.png>)
+![guide_done.png](<https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/guide_done_rhttdX.png>)
 
 ## 注意
 - **便携版**不支持自动升级，需手动下载，解压后直接替换根目录即可。
