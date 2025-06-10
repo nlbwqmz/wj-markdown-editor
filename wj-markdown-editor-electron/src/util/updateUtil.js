@@ -46,7 +46,7 @@ async function checkUpdate(winAllList) {
         resolve({ finish: true, success: false, message: '处理失败，请检查网络。' })
       })
     }).catch((e) => {
-      console.error('Check latest error', e)
+      console.error('Check latest error', e.message)
       broadcastVersionMessage(winAllList, false)
       resolve({ finish: true, success: false, message: '处理失败，请检查网络。' })
     })
