@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="" theme="light">
-  <head>
+<head>
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>wj-markdown-editor</title>
-  </head>
-  <body>
-  <div
-      id="startup-loading"
-      style="
+</head>
+<body>
+<div
+        id="startup-loading"
+        style="
         width: 100vw;
         height: 100vh;
         position: fixed;
@@ -21,48 +21,54 @@
         justify-content: center;
         visibility: hidden;
       "
-  >
+>
     <img
-        src="favicon.ico"
-        alt=""
-        style="max-width: 256px; max-height: 256px; width: calc(100vw * 0.3); height: calc(100vw * 0.3)"
+            src="favicon.ico"
+            alt=""
+            style="max-width: 256px; max-height: 256px; width: calc(100vw * 0.3); height: calc(100vw * 0.3)"
     />
-  </div>
-  <script>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const startupLoading = document.getElementById('startup-loading')
+        if (startupLoading) {
+            startupLoading.children[0].addEventListener(
+                'animationend',
+                () => {
+                    startupLoading.remove()
+                },
+                {once: true},
+            )
+            startupLoading.children[0].style.animation = 'startup-load-leave 0.8s linear forwards'
+        }
+    })
 
     if (window.location.href.indexOf('searchBar') > -1 || window.location.href.indexOf('export') > -1) {
-      document.getElementById('startup-loading').remove()
+        document.getElementById('startup-loading').remove()
     } else {
-      window.node.sendToMain({ event: 'get-global-theme' }).then(globalTheme => {
-          if(globalTheme === 'dark'){
-              document.getElementById('startup-loading').style.backgroundColor = 'rgb(40,44,52)'
-          }
-          document.getElementById('startup-loading').style.visibility = 'visible'
-          document.addEventListener('DOMContentLoaded', () => {
-              const startupLoading = document.getElementById('startup-loading')
-              if (startupLoading) {
-                  startupLoading.children[0].style.animation = 'startup-load-leave 0.8s linear forwards'
-                  startupLoading.children[0].addEventListener(
-                      'animationend',
-                      () => {startupLoading.remove()},
-                      { once: true },
-                  )
-              }
-          })
-      })
+        window.node.sendToMain({event: 'get-global-theme'}).then(globalTheme => {
+            const startupLoading = document.getElementById('startup-loading')
+            if (startupLoading) {
+                if (globalTheme === 'dark') {
+                    startupLoading.style.backgroundColor = 'rgb(40,44,52)'
+                }
+                startupLoading.style.visibility = 'visible'
+            }
+
+        })
     }
-  </script>
-  <div id="app"></div>
-  <script type="module" src="/src/main.js"></script>
-  </body>
-  <style>
+</script>
+<div id="app"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+<style>
     @keyframes startup-load-leave {
-      from {
-        opacity: 100;
-      }
-      to {
-        opacity: 0;
-      }
+        from {
+            opacity: 100;
+        }
+        to {
+            opacity: 0;
+        }
     }
-  </style>
+</style>
 </html>
