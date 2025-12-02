@@ -1,146 +1,147 @@
 .preview-theme-github {
-    --base-size-4: 0.25rem;
-    --base-size-8: 0.5rem;
-    --base-size-16: 1rem;
-    --base-size-24: 1.5rem;
-    --base-size-40: 2.5rem;
-    --base-text-weight-normal: 400;
-    --base-text-weight-medium: 500;
-    --base-text-weight-semibold: 600;
-    --fontStack-monospace: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
-    --fgColor-accent: Highlight;
+  --base-size-4: 0.25rem;
+  --base-size-8: 0.5rem;
+  --base-size-16: 1rem;
+  --base-size-24: 1.5rem;
+  --base-size-40: 2.5rem;
+  --base-text-weight-normal: 400;
+  --base-text-weight-medium: 500;
+  --base-text-weight-semibold: 600;
+  --fontStack-monospace: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  --fgColor-accent: Highlight;
 }
 :root[theme='dark'] {
-    .preview-theme-github {
-        /* dark */
-        color-scheme: dark;
-        --focus-outlineColor: #1f6feb;
-        --fgColor-default: #f0f6fc;
-        --fgColor-muted: #9198a1;
-        --fgColor-accent: #4493f8;
-        --fgColor-success: #3fb950;
-        --fgColor-attention: #d29922;
-        --fgColor-danger: #f85149;
-        --fgColor-done: #ab7df8;
-        --bgColor-default: var(--wj-markdown-bg-primary);
-        --bgColor-muted: #151b23;
-        --bgColor-neutral-muted: #656c7633;
-        --bgColor-attention-muted: #bb800926;
-        --borderColor-default: #3d444d;
-        --borderColor-muted: #3d444db3;
-        --borderColor-neutral-muted: #3d444db3;
-        --borderColor-accent-emphasis: #1f6feb;
-        --borderColor-success-emphasis: #238636;
-        --borderColor-attention-emphasis: #9e6a03;
-        --borderColor-danger-emphasis: #da3633;
-        --borderColor-done-emphasis: #8957e5;
-        --color-prettylights-syntax-comment: #9198a1;
-        --color-prettylights-syntax-constant: #79c0ff;
-        --color-prettylights-syntax-constant-other-reference-link: #a5d6ff;
-        --color-prettylights-syntax-entity: #d2a8ff;
-        --color-prettylights-syntax-storage-modifier-import: #f0f6fc;
-        --color-prettylights-syntax-entity-tag: #7ee787;
-        --color-prettylights-syntax-keyword: #ff7b72;
-        --color-prettylights-syntax-string: #a5d6ff;
-        --color-prettylights-syntax-variable: #ffa657;
-        --color-prettylights-syntax-brackethighlighter-unmatched: #f85149;
-        --color-prettylights-syntax-brackethighlighter-angle: #9198a1;
-        --color-prettylights-syntax-invalid-illegal-text: #f0f6fc;
-        --color-prettylights-syntax-invalid-illegal-bg: #8e1519;
-        --color-prettylights-syntax-carriage-return-text: #f0f6fc;
-        --color-prettylights-syntax-carriage-return-bg: #b62324;
-        --color-prettylights-syntax-string-regexp: #7ee787;
-        --color-prettylights-syntax-markup-list: #f2cc60;
-        --color-prettylights-syntax-markup-heading: #1f6feb;
-        --color-prettylights-syntax-markup-italic: #f0f6fc;
-        --color-prettylights-syntax-markup-bold: #f0f6fc;
-        --color-prettylights-syntax-markup-deleted-text: #ffdcd7;
-        --color-prettylights-syntax-markup-deleted-bg: #67060c;
-        --color-prettylights-syntax-markup-inserted-text: #aff5b4;
-        --color-prettylights-syntax-markup-inserted-bg: #033a16;
-        --color-prettylights-syntax-markup-changed-text: #ffdfb6;
-        --color-prettylights-syntax-markup-changed-bg: #5a1e02;
-        --color-prettylights-syntax-markup-ignored-text: #f0f6fc;
-        --color-prettylights-syntax-markup-ignored-bg: #1158c7;
-        --color-prettylights-syntax-meta-diff-range: #d2a8ff;
-        --color-prettylights-syntax-sublimelinter-gutter-mark: #3d444d;
-    }
-
+  .preview-theme-github {
+    /* dark */
+    color-scheme: dark;
+    --focus-outlineColor: #1f6feb;
+    --fgColor-default: #f0f6fc;
+    --fgColor-muted: #9198a1;
+    --fgColor-accent: #4493f8;
+    --fgColor-success: #3fb950;
+    --fgColor-attention: #d29922;
+    --fgColor-danger: #f85149;
+    --fgColor-done: #ab7df8;
+    --bgColor-default: var(--wj-markdown-bg-primary);
+    --bgColor-muted: #151b23;
+    --bgColor-neutral-muted: #656c7633;
+    --bgColor-attention-muted: #bb800926;
+    --borderColor-default: #3d444d;
+    --borderColor-muted: #3d444db3;
+    --borderColor-neutral-muted: #3d444db3;
+    --borderColor-accent-emphasis: #1f6feb;
+    --borderColor-success-emphasis: #238636;
+    --borderColor-attention-emphasis: #9e6a03;
+    --borderColor-danger-emphasis: #da3633;
+    --borderColor-done-emphasis: #8957e5;
+    --color-prettylights-syntax-comment: #9198a1;
+    --color-prettylights-syntax-constant: #79c0ff;
+    --color-prettylights-syntax-constant-other-reference-link: #a5d6ff;
+    --color-prettylights-syntax-entity: #d2a8ff;
+    --color-prettylights-syntax-storage-modifier-import: #f0f6fc;
+    --color-prettylights-syntax-entity-tag: #7ee787;
+    --color-prettylights-syntax-keyword: #ff7b72;
+    --color-prettylights-syntax-string: #a5d6ff;
+    --color-prettylights-syntax-variable: #ffa657;
+    --color-prettylights-syntax-brackethighlighter-unmatched: #f85149;
+    --color-prettylights-syntax-brackethighlighter-angle: #9198a1;
+    --color-prettylights-syntax-invalid-illegal-text: #f0f6fc;
+    --color-prettylights-syntax-invalid-illegal-bg: #8e1519;
+    --color-prettylights-syntax-carriage-return-text: #f0f6fc;
+    --color-prettylights-syntax-carriage-return-bg: #b62324;
+    --color-prettylights-syntax-string-regexp: #7ee787;
+    --color-prettylights-syntax-markup-list: #f2cc60;
+    --color-prettylights-syntax-markup-heading: #1f6feb;
+    --color-prettylights-syntax-markup-italic: #f0f6fc;
+    --color-prettylights-syntax-markup-bold: #f0f6fc;
+    --color-prettylights-syntax-markup-deleted-text: #ffdcd7;
+    --color-prettylights-syntax-markup-deleted-bg: #67060c;
+    --color-prettylights-syntax-markup-inserted-text: #aff5b4;
+    --color-prettylights-syntax-markup-inserted-bg: #033a16;
+    --color-prettylights-syntax-markup-changed-text: #ffdfb6;
+    --color-prettylights-syntax-markup-changed-bg: #5a1e02;
+    --color-prettylights-syntax-markup-ignored-text: #f0f6fc;
+    --color-prettylights-syntax-markup-ignored-bg: #1158c7;
+    --color-prettylights-syntax-meta-diff-range: #d2a8ff;
+    --color-prettylights-syntax-sublimelinter-gutter-mark: #3d444d;
+  }
 }
 
 :root[theme='light'] {
-    .preview-theme-github {
-        /* light */
-        color-scheme: light;
-        --focus-outlineColor: #0969da;
-        --fgColor-default: #1f2328;
-        --fgColor-muted: #59636e;
-        --fgColor-accent: #0969da;
-        --fgColor-success: #1a7f37;
-        --fgColor-attention: #9a6700;
-        --fgColor-danger: #d1242f;
-        --fgColor-done: #8250df;
-        --bgColor-default: var(--wj-markdown-bg-primary);
-        --bgColor-muted: #f6f8fa;
-        --bgColor-neutral-muted: #818b981f;
-        --bgColor-attention-muted: #fff8c5;
-        --borderColor-default: #d1d9e0;
-        --borderColor-muted: #d1d9e0b3;
-        --borderColor-neutral-muted: #d1d9e0b3;
-        --borderColor-accent-emphasis: #0969da;
-        --borderColor-success-emphasis: #1a7f37;
-        --borderColor-attention-emphasis: #9a6700;
-        --borderColor-danger-emphasis: #cf222e;
-        --borderColor-done-emphasis: #8250df;
-        --color-prettylights-syntax-comment: #59636e;
-        --color-prettylights-syntax-constant: #0550ae;
-        --color-prettylights-syntax-constant-other-reference-link: #0a3069;
-        --color-prettylights-syntax-entity: #6639ba;
-        --color-prettylights-syntax-storage-modifier-import: #1f2328;
-        --color-prettylights-syntax-entity-tag: #0550ae;
-        --color-prettylights-syntax-keyword: #cf222e;
-        --color-prettylights-syntax-string: #0a3069;
-        --color-prettylights-syntax-variable: #953800;
-        --color-prettylights-syntax-brackethighlighter-unmatched: #82071e;
-        --color-prettylights-syntax-brackethighlighter-angle: #59636e;
-        --color-prettylights-syntax-invalid-illegal-text: #f6f8fa;
-        --color-prettylights-syntax-invalid-illegal-bg: #82071e;
-        --color-prettylights-syntax-carriage-return-text: #f6f8fa;
-        --color-prettylights-syntax-carriage-return-bg: #cf222e;
-        --color-prettylights-syntax-string-regexp: #116329;
-        --color-prettylights-syntax-markup-list: #3b2300;
-        --color-prettylights-syntax-markup-heading: #0550ae;
-        --color-prettylights-syntax-markup-italic: #1f2328;
-        --color-prettylights-syntax-markup-bold: #1f2328;
-        --color-prettylights-syntax-markup-deleted-text: #82071e;
-        --color-prettylights-syntax-markup-deleted-bg: #ffebe9;
-        --color-prettylights-syntax-markup-inserted-text: #116329;
-        --color-prettylights-syntax-markup-inserted-bg: #dafbe1;
-        --color-prettylights-syntax-markup-changed-text: #953800;
-        --color-prettylights-syntax-markup-changed-bg: #ffd8b5;
-        --color-prettylights-syntax-markup-ignored-text: #d1d9e0;
-        --color-prettylights-syntax-markup-ignored-bg: #0550ae;
-        --color-prettylights-syntax-meta-diff-range: #8250df;
-        --color-prettylights-syntax-sublimelinter-gutter-mark: #818b98;
-    }
+  .preview-theme-github {
+    /* light */
+    color-scheme: light;
+    --focus-outlineColor: #0969da;
+    --fgColor-default: #1f2328;
+    --fgColor-muted: #59636e;
+    --fgColor-accent: #0969da;
+    --fgColor-success: #1a7f37;
+    --fgColor-attention: #9a6700;
+    --fgColor-danger: #d1242f;
+    --fgColor-done: #8250df;
+    --bgColor-default: var(--wj-markdown-bg-primary);
+    --bgColor-muted: #f6f8fa;
+    --bgColor-neutral-muted: #818b981f;
+    --bgColor-attention-muted: #fff8c5;
+    --borderColor-default: #d1d9e0;
+    --borderColor-muted: #d1d9e0b3;
+    --borderColor-neutral-muted: #d1d9e0b3;
+    --borderColor-accent-emphasis: #0969da;
+    --borderColor-success-emphasis: #1a7f37;
+    --borderColor-attention-emphasis: #9a6700;
+    --borderColor-danger-emphasis: #cf222e;
+    --borderColor-done-emphasis: #8250df;
+    --color-prettylights-syntax-comment: #59636e;
+    --color-prettylights-syntax-constant: #0550ae;
+    --color-prettylights-syntax-constant-other-reference-link: #0a3069;
+    --color-prettylights-syntax-entity: #6639ba;
+    --color-prettylights-syntax-storage-modifier-import: #1f2328;
+    --color-prettylights-syntax-entity-tag: #0550ae;
+    --color-prettylights-syntax-keyword: #cf222e;
+    --color-prettylights-syntax-string: #0a3069;
+    --color-prettylights-syntax-variable: #953800;
+    --color-prettylights-syntax-brackethighlighter-unmatched: #82071e;
+    --color-prettylights-syntax-brackethighlighter-angle: #59636e;
+    --color-prettylights-syntax-invalid-illegal-text: #f6f8fa;
+    --color-prettylights-syntax-invalid-illegal-bg: #82071e;
+    --color-prettylights-syntax-carriage-return-text: #f6f8fa;
+    --color-prettylights-syntax-carriage-return-bg: #cf222e;
+    --color-prettylights-syntax-string-regexp: #116329;
+    --color-prettylights-syntax-markup-list: #3b2300;
+    --color-prettylights-syntax-markup-heading: #0550ae;
+    --color-prettylights-syntax-markup-italic: #1f2328;
+    --color-prettylights-syntax-markup-bold: #1f2328;
+    --color-prettylights-syntax-markup-deleted-text: #82071e;
+    --color-prettylights-syntax-markup-deleted-bg: #ffebe9;
+    --color-prettylights-syntax-markup-inserted-text: #116329;
+    --color-prettylights-syntax-markup-inserted-bg: #dafbe1;
+    --color-prettylights-syntax-markup-changed-text: #953800;
+    --color-prettylights-syntax-markup-changed-bg: #ffd8b5;
+    --color-prettylights-syntax-markup-ignored-text: #d1d9e0;
+    --color-prettylights-syntax-markup-ignored-bg: #0550ae;
+    --color-prettylights-syntax-meta-diff-range: #8250df;
+    --color-prettylights-syntax-sublimelinter-gutter-mark: #818b98;
+  }
 }
 
 .preview-theme-github {
-    -ms-text-size-adjust: 100%;
-    -webkit-text-size-adjust: 100%;
-    margin: 0;
-    color: var(--fgColor-default);
-    background-color: var(--bgColor-default);
-    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
-    font-size: 16px;
-    line-height: 1.5;
-    word-wrap: break-word;
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+  margin: 0;
+  color: var(--fgColor-default);
+  background-color: var(--bgColor-default);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji';
+  font-size: 16px;
+  line-height: 1.5;
+  word-wrap: break-word;
 }
 
 .preview-theme-github .octicon {
-    display: inline-block;
-    fill: currentColor;
-    vertical-align: text-bottom;
+  display: inline-block;
+  fill: currentColor;
+  vertical-align: text-bottom;
 }
 
 .preview-theme-github h1:hover .anchor .octicon-link:before,
@@ -149,242 +150,243 @@
 .preview-theme-github h4:hover .anchor .octicon-link:before,
 .preview-theme-github h5:hover .anchor .octicon-link:before,
 .preview-theme-github h6:hover .anchor .octicon-link:before {
-    width: 16px;
-    height: 16px;
-    content: ' ';
-    display: inline-block;
-    background-color: currentColor;
-    -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
-    mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
+  width: 16px;
+  height: 16px;
+  content: ' ';
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
+  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path fill-rule='evenodd' d='M7.775 3.275a.75.75 0 001.06 1.06l1.25-1.25a2 2 0 112.83 2.83l-2.5 2.5a2 2 0 01-2.83 0 .75.75 0 00-1.06 1.06 3.5 3.5 0 004.95 0l2.5-2.5a3.5 3.5 0 00-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 010-2.83l2.5-2.5a2 2 0 012.83 0 .75.75 0 001.06-1.06 3.5 3.5 0 00-4.95 0l-2.5 2.5a3.5 3.5 0 004.95 4.95l1.25-1.25a.75.75 0 00-1.06-1.06l-1.25 1.25a2 2 0 01-2.83 0z'></path></svg>");
 }
 
 .preview-theme-github details,
 .preview-theme-github figcaption,
 .preview-theme-github figure {
-    display: block;
+  display: block;
 }
 
 .preview-theme-github summary {
-    display: list-item;
+  display: list-item;
 }
 
 .preview-theme-github [hidden] {
-    display: none !important;
+  display: none !important;
 }
 
 .preview-theme-github a {
-    background-color: transparent;
-    color: var(--fgColor-accent);
-    text-decoration: none;
+  background-color: transparent;
+  color: var(--fgColor-accent);
+  text-decoration: none;
 }
 
 .preview-theme-github abbr[title] {
-    border-bottom: none;
-    -webkit-text-decoration: underline dotted;
-    text-decoration: underline dotted;
+  border-bottom: none;
+  -webkit-text-decoration: underline dotted;
+  text-decoration: underline dotted;
 }
 
 .preview-theme-github b,
 .preview-theme-github strong {
-    font-weight: var(--base-text-weight-semibold, 600);
+  font-weight: var(--base-text-weight-semibold, 600);
 }
 
 .preview-theme-github dfn {
-    font-style: italic;
+  font-style: italic;
 }
 
 .preview-theme-github h1 {
-    margin: .67em 0;
-    font-weight: var(--base-text-weight-semibold, 600);
-    padding-bottom: .3em;
-    font-size: 2em;
-    border-bottom: 1px solid var(--borderColor-muted);
+  margin: 0.67em 0;
+  font-weight: var(--base-text-weight-semibold, 600);
+  padding-bottom: 0.3em;
+  font-size: 2em;
+  border-bottom: 1px solid var(--borderColor-muted);
 }
 
 .preview-theme-github mark {
-    background-color: var(--bgColor-attention-muted);
-    color: var(--fgColor-default);
+  background-color: var(--bgColor-attention-muted);
+  color: var(--fgColor-default);
 }
 
 .preview-theme-github small {
-    font-size: 90%;
+  font-size: 90%;
 }
 
 .preview-theme-github sub,
 .preview-theme-github sup {
-    font-size: 75%;
-    line-height: 0;
-    position: relative;
-    vertical-align: baseline;
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
 }
 
 .preview-theme-github sub {
-    bottom: -0.25em;
+  bottom: -0.25em;
 }
 
 .preview-theme-github sup {
-    top: -0.5em;
+  top: -0.5em;
 }
 
 .preview-theme-github img {
-    border-style: none;
-    max-width: 100%;
-    box-sizing: content-box;
+  border-style: none;
+  max-width: 100%;
+  box-sizing: content-box;
 }
 
 .preview-theme-github code,
 .preview-theme-github kbd,
 .preview-theme-github pre,
 .preview-theme-github samp {
-    font-family: monospace;
-    font-size: 1em;
+  font-family: monospace;
+  font-size: 1em;
 }
 
 .preview-theme-github figure {
-    margin: 1em var(--base-size-40);
+  margin: 1em var(--base-size-40);
 }
 
 .preview-theme-github hr {
-    box-sizing: content-box;
-    overflow: hidden;
-    background: transparent;
-    border-bottom: 1px solid var(--borderColor-muted);
-    height: .2em;
-    padding: 0;
-    margin: var(--base-size-24) 0;
-    background-color: var(--borderColor-default);
-    border: 0;
+  box-sizing: content-box;
+  overflow: hidden;
+  background: transparent;
+  border-bottom: 1px solid var(--borderColor-muted);
+  height: 0.2em;
+  padding: 0;
+  margin: var(--base-size-24) 0;
+  background-color: var(--borderColor-default);
+  border: 0;
 }
 
 .preview-theme-github input {
-    font: inherit;
-    margin: 0;
-    overflow: visible;
-    font-family: inherit;
-    font-size: inherit;
-    line-height: inherit;
+  font: inherit;
+  margin: 0;
+  overflow: visible;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
 }
 
-.preview-theme-github [type=button],
-.preview-theme-github [type=reset],
-.preview-theme-github [type=submit] {
-    -webkit-appearance: button;
-    appearance: button;
+.preview-theme-github [type='button'],
+.preview-theme-github [type='reset'],
+.preview-theme-github [type='submit'] {
+  -webkit-appearance: button;
+  appearance: button;
 }
 
-.preview-theme-github [type=checkbox],
-.preview-theme-github [type=radio] {
-    box-sizing: border-box;
-    padding: 0;
+.preview-theme-github [type='checkbox'],
+.preview-theme-github [type='radio'] {
+  box-sizing: border-box;
+  padding: 0;
 }
 
-.preview-theme-github [type=number]::-webkit-inner-spin-button,
-.preview-theme-github [type=number]::-webkit-outer-spin-button {
-    height: auto;
+.preview-theme-github [type='number']::-webkit-inner-spin-button,
+.preview-theme-github [type='number']::-webkit-outer-spin-button {
+  height: auto;
 }
 
-.preview-theme-github [type=search]::-webkit-search-cancel-button,
-.preview-theme-github [type=search]::-webkit-search-decoration {
-    -webkit-appearance: none;
-    appearance: none;
+.preview-theme-github [type='search']::-webkit-search-cancel-button,
+.preview-theme-github [type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .preview-theme-github ::-webkit-input-placeholder {
-    color: inherit;
-    opacity: .54;
+  color: inherit;
+  opacity: 0.54;
 }
 
 .preview-theme-github ::-webkit-file-upload-button {
-    -webkit-appearance: button;
-    appearance: button;
-    font: inherit;
+  -webkit-appearance: button;
+  appearance: button;
+  font: inherit;
 }
 
 .preview-theme-github a:hover {
-    text-decoration: underline;
+  text-decoration: underline;
 }
 
 .preview-theme-github ::placeholder {
-    color: var(--fgColor-muted);
-    opacity: 1;
+  color: var(--fgColor-muted);
+  opacity: 1;
 }
 
 .preview-theme-github hr::before {
-    display: table;
-    content: "";
+  display: table;
+  content: '';
 }
 
 .preview-theme-github hr::after {
-    display: table;
-    clear: both;
-    content: "";
+  display: table;
+  clear: both;
+  content: '';
 }
 
 .preview-theme-github table {
-    border-spacing: 0;
-    border-collapse: collapse;
-    display: block;
-    width: max-content;
-    max-width: 100%;
-    overflow: auto;
-    font-variant: tabular-nums;
+  border-spacing: 0;
+  border-collapse: collapse;
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+  font-variant: tabular-nums;
 }
 
 .preview-theme-github td,
 .preview-theme-github th {
-    padding: 0;
+  padding: 0;
 }
 
 .preview-theme-github details summary {
-    cursor: pointer;
+  cursor: pointer;
 }
 
 .preview-theme-github a:focus,
-.preview-theme-github [role=button]:focus,
-.preview-theme-github input[type=radio]:focus,
-.preview-theme-github input[type=checkbox]:focus {
-    outline: 2px solid var(--focus-outlineColor);
-    outline-offset: -2px;
-    box-shadow: none;
+.preview-theme-github [role='button']:focus,
+.preview-theme-github input[type='radio']:focus,
+.preview-theme-github input[type='checkbox']:focus {
+  outline: 2px solid var(--focus-outlineColor);
+  outline-offset: -2px;
+  box-shadow: none;
 }
 
 .preview-theme-github a:focus:not(:focus-visible),
-.preview-theme-github [role=button]:focus:not(:focus-visible),
-.preview-theme-github input[type=radio]:focus:not(:focus-visible),
-.preview-theme-github input[type=checkbox]:focus:not(:focus-visible) {
-    outline: solid 1px transparent;
+.preview-theme-github [role='button']:focus:not(:focus-visible),
+.preview-theme-github input[type='radio']:focus:not(:focus-visible),
+.preview-theme-github input[type='checkbox']:focus:not(:focus-visible) {
+  outline: solid 1px transparent;
 }
 
 .preview-theme-github a:focus-visible,
-.preview-theme-github [role=button]:focus-visible,
-.preview-theme-github input[type=radio]:focus-visible,
-.preview-theme-github input[type=checkbox]:focus-visible {
-    outline: 2px solid var(--focus-outlineColor);
-    outline-offset: -2px;
-    box-shadow: none;
+.preview-theme-github [role='button']:focus-visible,
+.preview-theme-github input[type='radio']:focus-visible,
+.preview-theme-github input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--focus-outlineColor);
+  outline-offset: -2px;
+  box-shadow: none;
 }
 
 .preview-theme-github a:not([class]):focus,
 .preview-theme-github a:not([class]):focus-visible,
-.preview-theme-github input[type=radio]:focus,
-.preview-theme-github input[type=radio]:focus-visible,
-.preview-theme-github input[type=checkbox]:focus,
-.preview-theme-github input[type=checkbox]:focus-visible {
-    outline-offset: 0;
+.preview-theme-github input[type='radio']:focus,
+.preview-theme-github input[type='radio']:focus-visible,
+.preview-theme-github input[type='checkbox']:focus,
+.preview-theme-github input[type='checkbox']:focus-visible {
+  outline-offset: 0;
 }
 
 .preview-theme-github kbd {
-    display: inline-block;
-    padding: var(--base-size-4);
-    font: 11px var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
-    line-height: 10px;
-    color: var(--fgColor-default);
-    vertical-align: middle;
-    background-color: var(--bgColor-muted);
-    border: solid 1px var(--borderColor-neutral-muted);
-    border-bottom-color: var(--borderColor-neutral-muted);
-    border-radius: 6px;
-    box-shadow: inset 0 -1px 0 var(--borderColor-neutral-muted);
+  display: inline-block;
+  padding: var(--base-size-4);
+  font: 11px
+    var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
+  line-height: 10px;
+  color: var(--fgColor-default);
+  vertical-align: middle;
+  background-color: var(--bgColor-muted);
+  border: solid 1px var(--borderColor-neutral-muted);
+  border-bottom-color: var(--borderColor-neutral-muted);
+  border-radius: 6px;
+  box-shadow: inset 0 -1px 0 var(--borderColor-neutral-muted);
 }
 
 .preview-theme-github h1,
@@ -393,144 +395,162 @@
 .preview-theme-github h4,
 .preview-theme-github h5,
 .preview-theme-github h6 {
-    margin-top: var(--base-size-24);
-    margin-bottom: var(--base-size-16);
-    font-weight: var(--base-text-weight-semibold, 600);
-    line-height: 1.25;
+  margin-top: var(--base-size-24);
+  margin-bottom: var(--base-size-16);
+  font-weight: var(--base-text-weight-semibold, 600);
+  line-height: 1.25;
 }
 
 .preview-theme-github h2 {
-    font-weight: var(--base-text-weight-semibold, 600);
-    padding-bottom: .3em;
-    font-size: 1.5em;
-    border-bottom: 1px solid var(--borderColor-muted);
+  font-weight: var(--base-text-weight-semibold, 600);
+  padding-bottom: 0.3em;
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--borderColor-muted);
 }
 
 .preview-theme-github h3 {
-    font-weight: var(--base-text-weight-semibold, 600);
-    font-size: 1.25em;
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 1.25em;
 }
 
 .preview-theme-github h4 {
-    font-weight: var(--base-text-weight-semibold, 600);
-    font-size: 1em;
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 1em;
 }
 
 .preview-theme-github h5 {
-    font-weight: var(--base-text-weight-semibold, 600);
-    font-size: .875em;
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 0.875em;
 }
 
 .preview-theme-github h6 {
-    font-weight: var(--base-text-weight-semibold, 600);
-    font-size: .85em;
-    color: var(--fgColor-muted);
+  font-weight: var(--base-text-weight-semibold, 600);
+  font-size: 0.85em;
+  color: var(--fgColor-muted);
 }
 
 .preview-theme-github p {
-    margin-top: 0;
-    margin-bottom: 10px;
+  margin-top: 0;
+  margin-bottom: 10px;
 }
 
 .preview-theme-github blockquote {
-    margin: 0;
-    padding: 0 1em;
-    color: var(--fgColor-muted);
-    border-left: .25em solid var(--borderColor-default);
+  margin: 0;
+  padding: 0 1em;
+  color: var(--fgColor-muted);
+  border-left: 0.25em solid var(--borderColor-default);
 }
 
 .preview-theme-github ul,
 .preview-theme-github ol {
-    margin-top: 0;
-    margin-bottom: 0;
-    padding-left: 2em;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-left: 2em;
 }
 
 .preview-theme-github ol ol,
 .preview-theme-github ul ol {
-    list-style-type: lower-roman;
+  list-style-type: lower-roman;
 }
 
 .preview-theme-github ul ul ol,
 .preview-theme-github ul ol ol,
 .preview-theme-github ol ul ol,
 .preview-theme-github ol ol ol {
-    list-style-type: lower-alpha;
+  list-style-type: lower-alpha;
 }
 
 .preview-theme-github dd {
-    margin-left: 0;
+  margin-left: 0;
 }
 
 .preview-theme-github tt,
 .preview-theme-github code,
 .preview-theme-github samp {
-    font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
-    font-size: 12px;
+  font-family: var(
+    --fontStack-monospace,
+    ui-monospace,
+    SFMono-Regular,
+    SF Mono,
+    Menlo,
+    Consolas,
+    Liberation Mono,
+    monospace
+  );
+  font-size: 12px;
 }
 
 .preview-theme-github pre {
-    margin-top: 0;
-    margin-bottom: 0;
-    font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace);
-    font-size: 12px;
-    word-wrap: normal;
+  margin-top: 0;
+  margin-bottom: 0;
+  font-family: var(
+    --fontStack-monospace,
+    ui-monospace,
+    SFMono-Regular,
+    SF Mono,
+    Menlo,
+    Consolas,
+    Liberation Mono,
+    monospace
+  );
+  font-size: 12px;
+  word-wrap: normal;
 }
 
 .preview-theme-github .octicon {
-    display: inline-block;
-    overflow: visible !important;
-    vertical-align: text-bottom;
-    fill: currentColor;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
 }
 
 .preview-theme-github input::-webkit-outer-spin-button,
 .preview-theme-github input::-webkit-inner-spin-button {
-    margin: 0;
-    appearance: none;
+  margin: 0;
+  appearance: none;
 }
 
 .preview-theme-github .mr-2 {
-    margin-right: var(--base-size-8, 8px) !important;
+  margin-right: var(--base-size-8, 8px) !important;
 }
 
 .preview-theme-github::before {
-    display: table;
-    content: "";
+  display: table;
+  content: '';
 }
 
 .preview-theme-github::after {
-    display: table;
-    clear: both;
-    content: "";
+  display: table;
+  clear: both;
+  content: '';
 }
 
-.preview-theme-github>*:first-child {
-    margin-top: 0 !important;
+.preview-theme-github > *:first-child {
+  margin-top: 0 !important;
 }
 
-.preview-theme-github>*:last-child {
-    margin-bottom: 0 !important;
+.preview-theme-github > *:last-child {
+  margin-bottom: 0 !important;
 }
 
 .preview-theme-github a:not([href]) {
-    color: inherit;
-    text-decoration: none;
+  color: inherit;
+  text-decoration: none;
 }
 
 .preview-theme-github .absent {
-    color: var(--fgColor-danger);
+  color: var(--fgColor-danger);
 }
 
 .preview-theme-github .anchor {
-    float: left;
-    padding-right: var(--base-size-4);
-    margin-left: -20px;
-    line-height: 1;
+  float: left;
+  padding-right: var(--base-size-4);
+  margin-left: -20px;
+  line-height: 1;
 }
 
 .preview-theme-github .anchor:focus {
-    outline: none;
+  outline: none;
 }
 
 .preview-theme-github p,
@@ -539,17 +559,17 @@
 .preview-theme-github ol,
 .preview-theme-github dl,
 .preview-theme-github table,
-.preview-theme-github pre{
-    margin-top: 0;
-    margin-bottom: var(--base-size-16);
+.preview-theme-github pre {
+  margin-top: 0;
+  margin-bottom: var(--base-size-16);
 }
 
-.preview-theme-github blockquote>:first-child {
-    margin-top: 0;
+.preview-theme-github blockquote > :first-child {
+  margin-top: 0;
 }
 
-.preview-theme-github blockquote>:last-child {
-    margin-bottom: 0;
+.preview-theme-github blockquote > :last-child {
+  margin-bottom: 0;
 }
 
 .preview-theme-github h1 .octicon-link,
@@ -558,9 +578,9 @@
 .preview-theme-github h4 .octicon-link,
 .preview-theme-github h5 .octicon-link,
 .preview-theme-github h6 .octicon-link {
-    color: var(--fgColor-default);
-    vertical-align: middle;
-    visibility: hidden;
+  color: var(--fgColor-default);
+  vertical-align: middle;
+  visibility: hidden;
 }
 
 .preview-theme-github h1:hover .anchor,
@@ -569,7 +589,7 @@
 .preview-theme-github h4:hover .anchor,
 .preview-theme-github h5:hover .anchor,
 .preview-theme-github h6:hover .anchor {
-    text-decoration: none;
+  text-decoration: none;
 }
 
 .preview-theme-github h1:hover .anchor .octicon-link,
@@ -578,7 +598,7 @@
 .preview-theme-github h4:hover .anchor .octicon-link,
 .preview-theme-github h5:hover .anchor .octicon-link,
 .preview-theme-github h6:hover .anchor .octicon-link {
-    visibility: visible;
+  visibility: visible;
 }
 
 .preview-theme-github h1 tt,
@@ -593,8 +613,8 @@
 .preview-theme-github h5 code,
 .preview-theme-github h6 tt,
 .preview-theme-github h6 code {
-    padding: 0 .2em;
-    font-size: inherit;
+  padding: 0 0.2em;
+  font-size: inherit;
 }
 
 .preview-theme-github summary h1,
@@ -603,7 +623,7 @@
 .preview-theme-github summary h4,
 .preview-theme-github summary h5,
 .preview-theme-github summary h6 {
-    display: inline-block;
+  display: inline-block;
 }
 
 .preview-theme-github summary h1 .anchor,
@@ -612,385 +632,385 @@
 .preview-theme-github summary h4 .anchor,
 .preview-theme-github summary h5 .anchor,
 .preview-theme-github summary h6 .anchor {
-    margin-left: -40px;
+  margin-left: -40px;
 }
 
 .preview-theme-github summary h1,
 .preview-theme-github summary h2 {
-    padding-bottom: 0;
-    border-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .preview-theme-github ul.no-list,
 .preview-theme-github ol.no-list {
-    padding: 0;
-    list-style-type: none;
+  padding: 0;
+  list-style-type: none;
 }
 
-.preview-theme-github ol[type="a s"] {
-    list-style-type: lower-alpha;
+.preview-theme-github ol[type='a s'] {
+  list-style-type: lower-alpha;
 }
 
-.preview-theme-github ol[type="A s"] {
-    list-style-type: upper-alpha;
+.preview-theme-github ol[type='A s'] {
+  list-style-type: upper-alpha;
 }
 
-.preview-theme-github ol[type="i s"] {
-    list-style-type: lower-roman;
+.preview-theme-github ol[type='i s'] {
+  list-style-type: lower-roman;
 }
 
-.preview-theme-github ol[type="I s"] {
-    list-style-type: upper-roman;
+.preview-theme-github ol[type='I s'] {
+  list-style-type: upper-roman;
 }
 
-.preview-theme-github ol[type="1"] {
-    list-style-type: decimal;
+.preview-theme-github ol[type='1'] {
+  list-style-type: decimal;
 }
 
-.preview-theme-github div>ol:not([type]) {
-    list-style-type: decimal;
+.preview-theme-github div > ol:not([type]) {
+  list-style-type: decimal;
 }
 
 .preview-theme-github ul ul,
 .preview-theme-github ul ol,
 .preview-theme-github ol ol,
 .preview-theme-github ol ul {
-    margin-top: 0;
-    margin-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
-.preview-theme-github li>p {
-    margin-top: var(--base-size-16);
+.preview-theme-github li > p {
+  margin-top: var(--base-size-16);
 }
 
-.preview-theme-github li+li {
-    margin-top: .25em;
+.preview-theme-github li + li {
+  margin-top: 0.25em;
 }
 
 .preview-theme-github dl {
-    padding: 0;
+  padding: 0;
 }
 
 .preview-theme-github dl dt {
-    padding: 0;
-    margin-top: var(--base-size-16);
-    font-size: 1em;
-    font-style: italic;
-    font-weight: var(--base-text-weight-semibold, 600);
+  padding: 0;
+  margin-top: var(--base-size-16);
+  font-size: 1em;
+  font-style: italic;
+  font-weight: var(--base-text-weight-semibold, 600);
 }
 
 .preview-theme-github dl dd {
-    padding: 0 var(--base-size-16);
-    margin-bottom: var(--base-size-16);
+  padding: 0 var(--base-size-16);
+  margin-bottom: var(--base-size-16);
 }
 
 .preview-theme-github table th {
-    font-weight: var(--base-text-weight-semibold, 600);
+  font-weight: var(--base-text-weight-semibold, 600);
 }
 
 .preview-theme-github table th,
 .preview-theme-github table td {
-    padding: 6px 13px;
-    border: 1px solid var(--borderColor-default);
+  padding: 6px 13px;
+  border: 1px solid var(--borderColor-default);
 }
 
-.preview-theme-github table td>:last-child {
-    margin-bottom: 0;
+.preview-theme-github table td > :last-child {
+  margin-bottom: 0;
 }
 
 .preview-theme-github table tr {
-    background-color: var(--bgColor-default);
-    border-top: 1px solid var(--borderColor-muted);
+  background-color: var(--bgColor-default);
+  border-top: 1px solid var(--borderColor-muted);
 }
 
 .preview-theme-github table tr:nth-child(2n) {
-    background-color: var(--bgColor-muted);
+  background-color: var(--bgColor-muted);
 }
 
 .preview-theme-github table img {
-    background-color: transparent;
+  background-color: transparent;
 }
 
-.preview-theme-github img[align=right] {
-    padding-left: 20px;
+.preview-theme-github img[align='right'] {
+  padding-left: 20px;
 }
 
-.preview-theme-github img[align=left] {
-    padding-right: 20px;
+.preview-theme-github img[align='left'] {
+  padding-right: 20px;
 }
 
 .preview-theme-github .emoji {
-    max-width: none;
-    vertical-align: text-top;
-    background-color: transparent;
+  max-width: none;
+  vertical-align: text-top;
+  background-color: transparent;
 }
 
 .preview-theme-github span.frame {
-    display: block;
-    overflow: hidden;
+  display: block;
+  overflow: hidden;
 }
 
-.preview-theme-github span.frame>span {
-    display: block;
-    float: left;
-    width: auto;
-    padding: 7px;
-    margin: 13px 0 0;
-    overflow: hidden;
-    border: 1px solid var(--borderColor-default);
+.preview-theme-github span.frame > span {
+  display: block;
+  float: left;
+  width: auto;
+  padding: 7px;
+  margin: 13px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--borderColor-default);
 }
 
 .preview-theme-github span.frame span img {
-    display: block;
-    float: left;
+  display: block;
+  float: left;
 }
 
 .preview-theme-github span.frame span span {
-    display: block;
-    padding: 5px 0 0;
-    clear: both;
-    color: var(--fgColor-default);
+  display: block;
+  padding: 5px 0 0;
+  clear: both;
+  color: var(--fgColor-default);
 }
 
 .preview-theme-github span.align-center {
-    display: block;
-    overflow: hidden;
-    clear: both;
+  display: block;
+  overflow: hidden;
+  clear: both;
 }
 
-.preview-theme-github span.align-center>span {
-    display: block;
-    margin: 13px auto 0;
-    overflow: hidden;
-    text-align: center;
+.preview-theme-github span.align-center > span {
+  display: block;
+  margin: 13px auto 0;
+  overflow: hidden;
+  text-align: center;
 }
 
 .preview-theme-github span.align-center span img {
-    margin: 0 auto;
-    text-align: center;
+  margin: 0 auto;
+  text-align: center;
 }
 
 .preview-theme-github span.align-right {
-    display: block;
-    overflow: hidden;
-    clear: both;
+  display: block;
+  overflow: hidden;
+  clear: both;
 }
 
-.preview-theme-github span.align-right>span {
-    display: block;
-    margin: 13px 0 0;
-    overflow: hidden;
-    text-align: right;
+.preview-theme-github span.align-right > span {
+  display: block;
+  margin: 13px 0 0;
+  overflow: hidden;
+  text-align: right;
 }
 
 .preview-theme-github span.align-right span img {
-    margin: 0;
-    text-align: right;
+  margin: 0;
+  text-align: right;
 }
 
 .preview-theme-github span.float-left {
-    display: block;
-    float: left;
-    margin-right: 13px;
-    overflow: hidden;
+  display: block;
+  float: left;
+  margin-right: 13px;
+  overflow: hidden;
 }
 
 .preview-theme-github span.float-left span {
-    margin: 13px 0 0;
+  margin: 13px 0 0;
 }
 
 .preview-theme-github span.float-right {
-    display: block;
-    float: right;
-    margin-left: 13px;
-    overflow: hidden;
+  display: block;
+  float: right;
+  margin-left: 13px;
+  overflow: hidden;
 }
 
-.preview-theme-github span.float-right>span {
-    display: block;
-    margin: 13px auto 0;
-    overflow: hidden;
-    text-align: right;
+.preview-theme-github span.float-right > span {
+  display: block;
+  margin: 13px auto 0;
+  overflow: hidden;
+  text-align: right;
 }
 
 .preview-theme-github code,
 .preview-theme-github tt {
-    padding: .2em .4em;
-    margin: 0;
-    font-size: 85%;
-    white-space: break-spaces;
-    background-color: var(--bgColor-neutral-muted);
-    box-decoration-break: clone;
-    border-radius: 6px;
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-size: 85%;
+  white-space: break-spaces;
+  background-color: var(--bgColor-neutral-muted);
+  box-decoration-break: clone;
+  border-radius: 6px;
 }
 
 .preview-theme-github code br,
 .preview-theme-github tt br {
-    display: none;
+  display: none;
 }
 
 .preview-theme-github del code {
-    text-decoration: inherit;
+  text-decoration: inherit;
 }
 
 .preview-theme-github samp {
-    font-size: 85%;
+  font-size: 85%;
 }
 
 .preview-theme-github pre code {
-    font-size: 100%;
+  font-size: 100%;
 }
 
-.preview-theme-github pre>code {
-    padding: 0;
-    margin: 0;
-    word-break: normal;
-    white-space: pre;
-    background: transparent;
-    border: 0;
+.preview-theme-github pre > code {
+  padding: 0;
+  margin: 0;
+  word-break: normal;
+  white-space: pre;
+  background: transparent;
+  border: 0;
 }
 
 .preview-theme-github .highlight {
-    margin-bottom: var(--base-size-16);
+  margin-bottom: var(--base-size-16);
 }
 
 .preview-theme-github .highlight pre {
-    margin-bottom: 0;
-    word-break: normal;
+  margin-bottom: 0;
+  word-break: normal;
 }
 
 .preview-theme-github .highlight pre,
 .preview-theme-github pre {
-    padding: var(--base-size-16);
-    overflow: auto;
-    font-size: 85%;
-    line-height: 1.45;
-    border-radius: 6px;
+  padding: var(--base-size-16);
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  border-radius: 6px;
 }
 
 .preview-theme-github-light .highlight pre,
 .preview-theme-github-light pre:not(.hljs) {
-    color: var(--fgColor-default);
-    background-color: var(--bgColor-muted);
+  color: var(--fgColor-default);
+  background-color: var(--bgColor-muted);
 }
 
 .preview-theme-github pre code,
 .preview-theme-github pre tt {
-    display: inline;
-    max-width: auto;
-    padding: 0;
-    margin: 0;
-    overflow: visible;
-    line-height: inherit;
-    word-wrap: normal;
-    background-color: transparent;
-    border: 0;
+  display: inline;
+  max-width: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  line-height: inherit;
+  word-wrap: normal;
+  background-color: transparent;
+  border: 0;
 }
 
 .preview-theme-github .csv-data td,
 .preview-theme-github .csv-data th {
-    padding: 5px;
-    overflow: hidden;
-    font-size: 12px;
-    line-height: 1;
-    text-align: left;
-    white-space: nowrap;
+  padding: 5px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .preview-theme-github .csv-data .blob-num {
-    padding: 10px var(--base-size-8) 9px;
-    text-align: right;
-    background: var(--bgColor-default);
-    border: 0;
+  padding: 10px var(--base-size-8) 9px;
+  text-align: right;
+  background: var(--bgColor-default);
+  border: 0;
 }
 
 .preview-theme-github .csv-data tr {
-    border-top: 0;
+  border-top: 0;
 }
 
 .preview-theme-github .csv-data th {
-    font-weight: var(--base-text-weight-semibold, 600);
-    background: var(--bgColor-muted);
-    border-top: 0;
+  font-weight: var(--base-text-weight-semibold, 600);
+  background: var(--bgColor-muted);
+  border-top: 0;
 }
 
 .preview-theme-github [data-footnote-ref]::before {
-    content: "[";
+  content: '[';
 }
 
 .preview-theme-github [data-footnote-ref]::after {
-    content: "]";
+  content: ']';
 }
 
 .preview-theme-github .footnotes {
-    font-size: 12px;
-    color: var(--fgColor-muted);
-    border-top: 1px solid var(--borderColor-default);
+  font-size: 12px;
+  color: var(--fgColor-muted);
+  border-top: 1px solid var(--borderColor-default);
 }
 
 .preview-theme-github .footnotes ol {
-    padding-left: var(--base-size-16);
+  padding-left: var(--base-size-16);
 }
 
 .preview-theme-github .footnotes ol ul {
-    display: inline-block;
-    padding-left: var(--base-size-16);
-    margin-top: var(--base-size-16);
+  display: inline-block;
+  padding-left: var(--base-size-16);
+  margin-top: var(--base-size-16);
 }
 
 .preview-theme-github .footnotes li {
-    position: relative;
+  position: relative;
 }
 
 .preview-theme-github .footnotes li:target::before {
-    position: absolute;
-    top: calc(var(--base-size-8)*-1);
-    right: calc(var(--base-size-8)*-1);
-    bottom: calc(var(--base-size-8)*-1);
-    left: calc(var(--base-size-24)*-1);
-    pointer-events: none;
-    content: "";
-    border: 2px solid var(--borderColor-accent-emphasis);
-    border-radius: 6px;
+  position: absolute;
+  top: calc(var(--base-size-8) * -1);
+  right: calc(var(--base-size-8) * -1);
+  bottom: calc(var(--base-size-8) * -1);
+  left: calc(var(--base-size-24) * -1);
+  pointer-events: none;
+  content: '';
+  border: 2px solid var(--borderColor-accent-emphasis);
+  border-radius: 6px;
 }
 
 .preview-theme-github .footnotes li:target {
-    color: var(--fgColor-default);
+  color: var(--fgColor-default);
 }
 
 .preview-theme-github .footnotes .data-footnote-backref g-emoji {
-    font-family: monospace;
+  font-family: monospace;
 }
 
 .preview-theme-github body:has(:modal) {
-    padding-right: var(--dialog-scrollgutter) !important;
+  padding-right: var(--dialog-scrollgutter) !important;
 }
 
 .preview-theme-github .pl-c {
-    color: var(--color-prettylights-syntax-comment);
+  color: var(--color-prettylights-syntax-comment);
 }
 
 .preview-theme-github .pl-c1,
 .preview-theme-github .pl-s .pl-v {
-    color: var(--color-prettylights-syntax-constant);
+  color: var(--color-prettylights-syntax-constant);
 }
 
 .preview-theme-github .pl-e,
 .preview-theme-github .pl-en {
-    color: var(--color-prettylights-syntax-entity);
+  color: var(--color-prettylights-syntax-entity);
 }
 
 .preview-theme-github .pl-smi,
 .preview-theme-github .pl-s .pl-s1 {
-    color: var(--color-prettylights-syntax-storage-modifier-import);
+  color: var(--color-prettylights-syntax-storage-modifier-import);
 }
 
 .preview-theme-github .pl-ent {
-    color: var(--color-prettylights-syntax-entity-tag);
+  color: var(--color-prettylights-syntax-entity-tag);
 }
 
 .preview-theme-github .pl-k {
-    color: var(--color-prettylights-syntax-keyword);
+  color: var(--color-prettylights-syntax-keyword);
 }
 
 .preview-theme-github .pl-s,
@@ -1000,234 +1020,234 @@
 .preview-theme-github .pl-sr .pl-cce,
 .preview-theme-github .pl-sr .pl-sre,
 .preview-theme-github .pl-sr .pl-sra {
-    color: var(--color-prettylights-syntax-string);
+  color: var(--color-prettylights-syntax-string);
 }
 
 .preview-theme-github .pl-v,
 .preview-theme-github .pl-smw {
-    color: var(--color-prettylights-syntax-variable);
+  color: var(--color-prettylights-syntax-variable);
 }
 
 .preview-theme-github .pl-bu {
-    color: var(--color-prettylights-syntax-brackethighlighter-unmatched);
+  color: var(--color-prettylights-syntax-brackethighlighter-unmatched);
 }
 
 .preview-theme-github .pl-ii {
-    color: var(--color-prettylights-syntax-invalid-illegal-text);
-    background-color: var(--color-prettylights-syntax-invalid-illegal-bg);
+  color: var(--color-prettylights-syntax-invalid-illegal-text);
+  background-color: var(--color-prettylights-syntax-invalid-illegal-bg);
 }
 
 .preview-theme-github .pl-c2 {
-    color: var(--color-prettylights-syntax-carriage-return-text);
-    background-color: var(--color-prettylights-syntax-carriage-return-bg);
+  color: var(--color-prettylights-syntax-carriage-return-text);
+  background-color: var(--color-prettylights-syntax-carriage-return-bg);
 }
 
 .preview-theme-github .pl-sr .pl-cce {
-    font-weight: bold;
-    color: var(--color-prettylights-syntax-string-regexp);
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-string-regexp);
 }
 
 .preview-theme-github .pl-ml {
-    color: var(--color-prettylights-syntax-markup-list);
+  color: var(--color-prettylights-syntax-markup-list);
 }
 
 .preview-theme-github .pl-mh,
 .preview-theme-github .pl-mh .pl-en,
 .preview-theme-github .pl-ms {
-    font-weight: bold;
-    color: var(--color-prettylights-syntax-markup-heading);
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-markup-heading);
 }
 
 .preview-theme-github .pl-mi {
-    font-style: italic;
-    color: var(--color-prettylights-syntax-markup-italic);
+  font-style: italic;
+  color: var(--color-prettylights-syntax-markup-italic);
 }
 
 .preview-theme-github .pl-mb {
-    font-weight: bold;
-    color: var(--color-prettylights-syntax-markup-bold);
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-markup-bold);
 }
 
 .preview-theme-github .pl-md {
-    color: var(--color-prettylights-syntax-markup-deleted-text);
-    background-color: var(--color-prettylights-syntax-markup-deleted-bg);
+  color: var(--color-prettylights-syntax-markup-deleted-text);
+  background-color: var(--color-prettylights-syntax-markup-deleted-bg);
 }
 
 .preview-theme-github .pl-mi1 {
-    color: var(--color-prettylights-syntax-markup-inserted-text);
-    background-color: var(--color-prettylights-syntax-markup-inserted-bg);
+  color: var(--color-prettylights-syntax-markup-inserted-text);
+  background-color: var(--color-prettylights-syntax-markup-inserted-bg);
 }
 
 .preview-theme-github .pl-mc {
-    color: var(--color-prettylights-syntax-markup-changed-text);
-    background-color: var(--color-prettylights-syntax-markup-changed-bg);
+  color: var(--color-prettylights-syntax-markup-changed-text);
+  background-color: var(--color-prettylights-syntax-markup-changed-bg);
 }
 
 .preview-theme-github .pl-mi2 {
-    color: var(--color-prettylights-syntax-markup-ignored-text);
-    background-color: var(--color-prettylights-syntax-markup-ignored-bg);
+  color: var(--color-prettylights-syntax-markup-ignored-text);
+  background-color: var(--color-prettylights-syntax-markup-ignored-bg);
 }
 
 .preview-theme-github .pl-mdr {
-    font-weight: bold;
-    color: var(--color-prettylights-syntax-meta-diff-range);
+  font-weight: bold;
+  color: var(--color-prettylights-syntax-meta-diff-range);
 }
 
 .preview-theme-github .pl-ba {
-    color: var(--color-prettylights-syntax-brackethighlighter-angle);
+  color: var(--color-prettylights-syntax-brackethighlighter-angle);
 }
 
 .preview-theme-github .pl-sg {
-    color: var(--color-prettylights-syntax-sublimelinter-gutter-mark);
+  color: var(--color-prettylights-syntax-sublimelinter-gutter-mark);
 }
 
 .preview-theme-github .pl-corl {
-    text-decoration: underline;
-    color: var(--color-prettylights-syntax-constant-other-reference-link);
+  text-decoration: underline;
+  color: var(--color-prettylights-syntax-constant-other-reference-link);
 }
 
-.preview-theme-github [role=button]:focus:not(:focus-visible),
-.preview-theme-github [role=tabpanel][tabindex="0"]:focus:not(:focus-visible),
+.preview-theme-github [role='button']:focus:not(:focus-visible),
+.preview-theme-github [role='tabpanel'][tabindex='0']:focus:not(:focus-visible),
 .preview-theme-github button:focus:not(:focus-visible),
 .preview-theme-github summary:focus:not(:focus-visible),
 .preview-theme-github a:focus:not(:focus-visible) {
-    outline: none;
-    box-shadow: none;
+  outline: none;
+  box-shadow: none;
 }
 
-.preview-theme-github [tabindex="0"]:focus:not(:focus-visible),
+.preview-theme-github [tabindex='0']:focus:not(:focus-visible),
 .preview-theme-github details-dialog:focus:not(:focus-visible) {
-    outline: none;
+  outline: none;
 }
 
 .preview-theme-github g-emoji {
-    display: inline-block;
-    min-width: 1ch;
-    font-family: "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol";
-    font-size: 1em;
-    font-style: normal !important;
-    font-weight: var(--base-text-weight-normal, 400);
-    line-height: 1;
-    vertical-align: -0.075em;
+  display: inline-block;
+  min-width: 1ch;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  font-size: 1em;
+  font-style: normal !important;
+  font-weight: var(--base-text-weight-normal, 400);
+  line-height: 1;
+  vertical-align: -0.075em;
 }
 
 .preview-theme-github g-emoji img {
-    width: 1em;
-    height: 1em;
+  width: 1em;
+  height: 1em;
 }
 
 .preview-theme-github .task-list-item {
-    list-style-type: none;
+  list-style-type: none;
 }
 
 .preview-theme-github .task-list-item label {
-    font-weight: var(--base-text-weight-normal, 400);
+  font-weight: var(--base-text-weight-normal, 400);
 }
 
 .preview-theme-github .task-list-item.enabled label {
-    cursor: pointer;
+  cursor: pointer;
 }
 
-.preview-theme-github .task-list-item+.task-list-item {
-    margin-top: var(--base-size-4);
+.preview-theme-github .task-list-item + .task-list-item {
+  margin-top: var(--base-size-4);
 }
 
 .preview-theme-github .task-list-item .handle {
-    display: none;
+  display: none;
 }
 
 .preview-theme-github .task-list-item-checkbox {
-    margin: 0 .2em .25em -1.4em;
-    vertical-align: middle;
+  margin: 0 0.2em 0.25em -1.4em;
+  vertical-align: middle;
 }
 
 .preview-theme-github ul:dir(rtl) .task-list-item-checkbox {
-    margin: 0 -1.6em .25em .2em;
+  margin: 0 -1.6em 0.25em 0.2em;
 }
 
 .preview-theme-github ol:dir(rtl) .task-list-item-checkbox {
-    margin: 0 -1.6em .25em .2em;
+  margin: 0 -1.6em 0.25em 0.2em;
 }
 
 .preview-theme-github .contains-task-list:hover .task-list-item-convert-container,
 .preview-theme-github .contains-task-list:focus-within .task-list-item-convert-container {
-    display: block;
-    width: auto;
-    height: 24px;
-    overflow: visible;
-    clip: auto;
+  display: block;
+  width: auto;
+  height: 24px;
+  overflow: visible;
+  clip: auto;
 }
 
 .preview-theme-github ::-webkit-calendar-picker-indicator {
-    filter: invert(50%);
+  filter: invert(50%);
 }
 
 .preview-theme-github .markdown-alert {
-    padding: var(--base-size-8) var(--base-size-16);
-    margin-bottom: var(--base-size-16);
-    color: inherit;
-    border-left: .25em solid var(--borderColor-default);
+  padding: var(--base-size-8) var(--base-size-16);
+  margin-bottom: var(--base-size-16);
+  color: inherit;
+  border-left: 0.25em solid var(--borderColor-default);
 }
 
-.preview-theme-github .markdown-alert>:first-child {
-    margin-top: 0;
+.preview-theme-github .markdown-alert > :first-child {
+  margin-top: 0;
 }
 
-.preview-theme-github .markdown-alert>:last-child {
-    margin-bottom: 0;
+.preview-theme-github .markdown-alert > :last-child {
+  margin-bottom: 0;
 }
 
 .preview-theme-github .markdown-alert .markdown-alert-title {
-    display: flex;
-    font-weight: var(--base-text-weight-medium, 500);
-    align-items: center;
-    line-height: 1;
+  display: flex;
+  font-weight: var(--base-text-weight-medium, 500);
+  align-items: center;
+  line-height: 1;
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-note {
-    border-left-color: var(--borderColor-accent-emphasis);
+  border-left-color: var(--borderColor-accent-emphasis);
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-note .markdown-alert-title {
-    color: var(--fgColor-accent);
+  color: var(--fgColor-accent);
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-important {
-    border-left-color: var(--borderColor-done-emphasis);
+  border-left-color: var(--borderColor-done-emphasis);
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-important .markdown-alert-title {
-    color: var(--fgColor-done);
+  color: var(--fgColor-done);
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-warning {
-    border-left-color: var(--borderColor-attention-emphasis);
+  border-left-color: var(--borderColor-attention-emphasis);
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-warning .markdown-alert-title {
-    color: var(--fgColor-attention);
+  color: var(--fgColor-attention);
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-tip {
-    border-left-color: var(--borderColor-success-emphasis);
+  border-left-color: var(--borderColor-success-emphasis);
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-tip .markdown-alert-title {
-    color: var(--fgColor-success);
+  color: var(--fgColor-success);
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-caution {
-    border-left-color: var(--borderColor-danger-emphasis);
+  border-left-color: var(--borderColor-danger-emphasis);
 }
 
 .preview-theme-github .markdown-alert.markdown-alert-caution .markdown-alert-title {
-    color: var(--fgColor-danger);
+  color: var(--fgColor-danger);
 }
 
-.preview-theme-github>*:first-child>.heading-element:first-child {
-    margin-top: 0 !important;
+.preview-theme-github > *:first-child > .heading-element:first-child {
+  margin-top: 0 !important;
 }
 
-.preview-theme-github .highlight pre:has(+.zeroclipboard-container) {
-    min-height: 52px;
+.preview-theme-github .highlight pre:has(+ .zeroclipboard-container) {
+  min-height: 52px;
 }

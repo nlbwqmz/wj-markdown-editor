@@ -1,15 +1,15 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="" theme="light">
-<head>
-    <meta charset="UTF-8">
-    <link rel="icon" href="/favicon.ico">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>wj-markdown-editor</title>
-</head>
-<body>
-<div
-        id="startup-loading"
-        style="
+  </head>
+  <body>
+    <div
+      id="startup-loading"
+      style="
         width: 100vw;
         height: 100vh;
         position: fixed;
@@ -21,54 +21,39 @@
         justify-content: center;
         visibility: hidden;
       "
->
-    <img
-            src="favicon.ico"
-            alt=""
-            style="max-width: 256px; max-height: 256px; width: calc(100vw * 0.3); height: calc(100vw * 0.3)"
-    />
-</div>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const startupLoading = document.getElementById('startup-loading')
-        if (startupLoading) {
-            startupLoading.children[0].addEventListener(
-                'animationend',
-                () => {
-                    startupLoading.remove()
-                },
-                {once: true},
-            )
-            startupLoading.children[0].style.animation = 'startup-load-leave 0.8s linear forwards'
-        }
-    })
-
-    if (window.location.href.indexOf('searchBar') > -1 || window.location.href.indexOf('export') > -1) {
+    >
+      <img
+        src="favicon.ico"
+        alt=""
+        style="max-width: 256px; max-height: 256px; width: calc(100vw * 0.3); height: calc(100vw * 0.3)"
+      />
+    </div>
+    <script>
+      if (window.location.href.indexOf('searchBar') > -1 || window.location.href.indexOf('export') > -1) {
         document.getElementById('startup-loading').remove()
-    } else {
-        window.node.sendToMain({event: 'get-global-theme'}).then(globalTheme => {
-            const startupLoading = document.getElementById('startup-loading')
-            if (startupLoading) {
-                if (globalTheme === 'dark') {
-                    startupLoading.style.backgroundColor = 'rgb(40,44,52)'
-                }
-                startupLoading.style.visibility = 'visible'
+      } else {
+        window.node.sendToMain({ event: 'get-global-theme' }).then((globalTheme) => {
+          const startupLoading = document.getElementById('startup-loading')
+          if (startupLoading) {
+            if (globalTheme === 'dark') {
+              startupLoading.style.backgroundColor = 'rgb(40,44,52)'
             }
-
+            startupLoading.style.visibility = 'visible'
+          }
         })
-    }
-</script>
-<div id="app"></div>
-<script type="module" src="/src/main.js"></script>
-</body>
-<style>
+      }
+    </script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+  <style>
     @keyframes startup-load-leave {
-        from {
-            opacity: 100;
-        }
-        to {
-            opacity: 0;
-        }
+      from {
+        opacity: 100;
+      }
+      to {
+        opacity: 0;
+      }
     }
-</style>
+  </style>
 </html>

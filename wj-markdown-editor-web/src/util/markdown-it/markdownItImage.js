@@ -17,7 +17,7 @@ export default function (md) {
         const src = token.attrs[srcIndex][1]
         if (src) {
           if (!src.match('^http') && !src.match('^data')) {
-            token.attrs[srcIndex][1] = `wj:///${commonUtil.stringToHex(src)}`
+            token.attrs[srcIndex][1] = `wj:///${commonUtil.stringToHex(src)}?wj_date=${Date.now()}`
           }
         }
       }

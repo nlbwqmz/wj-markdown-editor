@@ -13,7 +13,7 @@ import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
 import { Compartment } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { keymap } from '@codemirror/view'
-import { Form } from 'ant-design-vue'
+import { Form, message } from 'ant-design-vue'
 import { EditorView } from 'codemirror'
 import Split from 'split-grid'
 import { computed, createVNode, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
@@ -76,10 +76,14 @@ const isComposing = ref(false)
 const scrolling = ref({ editor: false, preview: false })
 const keymapCompartment = new Compartment()
 const themeCompartment = new Compartment()
-const menuVisible = ref(false)
 const editorContainer = ref()
 const anchorList = ref([])
 const editorScrollTop = ref(0)
+const menuVisible = ref(false)
+const menuController = ref(false)
+const previewVisible = ref(true)
+const previewController = ref(true)
+const gridAnimation = ref(false)
 
 watch(() => props.theme, (newValue) => {
   if (newValue === 'dark') {
@@ -253,6 +257,10 @@ function getElementToTopDistance(targetElement, containerElement) {
 }
 
 function jumpToTargetLine() {
+  if (!previewRef.value) {
+    message.warning('请先打开预览')
+    return
+  }
   // 找到对应的预览元素
   const main = editorView.state.selection.main
   const line = editorView.state.doc.lineAt(main.to)
@@ -281,16 +289,21 @@ function jumpToTargetLine() {
   }
 }
 
-function syncEditorToPreview() {
+function syncEditorToPreview(refresh) {
   if (scrolling.value.preview) {
+    return
+  }
+  if (!previewRef.value) {
     return
   }
 
   // 若竖向滚动条值没改变则表示横向滚动 直接跳过
   if (editorScrollTop.value === editorView.scrollDOM.scrollTop) {
-    editorScrollTop.value = editorView.scrollDOM.scrollTop
-    return
+    if (refresh !== true) {
+      return
+    }
   }
+  editorScrollTop.value = editorView.scrollDOM.scrollTop
   // 获取编辑器滚动位置和可视区域高度
   const scrollTop = editorView.scrollDOM.scrollTop
 
@@ -324,6 +337,7 @@ function syncEditorToPreview() {
     // 根据比例调整目标位置
     const targetScrollTop = elementTop + (elementHeight * scrollRatio)
     scrolling.value.editor = true
+
     // 平滑滚动到目标位置
     previewRef.value.scrollTo({
       top: targetScrollTop,
@@ -390,13 +404,15 @@ function onEditorWheel(e) {
   if (e.shiftKey === true) {
     return
   }
-  // e.deltaY > 0 表示往下滚动；且滚动条已到达底端
-  // e.deltaY < 0 表示往上滚动；且滚动条已到到顶端
-  if ((e.deltaY > 0 && editorView.scrollDOM.scrollHeight === editorView.scrollDOM.scrollTop + editorView.scrollDOM.clientHeight)
-    || (e.deltaY < 0 && editorView.scrollDOM.scrollTop === 0)
-  ) {
-    e.preventDefault()
-    previewRef.value.scrollBy({ top: e.deltaY, behavior: 'smooth' })
+  if (previewRef.value) {
+    // e.deltaY > 0 表示往下滚动；且滚动条已到达底端
+    // e.deltaY < 0 表示往上滚动；且滚动条已到到顶端
+    if ((e.deltaY > 0 && editorView.scrollDOM.scrollHeight === editorView.scrollDOM.scrollTop + editorView.scrollDOM.clientHeight)
+      || (e.deltaY < 0 && editorView.scrollDOM.scrollTop === 0)
+    ) {
+      e.preventDefault()
+      previewRef.value.scrollBy({ top: e.deltaY, behavior: 'smooth' })
+    }
   }
 }
 
@@ -405,7 +421,9 @@ onBeforeUnmount(() => {
   editorView.scrollDOM.removeEventListener('wheel', onEditorWheel)
   editorView.scrollDOM.removeEventListener('scroll', syncEditorToPreview)
   // 预览区滚动监听
-  previewRef.value.removeEventListener('scroll', syncPreviewToEditor)
+  // if (previewRef.value) {
+  //   previewRef.value.removeEventListener('scroll', syncPreviewToEditor)
+  // }
 })
 
 // 绑定事件
@@ -414,7 +432,7 @@ function bindEvents() {
   editorView.scrollDOM.addEventListener('wheel', onEditorWheel)
   editorView.scrollDOM.addEventListener('scroll', syncEditorToPreview)
   // 预览区滚动监听
-  previewRef.value.addEventListener('scroll', syncPreviewToEditor)
+  // previewRef.value.addEventListener('scroll', syncPreviewToEditor)
 }
 
 // function updateEditorContent(newContent) {
@@ -897,10 +915,21 @@ function refreshToolbarList() {
       shortcutKey: getKeymapByShortcutKeyId('editor-focus-line'),
       action: jumpToTargetLine,
     },
+    previewVisible: {
+      label: '预览',
+      icon: 'i-tabler:eye',
+      action: () => { previewVisible.value = !previewVisible.value },
+    },
     menuVisible: {
       label: '大纲',
       icon: 'i-tabler:menu-2',
-      action: () => { menuVisible.value = !menuVisible.value },
+      action: () => {
+        if (previewRef.value) {
+          menuVisible.value = !menuVisible.value
+        } else {
+          message.warning('请先打开预览')
+        }
+      },
     },
     prettier: {
       label: '美化',
@@ -935,24 +964,61 @@ function onAnchorChange(changedAnchorList) {
   emits('anchorChange', changedAnchorList)
 }
 
-const menuController = ref(false)
-
-watch(() => menuVisible.value, (newValue) => {
+watch(() => [menuVisible.value, previewVisible.value], () => {
   editorContainer.value.style['grid-template-columns'] = ''
-  if (newValue === true) {
+  splitInstance.destroy(true)
+  gridAnimation.value = true
+  if (menuVisible.value && previewVisible.value) {
+    previewController.value = true
     menuController.value = true
     nextTick(() => {
-      splitInstance.addColumnGutter(gutterMenuRef.value, 3)
+      splitInstance = Split({
+        columnGutters: [{ track: 1, element: gutterRef.value }, { track: 3, element: gutterMenuRef.value }],
+        // 最小尺寸
+        minSize: 200,
+        // 自动吸附距离
+        snapOffset: 0,
+      })
+      setTimeout(() => {
+        syncEditorToPreview(true)
+      }, 500)
+    })
+  } else if (previewVisible.value) {
+    previewController.value = true
+    menuController.value = false
+    nextTick(() => {
+      splitInstance = Split({
+        columnGutters: [{ track: 1, element: gutterRef.value }],
+        // 最小尺寸
+        minSize: 200,
+        // 自动吸附距离
+        snapOffset: 0,
+      })
+      setTimeout(() => {
+        syncEditorToPreview(true)
+      }, 500)
     })
   } else {
-    splitInstance.removeColumnGutter(3, true)
-    menuController.value = false
+    previewController.value = false
   }
+  setTimeout(() => {
+    gridAnimation.value = false
+  }, 500)
 })
 
 function onImageContextmenu(src) {
   emits('imageContextmenu', src)
 }
+
+const editorContainerClass = computed(() => {
+  if (previewController.value && menuController.value) {
+    return 'grid-cols-[1fr_2px_1fr_2px_0.4fr]'
+  } else if (previewController.value) {
+    return 'grid-cols-[1fr_2px_1fr_0px_0fr]'
+  } else {
+    return 'grid-cols-[1fr_0px_0fr_0px_0fr]'
+  }
+})
 </script>
 
 <template>
@@ -971,18 +1037,20 @@ function onImageContextmenu(src) {
         :popover="item.popover"
       />
     </div>
-    <div ref="editorContainer" class="grid w-full overflow-hidden" :class="menuController ? 'grid-cols-[1fr_2px_1fr_2px_0.4fr]' : 'grid-cols-[1fr_2px_1fr]'">
+    <div ref="editorContainer" class="grid w-full overflow-hidden" :class="editorContainerClass" :style="gridAnimation ? 'transition: grid-template-columns 0.5s ease-in-out;' : ''">
       <div ref="editorRef" class="h-full overflow-auto" />
-      <div ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
+      <div v-if="previewController" ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <div
+        v-if="previewController"
         ref="previewRef"
         class="allow-search wj-scrollbar h-full p-2"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
+        @scroll="syncPreviewToEditor"
       >
         <MarkdownPreview :content="props.modelValue" :code-theme="codeTheme" :preview-theme="previewTheme" :watermark="watermark" @anchor-change="onAnchorChange" @image-contextmenu="onImageContextmenu" />
       </div>
-      <div v-if="menuController" ref="gutterMenuRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
-      <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewRef" :close="() => { menuVisible = false }" class="allow-search" />
+      <div v-if="menuController && previewController" ref="gutterMenuRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
+      <MarkdownMenu v-if="menuController && previewController" :anchor-list="anchorList" :get-container="() => previewRef" :close="() => { menuVisible = false }" class="allow-search" />
     </div>
     <a-modal v-model:open="imageNetworkModel" title="网络图片" ok-text="确定" cancel-text="取消" centered destroy-on-close @ok="onInsertImgNetwork">
       <a-form
