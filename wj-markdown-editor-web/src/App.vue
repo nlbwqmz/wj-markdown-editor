@@ -48,17 +48,19 @@ function onKeydown(e) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
-  const startupLoading = document.getElementById('startup-loading')
-  if (startupLoading) {
-    startupLoading.children[0].addEventListener(
-      'animationend',
-      () => {
-        startupLoading.remove()
-      },
-      { once: true },
-    )
-    startupLoading.children[0].style.animation = 'startup-load-leave 0.8s linear forwards'
-  }
+  setTimeout(() => {
+    const startupLoading = document.getElementById('startup-loading')
+    if (startupLoading) {
+      startupLoading.children[0].addEventListener(
+        'animationend',
+        () => {
+          startupLoading.remove()
+        },
+        { once: true },
+      )
+      startupLoading.children[0].style.animation = 'startup-load-leave 0.8s linear forwards'
+    }
+  })
 })
 
 onBeforeUnmount(() => {

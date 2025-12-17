@@ -28,9 +28,14 @@ const fileName = computed(() => useCommonStore().fileName)
 const saved = computed(() => useCommonStore().saved)
 const isMaximize = computed(() => useCommonStore().isMaximize)
 const isAlwaysOnTop = computed(() => useCommonStore().isAlwaysOnTop)
+const theme = computed(() => useCommonStore().config.theme.global)
 
 function alwaysOnTop(flag) {
   channelUtil.send({ event: 'always-on-top', data: flag })
+}
+
+function switchThemes() {
+  channelUtil.send({ event: 'user-update-theme-global', data: theme.value === 'light' ? 'dark' : 'light' })
 }
 
 const appInfo = ref({ name: 'wj-markdown-editor', version: '' })
@@ -66,6 +71,15 @@ onBeforeMount(async () => {
         </template>
         <div class="bouncing h-8 w-8 flex items-center justify-center color-red hover:cursor-pointer hover:bg-bg-hover" @click="openAbout">
           <div class="i-tabler:arrow-bar-up" />
+        </div>
+      </a-tooltip>
+      <a-tooltip placement="bottom" color="#1677ff">
+        <template #title>
+          <span>主题切换</span>
+        </template>
+        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="switchThemes">
+          <div v-if="theme === 'light'" class="i-tabler:moon" />
+          <div v-else class="i-tabler:sun" />
         </div>
       </a-tooltip>
       <a-tooltip placement="bottom" color="#1677ff">

@@ -211,6 +211,9 @@ const handlerList = {
     await configUtil.setConfig(data)
     await recent.setMax(data.recentMax)
   },
+  'user-update-theme-global': async (winInfo, data) => {
+    await configUtil.setThemeGlobal(data)
+  },
   'app-info': () => {
     return { name: 'wj-markdown-editor', version: app.getVersion() }
   },
