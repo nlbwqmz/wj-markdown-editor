@@ -1,8 +1,19 @@
-@use "theme/github";
-@use "theme/juejin.scss";
-@use "theme/smart-blue";
-@use "theme/vuepress";
-@use "theme/mk-cute";
-@use "theme/cyanosis";
-@use "theme/scrolls";
-@use "theme/markdown-here";
+@use 'theme/github';
+@use 'theme/juejin.scss';
+@use 'theme/smart-blue';
+@use 'theme/vuepress';
+@use 'theme/mk-cute';
+@use 'theme/cyanosis';
+@use 'theme/scrolls';
+@use 'theme/markdown-here';
+
+.pre-container {
+  &:hover {
+    .pre-container-copy {
+      display: block;
+    }
+    .pre-container-lang {
+      display: none;
+    }
+  }
+}

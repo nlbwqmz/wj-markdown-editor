@@ -205,7 +205,7 @@ function onInsertImgNetwork() {
 // }
 
 // 查找匹配行号的元素
-function findPreviewElement(lineNumber) {
+function findPreviewElement(maxLineNumber, lineNumber, first) {
   const elements = previewRef.value.querySelectorAll('[data-line-start]')
   const waiting = []
   for (const element of elements) {
@@ -216,25 +216,65 @@ function findPreviewElement(lineNumber) {
     }
   }
   if (waiting.length === 0) {
-    return null
+    if (lineNumber < maxLineNumber) {
+      return findPreviewElement(maxLineNumber, lineNumber + 1, false)
+    } else {
+      return { element: null, found: false }
+    }
   }
   waiting.sort((a, b) => (a.end - a.start) - (b.end - b.start))
-  return waiting[0].element
+  return { element: waiting[0].element, found: first }
 }
 
 let checkScrollCallbackTimer
 
 function checkScrollTop(element, top, callback) {
+  // 清除之前的定时器
   checkScrollCallbackTimer && clearTimeout(checkScrollCallbackTimer)
-  checkScrollCallbackTimer = setTimeout(() => {
-    top = Math.max(0, top)
-    top = Math.min(element.scrollHeight - element.clientHeight, top)
-    if (Math.abs(element.scrollTop - top) < 1) {
+
+  // 标准化目标滚动位置
+  top = Math.max(0, Math.min(element.scrollHeight - element.clientHeight, top))
+
+  // 定义滚动完成的处理函数
+  const handleScrollComplete = () => {
+    // 移除事件监听器
+    element.removeEventListener('scrollend', handleScrollComplete)
+    // 清除fallback定时器
+    clearTimeout(checkScrollCallbackTimer)
+    // 调用回调
+    callback && callback()
+  }
+
+  // 优先使用现代浏览器的scrollend事件
+  if ('onscrollend' in element) {
+    element.addEventListener('scrollend', handleScrollComplete, { once: true })
+
+    // 设置fallback定时器，防止scrollend事件因某些原因未触发
+    checkScrollCallbackTimer = setTimeout(() => {
+      element.removeEventListener('scrollend', handleScrollComplete)
       callback && callback()
-    } else {
-      checkScrollTop(element, top, callback)
+    }, 1000) // 1秒超时，确保回调总会执行
+  } else {
+    // 旧浏览器降级方案：使用requestAnimationFrame进行更精确的轮询
+    let lastScrollTop = -1
+
+    const pollScroll = () => {
+      // 再次标准化目标位置（元素大小可能变化）
+      const normalizedTop = Math.max(0, Math.min(element.scrollHeight - element.clientHeight, top))
+
+      // 检查条件：
+      // 1. 滚动已达到目标位置附近（误差小于1px）
+      // 2. 滚动已停止（连续两次相同的scrollTop值）
+      if (Math.abs(element.scrollTop - normalizedTop) < 1 || element.scrollTop === lastScrollTop) {
+        callback && callback()
+      } else {
+        lastScrollTop = element.scrollTop
+        checkScrollCallbackTimer = requestAnimationFrame(pollScroll)
+      }
     }
-  }, 100)
+
+    pollScroll()
+  }
 }
 
 function getTotalLineHeight(start, end) {
@@ -265,19 +305,19 @@ function jumpToTargetLine() {
   const main = editorView.state.selection.main
   const line = editorView.state.doc.lineAt(main.to)
   const lineNumber = line.number
-  const previewElement = findPreviewElement(lineNumber)
-  if (previewElement && previewRef.value) {
-    const startLineNumber = +previewElement.dataset.lineStart
-    const endLineNumber = +previewElement.dataset.lineEnd
+  const previewElement = findPreviewElement(editorView.state.doc.lines, lineNumber, true)
+  if (previewElement.element && previewRef.value) {
+    const startLineNumber = +previewElement.element.dataset.lineStart
+    const endLineNumber = +previewElement.element.dataset.lineEnd
     let targetScrollTop
-    if (startLineNumber === endLineNumber) {
-      targetScrollTop = getElementToTopDistance(previewElement, previewRef.value)
+    if (startLineNumber === endLineNumber || previewElement.found === false) {
+      targetScrollTop = getElementToTopDistance(previewElement.element, previewRef.value)
     } else {
       const totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
       const offsetHeight = getTotalLineHeight(startLineNumber, lineNumber - 1)
       const scrollRatio = offsetHeight / totalLineHeight
-      const elementTop = getElementToTopDistance(previewElement, previewRef.value)
-      const elementHeight = previewElement.getBoundingClientRect().height
+      const elementTop = getElementToTopDistance(previewElement.element, previewRef.value)
+      const elementHeight = previewElement.element.getBoundingClientRect().height
       // 根据比例调整目标位置
       targetScrollTop = elementTop + (elementHeight * scrollRatio)
     }
@@ -316,35 +356,41 @@ function syncEditorToPreview(refresh) {
 
   // 找到对应的预览元素
   const lineNumber = editorView.state.doc.lineAt(topBlock.from).number
-  const previewElement = findPreviewElement(lineNumber)
-  if (previewElement && previewRef.value) {
-    const startLineNumber = +previewElement.dataset.lineStart
-    const endLineNumber = +previewElement.dataset.lineEnd
-    if (startLineNumber === endLineNumber) {
-      totalLineHeight = topBlock.height
-      scrollOffsetInLine = scrollTop - topBlock.top
-    } else {
-      totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
-      scrollOffsetInLine = startLineNumber === lineNumber ? scrollTop - topBlock.top : getTotalLineHeight(startLineNumber, lineNumber - 1) + scrollTop - topBlock.top
-    }
-    const scrollRatio = scrollOffsetInLine / totalLineHeight
-    // 计算预览元素的对应滚动位置
-    // const elementTop = previewElement.offsetTop
-    // 使用offsetTop某些标签会有问题（tr、tbody等表格标签）
-    const elementTop = getElementToTopDistance(previewElement, previewRef.value)
-    const elementHeight = previewElement.getBoundingClientRect().height
+  const previewElement = findPreviewElement(editorView.state.doc.lines, lineNumber, true)
+  if (previewElement.element && previewRef.value) {
+    let targetScrollTop = 0
+    if (previewElement.found) {
+      const startLineNumber = +previewElement.element.dataset.lineStart
+      const endLineNumber = +previewElement.element.dataset.lineEnd
+      if (startLineNumber === endLineNumber) {
+        totalLineHeight = topBlock.height
+        scrollOffsetInLine = scrollTop - topBlock.top
+      } else {
+        totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
+        scrollOffsetInLine = startLineNumber === lineNumber ? scrollTop - topBlock.top : getTotalLineHeight(startLineNumber, lineNumber - 1) + scrollTop - topBlock.top
+      }
+      const scrollRatio = scrollOffsetInLine / totalLineHeight
+      // 计算预览元素的对应滚动位置
+      // const elementTop = previewElement.offsetTop
+      // 使用offsetTop某些标签会有问题（tr、tbody等表格标签）
+      const elementTop = getElementToTopDistance(previewElement.element, previewRef.value)
+      const elementHeight = previewElement.element.getBoundingClientRect().height
 
-    // 根据比例调整目标位置
-    const targetScrollTop = elementTop + (elementHeight * scrollRatio)
+      // 根据比例调整目标位置
+      targetScrollTop = elementTop + (elementHeight * scrollRatio)
+    } else {
+      targetScrollTop = getElementToTopDistance(previewElement.element, previewRef.value)
+    }
+
     scrolling.value.editor = true
 
+    checkScrollTop(previewRef.value, targetScrollTop, () => {
+      scrolling.value.editor = false
+    })
     // 平滑滚动到目标位置
     previewRef.value.scrollTo({
       top: targetScrollTop,
       behavior: 'smooth',
-    })
-    checkScrollTop(previewRef.value, targetScrollTop, () => {
-      scrolling.value.editor = false
     })
   }
 }
@@ -388,13 +434,13 @@ function syncPreviewToEditor() {
     // 根据比例计算编辑器滚动位置
     const targetScrollTop = block.top + (totalLineHeight * scrollRatio)
     scrolling.value.preview = true
+    checkScrollTop(editorView.scrollDOM, targetScrollTop, () => {
+      scrolling.value.preview = false
+    })
     // 平滑滚动编辑器
     editorView.scrollDOM.scrollTo({
       top: targetScrollTop,
       behavior: 'smooth',
-    })
-    checkScrollTop(editorView.scrollDOM, targetScrollTop, () => {
-      scrolling.value.preview = false
     })
   }
 }

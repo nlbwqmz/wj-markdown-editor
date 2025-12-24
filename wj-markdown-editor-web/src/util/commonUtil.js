@@ -69,10 +69,36 @@ function upperCaseFirst(str) {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
 }
 
+function strToBase64(str) {
+  const bytes = new TextEncoder().encode(str)
+  const binString = String.fromCodePoint(...bytes)
+  return btoa(binString)
+}
+
+function base64ToStr(base64) {
+  const binString = atob(base64)
+  const bytes = Uint8Array.from(binString, m => m.codePointAt(0))
+  return new TextDecoder().decode(bytes)
+}
 export default {
+  strToBase64,
+  base64ToStr,
   stringToHex,
   createId,
   getUrlParam,
+  initCopyCode: () => {
+    window.copyCode = (code) => {
+      if (!code) {
+        message.warning('没有可复制的内容')
+        return
+      }
+      navigator.clipboard.writeText(base64ToStr(code)).then(() => {
+        message.success('复制成功')
+      }).catch(() => {
+        message.error('复制失败')
+      })
+    }
+  },
   initMessageConfig: () => {
     message.config({
       top: '150px',

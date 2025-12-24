@@ -11,7 +11,6 @@
       }
     }
   }
-
 }
 .preview-theme-markdown-here {
   font-size: 16px;
@@ -20,19 +19,20 @@
 
   img {
     max-width: 100%;
+    box-shadow: var(--img-box-shadow);
   }
 
-  pre, code {
+  pre,
+  code {
     font-size: 14px;
     font-family: Roboto, 'Courier New', Consolas, Inconsolata, Courier, monospace;
-    margin: auto 5px;
   }
 
   code {
     white-space: pre-wrap;
     border-radius: 2px;
     display: inline;
-    background-color: rgba(27,31,35,.05);
+    background-color: rgba(27, 31, 35, 0.05);
     font-size: 16px;
     color: black;
     padding: 0 2px;
@@ -51,20 +51,23 @@
     color: inherit;
     background-color: inherit;
     white-space: pre;
-    padding: 2px;
+    padding: 1.2rem;
     display: block;
+    overflow-x: auto;
   }
 
-  strong, b{
-    color: #BF360C;
+  strong,
+  b {
+    color: #bf360c;
   }
 
-  em, i {
+  em,
+  i {
     color: #009688;
   }
 
   hr {
-    border: 1px solid #BF360C;
+    border: 1px solid #bf360c;
     margin: 1.5em auto;
   }
 
@@ -72,11 +75,8 @@
     margin: 1.5em 5px;
   }
 
-  table, pre, dl, blockquote, q, ul, ol {
-    margin: 10px 5px;
-  }
-
-  ul, ol {
+  ul,
+  ol {
     padding-left: 15px;
   }
 
@@ -88,7 +88,10 @@
     margin: 10px 0;
   }
 
-  ul ul, ul ol, ol ul, ol ol {
+  ul ul,
+  ul ol,
+  ol ul,
+  ol ol {
     margin: 0;
     padding-left: 10px;
   }
@@ -113,7 +116,8 @@
     padding: 0 10px;
   }
 
-  blockquote, q {
+  blockquote,
+  q {
     border-left: 2px solid #009688;
     padding: 0 10px;
     color: #777;
@@ -121,11 +125,19 @@
     margin-left: 1em;
   }
 
-  blockquote::before, blockquote::after, q::before, q::after {
+  blockquote::before,
+  blockquote::after,
+  q::before,
+  q::after {
     content: none;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-weight: bold;
     color: #009688;
     text-align: center;
@@ -151,7 +163,6 @@
     font-size: 16px;
   }
 
-
   table {
     padding: 0;
     border-collapse: collapse;
@@ -169,19 +180,20 @@
 
   table tr {
     border: 0;
-    border-top: 1px solid #CCC;
+    border-top: 1px solid #ccc;
     background-color: white;
     margin: 0;
     padding: 0;
   }
 
   table tr:nth-child(2n) {
-    background-color: #F8F8F8;
+    background-color: #f8f8f8;
   }
 
-  table tr th, table tr td {
+  table tr th,
+  table tr td {
     font-size: 16px;
-    border: 1px solid #CCC;
+    border: 1px solid #ccc;
     margin: 0;
     padding: 5px 10px;
   }

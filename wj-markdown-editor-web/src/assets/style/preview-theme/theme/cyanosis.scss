@@ -1,7 +1,7 @@
 .preview-theme-cyanosis {
-  $monospace-font: Menlo, Monaco, Consolas, "Courier New", monospace;
+  $monospace-font: Menlo, Monaco, Consolas, 'Courier New', monospace;
   $line-space: 16px;
-  $id: "--cyanosis";
+  $id: '--cyanosis';
 
   $l-baseColor: #353535;
   $l-titleColor: #005bb7;
@@ -111,11 +111,11 @@
     background-color: var(--cyanosis-blockquote-bg-color);
   }
 
-  @mixin selectionColor($bgColor: "", $txtColor: "") {
-    @if $bgColor != "" {
+  @mixin selectionColor($bgColor: '', $txtColor: '') {
+    @if $bgColor != '' {
       background-color: var($bgColor);
     }
-    @if $txtColor != "" {
+    @if $txtColor != '' {
       color: var($txtColor);
     }
   }
@@ -147,14 +147,14 @@
     @include transitionColor();
 
     &::before {
-      content: "「";
+      content: '「';
       position: absolute;
       top: -6px;
       left: -14px;
     }
 
     &::after {
-      content: "」";
+      content: '」';
       position: relative;
       top: 6px;
       right: auto;
@@ -168,7 +168,7 @@
     @include transitionColor();
 
     &::before {
-      content: "»";
+      content: '»';
       padding-right: 6px;
       color: var(--cyanosis-strong-color);
     }
@@ -200,6 +200,7 @@
 
   img {
     max-width: 100%;
+    box-shadow: var(--img-box-shadow);
   }
 
   hr {
@@ -209,12 +210,12 @@
     margin-top: 32px;
     margin-bottom: 32px;
     background-image: linear-gradient(
-            90deg,
-            var(--cyanosis-link-color),
-            rgba(255, 0, 0, 0.3),
-            rgba(255, 255, 255, 0.1),
-            rgba(255, 0, 0, 0.3),
-            var(--cyanosis-link-color)
+      90deg,
+      var(--cyanosis-link-color),
+      rgba(255, 0, 0, 0.3),
+      rgba(255, 255, 255, 0.1),
+      rgba(255, 0, 0, 0.3),
+      var(--cyanosis-link-color)
     );
     border-width: 0;
     overflow: visible;
@@ -260,7 +261,7 @@
       color: inherit;
       background-color: inherit;
       display: block;
-      padding: 16px 12px;
+      padding: 1.2rem;
       margin: 0;
       font-size: 14px;
       word-break: normal;
@@ -305,13 +306,15 @@
 
     &::after {
       position: absolute;
-      content: "";
+      content: '';
       top: 100%;
       left: 0;
       width: 100%;
       opacity: 0;
       border-bottom: 1px solid var(--cyanosis-border-color);
-      transition: top 0.3s, opacity 0.3s;
+      transition:
+        top 0.3s,
+        opacity 0.3s;
       transform: translate3d(0, 0, 0);
     }
 
@@ -372,7 +375,7 @@
 
     &::after {
       display: block;
-      content: "";
+      content: '';
     }
 
     & > p {
@@ -510,11 +513,11 @@
     padding-left: 14px;
     list-style: none;
 
-    input[type="checkbox"] {
+    input[type='checkbox'] {
       position: relative;
 
       &::before {
-        content: "";
+        content: '';
         position: absolute;
         top: 0;
         left: 0;
@@ -531,7 +534,7 @@
 
       &:checked {
         &::after {
-          content: "\2713";
+          content: '\2713';
           position: absolute;
           top: -12px;
           left: 0;

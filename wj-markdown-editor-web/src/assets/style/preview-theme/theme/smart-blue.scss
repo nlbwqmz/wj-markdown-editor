@@ -8,8 +8,19 @@
 .preview-theme-smart-blue {
   color: #595959;
   font-size: 15px;
-  font-family: -apple-system,system-ui,BlinkMacSystemFont,Helvetica Neue,PingFang SC,Hiragino Sans GB,Microsoft YaHei,Arial,sans-serif;
-  background-image: linear-gradient(90deg, rgba(60, 10, 30, 0.04) 3%, rgba(0, 0, 0, 0) 3%), linear-gradient(360deg, rgba(60, 10, 30, 0.04) 3%, rgba(0, 0, 0, 0) 3%);
+  font-family:
+    -apple-system,
+    system-ui,
+    BlinkMacSystemFont,
+    Helvetica Neue,
+    PingFang SC,
+    Hiragino Sans GB,
+    Microsoft YaHei,
+    Arial,
+    sans-serif;
+  background-image:
+    linear-gradient(90deg, rgba(60, 10, 30, 0.04) 3%, rgba(0, 0, 0, 0) 3%),
+    linear-gradient(360deg, rgba(60, 10, 30, 0.04) 3%, rgba(0, 0, 0, 0) 3%);
   background-size: 20px 20px;
   background-position: center center;
 }
@@ -24,7 +35,7 @@
 }
 
 /* 段落间距控制 */
-.preview-theme-smart-blue p+p {
+.preview-theme-smart-blue p + p {
   margin-top: 16px;
 }
 
@@ -98,6 +109,7 @@
 
 .preview-theme-smart-blue img {
   max-width: 100%;
+  box-shadow: var(--img-box-shadow);
 }
 
 /* 已加载图片 */
@@ -124,7 +136,7 @@
 /* 链接 */
 .preview-theme-smart-blue a {
   color: #036aca;
-  border-bottom: 1px solid rgba(3, 106, 202, .8);
+  border-bottom: 1px solid rgba(3, 106, 202, 0.8);
   font-weight: 400;
   text-decoration: none;
 }
@@ -156,12 +168,17 @@
   overflow: auto;
   position: relative;
   line-height: 1.75;
-  font-family: Menlo,Monaco,Consolas,Courier New,monospace;
+  font-family:
+    Menlo,
+    Monaco,
+    Consolas,
+    Courier New,
+    monospace;
 }
 
-.preview-theme-smart-blue pre>code {
+.preview-theme-smart-blue pre > code {
   font-size: 12px;
-  padding: 15px 12px;
+  padding: 1.2rem;
   margin: 0;
   word-break: normal;
   display: block;
@@ -183,8 +200,8 @@
   word-break: break-word;
   border-radius: 6px;
   overflow-x: auto;
-  font-size: .87em;
-  padding: .065em .4em;
+  font-size: 0.87em;
+  padding: 0.065em 0.4em;
   background-color: #fff5f5;
   color: #ff502c;
   box-decoration-break: clone;
@@ -200,7 +217,7 @@
 .preview-theme-smart-blue table th,
 .preview-theme-smart-blue table td {
   border: 1px solid #dfe2e5;
-  padding: .6em 1em;
+  padding: 0.6em 1em;
 }
 
 .preview-theme-smart-blue table tr {
@@ -215,7 +232,7 @@
   From: icewolf-sec (御坂19008号)
   Description: 新增HTML5 <kbd> 键盘文字标签样式
 */
-.preview-theme-smart-blue kbd{
+.preview-theme-smart-blue kbd {
   color: white;
   background-color: #135ce0;
   border: 1px solid #135ce0;

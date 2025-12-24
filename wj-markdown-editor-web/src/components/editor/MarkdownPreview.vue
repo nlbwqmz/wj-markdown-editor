@@ -232,7 +232,7 @@ onBeforeRouteLeave(() => {
 <template>
   <a-watermark v-bind="watermark && watermark.enabled ? watermark : {}">
     <!-- 使用伪元素防止首个子元素导致margin塌陷 -->
-    <div class="pos-relative w-full p-2 before:table before:content-['']" :class="`code-theme-${codeTheme} preview-theme-${previewTheme}`">
+    <div class="backface-hidden pos-relative w-full p-2 before:table before:content-['']" :class="`code-theme-${codeTheme} preview-theme-${previewTheme}`">
       <div ref="previewRef" class="wj-scrollbar w-full" />
     </div>
   </a-watermark>

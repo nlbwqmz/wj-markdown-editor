@@ -5,7 +5,7 @@ $line-space: 22px;
   .preview-theme-juejin {
     color: var(--wj-markdown-text-primary);
     code {
-      background-color: rgba(171,178,191, .2);
+      background-color: rgba(171, 178, 191, 0.2);
     }
   }
 }
@@ -34,7 +34,11 @@ $line-space: 22px;
     font-size: 24px;
     margin-bottom: 5px;
   }
-  h2, h3, h4, h5, h6 {
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-size: 20px;
   }
   h2 {
@@ -57,6 +61,7 @@ $line-space: 22px;
 
   img {
     max-width: 100%;
+    box-shadow: var(--img-box-shadow);
   }
 
   hr {
@@ -89,7 +94,7 @@ $line-space: 22px;
     > code {
       background-color: inherit;
       font-size: 12px;
-      padding: 15px 12px;
+      padding: 1.2rem;
       margin: 0;
       word-break: normal;
       display: block;

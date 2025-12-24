@@ -38,5 +38,6 @@ app.use(Antd)
 app.mount('#app')
 
 commonUtil.initMessageConfig()
+commonUtil.initCopyCode()
 eventUtil.link()
 eventUtil.on()

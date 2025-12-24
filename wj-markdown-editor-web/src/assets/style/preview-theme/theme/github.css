@@ -231,6 +231,7 @@
   border-style: none;
   max-width: 100%;
   box-sizing: content-box;
+  box-shadow: var(--img-box-shadow);
 }
 
 .preview-theme-github code,
@@ -881,7 +882,6 @@
 
 .preview-theme-github .highlight pre,
 .preview-theme-github pre {
-  padding: var(--base-size-16);
   overflow: auto;
   font-size: 85%;
   line-height: 1.45;
@@ -896,9 +896,9 @@
 
 .preview-theme-github pre code,
 .preview-theme-github pre tt {
-  display: inline;
+  display: block;
   max-width: auto;
-  padding: 0;
+  padding: 1.2rem;
   margin: 0;
   overflow: visible;
   line-height: inherit;
