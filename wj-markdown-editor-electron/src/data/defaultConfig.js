@@ -16,6 +16,9 @@ export default {
   startPage: 'preview',
   openRecent: true,
   recentMax: 10,
+  markdown: {
+    typographer: true,
+  },
   export: {
     pdf: {
       footer: {

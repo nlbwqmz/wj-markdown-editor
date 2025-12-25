@@ -1,4 +1,5 @@
 <script setup>
+import { useCommonStore } from '@/stores/counter.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
 import mermaid from 'mermaid'
 import { onMounted, ref, watch } from 'vue'
@@ -179,6 +180,11 @@ function updateDOM(oldNode, newNode) {
     }
   }
 }
+
+watch(() => useCommonStore().config.markdown.typographer, (newValue) => {
+  md.set({ typographer: newValue })
+  refreshPreview(props.content)
+})
 
 function refreshPreview(doc) {
   removeImageListener()

@@ -1,3 +1,4 @@
+import { useCommonStore } from '@/stores/counter.js'
 import markdownItAudio from '@/util/markdown-it/markdownItAudio.js'
 import MarkdownItCodeBlock from '@/util/markdown-it/markdownItCodeBlock.js'
 import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
@@ -23,9 +24,10 @@ const md = new MarkdownIt({
   html: true,
   linkify: true,
   breaks: true,
-  typographer: true,
+  typographer: useCommonStore().config.markdown.typographer,
   xhtmlOut: true,
 })
+
 md.use(MarkdownItSup)
   .use(MarkdownItSub)
   .use(MarkdownItDefList)

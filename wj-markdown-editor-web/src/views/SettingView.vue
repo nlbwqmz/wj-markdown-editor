@@ -1,5 +1,6 @@
 <script setup>
 import OtherLayout from '@/components/layout/OtherLayout.vue'
+import TypographerDescription from '@/components/TypographerDescription.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import constant from '@/util/constant.js'
@@ -350,6 +351,30 @@ function reset() {
           </a-descriptions-item>
           <a-descriptions-item label="自动闭合括号">
             <a-radio-group v-model:value="config.editorExtension.closeBrackets" button-style="solid">
+              <a-radio-button :value="true">
+                是
+              </a-radio-button>
+              <a-radio-button :value="false">
+                否
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item>
+            <template #label>
+              <div class="flex items-center gap-1">
+                <span>印刷美化</span>
+                <a-popover trigger="hover" placement="topRight" color="#1677ff">
+                  <template #title>
+                    <span class="color-white">转换规则</span>
+                  </template>
+                  <template #content>
+                    <TypographerDescription />
+                  </template>
+                  <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
+                </a-popover>
+              </div>
+            </template>
+            <a-radio-group v-model:value="config.markdown.typographer" button-style="solid">
               <a-radio-button :value="true">
                 是
               </a-radio-button>
