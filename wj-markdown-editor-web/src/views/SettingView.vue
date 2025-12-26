@@ -9,36 +9,39 @@ import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { computed, createVNode, h, onMounted, ref, watch } from 'vue'
 import { ColorPicker } from 'vue3-colorpicker'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const config = ref()
 
 // 用于更新字体大小时，刷新锚点组件
 const anchorKey = ref(1)
 
-const anchorList = [
-  { key: '-1', href: '#general', title: '常规' },
-  { key: '0', href: '#view', title: '视图' },
-  { key: '1', href: '#editor', title: '编辑器' },
-  { key: '2', href: '#file', title: '文件' },
-  { key: '3', href: '#image', title: '图片' },
-  { key: '4', href: '#imageBed', title: '图床' },
-  { key: '5', href: '#shortcut', title: '快捷键' },
-  { key: '6', href: '#watermark', title: '水印' },
-  { key: '7', href: '#export', title: '导出' },
-]
+const anchorList = computed(() => [
+  { key: '-1', href: '#general', title: t('config.title.general') },
+  { key: '0', href: '#view', title: t('config.title.view') },
+  { key: '1', href: '#editor', title: t('config.title.editor') },
+  { key: '2', href: '#file', title: t('config.title.file') },
+  { key: '3', href: '#image', title: t('config.title.picture') },
+  { key: '4', href: '#imageBed', title: t('config.title.pictureBed') },
+  { key: '5', href: '#shortcut', title: t('config.title.shortcut') },
+  { key: '6', href: '#watermark', title: t('config.title.watermark') },
+  { key: '7', href: '#export', title: t('config.title.export') },
+])
 
 const imageBedUploaderList = ref([
   { value: 'github', name: 'GitHub' },
   { value: 'smms', name: 'SM.MS' },
 ])
 
-const autoSaveOptionList = ref([
+const autoSaveOptionList = computed(() => [
   {
-    label: '窗口失焦时',
+    label: t('config.general.autoSaveOption.onWindowBlur'),
     value: 'blur',
   },
   {
-    label: '窗口关闭时',
+    label: t('config.general.autoSaveOption.onWindowClose'),
     value: 'close',
   },
 ])
@@ -138,11 +141,11 @@ function settingClose() {
 }
 function reset() {
   Modal.confirm({
-    title: '恢复默认设置',
+    title: t('config.resetToDefault'),
     icon: createVNode(ExclamationCircleOutlined),
-    content: '当前操作无法撤销，确认恢复默认设置？',
-    okText: '确认',
-    cancelText: '取消',
+    content: t('config.resetToDefaultTip'),
+    okText: t('config.okText'),
+    cancelText: t('config.cancelText'),
     centered: true,
     onOk: async () => {
       config.value = await channelUtil.send({ event: 'get-default-config' })
@@ -153,11 +156,11 @@ function reset() {
 </script>
 
 <template>
-  <OtherLayout icon="i-tabler:settings" name="设置">
+  <OtherLayout icon="i-tabler:settings" :name="$t('config.modalTitle')">
     <template #action>
       <a-tooltip placement="bottom" color="#1677ff">
         <template #title>
-          <span>恢复默认设置</span>
+          <span>{{ $t('config.resetToDefault') }}</span>
         </template>
         <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="reset">
           <div class="i-tabler:settings-off" />
@@ -174,15 +177,28 @@ function reset() {
       <div class="w-full flex flex-1 flex-col">
         <a-descriptions bordered :column="1" size="small">
           <template #title>
-            <span id="general">常规</span>
+            <span id="general">{{ $t('config.title.general') }}</span>
           </template>
+          <a-descriptions-item :label="$t('config.general.language')">
+            <a-select
+              v-model:value="config.language"
+              class="w-full"
+            >
+              <a-select-option value="zh-CN">
+                中文
+              </a-select-option>
+              <a-select-option value="en-US">
+                English
+              </a-select-option>
+            </a-select>
+          </a-descriptions-item>
           <a-descriptions-item>
             <template #label>
               <div class="flex items-center gap-1">
-                <span>启动页</span>
-                <a-tooltip placement="topRight" color="#1677ff">
+                <span>{{ $t('config.general.startupView') }}</span>
+                <a-tooltip placement="topRight" color="#1677ff" class="flex-shrink-0">
                   <template #title>
-                    有内容时生效
+                    {{ $t('config.general.startupViewOption.tip') }}
                   </template>
                   <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
                 </a-tooltip>
@@ -190,33 +206,33 @@ function reset() {
             </template>
             <a-radio-group v-model:value="config.startPage" button-style="solid">
               <a-radio-button value="editor">
-                编辑
+                {{ $t('config.general.startupViewOption.edit') }}
               </a-radio-button>
               <a-radio-button value="preview">
-                预览
+                {{ $t('config.general.startupViewOption.preview') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="打开最近一次记录">
+          <a-descriptions-item :label="$t('config.general.openLastRecord')">
             <a-radio-group v-model:value="config.openRecent" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="最近历史记录数量">
+          <a-descriptions-item :label="$t('config.general.recentHistoryCount')">
             <a-input-number v-model:value="config.recentMax" :min="0" :max="50" class="w-full" :controls="false" />
           </a-descriptions-item>
           <a-descriptions-item>
             <template #label>
               <div class="flex items-center gap-1">
-                <span>自动保存</span>
-                <a-tooltip placement="topRight" color="#1677ff">
+                <span>{{ $t('config.general.autoSave') }}</span>
+                <a-tooltip placement="topRight" color="#1677ff" class="flex-shrink-0">
                   <template #title>
-                    仅当文件保存路径存在时生效
+                    {{ $t('config.general.autoSaveOption.tip') }}
                   </template>
                   <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
                 </a-tooltip>
@@ -227,29 +243,29 @@ function reset() {
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
-            <span id="view">视图</span>
+            <span id="view">{{ $t('config.title.view') }}</span>
           </template>
-          <a-descriptions-item label="默认显示大纲">
+          <a-descriptions-item :label="$t('config.view.defaultShowOutline')">
             <a-radio-group v-model:value="config.menuVisible" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="全局主题">
+          <a-descriptions-item :label="$t('config.view.globalTheme')">
             <a-radio-group v-model:value="config.theme.global" button-style="solid">
               <a-radio-button value="light">
-                明亮
+                {{ $t('config.view.globalThemeOption.light') }}
               </a-radio-button>
               <a-radio-button value="dark">
-                暗黑
+                {{ $t('config.view.globalThemeOption.dark') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="代码主题">
+          <a-descriptions-item :label="$t('config.view.codeTheme')">
             <a-select
               v-model:value="config.theme.code"
               class="w-full"
@@ -259,7 +275,7 @@ function reset() {
               </a-select-option>
             </a-select>
           </a-descriptions-item>
-          <a-descriptions-item label="预览主题">
+          <a-descriptions-item :label="$t('config.view.previewTheme')">
             <a-select
               v-model:value="config.theme.preview"
               class="w-full"
@@ -269,14 +285,14 @@ function reset() {
               </a-select-option>
             </a-select>
           </a-descriptions-item>
-          <a-descriptions-item label="预览宽度">
+          <a-descriptions-item :label="$t('config.view.previewWidth')">
             <a-slider
               v-model:value="config.previewWidth"
               :min="20"
               :max="100"
             />
           </a-descriptions-item>
-          <a-descriptions-item label="字体大小">
+          <a-descriptions-item :label="$t('config.view.fontSize')">
             <a-slider
               v-model:value="config.fontSize"
               :min="14"
@@ -286,45 +302,45 @@ function reset() {
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
-            <span id="editor">编辑器</span>
+            <span id="editor">{{ $t('config.title.editor') }}</span>
           </template>
-          <a-descriptions-item label="行号">
+          <a-descriptions-item :label="$t('config.editor.lineNumber')">
             <a-radio-group v-model:value="config.editorExtension.lineNumbers" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="自动换行">
+          <a-descriptions-item :label="$t('config.editor.lineWrapping')">
             <a-radio-group v-model:value="config.editorExtension.lineWrapping" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="高亮选中行">
+          <a-descriptions-item :label="$t('config.editor.highlightActiveLine')">
             <a-radio-group v-model:value="config.editorExtension.highlightActiveLine" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item>
             <template #label>
               <div class="flex items-center gap-1">
-                <span>突出匹配文本</span>
-                <a-tooltip placement="topRight" color="#1677ff">
+                <span>{{ $t('config.editor.highlightMatchingText') }}</span>
+                <a-tooltip placement="topRight" color="#1677ff" class="flex-shrink-0">
                   <template #title>
-                    突出显示与所选内容匹配的文本
+                    {{ $t('config.editor.highlightMatchingTextOption.tip') }}
                   </template>
                   <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
                 </a-tooltip>
@@ -332,40 +348,40 @@ function reset() {
             </template>
             <a-radio-group v-model:value="config.editorExtension.highlightSelectionMatches" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="突出匹配括号">
+          <a-descriptions-item :label="$t('config.editor.highlightMatchingBracket')">
             <a-radio-group v-model:value="config.editorExtension.bracketMatching" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="自动闭合括号">
+          <a-descriptions-item :label="$t('config.editor.autoCloseBracket')">
             <a-radio-group v-model:value="config.editorExtension.closeBrackets" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item>
             <template #label>
               <div class="flex items-center gap-1">
-                <span>印刷美化</span>
+                <span>{{ $t('config.editor.typographer') }}</span>
                 <a-popover trigger="hover" placement="topRight" color="#1677ff">
                   <template #title>
-                    <span class="color-white">转换规则</span>
+                    <span class="color-white">{{ $t('config.editor.typographerOption.tipTitle') }}</span>
                   </template>
                   <template #content>
                     <TypographerDescription />
@@ -376,35 +392,35 @@ function reset() {
             </template>
             <a-radio-group v-model:value="config.markdown.typographer" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
-            <span id="file">文件</span>
+            <span id="file">{{ $t('config.title.file') }}</span>
           </template>
-          <a-descriptions-item label="文件">
+          <a-descriptions-item :label="$t('config.file.file')">
             <a-select
               v-model:value="config.fileMode"
               class="w-full"
             >
               <a-select-option value="2">
-                保存到绝对路径
+                {{ $t('config.saveOption.saveToAbsolutePath') }}
               </a-select-option>
               <a-select-option value="3">
-                保存到 ./%{filename} 文件夹
+                {{ $t('config.saveOption.saveToFilenameFolder') }}
               </a-select-option>
               <a-select-option value="4">
-                保存到相对路径
+                {{ $t('config.saveOption.saveTorelativePath') }}
               </a-select-option>
             </a-select>
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.fileMode === '2'" label="绝对路径">
+          <a-descriptions-item v-if="config.fileMode === '2'" :label="$t('config.file.absolutePath')">
             <a-input
               v-model:value="config.fileAbsolutePath"
               readonly
@@ -414,56 +430,56 @@ function reset() {
               </template>
             </a-input>
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.fileMode === '4'" label="相对路径">
+          <a-descriptions-item v-if="config.fileMode === '4'" :label="$t('config.file.relativePath')">
             <a-input v-model:value="config.fileRelativePath" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
-            <span id="image">图片</span>
+            <span id="image">{{ $t('config.title.picture') }}</span>
           </template>
-          <a-descriptions-item label="本地图片">
+          <a-descriptions-item :label="$t('config.picture.localPicture')">
             <a-select
               v-model:value="config.imgLocal"
               class="w-full"
             >
               <a-select-option value="2">
-                保存到绝对路径
+                {{ $t('config.saveOption.saveToAbsolutePath') }}
               </a-select-option>
               <a-select-option value="3">
-                保存到 ./%{filename} 文件夹
+                {{ $t('config.saveOption.saveToFilenameFolder') }}
               </a-select-option>
               <a-select-option value="4">
-                保存到相对路径
+                {{ $t('config.saveOption.saveTorelativePath') }}
               </a-select-option>
               <a-select-option value="5">
-                上传到图床
+                {{ $t('config.saveOption.uploadToPictureBed') }}
               </a-select-option>
             </a-select>
           </a-descriptions-item>
-          <a-descriptions-item label="网络图片">
+          <a-descriptions-item :label="$t('config.picture.networkPicture')">
             <a-select
               v-model:value="config.imgNetwork"
               class="w-full"
             >
               <a-select-option value="1">
-                无操作
+                {{ $t('config.saveOption.noOperation') }}
               </a-select-option>
               <a-select-option value="2">
-                保存到绝对路径
+                {{ $t('config.saveOption.saveToAbsolutePath') }}
               </a-select-option>
               <a-select-option value="3">
-                保存到 ./%{filename} 文件夹
+                {{ $t('config.saveOption.saveToFilenameFolder') }}
               </a-select-option>
               <a-select-option value="4">
-                保存到相对路径
+                {{ $t('config.saveOption.saveTorelativePath') }}
               </a-select-option>
               <a-select-option value="5">
-                上传到图床
+                {{ $t('config.saveOption.uploadToPictureBed') }}
               </a-select-option>
             </a-select>
           </a-descriptions-item>
-          <a-descriptions-item v-if="showImgAbsolutePath" label="绝对路径">
+          <a-descriptions-item v-if="showImgAbsolutePath" :label="$t('config.picture.absolutePath')">
             <a-input
               v-model:value="config.imgAbsolutePath"
               readonly
@@ -473,15 +489,15 @@ function reset() {
               </template>
             </a-input>
           </a-descriptions-item>
-          <a-descriptions-item v-if="showImgRelativePath" label="相对路径">
+          <a-descriptions-item v-if="showImgRelativePath" :label="$t('config.picture.relativePath')">
             <a-input v-model:value="config.imgRelativePath" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
-            <span id="imageBed">图床</span>
+            <span id="imageBed">{{ $t('config.title.pictureBed') }}</span>
           </template>
-          <a-descriptions-item label="图床">
+          <a-descriptions-item :label="$t('config.pictureBed.pictureBed')">
             <a-select
               v-model:value="config.imageBed.uploader"
               class="w-full"
@@ -493,33 +509,33 @@ function reset() {
           </a-descriptions-item>
 
           <!-- smms -->
-          <a-descriptions-item v-if="config.imageBed.uploader === 'smms'" label="token">
+          <a-descriptions-item v-if="config.imageBed.uploader === 'smms'" label="Token">
             <a-input-password v-model:value="config.imageBed.smms.token" />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.imageBed.uploader === 'smms'" label="备用域名">
+          <a-descriptions-item v-if="config.imageBed.uploader === 'smms'" :label="$t('config.pictureBed.customDomain')">
             <a-input v-model:value="config.imageBed.smms.backupDomain" />
           </a-descriptions-item>
 
           <!-- github -->
-          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" label="仓库">
+          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.repository')">
             <a-input v-model:value="config.imageBed.github.repo" placeholder="owner/repo" />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" label="token">
+          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" label="Token">
             <a-input-password v-model:value="config.imageBed.github.token" />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" label="存储路径">
+          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.storagePath')">
             <a-input v-model:value="config.imageBed.github.path" />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" label="分支">
+          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.branch')">
             <a-input v-model:value="config.imageBed.github.branch" placeholder="main" />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" label="自定义域名">
+          <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.customDomain')">
             <a-input v-model:value="config.imageBed.github.customUrl" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
-            <span id="shortcut">快捷键</span>
+            <span id="shortcut">{{ $t('config.title.shortcut') }}</span>
           </template>
           <a-descriptions-item v-for="item in config.shortcutKeyList" :key="item.id" :label="item.name">
             <a-input
@@ -536,124 +552,124 @@ function reset() {
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
-            <span id="watermark">水印</span>
+            <span id="watermark">{{ $t('config.title.watermark') }}</span>
           </template>
-          <a-descriptions-item label="水印">
+          <a-descriptions-item :label="$t('config.watermark.watermark')">
             <a-radio-group v-model:value="config.watermark.enabled" button-style="solid">
               <a-radio-button :value="true">
-                开启
+                {{ $t('config.enable') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                关闭
+                {{ $t('config.disable') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="预览水印">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.previewWatermark')">
             <a-radio-group v-model:value="config.watermark.previewEnabled" button-style="solid">
               <a-radio-button :value="true">
-                开启
+                {{ $t('config.enable') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                关闭
+                {{ $t('config.disable') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="水印时间">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.watermarkTime')">
             <a-radio-group v-model:value="config.watermark.dateEnabled" button-style="solid">
               <a-radio-button :value="true">
-                开启
+                {{ $t('config.enable') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                关闭
+                {{ $t('config.disable') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="时间格式">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.timeFormat')">
             <a-select v-model:value="config.watermark.datePattern" class="w-full">
               <a-select-option value="YYYY-MM-DD">
-                年-月-日
+                YYYY-MM-DD
               </a-select-option>
               <a-select-option value="YYYY-MM-DD HH:mm:ss">
-                年-月-日 时:分:秒
+                YYYY-MM-DD HH:mm:ss
               </a-select-option>
             </a-select>
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="内容">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.content')">
             <a-input v-model:value="config.watermark.content" />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="旋转角度">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.angle')">
             <a-slider
               v-model:value="config.watermark.rotate"
               :min="-180"
               :max="180"
             />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="间隔宽度">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.intervalWidth')">
             <a-slider
               v-model:value="config.watermark.gap[0]"
               :min="10"
               :max="500"
             />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="间隔高度">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.intervalHeight')">
             <a-slider
               v-model:value="config.watermark.gap[1]"
               :min="10"
               :max="500"
             />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="字体大小">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.fontSize')">
             <a-slider
               v-model:value="config.watermark.font.fontSize"
               :min="12"
               :max="100"
             />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="字体粗细">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.fontWeight')">
             <a-slider
               v-model:value="config.watermark.font.fontWeight"
               :min="200"
               :max="1000"
             />
           </a-descriptions-item>
-          <a-descriptions-item v-if="config.watermark.enabled" label="字体颜色">
+          <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.fontColor')">
             <ColorPicker v-model:pure-color="config.watermark.font.color" format="rgb" shape="square" picker-type="chrome" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
           <template #title>
-            <span id="export">导出</span>
+            <span id="export">{{ $t('config.title.export') }}</span>
           </template>
-          <a-descriptions-item label="PDF页码">
+          <a-descriptions-item :label="$t('config.export.pdfPageNumber')">
             <a-radio-group v-model:value="config.export.pdf.footer.pageNumber" button-style="solid">
               <a-radio-button :value="true">
-                是
+                {{ $t('config.yes') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                否
+                {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item label="PDF页脚">
+          <a-descriptions-item :label="$t('config.export.pdfFooter')">
             <a-textarea
               v-model:value="config.export.pdf.footer.content"
               spellcheck="false"
-              placeholder="支持html标签"
+              placeholder="Support HTML tags"
               auto-size
             />
           </a-descriptions-item>
-          <a-descriptions-item label="PDF页头">
+          <a-descriptions-item :label="$t('config.export.pdfHeader')">
             <a-textarea
               v-model:value="config.export.pdf.header.content"
               spellcheck="false"
-              placeholder="支持html标签"
+              placeholder="Support HTML tags"
               auto-size
             />
           </a-descriptions-item>
         </a-descriptions>
       </div>
-      <div>
-        <a-affix :key="anchorKey" :offset-top="50">
+      <div class="w-25">
+        <a-affix :key="anchorKey" :offset-top="50" style="width: fit-content;">
           <a-anchor
             :affix="false"
             :wrapper-style="{ width: 'fit-content' }"
@@ -675,7 +691,7 @@ function reset() {
   padding-block-start: revert;
 }
 :deep(.ant-radio-button-wrapper) {
-  min-width: 60px;
+  min-width: 80px;
   text-align: center;
 }
 :deep(.ant-descriptions-title) {

@@ -16,6 +16,7 @@ export default {
   startPage: 'preview',
   openRecent: true,
   recentMax: 10,
+  language: 'zh-CN',
   markdown: {
     typographer: true,
   },

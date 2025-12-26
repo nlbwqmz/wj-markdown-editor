@@ -5,6 +5,7 @@ import Antd from 'ant-design-vue'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import App from './App.vue'
+import i18n from './i18n'
 import router from './router'
 import '@/assets/style/reset.css'
 import '@/assets/style/common.scss'
@@ -22,10 +23,10 @@ import '@/assets/style/preview-theme/preview-theme.scss'
 import '@/assets/style/antd.scss'
 // markdown-it-github-alerts
 import 'markdown-it-github-alerts/styles/github-base.css'
+
 import 'markdown-it-github-alerts/styles/github-colors-light.css'
 
 import '@/assets/style/search.scss'
-
 import '@/assets/style/global-theme/global-theme.scss'
 import '@/assets/style/colorpicker.scss'
 import '@/assets/style/codemirror.scss'
@@ -35,6 +36,7 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.use(Antd)
+app.use(i18n)
 app.mount('#app')
 
 commonUtil.initMessageConfig()

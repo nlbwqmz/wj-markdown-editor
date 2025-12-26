@@ -18,6 +18,7 @@ import { EditorView } from 'codemirror'
 import Split from 'split-grid'
 import { computed, createVNode, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ColorPicker } from 'vue3-colorpicker'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps({
   modelValue: {
@@ -47,6 +48,9 @@ const props = defineProps({
 })
 
 const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange', 'imageContextmenu'])
+
+const { t } = useI18n()
+
 const toolbarList = ref([])
 const shortcutKeyList = ref([])
 let splitInstance
@@ -967,7 +971,7 @@ function refreshToolbarList() {
       action: () => { previewVisible.value = !previewVisible.value },
     },
     menuVisible: {
-      label: '大纲',
+      label: t('outline'),
       icon: 'i-tabler:menu-2',
       action: () => {
         if (previewRef.value) {

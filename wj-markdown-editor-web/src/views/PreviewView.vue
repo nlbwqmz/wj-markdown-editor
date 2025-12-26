@@ -92,7 +92,7 @@ function onImageContextmenu(src) {
 <template>
   <a-tooltip v-if="menuController === false" placement="right" color="#1677ff">
     <template #title>
-      <span>大纲</span>
+      <span>{{ $t('outline') }}</span>
     </template>
     <div class="absolute left-0 z-10 flex cursor-pointer items-center p-1 op-60 hover:op-100" @click="() => { menuVisible = true }">
       <div class="i-tabler:menu-2" />

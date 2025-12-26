@@ -67,7 +67,7 @@ onBeforeMount(async () => {
     <div class="flex items-center">
       <a-tooltip v-if="hasNewVersion" placement="bottom" color="#1677ff">
         <template #title>
-          <span>新版本</span>
+          <span>{{ $t('top.newVersion') }}</span>
         </template>
         <div class="bouncing h-8 w-8 flex items-center justify-center color-red hover:cursor-pointer hover:bg-bg-hover" @click="openAbout">
           <div class="i-tabler:arrow-bar-up" />
@@ -75,7 +75,7 @@ onBeforeMount(async () => {
       </a-tooltip>
       <a-tooltip placement="bottom" color="#1677ff">
         <template #title>
-          <span>主题切换</span>
+          <span>{{ $t('top.switchTheme') }}</span>
         </template>
         <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="switchThemes">
           <div v-if="theme === 'light'" class="i-tabler:moon" />
@@ -84,7 +84,7 @@ onBeforeMount(async () => {
       </a-tooltip>
       <a-tooltip placement="bottom" color="#1677ff">
         <template #title>
-          <span>打开文件位置</span>
+          <span>{{ $t('top.openFileLocation') }}</span>
         </template>
         <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="openFolder">
           <div class="i-tabler:folder-open" />
@@ -92,7 +92,7 @@ onBeforeMount(async () => {
       </a-tooltip>
       <a-tooltip v-if="!isAlwaysOnTop" placement="bottom" color="#1677ff">
         <template #title>
-          <span>置顶</span>
+          <span>{{ $t('top.pinTop') }}</span>
         </template>
         <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="alwaysOnTop(true)">
           <div class="i-tabler:pin" />
@@ -100,7 +100,7 @@ onBeforeMount(async () => {
       </a-tooltip>
       <a-tooltip v-if="isAlwaysOnTop" placement="bottom" color="#1677ff">
         <template #title>
-          <span>取消置顶</span>
+          <span>{{ $t('top.cancelPinTop') }}</span>
         </template>
         <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="alwaysOnTop(false)">
           <div class="i-tabler:pinned-off" />

@@ -1,3 +1,4 @@
+import i18n from '@/i18n/index.js'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
@@ -5,6 +6,7 @@ import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { Button, message, Modal } from 'ant-design-vue'
 import { createVNode, h } from 'vue'
 
+const { t } = i18n.global
 export default {
   link: () => {
     window.node.sendToShow((obj) => {
@@ -51,25 +53,25 @@ export default {
     eventEmit.on('unsaved', () => {
       const modal = Modal.confirm({
         centered: true,
-        title: '提示',
+        title: t('prompt'),
         icon: createVNode(ExclamationCircleOutlined),
         content: createVNode('div', {}, [
           h('span', { style: { fontWeight: 'bold' } }, useCommonStore().fileName),
-          h('span', {}, '存在未保存的修改，是否确认退出？建议启用自动保存功能以避免数据丢失。'),
+          h('span', {}, t('closeModal.closePrompt')),
         ]),
         footer: h('div', { style: { width: '100%', display: 'flex', justifyContent: 'right', gap: '10px', paddingTop: '10px' } }, [
-          h(Button, { onClick: () => modal.destroy() }, () => '取消'),
+          h(Button, { onClick: () => modal.destroy() }, () => t('cancelText')),
           h(Button, { type: 'primary', onClick: () => {
             modal.destroy()
             channelUtil.send({ event: 'open-setting' }).then(() => {})
-          } }, () => '打开设置'),
+          } }, () => t('closeModal.openSetting')),
           h(Button, {
             type: 'primary',
             danger: true,
             onClick: () => {
               channelUtil.send({ event: 'force-close' }).then(() => {})
               modal.destroy() },
-          }, () => '确认退出'),
+          }, () => t('closeModal.confirmExit')),
         ]),
       })
     })

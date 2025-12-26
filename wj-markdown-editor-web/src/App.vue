@@ -7,7 +7,9 @@ import constant from '@/util/constant.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { px2remTransformer } from 'ant-design-vue'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
+const { locale } = useI18n()
 const searchBarVisible = computed(() => useCommonStore().searchBarVisible)
 
 // 设置ant-design-vue 的 rem 配置
@@ -21,6 +23,10 @@ watch(() => useCommonStore().config.theme.global, (newValue) => {
 
 watch(() => useCommonStore().config.fontSize, (newValue) => {
   document.documentElement.style.fontSize = `${newValue}px`
+}, { immediate: true })
+
+watch(() => useCommonStore().config.language, (newValue) => {
+  locale.value = newValue
 }, { immediate: true })
 
 function onKeydown(e) {

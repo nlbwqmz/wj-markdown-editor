@@ -6,6 +6,9 @@ import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { Modal, Tooltip } from 'ant-design-vue'
 import { createVNode, h, onBeforeMount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const menuList = ref([])
 const shortcutKeyList = ref(useCommonStore().config.shortcutKeyList)
@@ -36,7 +39,7 @@ function updateMenuList() {
   if (recentList.length === 0) {
     recentList.push({
       key: commonUtil.createId(),
-      label: '无',
+      label: t('topMenu.file.children.recentFiles.noHistory'),
       click: () => {},
     })
   } else {
@@ -46,14 +49,14 @@ function updateMenuList() {
     })
     recentList.unshift({
       key: commonUtil.createId(),
-      label: '清空最近历史',
+      label: t('topMenu.file.children.recentFiles.clear'),
       click: () => {
         Modal.confirm({
-          title: '提示',
+          title: t('prompt'),
           icon: createVNode(ExclamationCircleOutlined),
-          content: '确认清空所有历史记录？',
-          okText: '确认',
-          cancelText: '取消',
+          content: t('topMenu.file.children.recentFiles.clearTip'),
+          okText: t('config.yes'),
+          cancelText: t('config.no'),
           onOk: () => {
             channelUtil.send({ event: 'recent-clear' })
           },
@@ -64,37 +67,37 @@ function updateMenuList() {
   menuList.value = [
     {
       key: commonUtil.createId(),
-      label: '文件',
+      label: t('topMenu.file.name'),
       children: [
         {
           key: commonUtil.createId(),
-          label: commonUtil.createLabel('新建', getKeymapByShortcutKeyId('createNew')),
+          label: commonUtil.createLabel(t('topMenu.file.children.newFile'), getKeymapByShortcutKeyId('createNew')),
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('createNew', true)
           },
         },
         {
           key: commonUtil.createId(),
-          label: '最近',
+          label: t('topMenu.file.children.recentFiles.name'),
           children: recentList,
         },
         {
           key: commonUtil.createId(),
-          label: commonUtil.createLabel('打开', getKeymapByShortcutKeyId('openFile')),
+          label: commonUtil.createLabel(t('topMenu.file.children.openFile'), getKeymapByShortcutKeyId('openFile')),
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('openFile', true)
           },
         },
         {
           key: commonUtil.createId(),
-          label: commonUtil.createLabel('保存', getKeymapByShortcutKeyId('save')),
+          label: commonUtil.createLabel(t('topMenu.file.children.saveFile'), getKeymapByShortcutKeyId('save')),
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('save', true)
           },
         },
         {
           key: commonUtil.createId(),
-          label: commonUtil.createLabel('另存为', getKeymapByShortcutKeyId('saveOther')),
+          label: commonUtil.createLabel(t('topMenu.file.children.saveFileAs'), getKeymapByShortcutKeyId('saveOther')),
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('saveOther', true)
           },
@@ -105,11 +108,11 @@ function updateMenuList() {
         },
         {
           key: commonUtil.createId(),
-          label: '导出',
+          label: t('topMenu.file.children.export.name'),
           children: [
             {
               key: commonUtil.createId(),
-              label: h(Tooltip, { 'title': '不支持暗黑模式', 'auto-adjust-overflow': true, 'placement': 'right', 'color': '#1677ff' }, () => [
+              label: h(Tooltip, { 'title': t('topMenu.file.children.export.pdfTip'), 'auto-adjust-overflow': true, 'placement': 'right', 'color': '#1677ff' }, () => [
                 h('div', {}, 'PDF'),
               ]),
               click: () => { channelUtil.send({ event: 'export-start', data: 'PDF' }) },
@@ -132,7 +135,7 @@ function updateMenuList() {
         },
         {
           key: commonUtil.createId(),
-          label: commonUtil.createLabel('设置', getKeymapByShortcutKeyId('setting')),
+          label: commonUtil.createLabel(t('topMenu.file.children.setting'), getKeymapByShortcutKeyId('setting')),
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('setting', true)
           },
@@ -141,10 +144,10 @@ function updateMenuList() {
     },
     {
       key: commonUtil.createId(),
-      label: '视图',
+      label: t('topMenu.view.name'),
       children: [
         {
-          label: commonUtil.createLabel('切换', getKeymapByShortcutKeyId('switchView')),
+          label: commonUtil.createLabel(t('topMenu.view.children.switchView'), getKeymapByShortcutKeyId('switchView')),
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('switchView', true)
           },
@@ -153,16 +156,16 @@ function updateMenuList() {
     },
     {
       key: commonUtil.createId(),
-      label: '帮助',
+      label: t('topMenu.help.name'),
       children: [
         {
-          label: '示例',
+          label: t('topMenu.help.children.example'),
           click: () => {
             channelUtil.send({ event: 'open-guide' }).then(() => {})
           },
         },
         {
-          label: '关于',
+          label: t('topMenu.help.children.about'),
           click: () => {
             channelUtil.send({ event: 'open-about' }).then(() => {})
           },
@@ -171,6 +174,10 @@ function updateMenuList() {
     },
   ]
 }
+
+watch(() => useCommonStore().config.language, () => {
+  updateMenuList()
+}, { immediate: true })
 
 watch(() => useCommonStore().config.shortcutKeyList, (newValue) => {
   shortcutKeyList.value = newValue
