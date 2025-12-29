@@ -34,8 +34,7 @@ const handlerList = {
   ...guideUtil.channel,
   'open-dir-select': () => {
     const dirList = dialog.showOpenDialogSync({
-      title: '选择文件夹',
-      buttonLabel: '确认',
+      title: 'Select Folder',
       properties: ['openDirectory'],
     })
     return dirList && dirList.length > 0 ? dirList[0] : undefined
@@ -74,17 +73,16 @@ const handlerList = {
       return
     }
     if (!winInfo.path) {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '当前文件未保存' } })
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theCurrentFileIsNotSaved' } })
       return
     }
     shell.showItemInFolder(winInfo.path)
   },
   'save-other': async (winInfo) => {
     let otherPath = dialog.showSaveDialogSync({
-      title: '另存为',
-      buttonLabel: '另存为',
+      title: 'Save As',
       filters: [
-        { name: 'markdown文件', extensions: ['md'] },
+        { name: 'Markdown File', extensions: ['md'] },
       ],
     })
     if (otherPath) {
@@ -94,18 +92,17 @@ const handlerList = {
         otherPath += '.md'
       }
       await fs.writeFile(otherPath, winInfo.tempContent)
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '另存为成功' } })
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.saveAsSuccessfully' } })
     } else {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '已取消另存为' } })
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cancelSaveAs' } })
     }
   },
   'save': async (winInfo) => {
     if (!winInfo.path) {
       winInfo.path = dialog.showSaveDialogSync({
-        title: '保存',
-        buttonLabel: '保存',
+        title: 'Save',
         filters: [
-          { name: 'markdown文件', extensions: ['md'] },
+          { name: 'Markdown File', extensions: ['md'] },
         ],
       })
     }
@@ -117,9 +114,9 @@ const handlerList = {
       }
       await recent.add(winInfo.path)
       await winInfoUtil.save(winInfo)
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '保存成功' } })
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.saveSuccessfully' } })
     } else {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '已取消保存' } })
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cancelSave' } })
     }
   },
   'get-file-info': (winInfo) => {
@@ -152,11 +149,10 @@ const handlerList = {
       return false
     } else {
       const filePath = dialog.showOpenDialogSync({
-        title: '打开markdown文件',
-        buttonLabel: '选择',
+        title: 'Open Markdown File',
         properties: ['openFile'],
         filters: [
-          { name: 'markdown文件', extensions: ['md'] },
+          { name: 'markdown file', extensions: ['md'] },
         ],
       })
       if (filePath && filePath.length > 0) {
@@ -167,7 +163,7 @@ const handlerList = {
             }
           })
         } else {
-          sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '请选择markdown文件' } })
+          sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.pleaseSelectMarkdownFile' } })
         }
       }
     }

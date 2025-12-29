@@ -715,121 +715,121 @@ function onTextColorChange(color) {
 function refreshToolbarList() {
   const defaultToolbar = {
     bold: {
-      label: '加粗',
+      label: t('shortcutKey.editor-bold'),
       icon: 'i-tabler:bold',
       shortcutKey: getKeymapByShortcutKeyId('editor-bold'),
       action: () => { editorUtil.bold(editorView) },
     },
     underline: {
-      label: '下划线',
+      label: t('shortcutKey.editor-underline'),
       icon: 'i-tabler:underline',
       shortcutKey: getKeymapByShortcutKeyId('editor-underline'),
       action: () => { editorUtil.underline(editorView) },
     },
     italic: {
-      label: '斜体',
+      label: t('shortcutKey.editor-italic'),
       icon: 'i-tabler:italic',
       shortcutKey: getKeymapByShortcutKeyId('editor-italic'),
       action: () => { editorUtil.italic(editorView) },
     },
     strikeThrough: {
-      label: '删除线',
+      label: t('shortcutKey.editor-del'),
       icon: 'i-tabler:a-b-off',
       shortcutKey: getKeymapByShortcutKeyId('editor-del'),
       action: () => { editorUtil.strikeThrough(editorView) },
     },
     heading: {
-      label: '标题',
+      label: t('editor.heading'),
       icon: 'i-tabler:heading',
       menuList: [
         {
-          label: getKeymapByShortcutKeyId('editor-heading-1') ? commonUtil.createLabel('一级标题', getKeymapByShortcutKeyId('editor-heading-1')) : '一级标题',
+          label: getKeymapByShortcutKeyId('editor-heading-1') ? commonUtil.createLabel(t('shortcutKey.editor-heading-1'), getKeymapByShortcutKeyId('editor-heading-1')) : t('shortcutKey.editor-heading-1'),
           action: () => { editorUtil.heading(editorView, 1) },
         },
         {
-          label: getKeymapByShortcutKeyId('editor-heading-2') ? commonUtil.createLabel('二级标题', getKeymapByShortcutKeyId('editor-heading-2')) : '二级标题',
+          label: getKeymapByShortcutKeyId('editor-heading-2') ? commonUtil.createLabel(t('shortcutKey.editor-heading-2'), getKeymapByShortcutKeyId('editor-heading-2')) : t('shortcutKey.editor-heading-2'),
           action: () => { editorUtil.heading(editorView, 2) },
         },
         {
-          label: getKeymapByShortcutKeyId('editor-heading-3') ? commonUtil.createLabel('三级标题', getKeymapByShortcutKeyId('editor-heading-3')) : '三级标题',
+          label: getKeymapByShortcutKeyId('editor-heading-3') ? commonUtil.createLabel(t('shortcutKey.editor-heading-3'), getKeymapByShortcutKeyId('editor-heading-3')) : t('shortcutKey.editor-heading-3'),
           action: () => { editorUtil.heading(editorView, 3) },
         },
         {
-          label: getKeymapByShortcutKeyId('editor-heading-4') ? commonUtil.createLabel('四级标题', getKeymapByShortcutKeyId('editor-heading-4')) : '四级标题',
+          label: getKeymapByShortcutKeyId('editor-heading-4') ? commonUtil.createLabel(t('shortcutKey.editor-heading-4'), getKeymapByShortcutKeyId('editor-heading-4')) : t('shortcutKey.editor-heading-4'),
           action: () => { editorUtil.heading(editorView, 4) },
         },
         {
-          label: getKeymapByShortcutKeyId('editor-heading-5') ? commonUtil.createLabel('五级标题', getKeymapByShortcutKeyId('editor-heading-5')) : '五级标题',
+          label: getKeymapByShortcutKeyId('editor-heading-5') ? commonUtil.createLabel(t('shortcutKey.editor-heading-5'), getKeymapByShortcutKeyId('editor-heading-5')) : t('shortcutKey.editor-heading-5'),
           action: () => { editorUtil.heading(editorView, 5) },
         },
         {
-          label: getKeymapByShortcutKeyId('editor-heading-6') ? commonUtil.createLabel('六级标题', getKeymapByShortcutKeyId('editor-heading-6')) : '六级标题',
+          label: getKeymapByShortcutKeyId('editor-heading-6') ? commonUtil.createLabel(t('shortcutKey.editor-heading-6'), getKeymapByShortcutKeyId('editor-heading-6')) : t('shortcutKey.editor-heading-6'),
           action: () => { editorUtil.heading(editorView, 6) },
         },
       ],
     },
     subscript: {
-      label: '下标',
+      label: t('shortcutKey.editor-subscript'),
       icon: 'i-tabler:subscript',
       shortcutKey: getKeymapByShortcutKeyId('editor-subscript'),
       action: () => { editorUtil.subscript(editorView) },
     },
     superscript: {
-      label: '上标',
+      label: t('shortcutKey.editor-superscript'),
       icon: 'i-tabler:superscript',
       shortcutKey: getKeymapByShortcutKeyId('editor-superscript'),
       action: () => { editorUtil.superscript(editorView) },
     },
     quote: {
-      label: '引用',
+      label: t('shortcutKey.editor-quote'),
       icon: 'i-tabler:quote-filled',
       shortcutKey: getKeymapByShortcutKeyId('editor-quote'),
       action: () => { editorUtil.quote(editorView) },
     },
     list: {
-      label: '无序列表',
+      label: t('shortcutKey.editor-list'),
       icon: 'i-tabler:list',
       shortcutKey: getKeymapByShortcutKeyId('editor-list'),
       action: () => { editorUtil.list(editorView) },
     },
     numberList: {
-      label: '有序列表',
+      label: t('shortcutKey.editor-list-numbers'),
       icon: 'i-tabler:list-numbers',
       shortcutKey: getKeymapByShortcutKeyId('editor-list-numbers'),
       action: () => { editorUtil.numberList(editorView) },
     },
     taskList: {
-      label: '任务列表',
+      label: t('shortcutKey.editor-list-check'),
       icon: 'i-tabler:list-check',
       shortcutKey: getKeymapByShortcutKeyId('editor-list-check'),
       action: () => { editorUtil.taskList(editorView) },
     },
     code: {
-      label: '行内代码',
+      label: t('shortcutKey.editor-code-inline'),
       icon: 'i-tabler:terminal',
       shortcutKey: getKeymapByShortcutKeyId('editor-code-inline'),
       action: () => { editorUtil.code(editorView) },
     },
     blockCode: {
-      label: '代码块',
+      label: t('shortcutKey.editor-code-block'),
       icon: 'i-tabler:terminal-2',
       shortcutKey: getKeymapByShortcutKeyId('editor-code-block'),
       action: () => { editorUtil.blockCode(editorView) },
     },
     link: {
-      label: '链接',
+      label: t('shortcutKey.editor-link'),
       icon: 'i-tabler:link',
       shortcutKey: getKeymapByShortcutKeyId('editor-link'),
       action: () => { editorUtil.link(editorView) },
     },
     mark: {
-      label: '标记',
+      label: t('shortcutKey.editor-mark'),
       icon: 'i-tabler:brush',
       shortcutKey: getKeymapByShortcutKeyId('editor-mark'),
       action: () => { editorUtil.mark(editorView) },
     },
     table: {
-      label: '表格',
+      label: t('editor.table'),
       icon: 'i-tabler:table',
       popover: createVNode(TableShape, { col: 6, row: 6, onSelect: (row, col) => {
         const main = editorView.state.selection.main
@@ -837,7 +837,7 @@ function refreshToolbarList() {
       } }),
     },
     alert: {
-      label: '提示',
+      label: t('editor.alert'),
       icon: 'i-tabler:alert-square',
       menuList: [
         { label: 'note', action: () => { editorUtil.alertContainer(editorView, 'note') } },
@@ -848,7 +848,7 @@ function refreshToolbarList() {
       ],
     },
     container: {
-      label: '容器',
+      label: t('editor.container'),
       icon: 'i-tabler:container',
       menuList: [
         { label: 'info', action: () => { editorUtil.container(editorView, 'info') } },
@@ -860,19 +860,19 @@ function refreshToolbarList() {
       ],
     },
     image: {
-      label: '图片',
+      label: t('editor.image'),
       icon: 'i-tabler:photo',
       menuList: [
         {
-          label: getKeymapByShortcutKeyId('editor-image-template') ? commonUtil.createLabel('插入模板', getKeymapByShortcutKeyId('editor-image-template')) : '插入模板',
+          label: getKeymapByShortcutKeyId('editor-image-template') ? commonUtil.createLabel(t('shortcutKey.editor-image-template'), getKeymapByShortcutKeyId('editor-image-template')) : t('shortcutKey.editor-image-template'),
           action: () => { editorUtil.image(editorView) },
         },
         {
-          label: '本地图片',
+          label: t('editor.localImage'),
           action: () => { editorUtil.imageLocal(editorView) },
         },
         {
-          label: '网络图片',
+          label: t('editor.networkImage'),
           action: () => {
             imageNetworkData.name = undefined
             imageNetworkData.url = undefined
@@ -880,17 +880,17 @@ function refreshToolbarList() {
           },
         },
         {
-          label: getKeymapByShortcutKeyId('editor-screenshot') ? commonUtil.createLabel('直接截图', getKeymapByShortcutKeyId('editor-screenshot')) : '直接截图',
+          label: getKeymapByShortcutKeyId('editor-screenshot') ? commonUtil.createLabel(t('shortcutKey.editor-screenshot'), getKeymapByShortcutKeyId('editor-screenshot')) : t('shortcutKey.editor-screenshot'),
           action: () => { editorUtil.screenshot(editorView, false) },
         },
         {
-          label: getKeymapByShortcutKeyId('editor-screenshot-hide') ? commonUtil.createLabel('隐藏截图', getKeymapByShortcutKeyId('editor-screenshot-hide')) : '隐藏截图',
+          label: getKeymapByShortcutKeyId('editor-screenshot-hide') ? commonUtil.createLabel(t('shortcutKey.editor-screenshot-hide'), getKeymapByShortcutKeyId('editor-screenshot-hide')) : t('shortcutKey.editor-screenshot-hide'),
           action: () => { editorUtil.screenshot(editorView, true) },
         },
       ],
     },
     file: {
-      label: '文件',
+      label: t('editor.file'),
       icon: 'i-tabler:file',
       action: () => {
         const input = document.createElement('input')
@@ -909,47 +909,47 @@ function refreshToolbarList() {
       },
     },
     video: {
-      label: '视频',
+      label: t('editor.video'),
       icon: 'i-tabler:video',
       menuList: [
         {
-          label: '插入模板',
+          label: t('editor.insertTemplate'),
           action: () => { editorUtil.video(editorView) },
         },
         {
-          label: '本地视频',
+          label: t('editor.localVideo'),
           action: () => { editorUtil.videoLocal(editorView) },
         },
       ],
     },
     audio: {
-      label: '音频',
+      label: t('editor.audio'),
       icon: 'i-tabler:device-audio-tape',
       menuList: [
         {
-          label: '插入模板',
+          label: t('editor.insertTemplate'),
           action: () => { editorUtil.audio(editorView) },
         },
         {
-          label: '本地音频',
+          label: t('editor.localAudio'),
           action: () => { editorUtil.audioLocal(editorView) },
         },
       ],
     },
     undo: {
-      label: '撤销',
+      label: t('editor.undo'),
       icon: 'i-tabler:arrow-back-up',
       shortcutKey: 'Ctrl+z',
       action: () => { editorUtil.undo(editorView) },
     },
     redo: {
-      label: '重做',
+      label: t('editor.redo'),
       icon: 'i-tabler:arrow-forward-up',
       shortcutKey: 'Ctrl+y',
       action: () => { editorUtil.redo(editorView) },
     },
     textColor: {
-      label: '文字颜色',
+      label: t('editor.textColor'),
       icon: 'i-tabler:color-picker',
       popover: createVNode(ColorPicker, {
         'is-widget': true,
@@ -957,16 +957,16 @@ function refreshToolbarList() {
         'use-type': 'both',
         'onPureColorChange': onTextColorChange,
         'onGradientColorChange': onTextColorChange,
-      }, { extra: () => h('div', {}, '选中文字颜色语法文本直接更改颜色。') }),
+      }, { extra: () => h('div', {}, t('editor.textColorTip')) }),
     },
     focusLine: {
-      label: '跳转到目标行',
+      label: t('shortcutKey.editor-focus-line'),
       icon: 'i-tabler:focus-2',
       shortcutKey: getKeymapByShortcutKeyId('editor-focus-line'),
       action: jumpToTargetLine,
     },
     previewVisible: {
-      label: '预览',
+      label: t('editor.preview'),
       icon: 'i-tabler:eye',
       action: () => { previewVisible.value = !previewVisible.value },
     },
@@ -977,19 +977,19 @@ function refreshToolbarList() {
         if (previewRef.value) {
           menuVisible.value = !menuVisible.value
         } else {
-          message.warning('请先打开预览')
+          message.warning(t('editor.outlineTip'))
         }
       },
     },
     prettier: {
-      label: '美化',
+      label: t('editor.prettier'),
       icon: 'i-tabler:circle-letter-p',
       action: () => { editorUtil.doPrettier(editorView) },
     },
     save: {
-      label: '保存',
+      label: t('shortcutKey.save'),
       icon: 'i-tabler:file-check',
-      shortcutKey: 'Ctrl+s',
+      shortcutKey: getKeymapByShortcutKeyId('save'),
       action: () => { emits('save', editorView.state.doc.toString()) },
     },
   }

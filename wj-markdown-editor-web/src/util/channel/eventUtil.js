@@ -37,7 +37,7 @@ export default {
     })
     eventEmit.on('message', (data) => {
       message[data.type]({
-        content: data.content,
+        content: t(data.content) || data.content,
         key: data.key,
         duration: data.duration,
       })

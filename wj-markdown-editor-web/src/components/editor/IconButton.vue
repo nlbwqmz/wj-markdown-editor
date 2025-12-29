@@ -47,7 +47,9 @@ function handleMenuClick({ item }) {
         <template #title>
           <div v-if="shortcutKey" class="flex gap-2">
             <div>{{ label }}</div>
-            <div>{{ shortcutKey }}</div>
+            <div class="color-[rgb(200,200,200)]">
+              {{ shortcutKey }}
+            </div>
           </div>
           <span v-else>{{ label }}</span>
         </template>
@@ -69,7 +71,9 @@ function handleMenuClick({ item }) {
         <template #title>
           <div v-if="shortcutKey" class="flex gap-2">
             <div>{{ label }}</div>
-            <div>{{ shortcutKey }}</div>
+            <div class="color-[rgb(200,200,200)]">
+              {{ shortcutKey }}
+            </div>
           </div>
           <span v-else>{{ label }}</span>
         </template>
@@ -93,7 +97,9 @@ function handleMenuClick({ item }) {
       <template #title>
         <div v-if="shortcutKey" class="flex gap-2">
           <div>{{ label }}</div>
-          <div>{{ shortcutKey }}</div>
+          <div class="color-[rgb(200,200,200)]">
+            {{ shortcutKey }}
+          </div>
         </div>
         <span v-else>{{ label }}</span>
       </template>

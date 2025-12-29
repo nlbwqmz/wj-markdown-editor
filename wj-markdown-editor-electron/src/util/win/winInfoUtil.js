@@ -108,7 +108,7 @@ export default {
               if (exists) {
                 shell.showItemInFolder(fullPath)
               } else {
-                sendUtil.send(win, { event: 'message', data: { type: 'warning', content: '未找到文件' } })
+                sendUtil.send(win, { event: 'message', data: { type: 'warning', content: 'message.theFileDoesNotExist' } })
               }
             }).catch(() => {})
           }

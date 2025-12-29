@@ -23,11 +23,11 @@ function createLocalSavePath(winInfo, filePath, config) {
 
 function check(winInfo, config) {
   if (config.fileMode === '2' && !config.fileAbsolutePath) {
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '未设置文件绝对路径' } })
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theAbsolutePathToSaveIsNotSet' } })
     return false
   }
   if ((config.fileMode === '3' || config.fileMode === '4') && !winInfo.path) {
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '当前文件未保存，不能将文件保存到相对路径' } })
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cannotBeSavedToARelativePath' } })
     return false
   }
   return true
@@ -37,7 +37,7 @@ export default {
   save: async (winInfo, filePath, config) => {
     if (check(winInfo, config)) {
       if (!await fs.pathExists(filePath)) {
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '文件不存在' } })
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theFileDoesNotExist' } })
         return null
       }
       const loadingKey = commonUtil.createId()
@@ -45,9 +45,9 @@ export default {
         const savePath = createLocalSavePath(winInfo, filePath, config)
         await fs.ensureDir(path.dirname(savePath))
         // 消息Key
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: '正在保存文件', duration: 0, key: loadingKey } })
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: 'message.theFileIsBeingSaved', duration: 0, key: loadingKey } })
         await fs.copyFile(filePath, savePath)
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '文件保存成功', duration: 3, key: loadingKey } })
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.theFileIsSavedSuccessfully', duration: 3, key: loadingKey } })
         // 保存带绝对路径
         if (config.fileMode === '2') {
           return { name: path.basename(filePath), path: savePath }
@@ -68,7 +68,7 @@ export default {
         }
       } catch (e) {
         console.error(e)
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: `文件保存失败，错误信息：${e.message}`, duration: 3, key: loadingKey } })
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: `File save failed, error message: ${e.message}`, duration: 3, key: loadingKey } })
       }
     }
   },

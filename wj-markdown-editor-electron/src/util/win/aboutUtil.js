@@ -18,8 +18,8 @@ export default {
       aboutWin = new BrowserWindow({
         frame: false,
         icon: path.resolve(__dirname, '../../../icon/favicon.ico'),
-        title: '设置',
-        width: 490,
+        title: 'About',
+        width: 500,
         height: 390,
         show: false,
         maximizable: false,

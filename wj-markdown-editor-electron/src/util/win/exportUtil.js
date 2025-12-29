@@ -13,24 +13,23 @@ let exportWin
 let loadingKey
 function createExportWin(winInfo, type) {
   if (exportWin) {
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '正在导出请稍等' } })
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.exportingPleaseWait' } })
     return
   }
   if (!winInfo.tempContent) {
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '内容为空' } })
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.contentIsEmpty' } })
     return
   }
   const filePath = dialog.showSaveDialogSync({
-    title: `导出为${type.toLowerCase()}`,
-    buttonLabel: '导出',
+    title: `Export as ${type.toLowerCase()}`,
     defaultPath: winInfo.path ? path.basename(winInfo.path, path.extname(winInfo.path)) : '',
     filters: [
-      { name: `${type.toLowerCase()}文件`, extensions: [type.toLowerCase()] },
+      { name: `${type.toLowerCase()} file`, extensions: [type.toLowerCase()] },
     ],
   })
   if (filePath) {
     loadingKey = commonUtil.createId()
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: '正在导出', duration: 0, key: loadingKey } })
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: 'message.exporting', duration: 0, key: loadingKey } })
     exportWin = new BrowserWindow({
       width: 794,
       frame: false,
@@ -83,10 +82,10 @@ async function doExport(winInfo, data) {
       })
     }
     await fs.writeFile(data.filePath, buffer)
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '导出成功', duration: 3, key: loadingKey } })
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.exportSuccessfully', duration: 3, key: loadingKey } })
   } catch (e) {
     console.error('导出失败', e)
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: '导出失败', duration: 3, key: loadingKey } })
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: 'message.exportFailed', duration: 3, key: loadingKey } })
   } finally {
     exportWin.close()
     exportWin = undefined

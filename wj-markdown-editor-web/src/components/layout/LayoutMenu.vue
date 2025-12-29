@@ -71,7 +71,7 @@ function updateMenuList() {
       children: [
         {
           key: commonUtil.createId(),
-          label: commonUtil.createLabel(t('topMenu.file.children.newFile'), getKeymapByShortcutKeyId('createNew')),
+          label: commonUtil.createLabel(t('topMenu.file.children.createNew'), getKeymapByShortcutKeyId('createNew')),
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('createNew', true)
           },

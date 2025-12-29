@@ -67,12 +67,15 @@ const showImgRelativePath = computed(() => {
   return config.value.imgLocal === '4' || config.value.imgNetwork === '4'
 })
 onMounted(async () => {
-  window.document.title = '设置'
   config.value = await channelUtil.send({ event: 'get-config' })
   watch(() => config.value.fontSize, () => {
     anchorKey.value++
   })
 })
+
+watch(() => useCommonStore().config.language, () => {
+  window.document.title = t('config.modalTitle')
+}, { immediate: true })
 
 watch(() => useCommonStore().config.theme.global, (newValue) => {
   if (newValue !== config.value.theme.global) {
@@ -537,7 +540,7 @@ function reset() {
           <template #title>
             <span id="shortcut">{{ $t('config.title.shortcut') }}</span>
           </template>
-          <a-descriptions-item v-for="item in config.shortcutKeyList" :key="item.id" :label="item.name">
+          <a-descriptions-item v-for="item in config.shortcutKeyList" :key="item.id" :label="$t(`shortcutKey.${item.id}`)">
             <a-input
               v-model:value="item.keymap"
               readonly

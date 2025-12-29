@@ -1,17 +1,24 @@
 <script setup>
 import logo from '@/assets/img/logo.png'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
+import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { Modal } from 'ant-design-vue'
-import { computed, createVNode, onMounted, ref } from 'vue'
+import { createVNode, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const appInfo = ref({})
 
+watch(() => useCommonStore().config.language, () => {
+  window.document.title = t('aboutView.title')
+}, { immediate: true })
+
 onMounted(async () => {
   document.documentElement.style.fontSize = '16px'
-  window.document.title = '关于'
   appInfo.value = await channelUtil.send({ event: 'get-app-info' })
 })
 
@@ -28,18 +35,6 @@ const checking = ref(false)
 const checkInfo = ref()
 const downloadFinish = ref(false)
 
-const newVersion = computed(() => {
-  if (checkInfo.value) {
-    if (checkInfo.value.success === true) {
-      return checkInfo.value.version
-    } else {
-      return checkInfo.value.message
-    }
-  } else {
-    return '-'
-  }
-})
-
 async function checkUpdate() {
   checking.value = true
   downloading.value = false
@@ -48,6 +43,26 @@ async function checkUpdate() {
   downloadFinish.value = false
   checkInfo.value = await channelUtil.send({ event: 'check-update' })
   checking.value = false
+  if(checkInfo.value) {
+    if(checkInfo.value.success === true) {
+      if(checkInfo.value.version === appInfo.value.version) {
+        Modal.success({
+          title: t('prompt'),
+          content: t('aboutView.alreadyLatestVersion'),
+        });
+      }
+    } else {
+      Modal.error({
+        title: t('prompt'),
+        content: t('aboutView.checkUpdateFailed'),
+      });
+    }
+  } else {
+    Modal.warning({
+      title: t('prompt'),
+      content: t('aboutView.tip'),
+    });
+  }
 }
 //
 function executeDownload() {
@@ -65,11 +80,11 @@ function cancelDownload() {
 
 function executeUpdate() {
   Modal.confirm({
-    title: '提示',
+    title: t('prompt'),
     icon: createVNode(ExclamationCircleOutlined),
-    content: '当前操作不会校验文件是否保存，请确保文件已保存，安装后程序将重启，确认继续？',
-    okText: '确认',
-    cancelText: '取消',
+    content: t('aboutView.confirmExecuteUpdate'),
+    okText: t('okText'),
+    cancelText: t('cancelText'),
     onOk: () => {
       channelUtil.send({ event: 'execute-update' })
     },
@@ -77,17 +92,19 @@ function executeUpdate() {
 }
 
 onMounted(() => {
-  checkUpdate()
   eventEmit.on('download-update-finish', () => {
     percent.value = 100
     downloading.value = false
     downloadFinish.value = true
   })
   eventEmit.on('update-error', (result) => {
-    checkInfo.value = result
     checking.value = false
     downloading.value = false
     downloadFinish.value = false
+    Modal.error({
+      title: t('prompt'),
+      content: t('aboutView.checkUpdateFailed'),
+    });
   })
   eventEmit.on('download-update-progress', (progress) => {
     percent.value = Number.parseFloat(String(Math.floor(progress.percent * 10) / 10))
@@ -96,7 +113,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <OtherLayout icon="i-tabler:info-circle" name="关于">
+  <OtherLayout icon="i-tabler:info-circle" :name="$t('aboutView.title')">
     <template #action>
       <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="aboutMinimize">
         <div class="i-tabler:minus" />
@@ -109,92 +126,79 @@ onMounted(() => {
       <div class="w-full text-center">
         <img :src="logo" alt="logo" class="w-30">
       </div>
-      <a-alert
-        type="warning"
-        show-icon
-      >
-        <template #message>
-          <span><span style="font-weight: bold">便携版</span>不支持自动升级，需手动下载，解压后直接替换根目录即可。</span>
-        </template>
-      </a-alert>
-      <a-descriptions
-        bordered
-        :column="1"
-        size="small"
-      >
-        <a-descriptions-item label="程序名">
-          <span>{{ appInfo.name }}</span>
-          <a-button
-            type="link"
-            href="https://github.com/nlbwqmz/wj-markdown-editor"
-            target="_blank"
-          >
-            源码地址
-          </a-button>
-          <a-button
-            type="link"
-            href="https://github.com/nlbwqmz/wj-markdown-editor/releases"
-            target="_blank"
-          >
-            下载地址
-          </a-button>
-          <a-button
-            type="link"
-            href="https://github.com/nlbwqmz/wj-markdown-editor/issues"
-            danger
-            target="_blank"
-          >
-            反馈
-          </a-button>
-        </a-descriptions-item>
-        <a-descriptions-item label="当前版本">
-          <span>{{ appInfo.version }}</span>
-          <a-button
-            v-if="!downloading"
-            type="link"
-            :loading="checking"
-            @click="checkUpdate"
-          >
-            检查更新
-          </a-button>
-        </a-descriptions-item>
-        <a-descriptions-item label="最新版本">
-          <span :style="checkInfo && checkInfo.success === false ? { color: 'red' } : {}">{{ newVersion }}</span>
-          <a-button
-            v-if="checkInfo && checkInfo.version"
-            type="link"
-            :href="`https://github.com/nlbwqmz/wj-markdown-editor/releases/tag/${checkInfo.version}`"
-            target="_blank"
-          >
-            更新日志
-          </a-button>
-          <a-button
-            v-if="!downloading && checkInfo && checkInfo.version && checkInfo.version !== appInfo.version && !downloadFinish"
-            type="link"
-            @click="executeDownload"
-          >
-            立即下载
-          </a-button>
-          <a-button
-            v-if="downloading && !downloadFinish"
-            type="link"
-            danger
-            @click="cancelDownload"
-          >
-            取消下载
-          </a-button>
-          <a-button v-if="downloadFinish" type="link" @click="executeUpdate">
-            立即安装
-          </a-button>
-        </a-descriptions-item>
-        <a-descriptions-item label="下载进度">
-          <a-progress
-            v-if="downloading || downloadFinish"
-            :percent="percent"
-          />
-          <span v-else>-</span>
-        </a-descriptions-item>
-      </a-descriptions>
+      <div class="flex items-center justify-center gap-2 font-bold">
+        <span>{{ appInfo.name }}</span>
+        <span>v{{ appInfo.version }}</span>
+      </div>
+      <a-alert type="warning" show-icon :message="$t('aboutView.tip')" />
+      <div class="flex items-center justify-center gap-2">
+        <a-button
+          type="link"
+          href="https://github.com/nlbwqmz/wj-markdown-editor"
+          target="_blank"
+        >
+          GitHub
+        </a-button>
+        <a-divider type="vertical" />
+        <a-button
+          type="link"
+          href="https://github.com/nlbwqmz/wj-markdown-editor/releases"
+          target="_blank"
+        >
+          {{ $t('aboutView.downloadPath') }}
+        </a-button>
+        <a-divider type="vertical" />
+        <a-button
+          type="link"
+          href="https://github.com/nlbwqmz/wj-markdown-editor/issues"
+          target="_blank"
+        >
+          {{ $t('aboutView.issues') }}
+        </a-button>
+        <a-divider type="vertical" />
+        <a-button
+          type="link"
+          href="https://github.com/nlbwqmz/wj-markdown-editor/releases"
+          target="_blank"
+        >
+          {{ $t('aboutView.updateLog') }}
+        </a-button>
+        <a-divider type="vertical" />
+        <a-button
+          :disabled="downloading"
+          type="link"
+          :loading="checking"
+          @click="checkUpdate"
+        >
+          {{ $t('aboutView.checkUpdate') }}
+        </a-button>
+      </div>
+      <div class="flex items-center justify-center gap-2">
+        <a-typography-text v-if="checkInfo && checkInfo.version && checkInfo.version !== appInfo.version" type="success">
+          {{ $t('aboutView.latestVersion') }} : v{{ checkInfo.version }}
+        </a-typography-text>
+        <a-button
+          v-if="!downloading && checkInfo && checkInfo.version && checkInfo.version !== appInfo.version && !downloadFinish"
+          type="link"
+          @click="executeDownload"
+        >
+          {{ $t('aboutView.download') }}
+        </a-button>
+        <a-button
+          v-if="downloading && !downloadFinish"
+          type="link"
+          danger
+          @click="cancelDownload"
+        >
+          {{ $t('aboutView.cancelDownload') }}
+        </a-button>
+        <a-button v-if="downloadFinish" type="link" @click="executeUpdate">
+          {{ $t('aboutView.install') }}
+        </a-button>
+      </div>
+      <div v-if="downloading || downloadFinish" class="w-full p-x-8">
+        <a-progress :percent="percent" />
+      </div>
     </div>
   </OtherLayout>
 </template>
@@ -207,7 +211,6 @@ onMounted(() => {
 :deep(.ant-btn) {
   height: revert;
   padding: 0;
-  margin-left: 10px;
 }
 :deep(.ant-descriptions-item-label) {
   width: 90px;

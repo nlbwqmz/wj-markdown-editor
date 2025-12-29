@@ -94,11 +94,11 @@ export default {
   check: (winInfo, data, config) => {
     const type = data.mode === 'local' ? config.imgLocal : config.imgNetwork
     if (type === '2' && !config.imgAbsolutePath) {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '未设置图片绝对路径' } })
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theAbsolutePathToSaveIsNotSet' } })
       return false
     }
     if ((type === '3' || type === '4') && !winInfo.path) {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '当前文件未保存，不能将图片保存到相对路径' } })
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cannotBeSavedToARelativePath' } })
       return false
     }
     return true
@@ -122,19 +122,19 @@ export default {
     if (data.mode === 'local') {
       await commonUtil.base64ToImg(data.base64, imgSavePath)
     } else {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: '正在检查链接', duration: 0, key: loadingKey } })
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: 'message.checkingLink', duration: 0, key: loadingKey } })
       if (!await checkUrlIsImg(data.url)) {
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: '当前链接不是图片', duration: 3, key: loadingKey } })
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theLinkIsNotValid', duration: 3, key: loadingKey } })
         return null
       }
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: '正在下载图片', duration: 0, key: loadingKey } })
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: 'message.downloadingImage', duration: 0, key: loadingKey } })
       if (!await saveImgNetworkToLocal(data.url, imgSavePath)) {
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: '图片下载失败', duration: 3, key: loadingKey } })
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: 'message.imageDownloadFailed', duration: 3, key: loadingKey } })
         return null
       }
     }
 
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '图片保存成功', duration: 3, key: loadingKey } })
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.imageSavedSuccessfully', duration: 3, key: loadingKey } })
 
     // 保存带绝对路径
     if (type === '2') {
@@ -158,12 +158,12 @@ export default {
     // 上传到图床
     if (type === '5') {
       try {
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: '正在上传图片', duration: 0, key: loadingKey } })
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: 'message.uploadingImage', duration: 0, key: loadingKey } })
         const imgUrl = await imageBedUtil.upload(config.imageBed, imgSavePath)
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: '图片上传成功', duration: 3, key: loadingKey } })
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.imageUploadedSuccessfully', duration: 3, key: loadingKey } })
         return { name: data.name, path: imgUrl }
       } catch (e) {
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: `图片上传失败，请检查图床配置，错误信息：${e}`, duration: 3, key: loadingKey } })
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: `The image upload failed, please check the configuration of the picture bed, error message: ${e}`, duration: 3, key: loadingKey } })
         return null
       } finally {
         await fs.unlink(imgSavePath)

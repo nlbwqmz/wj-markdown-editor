@@ -84,7 +84,7 @@ onBeforeMount(async () => {
       </a-tooltip>
       <a-tooltip placement="bottom" color="#1677ff">
         <template #title>
-          <span>{{ $t('top.openFileLocation') }}</span>
+          <span>{{ $t('top.openInExplorer') }}</span>
         </template>
         <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="openFolder">
           <div class="i-tabler:folder-open" />
