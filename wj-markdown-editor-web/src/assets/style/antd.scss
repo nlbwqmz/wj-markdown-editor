@@ -167,6 +167,9 @@
     * {
       color: var(--wj-markdown-text-primary) !important;
     }
+    .ant-select-clear {
+      background-color: var(--wj-markdown-bg-secondary);
+    }
   }
   .ant-select-dropdown {
     background-color: var(--wj-markdown-bg-tertiary);

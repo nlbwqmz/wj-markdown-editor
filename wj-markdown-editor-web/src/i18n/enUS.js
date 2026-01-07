@@ -98,6 +98,7 @@ export default {
       shortcut: 'Shortcut Key',
       watermark: 'Watermark',
       export: 'Export',
+      fontFamily: 'Font Family',
     },
     general: {
       language: 'Language',
@@ -115,6 +116,13 @@ export default {
         onWindowBlur: 'On window blur',
         onWindowClose: 'On window close',
       },
+    },
+    fontFamily: {
+      editArea: 'Edit area',
+      previewArea: 'Preview area',
+      codeArea: 'Code area',
+      otherArea: 'Other area',
+      tip: 'This program relies on the system font library. After installing a new font, please restart the program to reload and refresh the font list.',
     },
     view: {
       defaultShowOutline: 'Default show outline',
@@ -211,6 +219,7 @@ export default {
     'editor-screenshot': 'Screenshot',
     'editor-screenshot-hide': 'Hide screenshot',
     'editor-focus-line': 'Jump to target line',
+    'conflictWithSystemShortcutKey': 'Shortcut key conflict with system shortcut key',
   },
   aboutView: {
     title: 'About',

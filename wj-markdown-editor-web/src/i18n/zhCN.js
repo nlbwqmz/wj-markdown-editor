@@ -98,6 +98,7 @@ export default {
       shortcut: '快捷键',
       watermark: '水印',
       export: '导出',
+      fontFamily: '字体',
     },
     general: {
       language: '语言',
@@ -115,6 +116,13 @@ export default {
         onWindowBlur: '窗口失焦时',
         onWindowClose: '窗口关闭时',
       },
+    },
+    fontFamily: {
+      editArea: '编辑区域',
+      previewArea: '预览区域',
+      codeArea: '代码区域',
+      otherArea: '其他区域',
+      tip: '本程序依赖系统字体库。新字体安装完毕后，请重启程序，以重新加载并刷新字体列表。',
     },
     view: {
       defaultShowOutline: '默认显示大纲',
@@ -211,6 +219,7 @@ export default {
     'editor-screenshot': '直接截图',
     'editor-screenshot-hide': '隐藏截图',
     'editor-focus-line': '跳转到目标行',
+    'conflictWithSystemShortcutKey': '与系统快捷键冲突',
   },
   aboutView: {
     title: '关于',

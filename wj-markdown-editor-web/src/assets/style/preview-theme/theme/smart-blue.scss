@@ -8,16 +8,6 @@
 .preview-theme-smart-blue {
   color: #595959;
   font-size: 15px;
-  font-family:
-    -apple-system,
-    system-ui,
-    BlinkMacSystemFont,
-    Helvetica Neue,
-    PingFang SC,
-    Hiragino Sans GB,
-    Microsoft YaHei,
-    Arial,
-    sans-serif;
   background-image:
     linear-gradient(90deg, rgba(60, 10, 30, 0.04) 3%, rgba(0, 0, 0, 0) 3%),
     linear-gradient(360deg, rgba(60, 10, 30, 0.04) 3%, rgba(0, 0, 0, 0) 3%);
@@ -168,12 +158,6 @@
   overflow: auto;
   position: relative;
   line-height: 1.75;
-  font-family:
-    Menlo,
-    Monaco,
-    Consolas,
-    Courier New,
-    monospace;
 }
 
 .preview-theme-smart-blue pre > code {

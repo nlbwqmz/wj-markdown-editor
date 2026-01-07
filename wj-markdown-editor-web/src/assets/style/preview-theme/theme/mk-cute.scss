@@ -7,7 +7,6 @@
   }
 }
 .preview-theme-mk-cute {
-  $monospace-font: Menlo, Monaco, Consolas, 'Courier New', monospace;
   $line-space: 22px;
 
   $theme-color: #36ace1;
@@ -171,7 +170,6 @@
   }
 
   code {
-    font-family: $monospace-font;
     word-break: break-word;
     border-radius: 2px;
     overflow-x: auto;
@@ -190,7 +188,6 @@
     > code {
       color: inherit;
       background-color: inherit;
-      font-family: $monospace-font;
       font-size: 12px;
       border-radius: 10px;
       padding: 1.2rem;

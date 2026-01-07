@@ -7,7 +7,7 @@ import constant from '@/util/constant.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { computed, createVNode, h, onMounted, ref, watch } from 'vue'
+import { computed, createVNode, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ColorPicker } from 'vue3-colorpicker'
 import { useI18n } from 'vue-i18n'
 
@@ -18,8 +18,11 @@ const config = ref()
 // 用于更新字体大小时，刷新锚点组件
 const anchorKey = ref(1)
 
+const systemFontList = ref([])
+
 const anchorList = computed(() => [
   { key: '-1', href: '#general', title: t('config.title.general') },
+  { key: '9', href: '#font', title: t('config.title.fontFamily') },
   { key: '0', href: '#view', title: t('config.title.view') },
   { key: '1', href: '#editor', title: t('config.title.editor') },
   { key: '2', href: '#file', title: t('config.title.file') },
@@ -49,6 +52,16 @@ const autoSaveOptionList = computed(() => [
 const codeThemeList = constant.codeThemeList
 const previewThemeList = constant.previewThemeList
 
+function refreshSystemFontList() {
+  if (document.visibilityState === 'visible') {
+    window.queryLocalFonts().then((fonts) => {
+      systemFontList.value = [...new Set(fonts.map(font => font.family))]
+    }).catch((e) => {
+      message.error(e.message)
+    })
+  }
+}
+
 function getAnchorContainer() {
   return window.document.getElementById('wj-other-layout-container')
 }
@@ -68,9 +81,15 @@ const showImgRelativePath = computed(() => {
 })
 onMounted(async () => {
   config.value = await channelUtil.send({ event: 'get-config' })
+  refreshSystemFontList()
+  window.addEventListener('visibilitychange', refreshSystemFontList)
   watch(() => config.value.fontSize, () => {
     anchorKey.value++
   })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('visibilitychange', refreshSystemFontList)
 })
 
 watch(() => useCommonStore().config.language, () => {
@@ -95,16 +114,25 @@ function onKeydown(shortcutKey) {
       const otherShortcutKeyList = config.value.shortcutKeyList.filter(item => item.id !== shortcutKey.id)
       for (let i = 0; i < otherShortcutKeyList.length; i++) {
         if (otherShortcutKeyList[i].keymap === keymap) {
-          const vNode = h('span', {}, [
-            h('span', {}, '与'),
-            h('span', { style: { color: '#FAAD14', fontWeight: 'bold' } }, otherShortcutKeyList[i].name),
-            h('span', {}, '快捷键冲突'),
-          ])
-          message.warn(vNode)
+          if (config.value.language === 'zh-CN') {
+            const vNode = h('span', {}, [
+              h('span', {}, '与 '),
+              h('span', { style: { color: '#FAAD14', fontWeight: 'bold' } }, t(`shortcutKey.${otherShortcutKeyList[i].id}`)),
+              h('span', {}, ' 快捷键冲突'),
+            ])
+            message.warn(vNode)
+          } else {
+            const vNode = h('span', {}, [
+              h('span', {}, 'Shortcut key conflict with '),
+              h('span', { style: { color: '#FAAD14', fontWeight: 'bold' } }, t(`shortcutKey.${otherShortcutKeyList[i].id}`)),
+            ])
+            message.warn(vNode)
+          }
+
           return
         }
         if (disallowedShortcutKeys.includes(keymap)) {
-          message.warn('与系统快捷键冲突')
+          message.warn(t('shortcutKey.conflictWithSystemShortcutKey'))
           return
         }
       }
@@ -147,8 +175,8 @@ function reset() {
     title: t('config.resetToDefault'),
     icon: createVNode(ExclamationCircleOutlined),
     content: t('config.resetToDefaultTip'),
-    okText: t('config.okText'),
-    cancelText: t('config.cancelText'),
+    okText: t('okText'),
+    cancelText: t('cancelText'),
     centered: true,
     onOk: async () => {
       config.value = await channelUtil.send({ event: 'get-default-config' })
@@ -242,6 +270,47 @@ function reset() {
               </div>
             </template>
             <a-checkbox-group v-model:value="config.autoSave" :options="autoSaveOptionList" />
+          </a-descriptions-item>
+        </a-descriptions>
+        <a-descriptions bordered :column="1" size="small">
+          <template #title>
+            <div id="font" class="flex items-center gap-1">
+              <span>{{ $t('config.title.fontFamily') }}</span>
+              <a-tooltip placement="topRight" color="#1677ff" class="flex-shrink-0">
+                <template #title>
+                  {{ $t('config.fontFamily.tip') }}
+                </template>
+                <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
+              </a-tooltip>
+            </div>
+          </template>
+          <a-descriptions-item :label="$t('config.fontFamily.editArea')">
+            <a-select v-model:value="config.fontFamily.editArea" class="w-full" allow-clear show-search @change="value => config.fontFamily.editArea = value === undefined ? '' : value">
+              <a-select-option v-for="item in systemFontList" :key="item" :value="item">
+                {{ item }}
+              </a-select-option>
+            </a-select>
+          </a-descriptions-item>
+          <a-descriptions-item :label="$t('config.fontFamily.previewArea')">
+            <a-select v-model:value="config.fontFamily.previewArea" class="w-full" allow-clear show-search @change="value => config.fontFamily.previewArea = value === undefined ? '' : value">
+              <a-select-option v-for="item in systemFontList" :key="item" :value="item">
+                {{ item }}
+              </a-select-option>
+            </a-select>
+          </a-descriptions-item>
+          <a-descriptions-item :label="$t('config.fontFamily.codeArea')">
+            <a-select v-model:value="config.fontFamily.codeArea" class="w-full" allow-clear show-search @change="value => config.fontFamily.codeArea = value === undefined ? '' : value">
+              <a-select-option v-for="item in systemFontList" :key="item" :value="item">
+                {{ item }}
+              </a-select-option>
+            </a-select>
+          </a-descriptions-item>
+          <a-descriptions-item :label="$t('config.fontFamily.otherArea')">
+            <a-select v-model:value="config.fontFamily.otherArea" class="w-full" show-search allow-clear @change="value => config.fontFamily.otherArea = value === undefined ? '' : value">
+              <a-select-option v-for="item in systemFontList" :key="item" :value="item">
+                {{ item }}
+              </a-select-option>
+            </a-select>
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
@@ -429,7 +498,7 @@ function reset() {
               readonly
             >
               <template #addonAfter>
-                <div class="i-tabler:folder cursor-pointer" @click="openFileDirSelect" />
+                <div class="i-tabler:folder cursor-pointer" style="color: var(--wj-markdown-text-primary)" @click="openFileDirSelect" />
               </template>
             </a-input>
           </a-descriptions-item>
@@ -698,10 +767,10 @@ function reset() {
   text-align: center;
 }
 :deep(.ant-descriptions-title) {
+  padding-top: 20px;
   user-select: none;
   span {
     display: inline-block;
-    padding-top: 20px;
   }
 }
 :deep(.ant-descriptions-item-label) {

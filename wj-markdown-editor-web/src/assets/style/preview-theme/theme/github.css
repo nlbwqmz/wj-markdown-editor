@@ -130,9 +130,6 @@
   margin: 0;
   color: var(--fgColor-default);
   background-color: var(--bgColor-default);
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif, 'Apple Color Emoji',
-    'Segoe UI Emoji';
   font-size: 16px;
   line-height: 1.5;
   word-wrap: break-word;
@@ -238,7 +235,6 @@
 .preview-theme-github kbd,
 .preview-theme-github pre,
 .preview-theme-github samp {
-  font-family: monospace;
   font-size: 1em;
 }
 
@@ -262,7 +258,6 @@
   font: inherit;
   margin: 0;
   overflow: visible;
-  font-family: inherit;
   font-size: inherit;
   line-height: inherit;
 }
@@ -468,32 +463,12 @@
 .preview-theme-github tt,
 .preview-theme-github code,
 .preview-theme-github samp {
-  font-family: var(
-    --fontStack-monospace,
-    ui-monospace,
-    SFMono-Regular,
-    SF Mono,
-    Menlo,
-    Consolas,
-    Liberation Mono,
-    monospace
-  );
   font-size: 12px;
 }
 
 .preview-theme-github pre {
   margin-top: 0;
   margin-bottom: 0;
-  font-family: var(
-    --fontStack-monospace,
-    ui-monospace,
-    SFMono-Regular,
-    SF Mono,
-    Menlo,
-    Consolas,
-    Liberation Mono,
-    monospace
-  );
   font-size: 12px;
   word-wrap: normal;
 }
@@ -978,10 +953,6 @@
   color: var(--fgColor-default);
 }
 
-.preview-theme-github .footnotes .data-footnote-backref g-emoji {
-  font-family: monospace;
-}
-
 .preview-theme-github body:has(:modal) {
   padding-right: var(--dialog-scrollgutter) !important;
 }
@@ -1123,7 +1094,6 @@
 .preview-theme-github g-emoji {
   display: inline-block;
   min-width: 1ch;
-  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
   font-size: 1em;
   font-style: normal !important;
   font-weight: var(--base-text-weight-normal, 400);

@@ -1,5 +1,4 @@
 .preview-theme-scrolls {
-  $monospace-font: Mono, Menlo, Monaco, Consolas, 'Courier New', monospace;
   $line-space: 22px;
   $font-primary-color: #cca152;
   @mixin HBefore {
@@ -108,7 +107,6 @@
     margin: 32px 0;
   }
   code {
-    font-family: $monospace-font;
     word-break: break-word;
     border-radius: 2px;
     overflow-x: auto;
@@ -120,7 +118,6 @@
   }
 
   pre {
-    font-family: $monospace-font;
     overflow: auto;
     position: relative;
     line-height: 1.75;

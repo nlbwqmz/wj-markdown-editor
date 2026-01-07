@@ -242,7 +242,6 @@
 
   code {
     padding: 0.065em 0.4em;
-    font-family: $monospace-font;
     font-size: 0.9em;
     word-break: break-word;
     overflow-x: auto;
@@ -253,7 +252,6 @@
   }
 
   pre {
-    font-family: $monospace-font;
     overflow: auto;
     position: relative;
     line-height: 1.75;

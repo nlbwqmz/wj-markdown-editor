@@ -13,6 +13,12 @@ export default {
   menuVisible: true,
   previewWidth: 80,
   fontSize: 16,
+  fontFamily: {
+    editArea: '',
+    previewArea: '',
+    codeArea: '',
+    otherArea: '',
+  },
   startPage: 'preview',
   openRecent: true,
   recentMax: 10,

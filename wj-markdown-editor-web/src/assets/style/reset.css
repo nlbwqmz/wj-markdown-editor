@@ -3,7 +3,10 @@
   margin: 0;
   padding: 0;
 }
-html, body, #app {
+html,
+body,
+#app {
   width: 100%;
   height: 100%;
+  font-family: var(--other-area-font);
 }

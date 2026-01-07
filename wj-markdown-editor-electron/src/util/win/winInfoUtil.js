@@ -147,7 +147,7 @@ export default {
     })
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
       win.loadURL(content ? `http://localhost:8080/#/${configUtil.getConfig().startPage}` : 'http://localhost:8080/#/editor').then(() => {
-        // win.webContents.openDevTools({ mode: 'undocked' })
+        win.webContents.openDevTools({ mode: 'undocked' })
       })
     } else {
       win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: content ? configUtil.getConfig().startPage : 'editor' }).then(() => {})

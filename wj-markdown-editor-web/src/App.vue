@@ -9,9 +9,15 @@ import { px2remTransformer } from 'ant-design-vue'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+const defaultFontFamily = {
+  editArea: `source-code-pro,Menlo,Monaco,Consolas,'Courier New',monospace`,
+  otherArea: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'`,
+  previewArea: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'`,
+  codeArea: `Menlo, Monaco, Consolas, 'Courier New', monospace`,
+}
+
 const { locale } = useI18n()
 const searchBarVisible = computed(() => useCommonStore().searchBarVisible)
-
 // 设置ant-design-vue 的 rem 配置
 const px2rem = px2remTransformer({
   rootValue: 16,
@@ -27,6 +33,22 @@ watch(() => useCommonStore().config.fontSize, (newValue) => {
 
 watch(() => useCommonStore().config.language, (newValue) => {
   locale.value = newValue
+}, { immediate: true })
+
+watch(() => useCommonStore().config.fontFamily.editArea, (newValue) => {
+  document.body.style.setProperty('--edit-area-font', newValue ? `'${newValue}', ${defaultFontFamily.editArea}` : defaultFontFamily.editArea)
+}, { immediate: true })
+
+watch(() => useCommonStore().config.fontFamily.otherArea, (newValue) => {
+  document.body.style.setProperty('--other-area-font', newValue ? `'${newValue}', ${defaultFontFamily.otherArea}` : defaultFontFamily.otherArea)
+}, { immediate: true })
+
+watch(() => useCommonStore().config.fontFamily.previewArea, (newValue) => {
+  document.body.style.setProperty('--preview-area-font', newValue ? `'${newValue}', ${defaultFontFamily.previewArea}` : defaultFontFamily.previewArea)
+}, { immediate: true })
+
+watch(() => useCommonStore().config.fontFamily.codeArea, (newValue) => {
+  document.body.style.setProperty('--code-area-font', newValue ? `'${newValue}', ${defaultFontFamily.codeArea}` : defaultFontFamily.codeArea)
 }, { immediate: true })
 
 function onKeydown(e) {
@@ -76,8 +98,10 @@ onBeforeUnmount(() => {
 
 <template>
   <a-style-provider :transformers="[px2rem]">
-    <router-view />
-    <SearchBar v-if="searchBarVisible" />
+    <a-config-provider :theme="{ token: { fontFamily: 'var(--other-area-font)' } }">
+      <router-view />
+      <SearchBar v-if="searchBarVisible" />
+    </a-config-provider>
   </a-style-provider>
 </template>
 

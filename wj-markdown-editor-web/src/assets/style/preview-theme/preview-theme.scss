@@ -8,6 +8,7 @@
 @use 'theme/markdown-here';
 
 .pre-container {
+  font-family: var(--code-area-font);
   &:hover {
     .pre-container-copy {
       display: block;
@@ -16,4 +17,12 @@
       display: none;
     }
   }
+}
+
+pre {
+  font-family: var(--code-area-font);
+}
+
+code {
+  font-family: var(--code-area-font);
 }

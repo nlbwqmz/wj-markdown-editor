@@ -41,13 +41,18 @@ const fixedExtension = [
       fontSize: '1rem',
     },
     '.cm-line': {
-      fontFamily: 'source-code-pro,Menlo,Monaco,Consolas,Courier New,monospace', // 字体
+      fontFamily: 'var(--edit-area-font)', // 字体
+    },
+    '.cm-completionLabel': {
+      fontFamily: 'var(--edit-area-font)', // 字体
     },
     '.cm-content': {
       lineHeight: '1.5',
     },
     '.cm-gutterElement': {
       userSelect: 'none',
+      padding: '0 !important',
+      textAlign: 'center !important',
     },
     '.cm-scroller': {
       overflowY: 'scroll',
