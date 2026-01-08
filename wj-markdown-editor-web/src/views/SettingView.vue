@@ -55,11 +55,24 @@ const previewThemeList = constant.previewThemeList
 function refreshSystemFontList() {
   if (document.visibilityState === 'visible') {
     window.queryLocalFonts().then((fonts) => {
-      systemFontList.value = [...new Set(fonts.map(font => font.family))]
+      const list = []
+      const familySet = new Set(fonts.map(font => font.family))
+      familySet.forEach((family) => {
+        const label = fonts.filter(font => font.family === family).sort((a, b) => a.fullName.length - b.fullName.length)[0].fullName
+        list.push({
+          value: family,
+          label: family === label ? family : `${family} (${label})`,
+        })
+      })
+      systemFontList.value = list
     }).catch((e) => {
       message.error(e.message)
     })
   }
+}
+
+function systemFontSelectFilterOption(inputValue, option) {
+  return option.label.toLowerCase().includes(inputValue.toLowerCase())
 }
 
 function getAnchorContainer() {
@@ -285,32 +298,16 @@ function reset() {
             </div>
           </template>
           <a-descriptions-item :label="$t('config.fontFamily.editArea')">
-            <a-select v-model:value="config.fontFamily.editArea" class="w-full" allow-clear show-search @change="value => config.fontFamily.editArea = value === undefined ? '' : value">
-              <a-select-option v-for="item in systemFontList" :key="item" :value="item">
-                {{ item }}
-              </a-select-option>
-            </a-select>
+            <a-select v-model:value="config.fontFamily.editArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => config.fontFamily.editArea = value === undefined ? '' : value" />
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.fontFamily.previewArea')">
-            <a-select v-model:value="config.fontFamily.previewArea" class="w-full" allow-clear show-search @change="value => config.fontFamily.previewArea = value === undefined ? '' : value">
-              <a-select-option v-for="item in systemFontList" :key="item" :value="item">
-                {{ item }}
-              </a-select-option>
-            </a-select>
+            <a-select v-model:value="config.fontFamily.previewArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => config.fontFamily.previewArea = value === undefined ? '' : value" />
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.fontFamily.codeArea')">
-            <a-select v-model:value="config.fontFamily.codeArea" class="w-full" allow-clear show-search @change="value => config.fontFamily.codeArea = value === undefined ? '' : value">
-              <a-select-option v-for="item in systemFontList" :key="item" :value="item">
-                {{ item }}
-              </a-select-option>
-            </a-select>
+            <a-select v-model:value="config.fontFamily.codeArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => config.fontFamily.codeArea = value === undefined ? '' : value" />
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.fontFamily.otherArea')">
-            <a-select v-model:value="config.fontFamily.otherArea" class="w-full" show-search allow-clear @change="value => config.fontFamily.otherArea = value === undefined ? '' : value">
-              <a-select-option v-for="item in systemFontList" :key="item" :value="item">
-                {{ item }}
-              </a-select-option>
-            </a-select>
+            <a-select v-model:value="config.fontFamily.otherArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" show-search allow-clear @change="value => config.fontFamily.otherArea = value === undefined ? '' : value" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">

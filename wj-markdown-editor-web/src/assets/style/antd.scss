@@ -178,9 +178,9 @@
     }
     .ant-select-item {
       color: var(--wj-markdown-text-primary) !important;
-      &:hover {
-        background-color: var(--wj-markdown-bg-hover);
-      }
+    }
+    .ant-select-item.ant-select-item-option-active {
+      background-color: var(--wj-markdown-bg-hover);
     }
   }
 
