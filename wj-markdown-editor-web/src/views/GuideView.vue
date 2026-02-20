@@ -5,7 +5,8 @@ import OtherLayout from '@/components/layout/OtherLayout.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import guideUtil from '@/util/guideUtil.js'
-import { ref, watch } from 'vue'
+import Split from 'split-grid'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -13,7 +14,9 @@ const { t } = useI18n()
 const commonStore = useCommonStore()
 const content = ref(guideUtil.getGuideContent(commonStore.config.language))
 const previewContainerRef = ref()
+const gutterRef = ref()
 const anchorList = ref([])
+let splitInstance
 
 watch(() => commonStore.config.language, (language) => {
   window.document.title = t('topMenu.help.children.example')
@@ -31,6 +34,18 @@ function guideClose() {
 function onAnchorChange(changedAnchorList) {
   anchorList.value = changedAnchorList
 }
+
+onMounted(() => {
+  splitInstance = Split({
+    columnGutters: [{ track: 1, element: gutterRef.value }],
+    minSize: 200,
+    snapOffset: 0,
+  })
+})
+
+onUnmounted(() => {
+  splitInstance?.destroy?.()
+})
 </script>
 
 <template>
@@ -43,8 +58,9 @@ function onAnchorChange(changedAnchorList) {
         <div class="i-tabler:x" />
       </div>
     </template>
-    <div class="allow-search grid grid-cols-[200px_1fr] h-full w-full overflow-hidden b-t-1 b-t-border-primary b-t-solid">
+    <div class="allow-search grid grid-cols-[200px_2px_1fr] h-full w-full overflow-hidden b-t-1 b-t-border-primary b-t-solid">
       <MarkdownMenu :anchor-list="anchorList" :get-container="() => previewContainerRef" class="b-r-1 b-r-border-primary b-r-solid" />
+      <div ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
         <div class="h-full w-full flex justify-center">
           <div class="h-full w-full">
