@@ -10,12 +10,14 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-const content = ref(guideUtil.getGuideContent())
+const commonStore = useCommonStore()
+const content = ref(guideUtil.getGuideContent(commonStore.config.language))
 const previewContainerRef = ref()
 const anchorList = ref([])
 
-watch(() => useCommonStore().config.language, () => {
+watch(() => commonStore.config.language, (language) => {
   window.document.title = t('topMenu.help.children.example')
+  content.value = guideUtil.getGuideContent(language)
 }, { immediate: true })
 
 function guideMinimize() {

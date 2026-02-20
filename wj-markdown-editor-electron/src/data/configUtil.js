@@ -124,6 +124,11 @@ export default {
     await fs.writeFile(configPath, JSON.stringify(config), 'utf-8')
     updateCallback && updateCallback(JSON.parse(JSON.stringify(config)))
   },
+  setLanguage: async (data) => {
+    config.language = data
+    await fs.writeFile(configPath, JSON.stringify(config), 'utf-8')
+    updateCallback && updateCallback(JSON.parse(JSON.stringify(config)))
+  },
   getDefaultConfig: () => {
     return JSON.parse(JSON.stringify(defaultConfig))
   },

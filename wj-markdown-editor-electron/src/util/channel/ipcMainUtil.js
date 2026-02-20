@@ -210,6 +210,9 @@ const handlerList = {
   'user-update-theme-global': async (winInfo, data) => {
     await configUtil.setThemeGlobal(data)
   },
+  'user-update-language': async (winInfo, data) => {
+    await configUtil.setLanguage(data)
+  },
   'app-info': () => {
     return { name: 'wj-markdown-editor', version: app.getVersion() }
   },

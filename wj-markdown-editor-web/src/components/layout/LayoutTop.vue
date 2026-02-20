@@ -38,6 +38,12 @@ function switchThemes() {
   channelUtil.send({ event: 'user-update-theme-global', data: theme.value === 'light' ? 'dark' : 'light' })
 }
 
+const language = computed(() => useCommonStore().config.language)
+
+function switchLanguage(lang) {
+  channelUtil.send({ event: 'user-update-language', data: lang })
+}
+
 const appInfo = ref({ name: 'wj-markdown-editor', version: '' })
 
 const hasNewVersion = computed(() => useCommonStore().hasNewVersion)
@@ -82,6 +88,23 @@ onBeforeMount(async () => {
           <div v-else class="i-tabler:sun" />
         </div>
       </a-tooltip>
+      <a-dropdown placement="bottom" :trigger="['hover', 'click']" arrow>
+        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover">
+          <div class="i-tabler:language" />
+        </div>
+        <template #overlay>
+          <a-menu>
+            <a-menu-item key="zh-CN" @click="switchLanguage('zh-CN')">
+              <span v-if="language === 'zh-CN'" class="i-tabler:check mr-1" />
+              <span v-else class="mr-4" />中文
+            </a-menu-item>
+            <a-menu-item key="en-US" @click="switchLanguage('en-US')">
+              <span v-if="language === 'en-US'" class="i-tabler:check mr-1" />
+              <span v-else class="mr-4" />English
+            </a-menu-item>
+          </a-menu>
+        </template>
+      </a-dropdown>
       <a-tooltip placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.openInExplorer') }}</span>
