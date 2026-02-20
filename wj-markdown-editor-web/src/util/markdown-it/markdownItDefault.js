@@ -7,6 +7,7 @@ import markdownItLineNumber from '@/util/markdown-it/markdownItLineNumber.js'
 import markdownItLink from '@/util/markdown-it/markdownItLink.js'
 import markdownItTextColor from '@/util/markdown-it/markdownItTextColor.js'
 import markdownItVideo from '@/util/markdown-it/markdownItVideo.js'
+import { footnote } from '@mdit/plugin-footnote'
 import { imgSize } from '@mdit/plugin-img-size'
 import MarkdownItKatex from '@vscode/markdown-it-katex'
 import MarkdownIt from 'markdown-it'
@@ -39,6 +40,7 @@ md.use(MarkdownItSup)
   .use(MarkdownItCodeBlock)
   .use(MarkdownItAnchor)
   .use(imgSize)
+  .use(footnote)
 
 // 文字颜色
 markdownItTextColor(md)

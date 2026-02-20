@@ -76,6 +76,40 @@ function removeImageListener() {
   }
 }
 
+/**
+ * 处理脚注链接点击
+ */
+function handleFootnoteClick(e) {
+  const target = e.target.closest('.footnote-ref a, .footnote-backref')
+  if (!target)
+    return
+
+  const href = target.getAttribute('href')
+  if (!href || !href.startsWith('#'))
+    return
+
+  e.preventDefault()
+  const targetId = href.slice(1)
+  const targetElement = document.getElementById(targetId)
+  if (targetElement) {
+    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+}
+
+/**
+ * 添加脚注链接点击事件
+ */
+function addFootnoteListener() {
+  previewRef.value?.addEventListener('click', handleFootnoteClick)
+}
+
+/**
+ * 移除脚注链接点击事件
+ */
+function removeFootnoteListener() {
+  previewRef.value?.removeEventListener('click', handleFootnoteClick)
+}
+
 const latestAnchorList = ref([])
 
 /**
@@ -188,6 +222,7 @@ watch(() => useCommonStore().config.markdown.typographer, (newValue) => {
 
 function refreshPreview(doc) {
   removeImageListener()
+  removeFootnoteListener()
   let shouldRefreshMermaid = false
   const rendered = md.render(doc)
   const tempElement = document.createElement('div')
@@ -214,6 +249,7 @@ function refreshPreview(doc) {
     mermaid.run()
   }
   addImageListener()
+  addFootnoteListener()
   pushAnchorList()
   emits('refreshComplete')
 }
