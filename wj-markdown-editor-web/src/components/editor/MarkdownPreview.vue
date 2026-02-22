@@ -1,5 +1,6 @@
 <script setup>
 import { useCommonStore } from '@/stores/counter.js'
+import { loadCodeTheme } from '@/util/codeThemeUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
 import mermaid from 'mermaid'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -239,6 +240,13 @@ watch(() => store.config.theme.global, () => {
   initMermaid()
   refreshPreview(props.content, true)
 })
+
+// 监听 codeTheme 变化，动态加载主题 CSS
+watch(() => props.codeTheme, async (newTheme) => {
+  if (newTheme) {
+    await loadCodeTheme(newTheme)
+  }
+}, { immediate: true })
 
 function refreshPreview(doc, forceRefreshMermaid = false) {
   let shouldRefreshMermaid = forceRefreshMermaid
