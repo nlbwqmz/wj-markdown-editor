@@ -2,7 +2,7 @@
 import { useCommonStore } from '@/stores/counter.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
 import mermaid from 'mermaid'
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 
 const props = defineProps({
@@ -26,88 +26,103 @@ const props = defineProps({
 
 const emits = defineEmits(['refreshComplete', 'anchorChange', 'imageContextmenu'])
 
+const store = useCommonStore()
+
+/**
+ * 根据全局主题获取 mermaid 主题
+ * @param {string} globalTheme - 全局主题 'light' 或 'dark'
+ * @returns {string} mermaid 主题
+ */
+function getMermaidTheme(globalTheme) {
+  return globalTheme === 'dark' ? 'dark' : 'default'
+}
+
+/**
+ * 初始化 mermaid 配置
+ */
+function initMermaid() {
+  const theme = getMermaidTheme(store.config.theme.global)
+  mermaid.initialize({
+    startOnLoad: false,
+    theme,
+    securityLevel: 'loose',
+  })
+}
+
 const previewRef = ref()
 
 const imageSrcList = ref([])
 const imagePreviewVisible = ref(false)
 const imagePreviewCurrentIndex = ref(0)
 
-function onImageClick(e) {
-  const index = Number(e.target.dataset.index)
-  imagePreviewVisible.value = true
-  imagePreviewCurrentIndex.value = index
-}
+/**
+ * 统一处理预览区点击事件（事件委托）
+ */
+function handlePreviewClick(e) {
+  // 处理图片点击
+  const img = e.target.closest('img')
+  if (img) {
+    const index = Number(img.dataset.index)
+    imagePreviewVisible.value = true
+    imagePreviewCurrentIndex.value = index
+    return
+  }
 
-function onImageContextmenu(e) {
-  const src = e.target.src
-  emits('imageContextmenu', src)
+  // 处理脚注链接点击
+  const footnoteLink = e.target.closest('.footnote-ref a, .footnote-backref')
+  if (footnoteLink) {
+    const href = footnoteLink.getAttribute('href')
+    if (!href || !href.startsWith('#'))
+      return
+
+    e.preventDefault()
+    const targetId = href.slice(1)
+    const targetElement = document.getElementById(targetId)
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
 }
 
 /**
- * 添加图片点击事件
+ * 统一处理预览区右键事件（事件委托）
  */
-function addImageListener() {
+function handlePreviewContextmenu(e) {
+  const img = e.target.closest('img')
+  if (img) {
+    e.preventDefault()
+    emits('imageContextmenu', img.src)
+  }
+}
+
+/**
+ * 绑定预览区事件
+ */
+function bindPreviewEvents() {
+  previewRef.value?.addEventListener('click', handlePreviewClick)
+  previewRef.value?.addEventListener('contextmenu', handlePreviewContextmenu)
+}
+
+/**
+ * 解绑预览区事件
+ */
+function unbindPreviewEvents() {
+  previewRef.value?.removeEventListener('click', handlePreviewClick)
+  previewRef.value?.removeEventListener('contextmenu', handlePreviewContextmenu)
+}
+
+/**
+ * 更新图片索引（用于预览）
+ */
+function updateImageIndex() {
+  const imageDomList = previewRef.value.querySelectorAll('img')
   const srcList = []
-  const imageDomList = previewRef.value.querySelectorAll('img')
-  if (imageDomList.length > 0) {
-    for (let i = 0; i < imageDomList.length; i++) {
-      const item = imageDomList.item(i)
-      item.dataset.index = String(i)
-      item.style.cursor = 'pointer'
-      srcList.push(item.src)
-      item.addEventListener('click', onImageClick)
-      item.addEventListener('contextmenu', onImageContextmenu)
-    }
-  }
+  imageDomList.forEach((item, index) => {
+    item.dataset.index = String(index)
+    item.style.cursor = 'pointer'
+    srcList.push(item.src)
+  })
   imageSrcList.value = srcList
-}
-
-/**
- * 移除图片点击事件
- */
-function removeImageListener() {
-  const imageDomList = previewRef.value.querySelectorAll('img')
-  if (imageDomList.length > 0) {
-    for (let i = 0; i < imageDomList.length; i++) {
-      const item = imageDomList.item(i)
-      item.removeEventListener('click', onImageClick)
-      item.removeEventListener('contextmenu', onImageContextmenu)
-    }
-  }
-}
-
-/**
- * 处理脚注链接点击
- */
-function handleFootnoteClick(e) {
-  const target = e.target.closest('.footnote-ref a, .footnote-backref')
-  if (!target)
-    return
-
-  const href = target.getAttribute('href')
-  if (!href || !href.startsWith('#'))
-    return
-
-  e.preventDefault()
-  const targetId = href.slice(1)
-  const targetElement = document.getElementById(targetId)
-  if (targetElement) {
-    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-}
-
-/**
- * 添加脚注链接点击事件
- */
-function addFootnoteListener() {
-  previewRef.value?.addEventListener('click', handleFootnoteClick)
-}
-
-/**
- * 移除脚注链接点击事件
- */
-function removeFootnoteListener() {
-  previewRef.value?.removeEventListener('click', handleFootnoteClick)
 }
 
 const latestAnchorList = ref([])
@@ -215,41 +230,40 @@ function updateDOM(oldNode, newNode) {
   }
 }
 
-watch(() => useCommonStore().config.markdown.typographer, (newValue) => {
+watch(() => store.config.markdown.typographer, (newValue) => {
   md.set({ typographer: newValue })
   refreshPreview(props.content)
 })
 
-function refreshPreview(doc) {
-  removeImageListener()
-  removeFootnoteListener()
-  let shouldRefreshMermaid = false
+watch(() => store.config.theme.global, () => {
+  initMermaid()
+  refreshPreview(props.content, true)
+})
+
+function refreshPreview(doc, forceRefreshMermaid = false) {
+  let shouldRefreshMermaid = forceRefreshMermaid
   const rendered = md.render(doc)
   const tempElement = document.createElement('div')
   tempElement.innerHTML = rendered
-  tempElement.querySelectorAll('.mermaid').forEach((mermaidElement) => {
-    const mermaidNode = previewRef.value.querySelector(`[data-code='${mermaidElement.dataset.code}']`)
-    if (mermaidNode) {
-      mermaidElement.classList.replace('mermaid', 'mermaid-cache')
-      mermaidElement.innerHTML = mermaidNode.innerHTML
-    } else {
-      shouldRefreshMermaid = true
-    }
-  })
+  if (!forceRefreshMermaid) {
+    tempElement.querySelectorAll('.mermaid').forEach((mermaidElement) => {
+      // 强制刷新时跳过缓存复用
+      const mermaidNode = previewRef.value.querySelector(`[data-code='${mermaidElement.dataset.code}']`)
+      if (mermaidNode) {
+        mermaidElement.classList.replace('mermaid', 'mermaid-cache')
+        mermaidElement.innerHTML = mermaidNode.innerHTML
+      } else {
+        shouldRefreshMermaid = true
+      }
+    })
+  }
   // 使用临时元素来更新，防止一些attribute没有映射到property上
   updateDOM(previewRef.value, tempElement)
 
-  // const checkboxList = previewRef.value.querySelectorAll('input[type=checkbox]')
-  // for (const checkboxListElement of checkboxList) {
-  //   if (checkboxListElement.getAttribute('checked') !== null) {
-  //     checkboxListElement.checked = true
-  //   }
-  // }
   if (shouldRefreshMermaid) {
     mermaid.run()
   }
-  addImageListener()
-  addFootnoteListener()
+  updateImageIndex()
   pushAnchorList()
   emits('refreshComplete')
 }
@@ -259,7 +273,13 @@ watch(() => props.content, (newValue) => {
 })
 
 onMounted(() => {
+  initMermaid()
+  bindPreviewEvents()
   refreshPreview(props.content)
+})
+
+onBeforeUnmount(() => {
+  unbindPreviewEvents()
 })
 
 function getImagePreviewContainer() {
