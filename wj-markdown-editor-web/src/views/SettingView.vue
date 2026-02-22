@@ -13,6 +13,8 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
+const store = useCommonStore()
+
 const config = ref()
 
 // 用于更新字体大小时，刷新锚点组件
@@ -105,17 +107,17 @@ onUnmounted(() => {
   window.removeEventListener('visibilitychange', refreshSystemFontList)
 })
 
-watch(() => useCommonStore().config.language, () => {
+watch(() => store.config.language, () => {
   window.document.title = t('config.modalTitle')
 }, { immediate: true })
 
-watch(() => useCommonStore().config.theme.global, (newValue) => {
+watch(() => store.config.theme.global, (newValue) => {
   if (newValue !== config.value.theme.global) {
     config.value.theme.global = newValue
   }
 })
 
-watch(() => useCommonStore().config.language, (newValue) => {
+watch(() => store.config.language, (newValue) => {
   if (newValue !== config.value.language) {
     config.value.language = newValue
   }

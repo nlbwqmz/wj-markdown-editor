@@ -50,15 +50,16 @@ const props = defineProps({
 const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange', 'imageContextmenu'])
 
 const { t } = useI18n()
+const store = useCommonStore()
 
 const toolbarList = ref([])
 const shortcutKeyList = ref([])
 let splitInstance
-const editorSearchBarVisible = computed(() => useCommonStore().editorSearchBarVisible)
+const editorSearchBarVisible = computed(() => store.editorSearchBarVisible)
 const dynamicExtension = editorExtensionUtil.getDynamicExtension()
 
 function onEditorSearchBarClose() {
-  useCommonStore().editorSearchBarVisible = false
+  store.editorSearchBarVisible = false
 }
 
 const useForm = Form.useForm
@@ -539,10 +540,10 @@ function refreshKeymap() {
     preventDefault: true,
     stopPropagation: true,
     run: () => {
-      if (useCommonStore().searchBarVisible === true) {
-        useCommonStore().searchBarVisible = false
+      if (store.searchBarVisible === true) {
+        store.searchBarVisible = false
       }
-      useCommonStore().editorSearchBarVisible = !useCommonStore().editorSearchBarVisible
+      store.editorSearchBarVisible = !store.editorSearchBarVisible
       return true
     },
   }
@@ -552,7 +553,7 @@ function refreshKeymap() {
 }
 
 onMounted(() => {
-  menuVisible.value = useCommonStore().config.menuVisible
+  menuVisible.value = store.config.menuVisible
   const keymapList = refreshKeymap()
   splitInstance = Split({
     columnGutters: [{ track: 1, element: gutterRef.value }],
@@ -999,7 +1000,7 @@ function refreshToolbarList() {
   }
   toolbarList.value = toolbarListTemp
 }
-watch(() => useCommonStore().config.shortcutKeyList, (newValue) => {
+watch(() => store.config.shortcutKeyList, (newValue) => {
   shortcutKeyList.value = newValue
   refreshToolbarList()
   if (editorView) {

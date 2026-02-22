@@ -9,6 +9,7 @@ import { onMounted, ref, watch } from 'vue'
 const content = ref('')
 // 确保content已获取再传入组件
 const ready = ref(false)
+const store = useCommonStore()
 const watermark = ref()
 const config = ref()
 function save() {
@@ -21,7 +22,7 @@ function updateFileInfo(data) {
   content.value = data.content
   ready.value = true
   window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
-  useCommonStore().$patch({
+  store.$patch({
     fileName: data.fileName,
     saved: data.saved,
   })
@@ -36,7 +37,7 @@ watch(() => content.value, (newValue, oldValue) => {
   }
 })
 
-watch(() => useCommonStore().config, (newValue) => {
+watch(() => store.config, (newValue) => {
   // 水印
   const tempWatermark = JSON.parse(JSON.stringify(newValue.watermark))
   tempWatermark.content = tempWatermark.content ? tempWatermark.content : 'wj-markdown-editor'

@@ -10,6 +10,8 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
+const store = useCommonStore()
+
 const content = ref('')
 const anchorList = ref([])
 let splitInstance
@@ -23,7 +25,7 @@ const ready = ref(false)
 
 const watermark = ref()
 
-watch(() => useCommonStore().config, (newValue) => {
+watch(() => store.config, (newValue) => {
   // 水印
   const tempWatermark = JSON.parse(JSON.stringify(newValue.watermark))
   tempWatermark.content = tempWatermark.content ? tempWatermark.content : 'wj-markdown-editor'
@@ -36,7 +38,7 @@ watch(() => useCommonStore().config, (newValue) => {
 }, { deep: true, immediate: true })
 
 onMounted(() => {
-  menuVisible.value = useCommonStore().config.menuVisible
+  menuVisible.value = store.config.menuVisible
 })
 
 watch(() => menuVisible.value, (newValue) => {
@@ -65,7 +67,7 @@ onActivated(async () => {
     ready.value = true
   }).then(() => {})
   window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
-  useCommonStore().$patch({
+  store.$patch({
     fileName: data.fileName,
     saved: data.saved,
   })

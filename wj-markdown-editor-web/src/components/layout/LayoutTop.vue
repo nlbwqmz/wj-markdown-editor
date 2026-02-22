@@ -4,6 +4,8 @@ import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import { computed, onBeforeMount, ref } from 'vue'
 
+const store = useCommonStore()
+
 function minimize() {
   channelUtil.send({ event: 'minimize' })
 }
@@ -24,11 +26,11 @@ function openAbout() {
   channelUtil.send({ event: 'open-about' })
 }
 
-const fileName = computed(() => useCommonStore().fileName)
-const saved = computed(() => useCommonStore().saved)
-const isMaximize = computed(() => useCommonStore().isMaximize)
-const isAlwaysOnTop = computed(() => useCommonStore().isAlwaysOnTop)
-const theme = computed(() => useCommonStore().config.theme.global)
+const fileName = computed(() => store.fileName)
+const saved = computed(() => store.saved)
+const isMaximize = computed(() => store.isMaximize)
+const isAlwaysOnTop = computed(() => store.isAlwaysOnTop)
+const theme = computed(() => store.config.theme.global)
 
 function alwaysOnTop(flag) {
   channelUtil.send({ event: 'always-on-top', data: flag })
@@ -38,7 +40,7 @@ function switchThemes() {
   channelUtil.send({ event: 'user-update-theme-global', data: theme.value === 'light' ? 'dark' : 'light' })
 }
 
-const language = computed(() => useCommonStore().config.language)
+const language = computed(() => store.config.language)
 
 function switchLanguage(lang) {
   channelUtil.send({ event: 'user-update-language', data: lang })
@@ -46,7 +48,7 @@ function switchLanguage(lang) {
 
 const appInfo = ref({ name: 'wj-markdown-editor', version: '' })
 
-const hasNewVersion = computed(() => useCommonStore().hasNewVersion)
+const hasNewVersion = computed(() => store.hasNewVersion)
 
 onBeforeMount(async () => {
   const info = await channelUtil.send({ event: 'app-info' })

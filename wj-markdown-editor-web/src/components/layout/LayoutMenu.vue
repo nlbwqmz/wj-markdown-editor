@@ -9,10 +9,11 @@ import { createVNode, h, onBeforeMount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+const store = useCommonStore()
 
 const menuList = ref([])
-const shortcutKeyList = ref(useCommonStore().config.shortcutKeyList)
-const recentList = ref(useCommonStore().recentList)
+const shortcutKeyList = ref(store.config.shortcutKeyList)
+const recentList = ref(store.recentList)
 
 function createRecentListVNode() {
   return recentList.value.map((item) => {
@@ -175,15 +176,15 @@ function updateMenuList() {
   ]
 }
 
-watch(() => useCommonStore().config.language, () => {
+watch(() => store.config.language, () => {
   updateMenuList()
 }, { immediate: true })
 
-watch(() => useCommonStore().config.shortcutKeyList, (newValue) => {
+watch(() => store.config.shortcutKeyList, (newValue) => {
   shortcutKeyList.value = newValue
   updateMenuList()
 }, { deep: true })
-watch(() => useCommonStore().recentList, (newValue) => {
+watch(() => store.recentList, (newValue) => {
   recentList.value = newValue
   updateMenuList()
 }, { deep: true })
