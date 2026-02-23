@@ -8,7 +8,6 @@ export default function (md) {
     // 检查是否以左花括号 { 开始（0x7B 是 { 的字符码）
     if (state.src.charCodeAt(start) !== 0x7B)
       return false
-    console.warn(state.src)
 
     // 先匹配 {color}( 部分，提取颜色值
     // 正则：^\{([^}]+)\}\( 匹配 {任意非}字符}(
@@ -40,7 +39,6 @@ export default function (md) {
     const text = state.src.slice(textStart, pos - 1) // 文本内容（不包含最后的右括号）
     const match = [state.src.slice(start, pos), color, text] // 构造匹配结果数组
 
-    console.warn('match', match)
     if (!silent) {
       // 创建 HTML 内联标签
       const token = state.push('html_inline', '', 0)
