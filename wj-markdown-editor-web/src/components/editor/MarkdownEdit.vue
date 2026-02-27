@@ -95,6 +95,7 @@ const previewController = ref(true)
 const gridAnimation = ref(false)
 const linkedHighlightState = ref(null)
 let activePreviewHighlightElement = null
+const BOTTOM_GAP = '40vh'
 
 // 编辑区联动高亮：通过装饰实现，不影响用户真实选区
 const setLinkedSourceHighlightEffect = StateEffect.define()
@@ -333,11 +334,19 @@ const linkedHighlightThemeStyle = computed(() => {
 const editorContainerStyle = computed(() => {
   const style = {
     ...linkedHighlightThemeStyle.value,
+    '--wj-editor-bottom-gap': BOTTOM_GAP,
+    '--wj-preview-bottom-gap': BOTTOM_GAP,
   }
   if (gridAnimation.value) {
     style.transition = 'grid-template-columns 0.5s ease-in-out'
   }
   return style
+})
+
+const previewContainerStyle = computed(() => {
+  return {
+    paddingBottom: 'calc(var(--wj-preview-bottom-gap) + 0.5rem)',
+  }
 })
 
 watch(() => props.theme, (newValue) => {
@@ -557,6 +566,13 @@ function getElementToTopDistance(targetElement, containerElement) {
   return trRect.top - containerRect.top - containerElement.clientTop + containerElement.scrollTop
 }
 
+function clampScrollRatio(value) {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+  return Math.max(0, Math.min(1, value))
+}
+
 function jumpToTargetLine() {
   if (!previewRef.value) {
     message.warning('请先打开预览')
@@ -576,7 +592,7 @@ function jumpToTargetLine() {
     } else {
       const totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
       const offsetHeight = getTotalLineHeight(startLineNumber, lineNumber - 1)
-      const scrollRatio = offsetHeight / totalLineHeight
+      const scrollRatio = clampScrollRatio(totalLineHeight > 0 ? offsetHeight / totalLineHeight : 0)
       const elementTop = getElementToTopDistance(previewElement.element, previewRef.value)
       const elementHeight = previewElement.element.getBoundingClientRect().height
       // 根据比例调整目标位置
@@ -630,7 +646,7 @@ function syncEditorToPreview(refresh) {
         totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
         scrollOffsetInLine = startLineNumber === lineNumber ? scrollTop - topBlock.top : getTotalLineHeight(startLineNumber, lineNumber - 1) + scrollTop - topBlock.top
       }
-      const scrollRatio = scrollOffsetInLine / totalLineHeight
+      const scrollRatio = clampScrollRatio(totalLineHeight > 0 ? scrollOffsetInLine / totalLineHeight : 0)
       // 计算预览元素的对应滚动位置
       // const elementTop = previewElement.offsetTop
       // 使用offsetTop某些标签会有问题（tr、tbody等表格标签）
@@ -685,7 +701,8 @@ function syncPreviewToEditor() {
     // 计算元素内滚动比例
     const elementTop = getElementToTopDistance(element, previewRef.value)
     const elementScrollOffset = previewScrollTop - elementTop
-    const scrollRatio = elementScrollOffset / element.getBoundingClientRect().height
+    const elementHeight = element.getBoundingClientRect().height
+    const scrollRatio = clampScrollRatio(elementHeight > 0 ? elementScrollOffset / elementHeight : 0)
 
     // 找到编辑器的对应行
     const startLine = editorView.state.doc.line(startLineNumber)
@@ -1383,6 +1400,7 @@ const editorContainerClass = computed(() => {
         v-if="previewController"
         ref="previewRef"
         class="allow-search wj-scrollbar h-full p-2"
+        :style="previewContainerStyle"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"
         @click="onPreviewAreaClick"

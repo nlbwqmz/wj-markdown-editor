@@ -48,6 +48,7 @@ const fixedExtension = [
     },
     '.cm-content': {
       lineHeight: '1.5',
+      paddingBottom: 'var(--wj-editor-bottom-gap, 40vh)',
     },
     '.cm-gutterElement': {
       userSelect: 'none',
