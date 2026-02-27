@@ -150,6 +150,7 @@ export default {
       highlightMatchingTextOption: {
         tip: '突出显示与所选内容匹配的文本',
       },
+      associationHighlight: '关联高亮',
     },
     file: {
       file: '文件',

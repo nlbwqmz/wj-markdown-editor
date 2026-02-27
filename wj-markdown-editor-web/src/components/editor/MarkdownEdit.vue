@@ -10,9 +10,9 @@ import commonUtil from '@/util/commonUtil.js'
 import editorExtensionUtil from '@/util/editor/editorExtensionUtil.js'
 import editorUtil from '@/util/editor/editorUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
-import { Compartment } from '@codemirror/state'
+import { Compartment, StateEffect, StateField } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { keymap } from '@codemirror/view'
+import { Decoration, keymap } from '@codemirror/view'
 import { Form, message } from 'ant-design-vue'
 import { EditorView } from 'codemirror'
 import Split from 'split-grid'
@@ -44,6 +44,10 @@ const props = defineProps({
   extension: {
     type: Object,
     default: () => undefined,
+  },
+  associationHighlight: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -89,6 +93,252 @@ const menuController = ref(false)
 const previewVisible = ref(true)
 const previewController = ref(true)
 const gridAnimation = ref(false)
+const linkedHighlightState = ref(null)
+let activePreviewHighlightElement = null
+
+// 编辑区联动高亮：通过装饰实现，不影响用户真实选区
+const setLinkedSourceHighlightEffect = StateEffect.define()
+
+function isSameLineRange(rangeA, rangeB) {
+  if (!rangeA && !rangeB) {
+    return true
+  }
+  if (!rangeA || !rangeB) {
+    return false
+  }
+  return rangeA.startLine === rangeB.startLine && rangeA.endLine === rangeB.endLine
+}
+
+function buildLinkedSourceLineDecorations(doc, lineRange) {
+  if (!lineRange) {
+    return Decoration.none
+  }
+  const startLine = Math.max(1, Math.min(doc.lines, lineRange.startLine))
+  const endLine = Math.max(1, Math.min(doc.lines, lineRange.endLine))
+  const rangeStartLine = Math.min(startLine, endLine)
+  const rangeEndLine = Math.max(startLine, endLine)
+  const decorationList = []
+  for (let lineNumber = rangeStartLine; lineNumber <= rangeEndLine; lineNumber++) {
+    const line = doc.line(lineNumber)
+    let className = 'cm-linked-source-highlight'
+    if (rangeStartLine === rangeEndLine) {
+      className += ' cm-linked-source-highlight-single'
+    } else if (lineNumber === rangeStartLine) {
+      className += ' cm-linked-source-highlight-start'
+    } else if (lineNumber === rangeEndLine) {
+      className += ' cm-linked-source-highlight-end'
+    } else {
+      className += ' cm-linked-source-highlight-middle'
+    }
+    decorationList.push(Decoration.line({ class: className }).range(line.from))
+  }
+  return Decoration.set(decorationList, true)
+}
+
+const linkedSourceHighlightField = StateField.define({
+  create: () => {
+    return {
+      lineRange: null,
+      decorations: Decoration.none,
+    }
+  },
+  update: (value, transaction) => {
+    let lineRange = value.lineRange
+    for (const effect of transaction.effects) {
+      if (effect.is(setLinkedSourceHighlightEffect)) {
+        lineRange = effect.value
+      }
+    }
+    if (lineRange && transaction.docChanged) {
+      const maxLine = transaction.state.doc.lines
+      lineRange = {
+        startLine: Math.max(1, Math.min(maxLine, lineRange.startLine)),
+        endLine: Math.max(1, Math.min(maxLine, lineRange.endLine)),
+      }
+    }
+    if (isSameLineRange(lineRange, value.lineRange) && !transaction.docChanged) {
+      return value
+    }
+    return {
+      lineRange,
+      decorations: buildLinkedSourceLineDecorations(transaction.state.doc, lineRange),
+    }
+  },
+  provide: field => EditorView.decorations.from(field, value => value.decorations),
+})
+
+function getEditorMaxLineNumber() {
+  return editorView ? Math.max(1, editorView.state.doc.lines) : 1
+}
+
+function normalizeLineNumber(lineNumber) {
+  const maxLine = getEditorMaxLineNumber()
+  const numericLine = Number.parseInt(lineNumber, 10)
+  if (Number.isNaN(numericLine)) {
+    return 1
+  }
+  return Math.max(1, Math.min(maxLine, numericLine))
+}
+
+function normalizeLineRange(startLine, endLine) {
+  const normalizedStartLine = normalizeLineNumber(startLine)
+  const normalizedEndLine = normalizeLineNumber(endLine)
+  if (normalizedStartLine <= normalizedEndLine) {
+    return { startLine: normalizedStartLine, endLine: normalizedEndLine }
+  }
+  return { startLine: normalizedEndLine, endLine: normalizedStartLine }
+}
+
+function clearPreviewLinkedHighlight() {
+  if (activePreviewHighlightElement) {
+    activePreviewHighlightElement.classList.remove('wj-preview-link-highlight')
+    activePreviewHighlightElement = null
+  }
+}
+
+function clearAllLinkedHighlight() {
+  clearPreviewLinkedHighlight()
+  linkedHighlightState.value = null
+  setEditorLinkedHighlight(null)
+}
+
+function setPreviewLinkedHighlight(element) {
+  if (!element) {
+    clearPreviewLinkedHighlight()
+    return
+  }
+  if (activePreviewHighlightElement && activePreviewHighlightElement !== element) {
+    activePreviewHighlightElement.classList.remove('wj-preview-link-highlight')
+  }
+  activePreviewHighlightElement = element
+  activePreviewHighlightElement.classList.add('wj-preview-link-highlight')
+}
+
+function getLineRangeFromPreviewElement(element) {
+  if (!element) {
+    return null
+  }
+  const startLine = Number.parseInt(element.dataset.lineStart, 10)
+  if (Number.isNaN(startLine)) {
+    return null
+  }
+  const endLine = Number.parseInt(element.dataset.lineEnd, 10)
+  return {
+    startLine,
+    endLine: Number.isNaN(endLine) ? startLine : endLine,
+  }
+}
+
+function getPreviewElementDepth(element) {
+  let depth = 0
+  let current = element
+  while (current && current !== previewRef.value) {
+    depth++
+    current = current.parentElement
+  }
+  return depth
+}
+
+function setEditorLinkedHighlight(lineRange) {
+  if (!editorView) {
+    return
+  }
+  editorView.dispatch({
+    effects: setLinkedSourceHighlightEffect.of(lineRange),
+  })
+}
+
+function syncPreviewLinkedHighlightByLine(lineNumber) {
+  if (!previewRef.value || !editorView) {
+    clearPreviewLinkedHighlight()
+    return
+  }
+  const normalizedLineNumber = normalizeLineNumber(lineNumber)
+  const previewElement = findPreviewElement(editorView.state.doc.lines, normalizedLineNumber, true)
+  setPreviewLinkedHighlight(previewElement.element)
+}
+
+function highlightBothSidesByLineRange(startLine, endLine, preferLine = startLine) {
+  if (!editorView || props.associationHighlight !== true) {
+    return
+  }
+  const normalizedLineRange = normalizeLineRange(startLine, endLine)
+  const normalizedPreferLine = normalizeLineNumber(preferLine)
+  const nextLinkedHighlightState = {
+    ...normalizedLineRange,
+    preferLine: normalizedPreferLine,
+  }
+  linkedHighlightState.value = nextLinkedHighlightState
+  setEditorLinkedHighlight(normalizedLineRange)
+  syncPreviewLinkedHighlightByLine(normalizedPreferLine)
+}
+
+function highlightByEditorCursor(state) {
+  if (!editorView || props.associationHighlight !== true) {
+    return
+  }
+  const currentState = state || editorView.state
+  const lineNumber = currentState.doc.lineAt(currentState.selection.main.to).number
+  highlightBothSidesByLineRange(lineNumber, lineNumber, lineNumber)
+}
+
+function onPreviewAreaClick(event) {
+  if (!previewRef.value || !editorView || props.associationHighlight !== true) {
+    return
+  }
+  if (!(event.target instanceof Element)) {
+    return
+  }
+  const targetLineElement = event.target.closest('[data-line-start]')
+  if (!(targetLineElement instanceof Element) || !previewRef.value.contains(targetLineElement)) {
+    return
+  }
+  const lineRange = getLineRangeFromPreviewElement(targetLineElement)
+  if (!lineRange) {
+    return
+  }
+  highlightBothSidesByLineRange(lineRange.startLine, lineRange.endLine, lineRange.startLine)
+}
+
+function restorePreviewLinkedHighlight() {
+  if (props.associationHighlight !== true) {
+    clearAllLinkedHighlight()
+    return
+  }
+  if (!linkedHighlightState.value) {
+    clearPreviewLinkedHighlight()
+    return
+  }
+  nextTick(() => {
+    if (!linkedHighlightState.value) {
+      return
+    }
+    syncPreviewLinkedHighlightByLine(linkedHighlightState.value.preferLine)
+  })
+}
+
+const linkedHighlightThemeStyle = computed(() => {
+  if (store.config.theme.global === 'dark') {
+    return {
+      '--wj-link-highlight-border': '#69b1ff',
+      '--wj-link-highlight-bg': 'rgba(105, 177, 255, 0.2)',
+    }
+  }
+  return {
+    '--wj-link-highlight-border': '#1677ff',
+    '--wj-link-highlight-bg': 'rgba(22, 119, 255, 0.12)',
+  }
+})
+
+const editorContainerStyle = computed(() => {
+  const style = {
+    ...linkedHighlightThemeStyle.value,
+  }
+  if (gridAnimation.value) {
+    style.transition = 'grid-template-columns 0.5s ease-in-out'
+  }
+  return style
+})
 
 watch(() => props.theme, (newValue) => {
   if (newValue === 'dark') {
@@ -217,7 +467,7 @@ function findPreviewElement(maxLineNumber, lineNumber, first) {
     const start = +element.dataset.lineStart
     const end = +element.dataset.lineEnd || start
     if (lineNumber >= start && lineNumber <= end) {
-      waiting.push({ element, start, end })
+      waiting.push({ element, start, end, depth: getPreviewElementDepth(element) })
     }
   }
   if (waiting.length === 0) {
@@ -227,7 +477,13 @@ function findPreviewElement(maxLineNumber, lineNumber, first) {
       return { element: null, found: false }
     }
   }
-  waiting.sort((a, b) => (a.end - a.start) - (b.end - b.start))
+  waiting.sort((a, b) => {
+    const spanCompare = (a.end - a.start) - (b.end - b.start)
+    if (spanCompare !== 0) {
+      return spanCompare
+    }
+    return b.depth - a.depth
+  })
   return { element: waiting[0].element, found: first }
 }
 
@@ -468,9 +724,10 @@ function onEditorWheel(e) {
 }
 
 onBeforeUnmount(() => {
+  clearAllLinkedHighlight()
   // 编辑器滚动监听
-  editorView.scrollDOM.removeEventListener('wheel', onEditorWheel)
-  editorView.scrollDOM.removeEventListener('scroll', syncEditorToPreview)
+  editorView?.scrollDOM.removeEventListener('wheel', onEditorWheel)
+  editorView?.scrollDOM.removeEventListener('scroll', syncEditorToPreview)
   // 预览区滚动监听
   // if (previewRef.value) {
   //   previewRef.value.removeEventListener('scroll', syncPreviewToEditor)
@@ -497,6 +754,20 @@ const refresh = commonUtil.debounce(() => {
   const doc = editorView.state.doc.toString()
   emits('update:modelValue', doc)
 }, 100)
+
+watch(() => props.modelValue, () => {
+  restorePreviewLinkedHighlight()
+})
+
+watch(() => props.associationHighlight, (enabled) => {
+  if (enabled === true) {
+    nextTick(() => {
+      highlightByEditorCursor()
+    })
+  } else {
+    clearAllLinkedHighlight()
+  }
+})
 
 // function refresh() {
 //   const doc = editorView.state.doc.toString()
@@ -574,11 +845,15 @@ onMounted(() => {
     extensions: [
       themeCompartment.of(props.theme === 'dark' ? [oneDark] : []),
       keymapCompartment.of(keymap.of(keymapList)),
+      linkedSourceHighlightField,
       ...editorExtensionUtil.getDefault(),
       ...dynamicExtensionList,
       EditorView.updateListener.of((update) => { // 监听更新
         if (update.docChanged && isComposing.value === false) { // 检查文档是否发生变化
           refresh()
+        }
+        if (update.selectionSet) {
+          highlightByEditorCursor(update.state)
         }
       }),
       EditorView.domEventHandlers({
@@ -596,6 +871,9 @@ onMounted(() => {
         paste: (event, view) => {
           const clipboardData = event.clipboardData
           pasteOrDrop(event, view, clipboardData.types, clipboardData.files)
+        },
+        click: (_event, view) => {
+          highlightByEditorCursor(view.state)
         },
         drop: (event, view) => {
           const dataTransfer = event.dataTransfer
@@ -638,6 +916,9 @@ onMounted(() => {
   })
   nextTick(() => {
     bindEvents()
+    if (props.associationHighlight === true) {
+      highlightByEditorCursor()
+    }
   })
 })
 
@@ -1032,6 +1313,7 @@ watch(() => [menuVisible.value, previewVisible.value], () => {
       })
       setTimeout(() => {
         syncEditorToPreview(true)
+        restorePreviewLinkedHighlight()
       }, 500)
     })
   } else if (previewVisible.value) {
@@ -1047,10 +1329,12 @@ watch(() => [menuVisible.value, previewVisible.value], () => {
       })
       setTimeout(() => {
         syncEditorToPreview(true)
+        restorePreviewLinkedHighlight()
       }, 500)
     })
   } else {
     previewController.value = false
+    clearPreviewLinkedHighlight()
   }
   setTimeout(() => {
     gridAnimation.value = false
@@ -1059,6 +1343,10 @@ watch(() => [menuVisible.value, previewVisible.value], () => {
 
 function onImageContextmenu(src) {
   emits('imageContextmenu', src)
+}
+
+function onPreviewRefreshComplete() {
+  restorePreviewLinkedHighlight()
 }
 
 const editorContainerClass = computed(() => {
@@ -1088,7 +1376,7 @@ const editorContainerClass = computed(() => {
         :popover="item.popover"
       />
     </div>
-    <div ref="editorContainer" class="grid w-full overflow-hidden" :class="editorContainerClass" :style="gridAnimation ? 'transition: grid-template-columns 0.5s ease-in-out;' : ''">
+    <div ref="editorContainer" class="grid w-full overflow-hidden" :class="editorContainerClass" :style="editorContainerStyle">
       <div ref="editorRef" class="h-full overflow-auto" />
       <div v-if="previewController" ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <div
@@ -1097,8 +1385,9 @@ const editorContainerClass = computed(() => {
         class="allow-search wj-scrollbar h-full p-2"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"
+        @click="onPreviewAreaClick"
       >
-        <MarkdownPreview :content="props.modelValue" :code-theme="codeTheme" :preview-theme="previewTheme" :watermark="watermark" @anchor-change="onAnchorChange" @image-contextmenu="onImageContextmenu" />
+        <MarkdownPreview :content="props.modelValue" :code-theme="codeTheme" :preview-theme="previewTheme" :watermark="watermark" @refresh-complete="onPreviewRefreshComplete" @anchor-change="onAnchorChange" @image-contextmenu="onImageContextmenu" />
       </div>
       <div v-if="menuController && previewController" ref="gutterMenuRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <MarkdownMenu v-if="menuController && previewController" :anchor-list="anchorList" :get-container="() => previewRef" :close="() => { menuVisible = false }" class="allow-search" />
@@ -1129,4 +1418,44 @@ const editorContainerClass = computed(() => {
 </template>
 
 <style scoped lang="scss">
+:deep(.wj-preview-link-highlight) {
+  border-radius: 4px;
+  background-color: var(--wj-link-highlight-bg);
+  outline: 2px solid var(--wj-link-highlight-border);
+  outline-offset: 2px;
+}
+
+:deep(.cm-linked-source-highlight) {
+  background-color: var(--wj-link-highlight-bg);
+  box-shadow:
+    inset 2px 0 0 var(--wj-link-highlight-border),
+    inset -2px 0 0 var(--wj-link-highlight-border);
+}
+
+:deep(.cm-linked-source-highlight-start) {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  box-shadow:
+    inset 2px 0 0 var(--wj-link-highlight-border),
+    inset -2px 0 0 var(--wj-link-highlight-border),
+    inset 0 2px 0 var(--wj-link-highlight-border);
+}
+
+:deep(.cm-linked-source-highlight-end) {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  box-shadow:
+    inset 2px 0 0 var(--wj-link-highlight-border),
+    inset -2px 0 0 var(--wj-link-highlight-border),
+    inset 0 -2px 0 var(--wj-link-highlight-border);
+}
+
+:deep(.cm-linked-source-highlight-single) {
+  border-radius: 4px;
+  box-shadow:
+    inset 2px 0 0 var(--wj-link-highlight-border),
+    inset -2px 0 0 var(--wj-link-highlight-border),
+    inset 0 2px 0 var(--wj-link-highlight-border),
+    inset 0 -2px 0 var(--wj-link-highlight-border);
+}
 </style>

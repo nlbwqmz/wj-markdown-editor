@@ -150,6 +150,7 @@ export default {
       highlightMatchingTextOption: {
         tip: 'Highlight text that matches the selection',
       },
+      associationHighlight: 'Association highlight',
     },
     file: {
       file: 'File',

@@ -37,6 +37,9 @@ export default {
       },
     },
   },
+  editor: {
+    associationHighlight: true,
+  },
   editorExtension: {
     lineNumbers: true,
     lineWrapping: true,

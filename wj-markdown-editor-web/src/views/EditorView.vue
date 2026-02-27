@@ -55,7 +55,7 @@ function onImageContextmenu(src) {
 </script>
 
 <template>
-  <MarkdownEdit v-if="ready" v-model="content" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @image-contextmenu="onImageContextmenu" />
+  <MarkdownEdit v-if="ready" v-model="content" :association-highlight="config.editor.associationHighlight" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @image-contextmenu="onImageContextmenu" />
 </template>
 
 <style scoped lang="scss">
