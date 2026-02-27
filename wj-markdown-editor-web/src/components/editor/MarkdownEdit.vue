@@ -323,11 +323,15 @@ const linkedHighlightThemeStyle = computed(() => {
     return {
       '--wj-link-highlight-border': '#69b1ff',
       '--wj-link-highlight-bg': 'rgba(105, 177, 255, 0.2)',
+      '--wj-link-highlight-width': '2px',
+      '--wj-link-highlight-radius': '4px',
     }
   }
   return {
     '--wj-link-highlight-border': '#1677ff',
     '--wj-link-highlight-bg': 'rgba(22, 119, 255, 0.12)',
+    '--wj-link-highlight-width': '2px',
+    '--wj-link-highlight-radius': '4px',
   }
 })
 
@@ -1437,43 +1441,43 @@ const editorContainerClass = computed(() => {
 
 <style scoped lang="scss">
 :deep(.wj-preview-link-highlight) {
-  border-radius: 4px;
+  border-radius: var(--wj-link-highlight-radius);
   background-color: var(--wj-link-highlight-bg);
-  outline: 2px solid var(--wj-link-highlight-border);
-  outline-offset: 2px;
+  outline: var(--wj-link-highlight-width) solid var(--wj-link-highlight-border);
+  outline-offset: var(--wj-link-highlight-width);
 }
 
 :deep(.cm-linked-source-highlight) {
   background-color: var(--wj-link-highlight-bg);
   box-shadow:
-    inset 2px 0 0 var(--wj-link-highlight-border),
-    inset -2px 0 0 var(--wj-link-highlight-border);
+    inset var(--wj-link-highlight-width) 0 0 var(--wj-link-highlight-border),
+    inset calc(var(--wj-link-highlight-width) * -1) 0 0 var(--wj-link-highlight-border);
 }
 
 :deep(.cm-linked-source-highlight-start) {
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
+  border-top-left-radius: var(--wj-link-highlight-radius);
+  border-top-right-radius: var(--wj-link-highlight-radius);
   box-shadow:
-    inset 2px 0 0 var(--wj-link-highlight-border),
-    inset -2px 0 0 var(--wj-link-highlight-border),
-    inset 0 2px 0 var(--wj-link-highlight-border);
+    inset var(--wj-link-highlight-width) 0 0 var(--wj-link-highlight-border),
+    inset calc(var(--wj-link-highlight-width) * -1) 0 0 var(--wj-link-highlight-border),
+    inset 0 var(--wj-link-highlight-width) 0 var(--wj-link-highlight-border);
 }
 
 :deep(.cm-linked-source-highlight-end) {
-  border-bottom-left-radius: 4px;
-  border-bottom-right-radius: 4px;
+  border-bottom-left-radius: var(--wj-link-highlight-radius);
+  border-bottom-right-radius: var(--wj-link-highlight-radius);
   box-shadow:
-    inset 2px 0 0 var(--wj-link-highlight-border),
-    inset -2px 0 0 var(--wj-link-highlight-border),
-    inset 0 -2px 0 var(--wj-link-highlight-border);
+    inset var(--wj-link-highlight-width) 0 0 var(--wj-link-highlight-border),
+    inset calc(var(--wj-link-highlight-width) * -1) 0 0 var(--wj-link-highlight-border),
+    inset 0 calc(var(--wj-link-highlight-width) * -1) 0 var(--wj-link-highlight-border);
 }
 
 :deep(.cm-linked-source-highlight-single) {
-  border-radius: 4px;
+  border-radius: var(--wj-link-highlight-radius);
   box-shadow:
-    inset 2px 0 0 var(--wj-link-highlight-border),
-    inset -2px 0 0 var(--wj-link-highlight-border),
-    inset 0 2px 0 var(--wj-link-highlight-border),
-    inset 0 -2px 0 var(--wj-link-highlight-border);
+    inset var(--wj-link-highlight-width) 0 0 var(--wj-link-highlight-border),
+    inset calc(var(--wj-link-highlight-width) * -1) 0 0 var(--wj-link-highlight-border),
+    inset 0 var(--wj-link-highlight-width) 0 var(--wj-link-highlight-border),
+    inset 0 calc(var(--wj-link-highlight-width) * -1) 0 var(--wj-link-highlight-border);
 }
 </style>
