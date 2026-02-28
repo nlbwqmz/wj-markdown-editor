@@ -1,7 +1,7 @@
 {
   "name": "wj-markdown-editor",
   "type": "module",
-  "version": "2.12.2",
+  "version": "2.13.0",
   "description": "markdown编辑器",
   "author": {
     "name": "魏杰",

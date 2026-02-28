@@ -198,9 +198,8 @@ function clearPreviewLinkedHighlight() {
 }
 
 function clearAllLinkedHighlight() {
-  clearPreviewLinkedHighlight()
+  clearLinkedHighlightDisplay()
   linkedHighlightState.value = null
-  setEditorLinkedHighlight(null)
 }
 
 function setPreviewLinkedHighlight(element) {
@@ -249,13 +248,32 @@ function setEditorLinkedHighlight(lineRange) {
   })
 }
 
+function isPreviewPanelActive() {
+  return previewController.value === true && !!previewRef.value
+}
+
+function clearLinkedHighlightDisplay() {
+  clearPreviewLinkedHighlight()
+  setEditorLinkedHighlight(null)
+}
+
 function syncPreviewLinkedHighlightByLine(lineNumber) {
-  if (!previewRef.value || !editorView) {
-    clearPreviewLinkedHighlight()
+  if (!editorView || !isPreviewPanelActive()) {
+    clearLinkedHighlightDisplay()
     return
   }
   const normalizedLineNumber = normalizeLineNumber(lineNumber)
   const previewElement = findPreviewElement(editorView.state.doc.lines, normalizedLineNumber, true)
+  if (!previewElement.found || !previewElement.element) {
+    clearAllLinkedHighlight()
+    return
+  }
+  const elementStart = +previewElement.element.dataset.lineStart
+  const elementEnd = +previewElement.element.dataset.lineEnd || elementStart
+  if (normalizedLineNumber < elementStart || normalizedLineNumber > elementEnd) {
+    clearAllLinkedHighlight()
+    return
+  }
   setPreviewLinkedHighlight(previewElement.element)
 }
 
@@ -265,13 +283,32 @@ function highlightBothSidesByLineRange(startLine, endLine, preferLine = startLin
   }
   const normalizedLineRange = normalizeLineRange(startLine, endLine)
   const normalizedPreferLine = normalizeLineNumber(preferLine)
+  if (!isPreviewPanelActive()) {
+    linkedHighlightState.value = {
+      ...normalizedLineRange,
+      preferLine: normalizedPreferLine,
+    }
+    clearLinkedHighlightDisplay()
+    return
+  }
+  const previewElement = findPreviewElement(editorView.state.doc.lines, normalizedPreferLine, true)
+  if (!previewElement.found || !previewElement.element) {
+    clearAllLinkedHighlight()
+    return
+  }
+  const elementStart = +previewElement.element.dataset.lineStart
+  const elementEnd = +previewElement.element.dataset.lineEnd || elementStart
+  if (normalizedPreferLine < elementStart || normalizedPreferLine > elementEnd) {
+    clearAllLinkedHighlight()
+    return
+  }
   const nextLinkedHighlightState = {
     ...normalizedLineRange,
     preferLine: normalizedPreferLine,
   }
   linkedHighlightState.value = nextLinkedHighlightState
   setEditorLinkedHighlight(normalizedLineRange)
-  syncPreviewLinkedHighlightByLine(normalizedPreferLine)
+  setPreviewLinkedHighlight(previewElement.element)
 }
 
 function highlightByEditorCursor(state) {
@@ -324,14 +361,14 @@ const linkedHighlightThemeStyle = computed(() => {
       '--wj-link-highlight-border': '#69b1ff',
       '--wj-link-highlight-bg': 'rgba(105, 177, 255, 0.2)',
       '--wj-link-highlight-width': '2px',
-      '--wj-link-highlight-radius': '4px',
+      '--wj-link-highlight-radius': '6px',
     }
   }
   return {
     '--wj-link-highlight-border': '#1677ff',
     '--wj-link-highlight-bg': 'rgba(22, 119, 255, 0.12)',
     '--wj-link-highlight-width': '2px',
-    '--wj-link-highlight-radius': '4px',
+    '--wj-link-highlight-radius': '6px',
   }
 })
 
@@ -474,6 +511,9 @@ function onInsertImgNetwork() {
 
 // 查找匹配行号的元素
 function findPreviewElement(maxLineNumber, lineNumber, first) {
+  if (!previewRef.value) {
+    return { element: null, found: false }
+  }
   const elements = previewRef.value.querySelectorAll('[data-line-start]')
   const waiting = []
   for (const element of elements) {
@@ -1355,7 +1395,7 @@ watch(() => [menuVisible.value, previewVisible.value], () => {
     })
   } else {
     previewController.value = false
-    clearPreviewLinkedHighlight()
+    clearLinkedHighlightDisplay()
   }
   setTimeout(() => {
     gridAnimation.value = false
@@ -1442,9 +1482,9 @@ const editorContainerClass = computed(() => {
 <style scoped lang="scss">
 :deep(.wj-preview-link-highlight) {
   border-radius: var(--wj-link-highlight-radius);
-  background-color: var(--wj-link-highlight-bg);
+  background-color: var(--wj-link-highlight-bg) !important;
   outline: var(--wj-link-highlight-width) solid var(--wj-link-highlight-border);
-  outline-offset: var(--wj-link-highlight-width);
+  //outline-offset: var(--wj-link-highlight-width);
 }
 
 :deep(.cm-linked-source-highlight) {
