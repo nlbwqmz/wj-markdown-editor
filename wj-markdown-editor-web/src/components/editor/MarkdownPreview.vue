@@ -55,6 +55,38 @@ const previewRef = ref()
 const imageSrcList = ref([])
 const imagePreviewVisible = ref(false)
 const imagePreviewCurrentIndex = ref(0)
+const pendingContent = ref(props.content)
+
+const PREVIEW_THROTTLE_MS = 180
+let previewRefreshRafId = null
+let previewRefreshTimer = null
+let lastPreviewRefreshAt = 0
+
+function createRafTask(callback) {
+  if (typeof requestAnimationFrame === 'function') {
+    return requestAnimationFrame(callback)
+  }
+  return setTimeout(callback, 16)
+}
+
+function cancelRafTask(id) {
+  if (typeof cancelAnimationFrame === 'function' && typeof requestAnimationFrame === 'function') {
+    cancelAnimationFrame(id)
+    return
+  }
+  clearTimeout(id)
+}
+
+function clearPreviewRefreshScheduler() {
+  if (previewRefreshRafId !== null) {
+    cancelRafTask(previewRefreshRafId)
+    previewRefreshRafId = null
+  }
+  if (previewRefreshTimer !== null) {
+    clearTimeout(previewRefreshTimer)
+    previewRefreshTimer = null
+  }
+}
 
 /**
  * 统一处理预览区点击事件（事件委托）
@@ -233,12 +265,12 @@ function updateDOM(oldNode, newNode) {
 
 watch(() => store.config.markdown.typographer, (newValue) => {
   md.set({ typographer: newValue })
-  refreshPreview(props.content)
+  refreshPreviewImmediately(props.content)
 })
 
 watch(() => store.config.theme.global, () => {
   initMermaid()
-  refreshPreview(props.content, true)
+  refreshPreviewImmediately(props.content, true)
 })
 
 // 监听 codeTheme 变化，动态加载主题 CSS
@@ -276,17 +308,56 @@ function refreshPreview(doc, forceRefreshMermaid = false) {
   emits('refreshComplete')
 }
 
+function refreshPreviewImmediately(doc, forceRefreshMermaid = false) {
+  clearPreviewRefreshScheduler()
+  pendingContent.value = doc
+  refreshPreview(doc, forceRefreshMermaid)
+  lastPreviewRefreshAt = Date.now()
+}
+
+function flushScheduledPreviewRefresh() {
+  previewRefreshRafId = null
+  const remainingMs = PREVIEW_THROTTLE_MS - (Date.now() - lastPreviewRefreshAt)
+
+  if (remainingMs <= 0) {
+    refreshPreview(pendingContent.value)
+    lastPreviewRefreshAt = Date.now()
+    return
+  }
+
+  if (previewRefreshTimer !== null) {
+    clearTimeout(previewRefreshTimer)
+  }
+  previewRefreshTimer = setTimeout(() => {
+    previewRefreshTimer = null
+    refreshPreview(pendingContent.value)
+    lastPreviewRefreshAt = Date.now()
+  }, remainingMs)
+}
+
+function schedulePreviewRefresh(doc) {
+  pendingContent.value = doc
+
+  if (previewRefreshRafId !== null || previewRefreshTimer !== null) {
+    return
+  }
+  previewRefreshRafId = createRafTask(() => {
+    flushScheduledPreviewRefresh()
+  })
+}
+
 watch(() => props.content, (newValue) => {
-  refreshPreview(newValue)
+  schedulePreviewRefresh(newValue)
 })
 
 onMounted(() => {
   initMermaid()
   bindPreviewEvents()
-  refreshPreview(props.content)
+  refreshPreviewImmediately(props.content)
 })
 
 onBeforeUnmount(() => {
+  clearPreviewRefreshScheduler()
   unbindPreviewEvents()
 })
 

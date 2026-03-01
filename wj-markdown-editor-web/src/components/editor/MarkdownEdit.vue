@@ -76,6 +76,7 @@ const previewController = ref(true)
 const gridAnimation = ref(false)
 
 const BOTTOM_GAP = '40vh'
+const EDITOR_EMIT_DEBOUNCE_MS = 160
 
 function onEditorSearchBarClose() {
   store.editorSearchBarVisible = false
@@ -182,7 +183,7 @@ const refresh = commonUtil.debounce(() => {
     return
   }
   emits('update:modelValue', view.state.doc.toString())
-}, 100)
+}, EDITOR_EMIT_DEBOUNCE_MS)
 
 function refreshToolbarList() {
   toolbarList.value = buildToolbarList()
