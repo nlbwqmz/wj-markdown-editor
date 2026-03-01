@@ -62,34 +62,34 @@
   $d-selectionPreCodeBgColor: rgba(160, 200, 255, 0.25);
 
   @mixin LightAndDark($isDark: false) {
-    #{$id}-base-color: if($isDark, $d-baseColor, $l-baseColor);
-    #{$id}-title-color: if($isDark, $d-titleColor, $l-titleColor);
-    #{$id}-strong-color: if($isDark, $d-strongColor, $l-strongColor);
-    #{$id}-em-color: if($isDark, $d-emColor, $l-emColor);
-    #{$id}-del-color: if($isDark, $d-delColor, $l-delColor);
-    #{$id}-link-color: if($isDark, $d-linkColor, $l-linkColor);
-    #{$id}-linkh-color: if($isDark, $d-linkhColor, $l-linkhColor);
-    #{$id}-border-color: if($isDark, $d-borderColor, $l-borderColor);
-    #{$id}-border-color-2: if($isDark, $d-borderColor2, $l-borderColor2);
-    #{$id}-bg-color: if($isDark, $d-bgColor, $l-bgColor);
-    #{$id}-blockquote-color: if($isDark, $d-blockquoteColor, $l-blockquoteColor);
-    #{$id}-blockquote-bg-color: if($isDark, $d-blockquoteBgColor, $l-blockquoteBgColor);
-    #{$id}-code-color: if($isDark, $d-codeColor, $l-codeColor);
-    #{$id}-code-bg-color: if($isDark, $d-codeBgColor, $l-codeBgColor);
-    #{$id}-code-pre-color: if($isDark, $d-codePreColor, $l-codePreColor);
-    #{$id}-table-border-color: if($isDark, $d-tableBorderColor, $l-tableBorderColor);
-    #{$id}-table-th-color: if($isDark, $d-tableThColor, $l-tableThColor);
-    #{$id}-table-tht-color: if($isDark, $d-tableThtColor, $l-tableThtColor);
-    #{$id}-table-tr-nc-color: if($isDark, $d-tableTrNcColor, $l-tableTrNcColor);
-    #{$id}-table-trh-color: if($isDark, $d-tableTrhColor, $l-tableTrhColor);
-    #{$id}-slct-title-color: if($isDark, $d-selectionTitleColor, $l-selectionTitleColor);
-    #{$id}-slct-titlebg-color: if($isDark, $d-selectionTitlebgColor, $l-selectionTitlebgColor);
-    #{$id}-slct-text-color: if($isDark, $d-selectionTextColor, $l-selectionTextColor);
-    #{$id}-slct-bg-color: if($isDark, $d-selectionBgColor, $l-selectionBgColor);
-    #{$id}-slct-del-color: if($isDark, $d-selectionDelColor, $l-selectionDelColor);
-    #{$id}-slct-elbg-color: if($isDark, $d-selectionElBgColor, $l-selectionElBgColor);
-    #{$id}-slct-codebg-color: if($isDark, $d-selectionCodeBgColor, $l-selectionCodeBgColor);
-    #{$id}-slct-prebg-color: if($isDark, $d-selectionPreCodeBgColor, $l-selectionPreCodeBgColor);
+    #{$id}-base-color: if(sass($isDark): $d-baseColor; else: $l-baseColor);
+    #{$id}-title-color: if(sass($isDark): $d-titleColor; else: $l-titleColor);
+    #{$id}-strong-color: if(sass($isDark): $d-strongColor; else: $l-strongColor);
+    #{$id}-em-color: if(sass($isDark): $d-emColor; else: $l-emColor);
+    #{$id}-del-color: if(sass($isDark): $d-delColor; else: $l-delColor);
+    #{$id}-link-color: if(sass($isDark): $d-linkColor; else: $l-linkColor);
+    #{$id}-linkh-color: if(sass($isDark): $d-linkhColor; else: $l-linkhColor);
+    #{$id}-border-color: if(sass($isDark): $d-borderColor; else: $l-borderColor);
+    #{$id}-border-color-2: if(sass($isDark): $d-borderColor2; else: $l-borderColor2);
+    #{$id}-bg-color: if(sass($isDark): $d-bgColor; else: $l-bgColor);
+    #{$id}-blockquote-color: if(sass($isDark): $d-blockquoteColor; else: $l-blockquoteColor);
+    #{$id}-blockquote-bg-color: if(sass($isDark): $d-blockquoteBgColor; else: $l-blockquoteBgColor);
+    #{$id}-code-color: if(sass($isDark): $d-codeColor; else: $l-codeColor);
+    #{$id}-code-bg-color: if(sass($isDark): $d-codeBgColor; else: $l-codeBgColor);
+    #{$id}-code-pre-color: if(sass($isDark): $d-codePreColor; else: $l-codePreColor);
+    #{$id}-table-border-color: if(sass($isDark): $d-tableBorderColor; else: $l-tableBorderColor);
+    #{$id}-table-th-color: if(sass($isDark): $d-tableThColor; else: $l-tableThColor);
+    #{$id}-table-tht-color: if(sass($isDark): $d-tableThtColor; else: $l-tableThtColor);
+    #{$id}-table-tr-nc-color: if(sass($isDark): $d-tableTrNcColor; else: $l-tableTrNcColor);
+    #{$id}-table-trh-color: if(sass($isDark): $d-tableTrhColor; else: $l-tableTrhColor);
+    #{$id}-slct-title-color: if(sass($isDark): $d-selectionTitleColor; else: $l-selectionTitleColor);
+    #{$id}-slct-titlebg-color: if(sass($isDark): $d-selectionTitlebgColor; else: $l-selectionTitlebgColor);
+    #{$id}-slct-text-color: if(sass($isDark): $d-selectionTextColor; else: $l-selectionTextColor);
+    #{$id}-slct-bg-color: if(sass($isDark): $d-selectionBgColor; else: $l-selectionBgColor);
+    #{$id}-slct-del-color: if(sass($isDark): $d-selectionDelColor; else: $l-selectionDelColor);
+    #{$id}-slct-elbg-color: if(sass($isDark): $d-selectionElBgColor; else: $l-selectionElBgColor);
+    #{$id}-slct-codebg-color: if(sass($isDark): $d-selectionCodeBgColor; else: $l-selectionCodeBgColor);
+    #{$id}-slct-prebg-color: if(sass($isDark): $d-selectionPreCodeBgColor; else: $l-selectionPreCodeBgColor);
   }
 
   @mixin transitionColor() {

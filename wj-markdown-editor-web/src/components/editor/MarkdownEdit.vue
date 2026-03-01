@@ -1,4 +1,8 @@
 <script setup>
+import Split from 'split-grid'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { isPointerSelectionUpdate } from '@/components/editor/composables/selectionUpdateUtil.js'
 import { useAssetInsert } from '@/components/editor/composables/useAssetInsert.js'
 import { useAssociationHighlight } from '@/components/editor/composables/useAssociationHighlight.js'
 import { useEditorCore } from '@/components/editor/composables/useEditorCore.js'
@@ -12,9 +16,6 @@ import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import commonUtil from '@/util/commonUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
-import Split from 'split-grid'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 const props = defineProps({
   modelValue: {
@@ -117,6 +118,7 @@ const {
 const {
   linkedSourceHighlightField,
   linkedHighlightThemeStyle,
+  cancelScheduledCursorHighlight,
   clearAllLinkedHighlight,
   clearLinkedHighlightDisplay,
   highlightByEditorCursor,
@@ -313,7 +315,12 @@ onMounted(() => {
     keymapList: refreshKeymap(),
     extraExtensions: [linkedSourceHighlightField],
     onDocChange: refresh,
-    onSelectionChange: state => highlightByEditorCursor(state),
+    onSelectionChange: (update) => {
+      if (isPointerSelectionUpdate(update)) {
+        return
+      }
+      highlightByEditorCursor(update.state)
+    },
     onCompositionEnd: refresh,
     onPaste: (event, view) => {
       const clipboardData = event.clipboardData
@@ -341,6 +348,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  cancelScheduledCursorHighlight()
   clearAllLinkedHighlight()
   unbindEvents()
   clearScrollTimer()

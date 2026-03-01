@@ -16,8 +16,34 @@ export function useAssociationHighlight({
 }) {
   const linkedHighlightState = ref(null)
   let activePreviewHighlightElement = null
+  let cursorHighlightRafId = null
+  let pendingCursorLineNumber = null
+  let lastSyncedCursorLineNumber = null
 
   const setLinkedSourceHighlightEffect = StateEffect.define()
+
+  function createRafTask(callback) {
+    if (typeof requestAnimationFrame === 'function') {
+      return requestAnimationFrame(callback)
+    }
+    return setTimeout(callback, 16)
+  }
+
+  function cancelRafTask(id) {
+    if (typeof cancelAnimationFrame === 'function' && typeof requestAnimationFrame === 'function') {
+      cancelAnimationFrame(id)
+      return
+    }
+    clearTimeout(id)
+  }
+
+  function cancelScheduledCursorHighlight() {
+    if (cursorHighlightRafId !== null) {
+      cancelRafTask(cursorHighlightRafId)
+      cursorHighlightRafId = null
+    }
+    pendingCursorLineNumber = null
+  }
 
   function isSameLineRange(rangeA, rangeB) {
     if (!rangeA && !rangeB) {
@@ -133,8 +159,10 @@ export function useAssociationHighlight({
   }
 
   function clearAllLinkedHighlight() {
+    cancelScheduledCursorHighlight()
     clearLinkedHighlightDisplay()
     linkedHighlightState.value = null
+    lastSyncedCursorLineNumber = null
   }
 
   function setPreviewLinkedHighlight(element) {
@@ -231,7 +259,27 @@ export function useAssociationHighlight({
     }
     const currentState = state || view.state
     const lineNumber = currentState.doc.lineAt(currentState.selection.main.to).number
-    highlightBothSidesByLineRange(lineNumber, lineNumber, lineNumber)
+    if (lineNumber === lastSyncedCursorLineNumber || lineNumber === pendingCursorLineNumber) {
+      return
+    }
+    pendingCursorLineNumber = lineNumber
+    if (cursorHighlightRafId !== null) {
+      return
+    }
+    cursorHighlightRafId = createRafTask(() => {
+      cursorHighlightRafId = null
+      const targetLineNumber = pendingCursorLineNumber
+      pendingCursorLineNumber = null
+      if (targetLineNumber === null || targetLineNumber === undefined) {
+        return
+      }
+      const currentView = editorViewRef.value
+      if (!currentView || associationHighlight.value !== true) {
+        return
+      }
+      highlightBothSidesByLineRange(targetLineNumber, targetLineNumber, targetLineNumber)
+      lastSyncedCursorLineNumber = targetLineNumber
+    })
   }
 
   function onPreviewAreaClick(event) {
@@ -250,6 +298,8 @@ export function useAssociationHighlight({
     if (!lineRange) {
       return
     }
+    cancelScheduledCursorHighlight()
+    lastSyncedCursorLineNumber = null
     highlightBothSidesByLineRange(lineRange.startLine, lineRange.endLine, lineRange.startLine)
   }
 
@@ -290,6 +340,7 @@ export function useAssociationHighlight({
   return {
     linkedSourceHighlightField,
     linkedHighlightThemeStyle,
+    cancelScheduledCursorHighlight,
     clearAllLinkedHighlight,
     clearLinkedHighlightDisplay,
     highlightByEditorCursor,

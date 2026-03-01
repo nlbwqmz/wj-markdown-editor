@@ -57,7 +57,7 @@ export function useEditorCore({ editorRef }) {
             onDocChange && onDocChange()
           }
           if (update.selectionSet) {
-            onSelectionChange && onSelectionChange(update.state)
+            onSelectionChange && onSelectionChange(update)
           }
         }),
         EditorView.domEventHandlers({
