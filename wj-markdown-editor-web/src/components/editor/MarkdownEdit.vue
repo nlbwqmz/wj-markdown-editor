@@ -414,13 +414,13 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 :deep(.wj-preview-link-highlight) {
   border-radius: var(--wj-link-highlight-radius);
-  background-color: var(--wj-link-highlight-bg);
+  // background-color: var(--wj-link-highlight-bg);
   outline: var(--wj-link-highlight-width) solid var(--wj-link-highlight-border);
   //outline-offset: var(--wj-link-highlight-width);
 }
 
 :deep(.cm-linked-source-highlight) {
-  background-color: var(--wj-link-highlight-bg);
+  // background-color: var(--wj-link-highlight-bg);
   box-shadow:
     inset var(--wj-link-highlight-width) 0 0 var(--wj-link-highlight-border),
     inset calc(var(--wj-link-highlight-width) * -1) 0 0 var(--wj-link-highlight-border);
