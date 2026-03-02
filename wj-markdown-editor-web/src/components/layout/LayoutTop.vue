@@ -1,8 +1,8 @@
 <script setup>
+import { computed, onBeforeMount, ref } from 'vue'
 import log from '@/assets/img/logo.png'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
-import { computed, onBeforeMount, ref } from 'vue'
 
 const store = useCommonStore()
 
