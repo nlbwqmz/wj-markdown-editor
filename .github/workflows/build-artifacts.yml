@@ -1,0 +1,67 @@
+name: Build Desktop Artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            wj-markdown-editor-web/package-lock.json
+            wj-markdown-editor-electron/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: wj-markdown-editor-web
+
+      - name: Build web
+        run: npm run build
+        working-directory: wj-markdown-editor-web
+
+      - name: Install electron dependencies
+        run: npm ci
+        working-directory: wj-markdown-editor-electron
+
+      - name: Install rpm tool (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y rpm
+          rpm --version
+
+      - name: Build electron (Windows)
+        if: runner.os == 'Windows'
+        run: npm run build -- --win --publish never
+        working-directory: wj-markdown-editor-electron
+
+      - name: Build electron (Linux)
+        if: runner.os == 'Linux'
+        run: npm run build -- --linux --publish never
+        working-directory: wj-markdown-editor-electron
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wj-markdown-editor-${{ runner.os }}
+          path: wj-markdown-editor-electron/electron-build/**
+          if-no-files-found: error
+          retention-days: 14
