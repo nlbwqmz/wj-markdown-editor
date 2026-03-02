@@ -1,21 +1,16 @@
-name: Build Desktop Artifacts
+name: Build And Release Desktop
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - windows-latest
-          - ubuntu-latest
-
+  prepare-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +18,26 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: Read version from electron package.json
+        id: version
+        shell: bash
+        run: |
+          version="$(node -p "require('./wj-markdown-editor-electron/package.json').version")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+  release-windows:
+    needs: prepare-version
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             wj-markdown-editor-web/package-lock.json
@@ -41,27 +55,113 @@ jobs:
         run: npm ci
         working-directory: wj-markdown-editor-electron
 
-      - name: Install rpm tool (Linux)
-        if: runner.os == 'Linux'
+      - name: Build electron (Windows)
+        run: npm run build -- --win --publish never
+        working-directory: wj-markdown-editor-electron
+
+      - name: Validate Windows artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $patterns = @(
+            'wj-markdown-editor-electron/electron-build/latest.yml',
+            'wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.exe',
+            'wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.exe.blockmap',
+            'wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.zip'
+          )
+
+          foreach ($pattern in $patterns) {
+            $items = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue
+            if (-not $items) {
+              throw "未找到构建文件: $pattern"
+            }
+          }
+
+      - name: Upload Windows assets to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-version.outputs.version }}
+          name: ${{ needs.prepare-version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          overwrite_files: true
+          files: |
+            wj-markdown-editor-electron/electron-build/latest.yml
+            wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.exe
+            wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.exe.blockmap
+            wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-linux:
+    needs:
+      - prepare-version
+      - release-windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            wj-markdown-editor-web/package-lock.json
+            wj-markdown-editor-electron/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: wj-markdown-editor-web
+
+      - name: Build web
+        run: npm run build
+        working-directory: wj-markdown-editor-web
+
+      - name: Install electron dependencies
+        run: npm ci
+        working-directory: wj-markdown-editor-electron
+
+      - name: Install rpm tool
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y rpm
           rpm --version
 
-      - name: Build electron (Windows)
-        if: runner.os == 'Windows'
-        run: npm run build -- --win --publish never
-        working-directory: wj-markdown-editor-electron
-
       - name: Build electron (Linux)
-        if: runner.os == 'Linux'
         run: npm run build -- --linux --publish never
         working-directory: wj-markdown-editor-electron
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Validate Linux artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_file() {
+            local pattern="$1"
+            if ! compgen -G "$pattern" > /dev/null; then
+              echo "未找到构建文件: $pattern"
+              exit 1
+            fi
+          }
+
+          check_file "wj-markdown-editor-electron/electron-build/latest-linux.yml"
+          check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-amd64-*.deb"
+          check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.rpm"
+
+      - name: Upload Linux assets to Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: wj-markdown-editor-${{ runner.os }}
-          path: wj-markdown-editor-electron/electron-build/**
-          if-no-files-found: error
-          retention-days: 14
+          tag_name: ${{ needs.prepare-version.outputs.version }}
+          name: ${{ needs.prepare-version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          overwrite_files: true
+          files: |
+            wj-markdown-editor-electron/electron-build/latest-linux.yml
+            wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-amd64-*.deb
+            wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.rpm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
