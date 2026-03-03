@@ -30,6 +30,8 @@ function findByWin(win) {
 
 async function save(winInfo) {
   await fs.writeFile(winInfo.path, winInfo.tempContent)
+  winInfo.exists = true
+  winInfo.missingPath = null
   winInfo.content = winInfo.tempContent
   sendUtil.send(winInfo.win, { event: 'save-success', data: {
     fileName: path.basename(winInfo.path),
@@ -39,7 +41,7 @@ async function save(winInfo) {
 
 export default {
   createNew: async (filePath, isRecent = false) => {
-    const exists = filePath && await fs.pathExists(filePath)
+    const exists = Boolean(filePath && await fs.pathExists(filePath))
     if (exists) {
       await recent.add(filePath)
       const find = winInfoList.find(item => item.path === filePath)
@@ -72,7 +74,8 @@ export default {
       win,
       content,
       tempContent: content,
-      path: filePath || null,
+      path: exists ? filePath : null,
+      missingPath: exists ? null : (filePath || null),
       exists,
       isRecent,
     })

@@ -124,7 +124,7 @@ const handlerList = {
       fileName: winInfo.path && winInfo.exists ? path.basename(winInfo.path) : 'Unnamed',
       content: winInfo.tempContent,
       saved: winInfo.content === winInfo.tempContent,
-      path: winInfo.path,
+      path: winInfo.path || winInfo.missingPath || null,
       exists: winInfo.exists,
       isRecent: winInfo.isRecent,
     }
