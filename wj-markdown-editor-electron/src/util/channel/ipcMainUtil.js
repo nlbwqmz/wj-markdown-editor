@@ -275,6 +275,7 @@ ipcMain.on('sendToMainSync', (event, json) => {
   if (handlerListSync[json.event]) {
     const win = BrowserWindow.fromWebContents(event.sender)
     event.returnValue = handlerListSync[json.event](winInfoUtil.getWinInfo(win) || winInfoUtil.getWinInfo(win.getParentWindow()), json.data)
+    return
   }
   event.returnValue = null
 })
