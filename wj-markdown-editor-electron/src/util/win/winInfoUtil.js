@@ -141,13 +141,6 @@ export default {
         save(winInfo)
       }
     })
-    // 在请求自定义协议（wj）时，添加自定义请求头（X-Window-ID）标识窗口ID，用于获取相对路径的图片、文件等
-    win.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
-      if (details.url.startsWith('wj:') || details.url.startsWith('wj-stream:')) {
-        details.requestHeaders['X-Window-ID'] = id
-      }
-      callback({ requestHeaders: details.requestHeaders })
-    })
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
       win.loadURL(content ? `http://localhost:8080/#/${configUtil.getConfig().startPage}` : 'http://localhost:8080/#/editor').then(() => {
         win.webContents.openDevTools({ mode: 'undocked' })
@@ -164,6 +157,9 @@ export default {
   },
   getAll: () => {
     return winInfoList
+  },
+  getByWebContentsId: (webContentsId) => {
+    return winInfoList.find(item => item.win.webContents.id === webContentsId)
   },
   save,
 }

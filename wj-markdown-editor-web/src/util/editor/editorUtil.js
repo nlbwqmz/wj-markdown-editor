@@ -1,8 +1,8 @@
-import channelUtil from '@/util/channel/channelUtil.js'
-import commonUtil from '@/util/commonUtil.js'
 import { redo, undo } from '@codemirror/commands'
 import * as markdownParser from 'prettier/parser-markdown'
 import * as prettier from 'prettier/standalone'
+import channelUtil from '@/util/channel/channelUtil.js'
+import commonUtil from '@/util/commonUtil.js'
 
 /**
  * 获取选中的行号
@@ -62,8 +62,9 @@ function insertTable(view, row, col, from, to) {
 
 /**
  * 行内命令
- * @param prefix
- * @param suffix
+ * @param editorView 编辑器视图
+ * @param prefix 前缀
+ * @param suffix 后缀
  */
 function inlineCommand(editorView, prefix, suffix = prefix) {
   const main = editorView.state.selection.main
