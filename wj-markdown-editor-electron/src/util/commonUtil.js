@@ -27,15 +27,30 @@ function createUniqueFileName(name) {
   return `${path.basename(name, extname)}_${nanoid(6)}${extname}`
 }
 
+function isRootDir(targetPath) {
+  const normalizedPath = path.resolve(targetPath)
+  return path.parse(normalizedPath).root === normalizedPath
+}
+
+async function ensureDirSafe(targetPath) {
+  if (!targetPath) {
+    return
+  }
+  if (isRootDir(targetPath)) {
+    return
+  }
+  await fs.ensureDir(targetPath)
+}
+
 export default {
   createId,
   createUniqueFileName,
+  ensureDirSafe,
   removePathSplit,
   base64ToImg: async (data, imgPath) => {
-    await fs.ensureDir(path.dirname(imgPath))
+    await ensureDirSafe(path.dirname(imgPath))
     const base64 = data.startsWith('data:') ? data.replace(/^data:image\/\w+;base64,/, '') : data
     const dataBuffer = Buffer.from(base64, 'base64')
-    await fs.ensureDir(path.dirname(imgPath))
     await fs.writeFile(imgPath, dataBuffer)
   },
   hexToString,

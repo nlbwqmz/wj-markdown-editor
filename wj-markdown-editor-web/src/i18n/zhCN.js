@@ -244,6 +244,7 @@ export default {
     theCurrentFileIsNotSaved: '当前文件未保存',
     cannotBeSavedToARelativePath: '当前文件未保存，不能将资源保存到相对路径',
     theAbsolutePathToSaveIsNotSet: '未设置保存绝对路径',
+    theRelativePathToSaveIsNotSet: '未设置保存相对路径',
     checkingLink: '正在检查链接',
     theLinkIsNotValid: '链接不是有效的图片链接',
     downloadingImage: '正在下载图片',

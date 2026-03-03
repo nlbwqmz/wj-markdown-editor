@@ -26,6 +26,10 @@ function check(winInfo, config) {
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theAbsolutePathToSaveIsNotSet' } })
     return false
   }
+  if (config.fileMode === '4' && !(config.fileRelativePath || '').trim()) {
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theRelativePathToSaveIsNotSet' } })
+    return false
+  }
   if ((config.fileMode === '3' || config.fileMode === '4') && !winInfo.path) {
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cannotBeSavedToARelativePath' } })
     return false
@@ -43,7 +47,7 @@ export default {
       const loadingKey = commonUtil.createId()
       try {
         const savePath = createLocalSavePath(winInfo, filePath, config)
-        await fs.ensureDir(path.dirname(savePath))
+        await commonUtil.ensureDirSafe(path.dirname(savePath))
         // 消息Key
         sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: 'message.theFileIsBeingSaved', duration: 0, key: loadingKey } })
         await fs.copyFile(filePath, savePath)
@@ -60,11 +64,11 @@ export default {
 
         // 保存到相对路径
         if (config.fileMode === '4') {
-          if (config.imgRelativePath) {
-            return { name: path.basename(filePath), path: `${config.fileRelativePath}/${path.basename(savePath)}` }
-          } else {
-            return { name: path.basename(filePath), path: path.basename(savePath) }
+          const normalizedRelativePath = commonUtil.removePathSplit(config.fileRelativePath || '')
+          if (normalizedRelativePath) {
+            return { name: path.basename(filePath), path: `${normalizedRelativePath}/${path.basename(savePath)}` }
           }
+          return { name: path.basename(filePath), path: path.basename(savePath) }
         }
       } catch (e) {
         console.error(e)

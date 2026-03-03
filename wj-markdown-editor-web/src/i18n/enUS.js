@@ -244,6 +244,7 @@ export default {
     theCurrentFileIsNotSaved: 'The current file is not saved',
     cannotBeSavedToARelativePath: 'The current file is not saved and the resource cannot be saved to a relative path.',
     theAbsolutePathToSaveIsNotSet: 'The absolute path to save is not set.',
+    theRelativePathToSaveIsNotSet: 'The relative path to save is not set.',
     checkingLink: 'Checking link...',
     theLinkIsNotValid: 'The link is not a valid image link.',
     downloadingImage: 'Downloading image...',

@@ -29,7 +29,7 @@ async function checkUrlIsImg(imgUrl) {
  */
 async function saveImgNetworkToLocal(imgUrl, imgPath) {
   try {
-    await fs.ensureDir(path.dirname(imgPath))
+    await commonUtil.ensureDirSafe(path.dirname(imgPath))
     // 发送 GET 请求，设置 responseType 为 'stream' 以处理大文件
     const response = await axios({
       method: 'get',
@@ -55,21 +55,22 @@ async function getRelativePath(winInfo, config, type) {
   if (type === '3') {
     relativePath = path.resolve(path.dirname(winInfo.path), path.basename(winInfo.path, path.extname(winInfo.path)))
   } else if (type === '4') {
-    if (!config.imgRelativePath) {
+    const normalizedRelativePath = commonUtil.removePathSplit((config.imgRelativePath || '').trim())
+    if (!normalizedRelativePath || normalizedRelativePath === '.') {
       relativePath = path.dirname(winInfo.path)
     } else {
-      const removePathSplit = commonUtil.removePathSplit(config.imgRelativePath)
-      relativePath = path.resolve(path.dirname(winInfo.path), removePathSplit)
+      relativePath = path.resolve(path.dirname(winInfo.path), normalizedRelativePath)
     }
   }
-  await fs.ensureDir(relativePath)
+  await commonUtil.ensureDirSafe(relativePath)
   return relativePath
 }
 
 /**
  * 生成图片本地保存路径
- * @param config
+ * @param winInfo
  * @param data
+ * @param config
  */
 async function createLocalSavePath(winInfo, data, config) {
   const imageSaveType = data.mode === 'local' ? config.imgLocal : config.imgNetwork
@@ -95,6 +96,10 @@ export default {
     const type = data.mode === 'local' ? config.imgLocal : config.imgNetwork
     if (type === '2' && !config.imgAbsolutePath) {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theAbsolutePathToSaveIsNotSet' } })
+      return false
+    }
+    if (type === '4' && !(config.imgRelativePath || '').trim()) {
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theRelativePathToSaveIsNotSet' } })
       return false
     }
     if ((type === '3' || type === '4') && !winInfo.path) {
@@ -148,11 +153,11 @@ export default {
 
     // 保存到相对路径
     if (type === '4') {
-      if (config.imgRelativePath) {
-        return { name: data.name, path: `${config.imgRelativePath}/${path.basename(imgSavePath)}` }
-      } else {
-        return { name: data.name, path: path.basename(imgSavePath) }
+      const normalizedRelativePath = commonUtil.removePathSplit((config.imgRelativePath || '').trim())
+      if (normalizedRelativePath && normalizedRelativePath !== '.') {
+        return { name: data.name, path: `${normalizedRelativePath}/${path.basename(imgSavePath)}` }
       }
+      return { name: data.name, path: path.basename(imgSavePath) }
     }
 
     // 上传到图床
