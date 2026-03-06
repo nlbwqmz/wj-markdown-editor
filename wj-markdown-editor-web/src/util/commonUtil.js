@@ -61,6 +61,31 @@ function stringToHex(str) {
 }
 
 /**
+ * 将资源地址转换为稳定的资源 URL。
+ * 本地路径转换为 wj 协议地址，显式协议地址、锚点链接和协议相对地址保持原样。
+ * @param {string} src - 资源地址
+ * @returns {string} - 转换后的资源地址
+ */
+function convertResourceUrl(src) {
+  if (!src) {
+    return src
+  }
+
+  if (src.startsWith('#') || src.startsWith('//')) {
+    return src
+  }
+
+  const hasExplicitScheme = /^[a-z][a-z\d+.-]*:/i.test(src)
+  const isWindowsAbsolutePath = /^[a-z]:[\\/]/i.test(src)
+
+  if (hasExplicitScheme && !isWindowsAbsolutePath) {
+    return src
+  }
+
+  return `wj://${stringToHex(src)}`
+}
+
+/**
  * 将 hex 解码为字符串
  * @param {string} hex - hex 编码的字符串
  * @returns {string} - 解码后的字符串
@@ -94,6 +119,7 @@ export default {
   strToBase64,
   base64ToStr,
   stringToHex,
+  convertResourceUrl,
   hexToString,
   createId,
   getUrlParam,

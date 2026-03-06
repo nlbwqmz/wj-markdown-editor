@@ -22,8 +22,8 @@ export default function (md) {
     if (hrefIndex >= 0) {
       // add new attribute
       const href = tokens[idx].attrs[hrefIndex][1]
-      if (href && !href.match('^http')) {
-        tokens[idx].attrs[hrefIndex][1] = `wj://${commonUtil.stringToHex(href)}?wj_date=${Date.now()}`
+      if (href) {
+        tokens[idx].attrs[hrefIndex][1] = commonUtil.convertResourceUrl(href)
       }
     }
     // pass token to default renderer.

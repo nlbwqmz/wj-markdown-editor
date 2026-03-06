@@ -30,12 +30,7 @@ export default function (md) {
 
   // 渲染视频标签
   md.renderer.rules.video = (tokens, idx) => {
-    let src = md.utils.escapeHtml(tokens[idx].content)
-
-    // Use wj:// protocol for local files with hex encoding
-    if (!src.match('^http') && !src.match('^data')) {
-      src = `wj://${commonUtil.stringToHex(src)}?wj_date=${Date.now()}`
-    }
+    const src = commonUtil.convertResourceUrl(md.utils.escapeHtml(tokens[idx].content))
 
     return `<video src="${src}" controls style="max-width: 100%"></video>`
   }
