@@ -60,10 +60,10 @@ const handlerList = {
   },
   'open-folder': (winInfo, data) => {
     if (data && typeof data === 'string') {
-      if (!data.startsWith('wj:///')) {
+      if (!data.startsWith('wj://')) {
         return
       }
-      const filePath = decodeURIComponent(commonUtil.hexToString(data.replace('wj:///', '')))
+      const filePath = commonUtil.decodeWjUrl(data)
       const isAbsolute = path.isAbsolute(filePath)
       if (!isAbsolute && !winInfo.path) {
         return // 如果是相对路径且 winInfo.path 为空，直接返回

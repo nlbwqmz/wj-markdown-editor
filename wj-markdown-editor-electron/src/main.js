@@ -1,4 +1,4 @@
-import { app, Menu } from 'electron'
+import { app, Menu, protocol } from 'electron'
 import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
 import sendUtil from './util/channel/sendUtil.js'
@@ -14,6 +14,32 @@ import winInfoUtil from './util/win/winInfoUtil.js'
 import './util/channel/ipcMainUtil.js'
 
 app.commandLine.appendSwitch('--disable-http-cache')
+
+// 注册自定义协议特权（必须在 app.whenReady() 之前调用）
+try {
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: 'wj',
+      privileges: {
+        standard: true, // 标准 URL 行为
+        secure: true, // HTTPS 级别安全
+        supportFetchAPI: true, // 支持 Fetch API
+        corsEnabled: false, // 禁用 CORS
+        bypassCSP: false, // 不绕过 CSP
+        stream: true, // 支持流式传输（Range 请求）
+      },
+    },
+  ])
+} catch (error) {
+  console.error('[Protocol] CRITICAL: Failed to register wj:// protocol privileges')
+  console.error('[Protocol] Error details:', {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+  })
+  console.error('[Protocol] Application may not function correctly without protocol registration')
+  // 不阻止应用启动，但记录严重错误
+}
 
 /**
  * 是否通过文件打开
@@ -62,7 +88,18 @@ if (!lock) {
         sendUtil.send(item.win, { event: 'update-recent', data: recentList })
       })
     })
-    protocolUtil.handleProtocol()
+
+    // 初始化协议处理器，捕获可能的错误
+    try {
+      protocolUtil.handleProtocol()
+    } catch (protocolError) {
+      console.error('[Main] CRITICAL: Protocol handler initialization failed')
+      console.error('[Main] Error:', protocolError)
+      console.error('[Main] Local file access (images, videos, audio) will not work')
+      console.error('[Main] Application will continue but with limited functionality')
+      // 应用继续运行，但本地资源加载功能将不可用
+    }
+
     const openOnFilePath = getOpenOnFilePath()
     if (openOnFilePath) {
       await winInfoUtil.createNew(openOnFilePath)

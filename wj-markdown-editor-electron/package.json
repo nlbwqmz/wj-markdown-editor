@@ -15,7 +15,9 @@
     "static": "electron .",
     "make": "cd ../wj-markdown-editor-web && npm install && npm run build && cd ../wj-markdown-editor-electron && npm install && electron-builder",
     "build": "electron-builder",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix"
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "build": {
     "publish": {
@@ -109,6 +111,7 @@
     "electron": "39.2.7",
     "electron-builder": "^26.0.12",
     "eslint": "^9.17.0",
-    "eslint-plugin-format": "^1.0.1"
+    "eslint-plugin-format": "^1.0.1",
+    "vitest": "^4.0.18"
   }
 }

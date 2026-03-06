@@ -142,6 +142,12 @@ npm run make         # 安装依赖、构建 Web、构建 Electron 安装包
 }
 ```
 
+补充要求：
+
+- 修改或新增文件后，必须在对应包目录下使用该包自己的 ESLint 配置进行格式化，不得跨包混用配置。
+- `wj-markdown-editor-web` 下的文件，需要在 `wj-markdown-editor-web/` 目录中按文件执行 ESLint 格式化；如果修改了多个文件，则一次传入多个文件路径一起格式化，例如：`npx eslint --fix <文件路径1> <文件路径2>`，不要执行全局格式化。
+- `wj-markdown-editor-electron` 下的文件，需要在 `wj-markdown-editor-electron/` 目录中按文件执行 ESLint 格式化；如果修改了多个文件，则一次传入多个文件路径一起格式化，例如：`npx eslint --fix <文件路径1> <文件路径2>`，不要执行全局格式化。
+
 ### 代码风格
 
 - 使用 Vue 3 Composition API (`<script setup>`)

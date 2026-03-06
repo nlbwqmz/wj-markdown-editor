@@ -64,7 +64,7 @@ export default {
       minWidth: 800,
       minHeight: 600,
       webPreferences: {
-        webSecurity: false,
+        webSecurity: true,
         preload: path.resolve(__dirname, '../../preload.js'),
       },
     })
@@ -99,8 +99,8 @@ export default {
       const url = details.url
       if (url.match('^http')) {
         shell.openExternal(url).then(() => {})
-      } else if (url.match('^wj:///')) {
-        const filePath = decodeURIComponent(commonUtil.hexToString(url.slice('wj:///'.length)))
+      } else if (url.match('^wj://')) {
+        const filePath = commonUtil.decodeWjUrl(url)
         if (path.isAbsolute(filePath)) {
           shell.showItemInFolder(filePath)
         } else {

@@ -22,6 +22,16 @@ function hexToString(hex) {
   return Buffer.from(hex, 'hex').toString('utf8')
 }
 
+function decodeWjUrl(url) {
+  const parsedUrl = new URL(url)
+  if (parsedUrl.protocol !== 'wj:') {
+    throw new Error('Invalid wj protocol URL')
+  }
+
+  const hexValue = parsedUrl.host || parsedUrl.pathname.replace(/^\/+|\/+$/g, '')
+  return decodeURIComponent(hexToString(hexValue))
+}
+
 function createUniqueFileName(name) {
   const extname = path.extname(name)
   return `${path.basename(name, extname)}_${nanoid(6)}${extname}`
@@ -53,5 +63,6 @@ export default {
     const dataBuffer = Buffer.from(base64, 'base64')
     await fs.writeFile(imgPath, dataBuffer)
   },
+  decodeWjUrl,
   hexToString,
 }

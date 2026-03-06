@@ -1,7 +1,7 @@
-import channelUtil from '@/util/channel/channelUtil.js'
+import commonUtil from '@/util/commonUtil.js'
 
 /**
- * 视频插件 !audio(...)
+ * 音频插件 !audio(...)
  */
 export default function (md) {
   const audioRegex = /^!audio\(([^)]+)\)/i
@@ -19,7 +19,7 @@ export default function (md) {
     // 非静默模式时创建 token
     if (!silent) {
       const token = state.push('audio', '', 0)
-      token.content = match[1].trim() // 提取视频地址
+      token.content = match[1].trim() // 提取音频地址
       token.level = state.level
     }
 
@@ -28,12 +28,15 @@ export default function (md) {
     return true
   })
 
-  // 渲染视频标签
+  // 渲染音频标签
   md.renderer.rules.audio = (tokens, idx) => {
     let src = md.utils.escapeHtml(tokens[idx].content)
+
+    // Use wj:// protocol for local files with hex encoding
     if (!src.match('^http') && !src.match('^data')) {
-      src = `file:///${channelUtil.sendSync({ event: 'convert-to-absolute-path', data: src })}`
+      src = `wj://${commonUtil.stringToHex(src)}?wj_date=${Date.now()}`
     }
+
     return `<audio src="${src}" controls style="max-width: 100%"></audio>`
   }
 }

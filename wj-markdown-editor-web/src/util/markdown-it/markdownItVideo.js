@@ -1,4 +1,4 @@
-import channelUtil from '@/util/channel/channelUtil.js'
+import commonUtil from '@/util/commonUtil.js'
 
 /**
  * 视频插件 !video(...)
@@ -31,9 +31,12 @@ export default function (md) {
   // 渲染视频标签
   md.renderer.rules.video = (tokens, idx) => {
     let src = md.utils.escapeHtml(tokens[idx].content)
+
+    // Use wj:// protocol for local files with hex encoding
     if (!src.match('^http') && !src.match('^data')) {
-      src = `file:///${channelUtil.sendSync({ event: 'convert-to-absolute-path', data: src })}`
+      src = `wj://${commonUtil.stringToHex(src)}?wj_date=${Date.now()}`
     }
+
     return `<video src="${src}" controls style="max-width: 100%"></video>`
   }
 }

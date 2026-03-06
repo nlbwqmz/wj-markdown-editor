@@ -1,9 +1,9 @@
-import router from '@/router/index.js'
-import channelUtil from '@/util/channel/channelUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal, Tooltip } from 'ant-design-vue'
 import { nanoid } from 'nanoid'
 import { createVNode, h } from 'vue'
+import router from '@/router/index.js'
+import channelUtil from '@/util/channel/channelUtil.js'
 
 const createId = () => `wj${nanoid()}`
 
@@ -49,15 +49,25 @@ function getUrlParam(name) {
   return searchParams.get(name)
 }
 
+/**
+ * 将字符串编码为 hex
+ * @param {string} str - 要编码的字符串
+ * @returns {string} - hex 编码的字符串
+ */
 function stringToHex(str) {
-  let hex = ''
-  for (let i = 0; i < str.length; i++) {
-    const charCode = str.charCodeAt(i)
-    const hexValue = charCode.toString(16)
-    // 确保每个字符是两位十六进制表示
-    hex += hexValue.padStart(2, '0')
-  }
-  return hex
+  return Array.from(new TextEncoder().encode(str))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/**
+ * 将 hex 解码为字符串
+ * @param {string} hex - hex 编码的字符串
+ * @returns {string} - 解码后的字符串
+ */
+function hexToString(hex) {
+  const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(byte => Number.parseInt(byte, 16)))
+  return new TextDecoder().decode(bytes)
 }
 
 function upperCaseFirst(str) {
@@ -84,6 +94,7 @@ export default {
   strToBase64,
   base64ToStr,
   stringToHex,
+  hexToString,
   createId,
   getUrlParam,
   initCopyCode: () => {
