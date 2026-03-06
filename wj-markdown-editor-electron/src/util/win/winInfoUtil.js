@@ -1,11 +1,13 @@
+import { watch } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, screen, shell } from 'electron'
+import { app, BrowserWindow, Notification, screen, shell } from 'electron'
 import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
+import fileWatchUtil from '../fileWatchUtil.js'
 import updateUtil from '../updateUtil.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -28,11 +30,176 @@ function findByWin(win) {
   return winInfoList.find(item => item.win === win)
 }
 
+function getFileInfoPayload(winInfo) {
+  return {
+    fileName: winInfo.path && winInfo.exists ? path.basename(winInfo.path) : 'Unnamed',
+    content: winInfo.tempContent,
+    saved: winInfo.content === winInfo.tempContent,
+    path: winInfo.path || winInfo.missingPath || null,
+    exists: winInfo.exists,
+    isRecent: winInfo.isRecent,
+  }
+}
+
+function createExternalWatchState() {
+  return fileWatchUtil.createWatchState()
+}
+
+function getExternalChangeNotificationContent(winInfo) {
+  const filePath = winInfo?.path || ''
+  const fileName = filePath ? path.basename(filePath) : ''
+  if (configUtil.getConfig().language === 'en-US') {
+    return {
+      title: fileName ? `File content updated - ${fileName}` : 'File content updated',
+      body: filePath
+        ? `The file was modified externally and the latest content has been applied automatically.\nPath: ${filePath}`
+        : 'The file was modified externally and the latest content has been applied automatically.',
+    }
+  }
+  return {
+    title: fileName ? `文件内容已更新 - ${fileName}` : '文件内容已更新',
+    body: filePath
+      ? `检测到文件被外部修改，已自动应用最新内容。\n路径：${filePath}`
+      : '检测到文件被外部修改，已自动应用最新内容。',
+  }
+}
+
+function notifyExternalChangeApplied(winInfo) {
+  const content = getExternalChangeNotificationContent(winInfo)
+  const icon = path.resolve(__dirname, '../../../icon/256x256.png')
+  if (Notification.isSupported()) {
+    const notification = new Notification({
+      ...content,
+      icon,
+    })
+    notification.on('click', () => {
+      if (winInfo?.win?.isDestroyed() === false) {
+        if (winInfo.win.isMinimized()) {
+          winInfo.win.restore()
+        }
+        winInfo.win.show()
+        winInfo.win.focus()
+      }
+    })
+    notification.show()
+    return
+  }
+  sendUtil.send(winInfo.win, {
+    event: 'message',
+    data: {
+      type: 'info',
+      content: content.body,
+    },
+  })
+}
+
+function sendExternalChange(winInfo, change) {
+  if (!winInfo?.win || !change) {
+    return
+  }
+  if (change.content === winInfo.tempContent) {
+    winInfo.externalWatch.ignoredVersionHash = change.versionHash
+    winInfo.externalWatch.pendingChange = null
+    return
+  }
+  sendUtil.send(winInfo.win, {
+    event: 'file-external-changed',
+    data: {
+      fileName: getFileInfoPayload(winInfo).fileName,
+      filePath: winInfo.path,
+      version: change.version,
+      localContent: winInfo.tempContent,
+      externalContent: change.content,
+      saved: winInfo.content === winInfo.tempContent,
+      exists: winInfo.exists,
+    },
+  })
+}
+
+function stopExternalWatch(winInfo) {
+  if (!winInfo?.externalWatch) {
+    return true
+  }
+  fileWatchUtil.stopWatching(winInfo.externalWatch)
+  return winInfo.externalWatch.watcher === null && winInfo.externalWatch.debounceTimer === null
+}
+
+function startExternalWatch(winInfo) {
+  if (!winInfo?.path) {
+    return false
+  }
+  if (!winInfo.externalWatch) {
+    winInfo.externalWatch = createExternalWatchState()
+  }
+  if (winInfo.externalWatch.watchingPath === winInfo.path && winInfo.externalWatch.watcher) {
+    return true
+  }
+  stopExternalWatch(winInfo)
+  winInfo.externalWatch = createExternalWatchState()
+  fileWatchUtil.startWatching({
+    state: winInfo.externalWatch,
+    filePath: winInfo.path,
+    watch,
+    onExternalChange: (change) => {
+      sendExternalChange(winInfo, change)
+    },
+    onError: () => {
+      sendUtil.send(winInfo.win, {
+        event: 'message',
+        data: {
+          type: 'warning',
+          content: 'message.fileExternalChangeReadFailed',
+        },
+      })
+    },
+  })
+  return true
+}
+
+function applyExternalPendingChange(winInfo, version, options = {}) {
+  const pendingChange = winInfo?.externalWatch?.pendingChange
+  if (!pendingChange || pendingChange.version !== version) {
+    return false
+  }
+  winInfo.content = pendingChange.content
+  winInfo.tempContent = pendingChange.content
+  winInfo.externalWatch.pendingChange = null
+  winInfo.externalWatch.ignoredVersionHash = null
+  sendUtil.send(winInfo.win, {
+    event: 'file-content-reloaded',
+    data: getFileInfoPayload(winInfo),
+  })
+  sendUtil.send(winInfo.win, { event: 'file-is-saved', data: true })
+  if (options.notify === true) {
+    notifyExternalChangeApplied(winInfo)
+  }
+  return true
+}
+
+function ignoreExternalPendingChange(winInfo, version) {
+  const pendingChange = winInfo?.externalWatch?.pendingChange
+  if (!pendingChange || pendingChange.version !== version) {
+    return false
+  }
+  winInfo.content = pendingChange.content
+  fileWatchUtil.ignorePendingChange(winInfo.externalWatch)
+  sendUtil.send(winInfo.win, { event: 'file-is-saved', data: false })
+  return true
+}
+
 async function save(winInfo) {
+  if (winInfo.path && winInfo.externalWatch?.watcher) {
+    fileWatchUtil.markInternalSave(winInfo.externalWatch, winInfo.tempContent)
+  }
   await fs.writeFile(winInfo.path, winInfo.tempContent)
   winInfo.exists = true
   winInfo.missingPath = null
   winInfo.content = winInfo.tempContent
+  if (!winInfo.externalWatch) {
+    winInfo.externalWatch = createExternalWatchState()
+  }
+  startExternalWatch(winInfo)
+  fileWatchUtil.markInternalSave(winInfo.externalWatch, winInfo.tempContent)
   sendUtil.send(winInfo.win, { event: 'save-success', data: {
     fileName: path.basename(winInfo.path),
     saved: true,
@@ -78,7 +245,12 @@ export default {
       missingPath: exists ? null : (filePath || null),
       exists,
       isRecent,
+      externalWatch: createExternalWatchState(),
     })
+    const winInfo = winInfoList.find(item => item.id === id)
+    if (exists) {
+      startExternalWatch(winInfo)
+    }
     win.once('ready-to-show', () => {
       win.show()
       setTimeout(() => {
@@ -132,6 +304,7 @@ export default {
           return false
         }
       }
+      stopExternalWatch(winInfo)
       deleteEditorWin(id)
       checkWinList()
     })
@@ -161,5 +334,10 @@ export default {
   getByWebContentsId: (webContentsId) => {
     return winInfoList.find(item => item.win.webContents.id === webContentsId)
   },
+  getFileInfoPayload,
+  startExternalWatch,
+  stopExternalWatch,
+  applyExternalPendingChange,
+  ignoreExternalPendingChange,
   save,
 }

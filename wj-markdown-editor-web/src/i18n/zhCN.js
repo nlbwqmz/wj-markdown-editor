@@ -31,6 +31,14 @@ export default {
     openSetting: '打开设置',
     confirmExit: '确认退出',
   },
+  externalFileChangeModal: {
+    title: '文件已被外部修改',
+    description: '检测到 {fileName} 已被外部修改，请选择如何处理。',
+    ignore: '忽略',
+    apply: '应用',
+    localVersion: '当前内容',
+    externalVersion: '外部内容',
+  },
   top: {
     switchTheme: '切换主题',
     openInExplorer: '在资源管理器中打开',
@@ -106,6 +114,8 @@ export default {
       openLastRecord: '打开最近一次记录',
       recentHistoryCount: '最近历史记录数量',
       autoSave: '自动保存',
+      externalFileChangeStrategy: '外部文件修改处理方式',
+      externalFileChangeStrategyTip: '直接应用会自动加载磁盘中的最新内容；提醒会打开差异对比弹窗，由你决定是忽略还是应用。',
       startupViewOption: {
         tip: '有内容时生效',
         edit: '编辑',
@@ -115,6 +125,10 @@ export default {
         tip: '仅当文件保存路径存在时生效',
         onWindowBlur: '窗口失焦时',
         onWindowClose: '窗口关闭时',
+      },
+      externalFileChangeStrategyOption: {
+        apply: '直接应用',
+        prompt: '提醒',
       },
     },
     fontFamily: {
@@ -262,5 +276,10 @@ export default {
     exporting: '正在导出',
     exportSuccessfully: '导出成功',
     exportFailed: '导出失败',
+    fileExternalChangeReadFailed: '读取外部修改后的文件内容失败。',
+    fileExternalChangeApplyFailed: '应用外部修改失败。',
+    fileExternalChangeAutoApplied: '检测到文件被外部修改，已自动应用最新内容。',
+    fileExternalChangeNotificationTitle: '文件内容已更新',
+    fileExternalChangeNotificationBody: '检测到文件被外部修改，已自动应用最新内容。',
   },
 }

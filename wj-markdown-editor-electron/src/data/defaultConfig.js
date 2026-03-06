@@ -23,6 +23,7 @@ export default {
   openRecent: true,
   recentMax: 10,
   language: 'zh-CN',
+  externalFileChangeStrategy: 'prompt',
   markdown: {
     typographer: true,
   },

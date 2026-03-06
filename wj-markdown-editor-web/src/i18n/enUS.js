@@ -31,6 +31,14 @@ export default {
     openSetting: 'Open settings',
     confirmExit: 'Confirm exit',
   },
+  externalFileChangeModal: {
+    title: 'File Changed Externally',
+    description: '{fileName} has been modified outside the editor. Please choose how to handle it.',
+    ignore: 'Ignore',
+    apply: 'Apply',
+    localVersion: 'Current Content',
+    externalVersion: 'External Content',
+  },
   top: {
     switchTheme: 'Switch theme',
     openInExplorer: 'Open in explorer',
@@ -106,6 +114,8 @@ export default {
       openLastRecord: 'Open latest record',
       recentHistoryCount: 'Recent history count',
       autoSave: 'Auto save',
+      externalFileChangeStrategy: 'External file change handling',
+      externalFileChangeStrategyTip: 'Apply will load the latest content from disk automatically; Prompt will open a diff dialog for you to choose ignore or apply.',
       startupViewOption: {
         tip: 'Effective when there is content',
         edit: 'Edit',
@@ -115,6 +125,10 @@ export default {
         tip: 'Effective only if the file save path exists',
         onWindowBlur: 'On window blur',
         onWindowClose: 'On window close',
+      },
+      externalFileChangeStrategyOption: {
+        apply: 'Apply directly',
+        prompt: 'Prompt',
       },
     },
     fontFamily: {
@@ -262,5 +276,10 @@ export default {
     exporting: 'Exporting...',
     exportSuccessfully: 'Export successfully.',
     exportFailed: 'Export failed.',
+    fileExternalChangeReadFailed: 'Failed to read the externally modified file content.',
+    fileExternalChangeApplyFailed: 'Failed to apply the external changes.',
+    fileExternalChangeAutoApplied: 'The file was modified externally and the latest content has been applied automatically.',
+    fileExternalChangeNotificationTitle: 'File content updated',
+    fileExternalChangeNotificationBody: 'The file was modified externally and the latest content has been applied automatically.',
   },
 }

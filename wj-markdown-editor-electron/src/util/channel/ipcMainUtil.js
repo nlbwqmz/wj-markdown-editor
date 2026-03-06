@@ -120,18 +120,17 @@ const handlerList = {
     }
   },
   'get-file-info': (winInfo) => {
-    return {
-      fileName: winInfo.path && winInfo.exists ? path.basename(winInfo.path) : 'Unnamed',
-      content: winInfo.tempContent,
-      saved: winInfo.content === winInfo.tempContent,
-      path: winInfo.path || winInfo.missingPath || null,
-      exists: winInfo.exists,
-      isRecent: winInfo.isRecent,
-    }
+    return winInfoUtil.getFileInfoPayload(winInfo)
   },
   'file-content-update': (winInfo, content) => {
     winInfo.tempContent = content
     sendUtil.send(winInfo.win, { event: 'file-is-saved', data: winInfo.tempContent === winInfo.content })
+  },
+  'file-external-change-apply': (winInfo, data) => {
+    return winInfoUtil.applyExternalPendingChange(winInfo, data?.version, { notify: data?.notify === true })
+  },
+  'file-external-change-ignore': (winInfo, data) => {
+    return winInfoUtil.ignoreExternalPendingChange(winInfo, data?.version)
   },
   'create-new': () => {
     winInfoUtil.createNew().then(() => {})

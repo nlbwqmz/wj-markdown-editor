@@ -1,10 +1,11 @@
 <script setup>
+import { onBeforeUnmount, onMounted } from 'vue'
+import ExternalFileChangeModal from '@/components/ExternalFileChangeModal.vue'
 import LayoutContainer from '@/components/layout/LayoutContainer.vue'
 import LayoutMenu from '@/components/layout/LayoutMenu.vue'
 import LayoutTop from '@/components/layout/LayoutTop.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
-import { onBeforeUnmount, onMounted } from 'vue'
 
 function findShortcutKeyId(keymap) {
   const shortcutKeyList = useCommonStore().config.shortcutKeyList
@@ -43,5 +44,6 @@ onBeforeUnmount(() => {
     <div class="h-0 flex-1 overflow-hidden">
       <LayoutContainer />
     </div>
+    <ExternalFileChangeModal />
   </div>
 </template>

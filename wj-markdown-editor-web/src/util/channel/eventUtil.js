@@ -42,6 +42,35 @@ export default {
         duration: data.duration,
       })
     })
+    eventEmit.on('file-external-changed', async (data) => {
+      const store = useCommonStore()
+      if (store.config.externalFileChangeStrategy === 'apply') {
+        store.resetExternalFileChange()
+        const success = await channelUtil.send({
+          event: 'file-external-change-apply',
+          data: {
+            version: data.version,
+            notify: true,
+          },
+        })
+        if (!success) {
+          message.warning({
+            content: t('message.fileExternalChangeApplyFailed') || '应用外部修改失败',
+          })
+        }
+        return
+      }
+      store.showExternalFileChange(data)
+    })
+    eventEmit.on('file-content-reloaded', (data) => {
+      window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
+      const store = useCommonStore()
+      store.$patch({
+        fileName: data.fileName,
+        saved: data.saved,
+      })
+      store.resetExternalFileChange()
+    })
     eventEmit.on('window-size', (data) => {
       useCommonStore().isMaximize = data.isMaximize
     })

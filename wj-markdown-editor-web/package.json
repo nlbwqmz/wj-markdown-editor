@@ -41,6 +41,7 @@
     "pinia": "^3.0.1",
     "prettier": "^3.5.3",
     "split-grid": "^1.0.11",
+    "v-code-diff": "^1.13.1",
     "vue": "^3.5.13",
     "vue-i18n": "^11.2.7",
     "vue-router": "^4.5.0",

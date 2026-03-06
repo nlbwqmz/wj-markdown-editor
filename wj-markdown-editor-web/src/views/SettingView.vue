@@ -1,15 +1,15 @@
 <script setup>
+import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import { computed, createVNode, h, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ColorPicker } from 'vue3-colorpicker'
+import { useI18n } from 'vue-i18n'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
 import TypographerDescription from '@/components/TypographerDescription.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import constant from '@/util/constant.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
-import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { message, Modal } from 'ant-design-vue'
-import { computed, createVNode, h, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ColorPicker } from 'vue3-colorpicker'
-import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
@@ -48,6 +48,17 @@ const autoSaveOptionList = computed(() => [
   {
     label: t('config.general.autoSaveOption.onWindowClose'),
     value: 'close',
+  },
+])
+
+const externalFileChangeStrategyOptionList = computed(() => [
+  {
+    label: t('config.general.externalFileChangeStrategyOption.apply'),
+    value: 'apply',
+  },
+  {
+    label: t('config.general.externalFileChangeStrategyOption.prompt'),
+    value: 'prompt',
   },
 ])
 
@@ -291,6 +302,24 @@ function reset() {
               </div>
             </template>
             <a-checkbox-group v-model:value="config.autoSave" :options="autoSaveOptionList" />
+          </a-descriptions-item>
+          <a-descriptions-item>
+            <template #label>
+              <div class="flex items-center gap-1">
+                <span>{{ $t('config.general.externalFileChangeStrategy') }}</span>
+                <a-tooltip placement="topRight" color="#1677ff" class="flex-shrink-0">
+                  <template #title>
+                    {{ $t('config.general.externalFileChangeStrategyTip') }}
+                  </template>
+                  <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
+                </a-tooltip>
+              </div>
+            </template>
+            <a-radio-group v-model:value="config.externalFileChangeStrategy" button-style="solid">
+              <a-radio-button v-for="item in externalFileChangeStrategyOptionList" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </a-radio-button>
+            </a-radio-group>
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">

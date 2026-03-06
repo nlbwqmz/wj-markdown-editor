@@ -1,12 +1,13 @@
 <script setup>
+import dayjs from 'dayjs'
+import Split from 'split-grid'
+import { nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
-import dayjs from 'dayjs'
-import Split from 'split-grid'
-import { nextTick, onActivated, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import eventEmit from '@/util/channel/eventEmit.js'
 
 const router = useRouter()
 
@@ -25,6 +26,19 @@ const ready = ref(false)
 
 const watermark = ref()
 
+function updateFileInfo(data) {
+  content.value = data.content
+  ready.value = true
+  window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
+  store.$patch({
+    fileName: data.fileName,
+    saved: data.saved,
+  })
+  if (!content.value) {
+    anchorList.value = []
+  }
+}
+
 watch(() => store.config, (newValue) => {
   // 水印
   const tempWatermark = JSON.parse(JSON.stringify(newValue.watermark))
@@ -39,6 +53,11 @@ watch(() => store.config, (newValue) => {
 
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
+  eventEmit.on('file-content-reloaded', updateFileInfo)
+})
+
+onBeforeUnmount(() => {
+  eventEmit.remove('file-content-reloaded', updateFileInfo)
 })
 
 watch(() => menuVisible.value, (newValue) => {
@@ -62,18 +81,7 @@ watch(() => menuVisible.value, (newValue) => {
 
 onActivated(async () => {
   const data = await channelUtil.send({ event: 'get-file-info' })
-  content.value = data.content
-  nextTick(() => {
-    ready.value = true
-  }).then(() => {})
-  window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
-  store.$patch({
-    fileName: data.fileName,
-    saved: data.saved,
-  })
-  if (!content.value) {
-    anchorList.value = []
-  }
+  updateFileInfo(data)
 })
 
 function toEdit() {

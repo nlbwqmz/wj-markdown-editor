@@ -1,10 +1,11 @@
 <script setup>
+import dayjs from 'dayjs'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import MarkdownEdit from '@/components/editor/MarkdownEdit.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
-import dayjs from 'dayjs'
-import { onMounted, ref, watch } from 'vue'
 
 const content = ref('')
 // 确保content已获取再传入组件
@@ -30,7 +31,13 @@ function updateFileInfo(data) {
 onMounted(async () => {
   const data = await channelUtil.send({ event: 'get-file-info' })
   updateFileInfo(data)
+  eventEmit.on('file-content-reloaded', updateFileInfo)
 })
+
+onBeforeUnmount(() => {
+  eventEmit.remove('file-content-reloaded', updateFileInfo)
+})
+
 watch(() => content.value, (newValue, oldValue) => {
   if (newValue !== oldValue) {
     channelUtil.send({ event: 'file-content-update', data: newValue })

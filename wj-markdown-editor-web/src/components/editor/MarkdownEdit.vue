@@ -236,7 +236,20 @@ watch(() => props.extension, (newValue) => {
   reconfigureExtensions(newValue)
 }, { deep: true })
 
-watch(() => props.modelValue, () => {
+watch(() => props.modelValue, (newValue) => {
+  const view = editorView.value
+  if (view) {
+    const currentValue = view.state.doc.toString()
+    if (currentValue !== newValue) {
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: currentValue.length,
+          insert: newValue,
+        },
+      })
+    }
+  }
   restorePreviewLinkedHighlight()
 })
 
