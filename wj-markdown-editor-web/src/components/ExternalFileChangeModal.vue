@@ -1,15 +1,39 @@
 <script setup>
-import { CodeDiff } from 'v-code-diff'
+import { createTwoFilesPatch } from 'diff'
+import { html as diff2html } from 'diff2html'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import 'diff2html/bundles/css/diff2html.min.css'
 
 const { t } = useI18n()
 const store = useCommonStore()
 
 const externalFileChange = computed(() => store.externalFileChange)
 const diffTheme = computed(() => (store.config.theme.global === 'dark' ? 'dark' : 'light'))
+const diffHtml = computed(() => {
+  const fileName = externalFileChange.value.fileName || 'Unnamed'
+  const localVersionName = `${fileName} - ${t('externalFileChangeModal.localVersion')}`
+  const externalVersionName = `${fileName} - ${t('externalFileChangeModal.externalVersion')}`
+  const diffString = createTwoFilesPatch(
+    localVersionName,
+    externalVersionName,
+    externalFileChange.value.localContent || '',
+    externalFileChange.value.externalContent || '',
+    '',
+    '',
+    { context: 3 },
+  )
+  return diff2html(diffString, {
+    colorScheme: diffTheme.value,
+    diffStyle: 'char',
+    drawFileList: false,
+    matching: 'words',
+    outputFormat: 'side-by-side',
+    renderNothingWhenEmpty: true,
+  })
+})
 
 async function ignoreExternalChange() {
   // 忽略时不更新编辑器内容，
@@ -78,18 +102,7 @@ async function applyExternalChange() {
         {{ t('externalFileChangeModal.description', { fileName: externalFileChange.fileName || 'Unnamed' }) }}
       </div>
     </div>
-    <CodeDiff
-      diff-style="char"
-      :old-string="externalFileChange.localContent"
-      :new-string="externalFileChange.externalContent"
-      output-format="side-by-side"
-      language="plaintext"
-      :theme="diffTheme"
-      :filename="`${externalFileChange.fileName || 'Unnamed'} - ${t('externalFileChangeModal.localVersion')}`"
-      :new-filename="`${externalFileChange.fileName || 'Unnamed'} - ${t('externalFileChangeModal.externalVersion')}`"
-      max-height="60vh"
-      class="wj-scrollbar"
-    />
+    <div class="external-file-change-modal__diff wj-scrollbar relative" v-html="diffHtml" />
     <div class="mt-4 flex justify-end gap-3">
       <a-button :loading="externalFileChange.loading" @click="ignoreExternalChange">
         {{ t('externalFileChangeModal.ignore') }}
@@ -117,6 +130,15 @@ async function applyExternalChange() {
 
   .external-file-change-modal__description {
     color: var(--wj-markdown-text-secondary);
+  }
+
+  .external-file-change-modal__diff {
+    max-height: 60vh;
+    overflow: auto;
+  }
+
+  .d2h-file-side-diff {
+    overflow-x: auto;
   }
 }
 </style>
