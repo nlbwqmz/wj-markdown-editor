@@ -1,9 +1,9 @@
-import eventUtil from '@/util/channel/eventUtil.js'
-import commonUtil from '@/util/commonUtil.js'
 import Antd from 'ant-design-vue'
-
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
+
+import eventUtil from '@/util/channel/eventUtil.js'
+import commonUtil from '@/util/commonUtil.js'
 import App from './App.vue'
 import i18n from './i18n'
 import router from './router'

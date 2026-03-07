@@ -27,6 +27,8 @@ const ready = ref(false)
 const watermark = ref()
 
 function updateFileInfo(data) {
+  // 预览页也是被动接收 Electron 已确认的最终内容，
+  // 不参与外部修改的应用决策，只负责展示结果。
   content.value = data.content
   ready.value = true
   window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
@@ -53,6 +55,8 @@ watch(() => store.config, (newValue) => {
 
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
+  // 当 Electron 自动应用外部修改，或者用户手动应用完成后，
+  // 预览页会收到统一的刷新事件。
   eventEmit.on('file-content-reloaded', updateFileInfo)
 })
 

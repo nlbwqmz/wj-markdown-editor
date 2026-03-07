@@ -18,6 +18,8 @@ export default {
       useCommonStore().isAlwaysOnTop = isAlwaysOnTop
     })
     eventEmit.on('file-is-saved', (data) => {
+      // Electron 计算好的保存状态只在这里落到全局 store，
+      // 顶部标题栏是否显示红色 * 也是基于这个字段。
       useCommonStore().saved = data
     })
     eventEmit.on('update-recent', (data) => {
@@ -42,27 +44,15 @@ export default {
         duration: data.duration,
       })
     })
-    eventEmit.on('file-external-changed', async (data) => {
-      const store = useCommonStore()
-      if (store.config.externalFileChangeStrategy === 'apply') {
-        store.resetExternalFileChange()
-        const success = await channelUtil.send({
-          event: 'file-external-change-apply',
-          data: {
-            version: data.version,
-            notify: true,
-          },
-        })
-        if (!success) {
-          message.warning({
-            content: t('message.fileExternalChangeApplyFailed') || '应用外部修改失败',
-          })
-        }
-        return
-      }
-      store.showExternalFileChange(data)
+    eventEmit.on('file-external-changed', (data) => {
+      // Electron 在提醒策略下不会直接改前端内容，
+      // 而是把 diff 所需数据发过来，由这里打开弹窗。
+      useCommonStore().showExternalFileChange(data)
     })
     eventEmit.on('file-content-reloaded', (data) => {
+      // 这里表示 Electron 已经完成了内容收敛：
+      // 可能是自动应用，也可能是用户在弹窗里点击了“应用”。
+      // 前端只需要被动刷新页面和关闭弹窗。
       window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
       const store = useCommonStore()
       store.$patch({

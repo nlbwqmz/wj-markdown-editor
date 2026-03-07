@@ -42,7 +42,7 @@ describe('fileWatchUtil', () => {
     expect(result.change.version).toBe(1)
   })
 
-  it('应该忽略已被用户忽略过的相同外部版本', () => {
+  it('应该在忽略后清理状态，并仅短暂抑制同一版本的重复事件', () => {
     const state = fileWatchUtil.createWatchState()
 
     const firstResult = fileWatchUtil.resolveExternalChange(state, '# 外部版本 1')
@@ -51,9 +51,12 @@ describe('fileWatchUtil', () => {
 
     fileWatchUtil.ignorePendingChange(state)
 
+    expect(state.pendingChange).toBeNull()
+    expect(state.ignoredVersionHash).toBeNull()
+
     const secondResult = fileWatchUtil.resolveExternalChange(state, '# 外部版本 1')
     expect(secondResult.changed).toBe(false)
-    expect(secondResult.reason).toBe('ignored')
+    expect(secondResult.reason).toBe('handled')
     expect(state.currentVersion).toBe(1)
     expect(state.pendingChange).toBeNull()
   })

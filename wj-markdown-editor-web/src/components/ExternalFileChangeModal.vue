@@ -12,6 +12,8 @@ const externalFileChange = computed(() => store.externalFileChange)
 const diffTheme = computed(() => (store.config.theme.global === 'dark' ? 'dark' : 'light'))
 
 async function ignoreExternalChange() {
+  // 忽略时不更新编辑器内容，
+  // 只通知 Electron 清理当前这次待处理外部变更。
   if (externalFileChange.value.loading) {
     return
   }
@@ -33,6 +35,9 @@ async function ignoreExternalChange() {
 }
 
 async function applyExternalChange() {
+  // 应用动作由 Electron 主导完成：
+  // Electron 会直接更新 tempContent / 保存状态，
+  // 然后再通过 `file-content-reloaded` 通知渲染端刷新。
   if (externalFileChange.value.loading) {
     return
   }
@@ -74,6 +79,7 @@ async function applyExternalChange() {
       </div>
     </div>
     <CodeDiff
+      diff-style="char"
       :old-string="externalFileChange.localContent"
       :new-string="externalFileChange.externalContent"
       output-format="side-by-side"
@@ -82,6 +88,7 @@ async function applyExternalChange() {
       :filename="`${externalFileChange.fileName || 'Unnamed'} - ${t('externalFileChangeModal.localVersion')}`"
       :new-filename="`${externalFileChange.fileName || 'Unnamed'} - ${t('externalFileChangeModal.externalVersion')}`"
       max-height="60vh"
+      class="wj-scrollbar"
     />
     <div class="mt-4 flex justify-end gap-3">
       <a-button :loading="externalFileChange.loading" @click="ignoreExternalChange">

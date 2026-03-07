@@ -32,6 +32,8 @@ const useCommonStore = defineStore('common', () => {
   const externalFileChange = ref(createDefaultExternalFileChange())
 
   function showExternalFileChange(data) {
+    // 每次收到新的外部 diff 数据时，都覆盖掉上一次弹窗状态，
+    // 避免旧版本内容残留在弹窗里。
     externalFileChange.value = {
       ...createDefaultExternalFileChange(),
       ...data,
@@ -41,6 +43,7 @@ const useCommonStore = defineStore('common', () => {
   }
 
   function resetExternalFileChange() {
+    // 用户完成决策，或者 Electron 已经自动应用并通知刷新后，统一回到初始状态。
     externalFileChange.value = createDefaultExternalFileChange()
   }
 
