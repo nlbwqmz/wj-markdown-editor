@@ -807,7 +807,7 @@ function reset() {
   padding-block-start: revert;
 }
 :deep(.ant-radio-button-wrapper) {
-  min-width: 80px;
+  min-width: 120px;
   text-align: center;
 }
 :deep(.ant-descriptions-title) {

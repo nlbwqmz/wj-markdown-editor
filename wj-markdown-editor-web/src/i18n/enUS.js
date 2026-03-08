@@ -36,6 +36,8 @@ export default {
     description: '{fileName} has been modified outside the editor. Please choose how to handle it.',
     ignore: 'Ignore',
     apply: 'Apply',
+    ignoreActionDescription: 'Keep the current editor content and do not load external changes from disk. This prompt will be closed.',
+    applyActionDescription: 'Load the latest disk content into the editor. Unsaved local content may be overwritten.',
     localVersion: 'Current Content',
     externalVersion: 'External Content',
   },
@@ -114,7 +116,7 @@ export default {
       openLastRecord: 'Open latest record',
       recentHistoryCount: 'Recent history count',
       autoSave: 'Auto save',
-      externalFileChangeStrategy: 'External file change handling',
+      externalFileChangeStrategy: 'External Change Handling',
       externalFileChangeStrategyTip: 'Apply will load the latest content from disk automatically; Prompt will open a diff dialog for you to choose ignore or apply.',
       startupViewOption: {
         tip: 'Effective when there is content',

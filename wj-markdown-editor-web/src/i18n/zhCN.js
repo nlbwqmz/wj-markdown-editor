@@ -36,6 +36,8 @@ export default {
     description: '检测到 {fileName} 已被外部修改，请选择如何处理。',
     ignore: '忽略',
     apply: '应用',
+    ignoreActionDescription: '保留当前编辑器内容，不加载磁盘中的外部修改，本次提醒将关闭。',
+    applyActionDescription: '加载磁盘中的最新内容并更新编辑器，当前未保存内容可能会被覆盖。',
     localVersion: '当前内容',
     externalVersion: '外部内容',
   },
@@ -114,7 +116,7 @@ export default {
       openLastRecord: '打开最近一次记录',
       recentHistoryCount: '最近历史记录数量',
       autoSave: '自动保存',
-      externalFileChangeStrategy: '外部文件修改处理方式',
+      externalFileChangeStrategy: '外部变更处理',
       externalFileChangeStrategyTip: '直接应用会自动加载磁盘中的最新内容；提醒会打开差异对比弹窗，由你决定是忽略还是应用。',
       startupViewOption: {
         tip: '有内容时生效',

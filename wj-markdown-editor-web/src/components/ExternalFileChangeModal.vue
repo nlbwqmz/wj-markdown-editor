@@ -1,5 +1,5 @@
 <script setup>
-import { createTwoFilesPatch } from 'diff'
+import { createPatch } from 'diff'
 import { html as diff2html } from 'diff2html'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -14,16 +14,13 @@ const externalFileChange = computed(() => store.externalFileChange)
 const diffTheme = computed(() => (store.config.theme.global === 'dark' ? 'dark' : 'light'))
 const diffHtml = computed(() => {
   const fileName = externalFileChange.value.fileName || 'Unnamed'
-  const localVersionName = `${fileName} - ${t('externalFileChangeModal.localVersion')}`
-  const externalVersionName = `${fileName} - ${t('externalFileChangeModal.externalVersion')}`
-  const diffString = createTwoFilesPatch(
-    localVersionName,
-    externalVersionName,
+  const diffString = createPatch(
+    fileName,
     externalFileChange.value.localContent || '',
     externalFileChange.value.externalContent || '',
     '',
     '',
-    { context: 3 },
+    { context: 5 },
   )
   return diff2html(diffString, {
     colorScheme: diffTheme.value,
@@ -90,20 +87,28 @@ async function applyExternalChange() {
     :mask-closable="false"
     :keyboard="false"
     :closable="false"
-    :width="1200"
+    width="80vw"
     :footer="null"
     centered
+    :title="t('externalFileChangeModal.title')"
   >
-    <div class="external-file-change-modal__header mb-4">
-      <div class="external-file-change-modal__title text-18px font-600">
-        {{ t('externalFileChangeModal.title') }}
-      </div>
-      <div class="external-file-change-modal__description mt-2 text-14px">
+    <div class="mb-4">
+      <div class="text-3.5 color-[var(--wj-markdown-text-secondary)]">
         {{ t('externalFileChangeModal.description', { fileName: externalFileChange.fileName || 'Unnamed' }) }}
       </div>
     </div>
-    <div class="external-file-change-modal__diff wj-scrollbar relative" v-html="diffHtml" />
-    <div class="mt-4 flex justify-end gap-3">
+    <div class="wj-scrollbar relative max-h-60vh overflow-auto" v-html="diffHtml" />
+    <div class="text-3.5">
+      <div class="color-[var(--wj-markdown-text-primary)]">
+        <span class="font-600">{{ t('externalFileChangeModal.ignore') }}：</span>
+        <span class="color-[var(--wj-markdown-text-secondary)]">{{ t('externalFileChangeModal.ignoreActionDescription') }}</span>
+      </div>
+      <div class="color-[var(--wj-markdown-text-primary)]">
+        <span class="font-600">{{ t('externalFileChangeModal.apply') }}：</span>
+        <span class="color-[var(--wj-markdown-text-secondary)]">{{ t('externalFileChangeModal.applyActionDescription') }}</span>
+      </div>
+    </div>
+    <div class="mt-4 flex justify-end gap-2">
       <a-button :loading="externalFileChange.loading" @click="ignoreExternalChange">
         {{ t('externalFileChangeModal.ignore') }}
       </a-button>
@@ -116,27 +121,6 @@ async function applyExternalChange() {
 
 <style lang="scss">
 .external-file-change-modal {
-  .ant-modal-content {
-    color: var(--wj-markdown-text-primary);
-  }
-
-  .external-file-change-modal__header {
-    color: var(--wj-markdown-text-primary);
-  }
-
-  .external-file-change-modal__title {
-    color: var(--wj-markdown-text-primary);
-  }
-
-  .external-file-change-modal__description {
-    color: var(--wj-markdown-text-secondary);
-  }
-
-  .external-file-change-modal__diff {
-    max-height: 60vh;
-    overflow: auto;
-  }
-
   .d2h-file-side-diff {
     overflow-x: auto;
   }
