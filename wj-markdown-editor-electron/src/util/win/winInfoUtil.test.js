@@ -5,13 +5,11 @@ const notificationShowMock = vi.fn()
 const notificationOnMock = vi.fn()
 const ignorePendingChangeMock = vi.fn((state) => {
   state.pendingChange = null
-  state.ignoredVersionHash = null
   state.lastHandledVersionHash = 'handled-from-ignore'
   return state.lastHandledVersionHash
 })
 const settlePendingChangeMock = vi.fn((state, versionHash) => {
   state.pendingChange = null
-  state.ignoredVersionHash = null
   state.lastHandledVersionHash = versionHash || null
   return state.lastHandledVersionHash
 })
@@ -136,7 +134,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
           versionHash: 'external-hash',
           content: '# 外部最新内容',
         },
-        ignoredVersionHash: 'stale-ignore',
       },
     }
 
@@ -149,7 +146,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
     expect(winInfoUtil.getFileInfoPayload(winInfo).saved).toBe(false)
     expect(sendMock).not.toHaveBeenCalled()
     expect(winInfo.externalWatch.pendingChange).toBeNull()
-    expect(winInfo.externalWatch.ignoredVersionHash).toBeNull()
   })
 
   it('外部修改后若真实值与当前编辑值相同，应仅同步保存状态且不弹窗', () => {
@@ -167,7 +163,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
           versionHash: 'external-hash-2',
           content: '# 外部最新内容',
         },
-        ignoredVersionHash: 'stale-ignore',
       },
     }
 
@@ -198,7 +193,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
       lastNotifiedSavedState: true,
       externalWatch: {
         pendingChange: null,
-        ignoredVersionHash: null,
       },
     }
 
@@ -222,7 +216,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
           versionHash: 'external-hash-8',
           content: '# 外部最新内容',
         },
-        ignoredVersionHash: null,
       },
     }
 
@@ -251,7 +244,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
           versionHash: 'external-hash-3',
           content: '# 外部最新内容',
         },
-        ignoredVersionHash: null,
       },
     }
 
@@ -290,7 +282,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
           versionHash: 'external-hash-4',
           content: '# 外部最新内容',
         },
-        ignoredVersionHash: 'stale-ignore',
       },
     }
 
@@ -301,7 +292,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
     expect(winInfo.tempContent).toBe('# 外部最新内容')
     expect(settlePendingChangeMock).toHaveBeenCalledWith(winInfo.externalWatch, 'external-hash-4')
     expect(winInfo.externalWatch.pendingChange).toBeNull()
-    expect(winInfo.externalWatch.ignoredVersionHash).toBeNull()
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'file-content-reloaded',
       data: winInfoUtil.getFileInfoPayload(winInfo),
@@ -329,7 +319,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
           versionHash: 'external-hash-2',
           content: '# 外部最新内容',
         },
-        ignoredVersionHash: null,
       },
     }
 
@@ -371,7 +360,6 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
           versionHash: 'external-hash-7',
           content: '# 外部最新内容',
         },
-        ignoredVersionHash: null,
       },
     }
 

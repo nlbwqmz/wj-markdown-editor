@@ -11,7 +11,7 @@ function createContentVersion(content = '') {
  * 这份状态会一直挂在每个窗口自己的 `winInfo.externalWatch` 上，
  * 用来解决下面几类问题：
  * 1. 软件自己保存文件时，不要把这次写盘误判成“外部修改”
- * 2. 同一个外部版本在短时间内被底层 watcher 连续触发时，不要重复弹窗
+ * 2. 同一个外部版本被底层 watcher 连续触发时，不要重复弹窗
  * 3. 用户已经“忽略 / 应用”过某次外部修改后，不要立刻再次处理同一版本
  * 4. 重新监听新文件时，旧文件异步回调返回的数据不能污染新状态
  */
@@ -23,13 +23,10 @@ function createWatchState() {
     generation: 0,
     latestRunToken: 0,
     currentVersion: 0,
-    internalSaveWindowMs: 1500,
+    internalSaveWindowMs: 2000,
     lastInternalSaveAt: 0,
     lastInternalSavedVersion: null,
-    handledChangeWindowMs: 1500,
-    lastHandledAt: 0,
     lastHandledVersionHash: null,
-    ignoredVersionHash: null,
     pendingChange: null,
     stopped: false,
   }
@@ -41,9 +38,7 @@ function resetTrackedState(state) {
   state.currentVersion = 0
   state.lastInternalSaveAt = 0
   state.lastInternalSavedVersion = null
-  state.lastHandledAt = 0
   state.lastHandledVersionHash = null
-  state.ignoredVersionHash = null
   state.pendingChange = null
   state.latestRunToken = 0
 }
@@ -77,12 +72,10 @@ function markInternalSave(state, content) {
  *
  * 处理完成后要做两件事：
  * - 清掉 `pendingChange`，避免影响下一次外部事件
- * - 记录最近一次已处理版本，短时间内再次收到同版本事件时直接忽略
+ * - 记录最近一次已处理版本，后续同版本事件直接忽略
  */
 function settlePendingChange(state, versionHash = state?.pendingChange?.versionHash || null) {
-  state.lastHandledAt = Date.now()
   state.lastHandledVersionHash = versionHash
-  state.ignoredVersionHash = null
   state.pendingChange = null
   return state.lastHandledVersionHash
 }
@@ -115,20 +108,8 @@ function resolveExternalChange(state, diskContent) {
     }
   }
 
-  if (
-    versionHash === state.lastHandledVersionHash
-    && Date.now() - state.lastHandledAt <= state.handledChangeWindowMs
-  ) {
-    // 同一版本刚刚已经被“应用 / 忽略 / 自动收敛”处理过，短时间内直接去重。
-    return {
-      changed: false,
-      reason: 'handled',
-      versionHash,
-    }
-  }
-
-  if (versionHash === state.ignoredVersionHash) {
-    // 兼容旧状态字段。当前逻辑里最终也按“已处理”看待，不再单独保留忽略态。
+  if (versionHash === state.lastHandledVersionHash) {
+    // 同一版本已经被“应用 / 忽略 / 自动收敛”处理过，直接去重。
     return {
       changed: false,
       reason: 'handled',
@@ -166,8 +147,8 @@ function resolveExternalChange(state, diskContent) {
   }
 }
 
-// “忽略”不再单独保留一份长期忽略状态，
-// 而是直接收敛到“本次版本已处理完成”，防止脏状态影响下一轮监听。
+// “忽略”直接收敛到“本次版本已处理完成”，
+// 后续同 hash 事件会统一走 handled 去重。
 function ignorePendingChange(state) {
   if (!state.pendingChange) {
     return null

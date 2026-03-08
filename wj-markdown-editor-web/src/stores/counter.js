@@ -10,12 +10,9 @@ function createDefaultExternalFileChange() {
     visible: false,
     loading: false,
     fileName: '',
-    filePath: '',
     version: 0,
     localContent: '',
     externalContent: '',
-    saved: true,
-    exists: true,
   }
 }
 
