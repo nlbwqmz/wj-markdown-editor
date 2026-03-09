@@ -72,7 +72,7 @@ const handlerList = {
       shell.showItemInFolder(resolvedPath)
       return
     }
-    if (!winInfo.path) {
+    if (!winInfo.path || !winInfo.exists) {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theCurrentFileIsNotSaved' } })
       return
     }

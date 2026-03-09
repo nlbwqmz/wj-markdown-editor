@@ -14,6 +14,9 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const winInfoList = []
+const MISSING_PATH_REASON = {
+  OPEN_TARGET_MISSING: 'open-target-missing',
+}
 
 function deleteEditorWin(id) {
   const index = winInfoList.findIndex(win => win.id === id)
@@ -34,14 +37,54 @@ function findByWin(win) {
   return winInfoList.find(item => item.win === win)
 }
 
+/**
+ * `missingPath` 不是通用兜底路径。
+ *
+ * 它只用于一个非常具体的场景：
+ * - 窗口启动时带了目标路径
+ * - 但这个目标文件当时并不存在
+ * - 我们仍然希望前端能拿到“缺的是哪一个路径”，用于提示用户移除最近文件
+ *
+ * 只有在显式标记了这个场景后，`missingPath` 才允许参与展示路径计算。
+ * 这样可以避免后续有人误把它复用于“外部删除”“另存为中间态”等其他语义。
+ */
+function canUseMissingPathForDisplay(winInfo) {
+  return Boolean(winInfo?.missingPath)
+    && winInfo?.missingPathReason === MISSING_PATH_REASON.OPEN_TARGET_MISSING
+}
+
+function getDisplayPath(winInfo) {
+  if (winInfo?.path) {
+    return winInfo.path
+  }
+  return canUseMissingPathForDisplay(winInfo) ? winInfo.missingPath : null
+}
+
+function getDisplayFileName(winInfo) {
+  // “展示路径”和“展示文件名”不是同一套语义。
+  //
+  // 这里必须只基于 `path` 来决定标题里的文件名：
+  // 1. 已保存文件后来被外部删除/重命名移走时，我们会保留 `path`，
+  //    所以这里仍然能正确显示原文件名
+  // 2. 启动时如果尝试打开一个最近文件，但磁盘上已经不存在，
+  //    这时 `path === null`，只有 `missingPath` 用于“提示用户哪个最近文件丢了”
+  //    标题仍应回退为 `Unnamed`，保持历史行为不变
+  //
+  // 因此：`missingPath` 只参与“路径提示”，不参与“标题文件名”计算。
+  return winInfo?.path ? path.basename(winInfo.path) : 'Unnamed'
+}
+
 function getFileInfoPayload(winInfo) {
   return {
-    fileName: winInfo.path && winInfo.exists ? path.basename(winInfo.path) : 'Unnamed',
+    // 文件名的展示应基于“当前可展示的路径”，
+    // 而不是基于 exists。
+    // 这样文件被外部删除后，标题仍然保留原文件名，不会错误退回 Unnamed。
+    fileName: getDisplayFileName(winInfo),
     // 渲染端页面真正展示和编辑的是 tempContent，
     // 因此这里返回给前端的 content 永远取 tempContent。
     content: winInfo.tempContent,
     saved: winInfo.content === winInfo.tempContent,
-    path: winInfo.path || winInfo.missingPath || null,
+    path: getDisplayPath(winInfo),
     exists: winInfo.exists,
     isRecent: winInfo.isRecent,
   }
@@ -54,13 +97,11 @@ function createExternalWatchState() {
 function markPathExists(winInfo) {
   winInfo.exists = true
   winInfo.missingPath = null
+  winInfo.missingPathReason = null
 }
 
 function markPathMissing(winInfo) {
   winInfo.exists = false
-  if (winInfo.path) {
-    winInfo.missingPath = winInfo.path
-  }
 }
 
 function isSaved(winInfo) {
@@ -97,7 +138,7 @@ function settleExternalChange(winInfo, versionHash) {
 }
 
 function getExternalChangeNotificationContent(winInfo, mode = 'applied') {
-  const filePath = winInfo?.path || ''
+  const filePath = getDisplayPath(winInfo) || ''
   const fileName = filePath ? path.basename(filePath) : ''
   const isPromptMode = mode === 'prompt'
   if (configUtil.getConfig().language === 'en-US') {
@@ -124,12 +165,60 @@ function getExternalChangeNotificationContent(winInfo, mode = 'applied') {
   }
 }
 
+function getFileMissingNotificationContent(winInfo) {
+  const filePath = getDisplayPath(winInfo) || ''
+  const fileName = getDisplayFileName(winInfo)
+  if (configUtil.getConfig().language === 'en-US') {
+    return {
+      title: fileName !== 'Unnamed' ? `File deleted - ${fileName}` : 'File deleted',
+      body: filePath
+        ? `The file has been deleted.\nPath: ${filePath}`
+        : 'The file has been deleted.',
+    }
+  }
+  return {
+    title: fileName !== 'Unnamed' ? `文件被删除 - ${fileName}` : '文件被删除',
+    body: filePath
+      ? `检测到文件已被删除。\n路径：${filePath}`
+      : '检测到文件已被删除。',
+  }
+}
+
 // 外部文件变更通知分为两类：
 // 1. applied: Electron 已经自动应用了最新内容
 // 2. prompt: Electron 发现外部修改，正在等用户回到编辑器处理
 // 两种场景都需要系统通知，但文案必须区分，避免把“待处理”误提示成“已自动应用”。
 function notifyExternalChange(winInfo, mode = 'applied') {
   const content = getExternalChangeNotificationContent(winInfo, mode)
+  const icon = path.resolve(__dirname, '../../../icon/256x256.png')
+  if (Notification.isSupported()) {
+    const notification = new Notification({
+      ...content,
+      icon,
+    })
+    notification.on('click', () => {
+      if (winInfo?.win?.isDestroyed() === false) {
+        if (winInfo.win.isMinimized()) {
+          winInfo.win.restore()
+        }
+        winInfo.win.show()
+        winInfo.win.focus()
+      }
+    })
+    notification.show()
+    return
+  }
+  sendUtil.send(winInfo.win, {
+    event: 'message',
+    data: {
+      type: 'info',
+      content: content.body,
+    },
+  })
+}
+
+function notifyFileMissing(winInfo) {
+  const content = getFileMissingNotificationContent(winInfo)
   const icon = path.resolve(__dirname, '../../../icon/256x256.png')
   if (Notification.isSupported()) {
     const notification = new Notification({
@@ -182,6 +271,38 @@ function sendExternalChange(winInfo, change) {
 function updateTempContent(winInfo, content) {
   winInfo.tempContent = content
   syncSavedState(winInfo)
+}
+
+/**
+ * 文件被外部删除，或者被外部重命名移走时，统一走这里。
+ *
+ * 这里的产品语义是：
+ * 1. 原路径已经不存在，所以真实磁盘内容 `content` 需要清空
+ * 2. 用户正在编辑的 `tempContent` 必须保留，避免编辑内容丢失
+ * 3. `path` 继续保留，用户直接保存时仍然写回原路径，不弹保存框
+ * 4. 保存状态重新由 `content === tempContent` 决定
+ * 5. 通知渲染端刷新标题/保存态，并关闭可能存在的外部 diff 弹窗
+ */
+function handleFileMissing(winInfo) {
+  if (!winInfo) {
+    return 'ignored'
+  }
+
+  winInfo.content = ''
+  markPathMissing(winInfo)
+
+  if (winInfo.externalWatch) {
+    winInfo.externalWatch.pendingChange = null
+  }
+
+  const payload = getFileInfoPayload(winInfo)
+  syncSavedState(winInfo)
+  sendUtil.send(winInfo.win, {
+    event: 'file-missing',
+    data: payload,
+  })
+  notifyFileMissing(winInfo)
+  return 'missing'
 }
 
 /**
@@ -262,9 +383,13 @@ function startExternalWatch(winInfo) {
       handleExternalChange(winInfo, change)
     },
     // 目录监听模型下，外部 rename / 删除会表现为“原路径文件暂时不存在”。
-    // 这里不弹内容差异，也不自动追踪新文件名，只更新当前窗口对“原路径是否存在”的认知。
+    // 这里统一按“文件被删除”处理：
+    // - 清空真实磁盘内容
+    // - 保留当前编辑内容
+    // - 保留原路径，后续保存仍直接写回去
+    // - 同步通知前端更新标题/保存状态
     onMissing: () => {
-      markPathMissing(winInfo)
+      handleFileMissing(winInfo)
     },
     // 当原路径重新出现时，恢复为正常已存在状态。
     // 后续若内容真的变化，再由 onExternalChange 继续走外部内容处理链路。
@@ -390,6 +515,7 @@ export default {
       tempContent: content,
       path: exists ? filePath : null,
       missingPath: exists ? null : (filePath || null),
+      missingPathReason: exists || !filePath ? null : MISSING_PATH_REASON.OPEN_TARGET_MISSING,
       exists,
       isRecent,
       externalWatch: createExternalWatchState(),
@@ -485,6 +611,7 @@ export default {
   getFileInfoPayload,
   updateTempContent,
   handleExternalChange,
+  handleFileMissing,
   startExternalWatch,
   stopExternalWatch,
   applyExternalPendingChange,

@@ -61,6 +61,20 @@ export default {
       })
       store.resetExternalFileChange()
     })
+    eventEmit.on('file-missing', (data) => {
+      // 文件被外部删除或重命名移走时，Electron 只会同步元信息：
+      // - 编辑器当前内容仍然保留
+      // - 标题与文件名保持原值
+      // - 保存状态按最新的 content/tempContent 对比结果更新
+      // 同时需要关闭任何仍停留在界面的外部 diff 弹窗。
+      window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
+      const store = useCommonStore()
+      store.$patch({
+        fileName: data.fileName,
+        saved: data.saved,
+      })
+      store.resetExternalFileChange()
+    })
     eventEmit.on('window-size', (data) => {
       useCommonStore().isMaximize = data.isMaximize
     })

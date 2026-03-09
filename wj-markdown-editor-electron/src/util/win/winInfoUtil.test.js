@@ -423,6 +423,95 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
     expect(notificationShowMock).not.toHaveBeenCalled()
   })
 
+  it('文件被删除时，应清空真实内容、保留编辑内容、同步保存状态并发送缺失通知', () => {
+    const winInfo = {
+      win: {
+        isDestroyed: vi.fn(() => false),
+        isMinimized: vi.fn(() => false),
+        restore: vi.fn(),
+        show: vi.fn(),
+        focus: vi.fn(),
+      },
+      path: 'D:/demo.md',
+      missingPath: null,
+      exists: true,
+      isRecent: false,
+      content: '# 磁盘内容',
+      tempContent: '# 当前编辑内容',
+      lastNotifiedSavedState: true,
+      externalWatch: {
+        pendingChange: {
+          version: 10,
+          versionHash: 'external-hash-10',
+          content: '# 外部版本',
+        },
+      },
+    }
+
+    winInfoUtil.startExternalWatch(winInfo)
+    const onMissing = startWatchingMock.mock.calls[0][0].onMissing
+    onMissing()
+
+    expect(winInfo.content).toBe('')
+    expect(winInfo.tempContent).toBe('# 当前编辑内容')
+    expect(winInfo.exists).toBe(false)
+    expect(winInfo.path).toBe('D:/demo.md')
+    expect(winInfo.missingPath).toBeNull()
+    expect(winInfo.externalWatch.pendingChange).toBeNull()
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+    expect(notificationShowMock.mock.calls[0][0].title).toContain('文件被删除')
+    expect(notificationShowMock.mock.calls[0][0].body).toContain('D:/demo.md')
+    expect(sendMock.mock.calls).toContainEqual([winInfo.win, { event: 'file-is-saved', data: false }])
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-missing')).toBe(true)
+  })
+
+  it('文件缺失时，文件名仍应保持原路径对应的名称，而不是 Unnamed', () => {
+    const payload = winInfoUtil.getFileInfoPayload({
+      path: 'D:/missing/demo.md',
+      missingPath: null,
+      exists: false,
+      isRecent: false,
+      content: '',
+      tempContent: '# 编辑内容',
+    })
+
+    expect(payload.fileName).toBe('demo.md')
+    expect(payload.path).toBe('D:/missing/demo.md')
+    expect(payload.saved).toBe(false)
+  })
+
+  it('最近文件不存在时，应回退为 Unnamed，但仍保留缺失路径用于提示', () => {
+    const payload = winInfoUtil.getFileInfoPayload({
+      path: null,
+      missingPath: 'D:/missing/recent-demo.md',
+      missingPathReason: 'open-target-missing',
+      exists: false,
+      isRecent: true,
+      content: '',
+      tempContent: '',
+    })
+
+    expect(payload.fileName).toBe('Unnamed')
+    expect(payload.path).toBe('D:/missing/recent-demo.md')
+    expect(payload.exists).toBe(false)
+    expect(payload.isRecent).toBe(true)
+  })
+
+  it('missingPath 没有明确场景标记时，不应参与当前文件路径展示', () => {
+    const payload = winInfoUtil.getFileInfoPayload({
+      path: null,
+      missingPath: 'D:/missing/should-not-display.md',
+      missingPathReason: null,
+      exists: false,
+      isRecent: false,
+      content: '',
+      tempContent: '',
+    })
+
+    expect(payload.fileName).toBe('Unnamed')
+    expect(payload.path).toBeNull()
+  })
+
   it('未保存的新文件不应注册外部监听', () => {
     const winInfo = {
       win: {},
@@ -446,6 +535,7 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
       content: '',
       exists: false,
       missingPath: 'D:/demo.md',
+      missingPathReason: 'open-target-missing',
       externalWatch: null,
       lastNotifiedSavedState: false,
     }
@@ -463,5 +553,27 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
     expect(markInternalSaveMock).toHaveBeenCalledTimes(1)
     expect(winInfo.exists).toBe(true)
     expect(winInfo.missingPath).toBeNull()
+    expect(winInfo.missingPathReason).toBeNull()
+  })
+
+  it('文件缺失后再次保存时，仍应直接写回原路径', async () => {
+    const winInfo = {
+      win: {},
+      path: 'D:/demo.md',
+      missingPath: null,
+      tempContent: '# 当前内容',
+      content: '',
+      exists: false,
+      externalWatch: {
+        watcher: {},
+        pendingChange: null,
+      },
+      lastNotifiedSavedState: false,
+    }
+
+    await winInfoUtil.save(winInfo)
+
+    expect(writeFileMock).toHaveBeenCalledTimes(1)
+    expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 当前内容')
   })
 })
