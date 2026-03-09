@@ -1,4 +1,3 @@
-import completionHandler from '@/util/editor/completion/completionHandler.js'
 import {
   autocompletion,
   closeBrackets,
@@ -24,6 +23,7 @@ import {
   rectangularSelection,
 } from '@codemirror/view'
 import { EditorView } from 'codemirror'
+import completionHandler from '@/util/editor/completion/completionHandler.js'
 
 /**
  * 固定的插件
@@ -33,7 +33,10 @@ const fixedExtension = [
   drawSelection(),
   dropCursor(),
   indentOnInput(),
-  search(),
+  search({
+    // 显式使用当前编辑器实例对应的 EditorView 生成滚动效果，避免 @codemirror/search 内部依赖的 view 副本导致跳转仅更新选区、不触发滚动
+    scrollToMatch: range => EditorView.scrollIntoView(range, { y: 'center' }),
+  }),
   markdown({ codeLanguages: languages }),
   EditorView.theme({
     '&': {
