@@ -51,6 +51,18 @@ function createExternalWatchState() {
   return fileWatchUtil.createWatchState()
 }
 
+function markPathExists(winInfo) {
+  winInfo.exists = true
+  winInfo.missingPath = null
+}
+
+function markPathMissing(winInfo) {
+  winInfo.exists = false
+  if (winInfo.path) {
+    winInfo.missingPath = winInfo.path
+  }
+}
+
 function isSaved(winInfo) {
   return winInfo.content === winInfo.tempContent
 }
@@ -84,27 +96,40 @@ function settleExternalChange(winInfo, versionHash) {
   return fileWatchUtil.settlePendingChange(winInfo.externalWatch, versionHash)
 }
 
-function getExternalChangeNotificationContent(winInfo) {
+function getExternalChangeNotificationContent(winInfo, mode = 'applied') {
   const filePath = winInfo?.path || ''
   const fileName = filePath ? path.basename(filePath) : ''
+  const isPromptMode = mode === 'prompt'
   if (configUtil.getConfig().language === 'en-US') {
     return {
       title: fileName ? `File content updated - ${fileName}` : 'File content updated',
       body: filePath
-        ? `The file was modified externally and the latest content has been applied automatically.\nPath: ${filePath}`
-        : 'The file was modified externally and the latest content has been applied automatically.',
+        ? `${isPromptMode
+          ? 'The file was modified externally. Please return to the editor to review and handle it.'
+          : 'The file was modified externally and the latest content has been applied automatically.'}\nPath: ${filePath}`
+        : isPromptMode
+          ? 'The file was modified externally. Please return to the editor to review and handle it.'
+          : 'The file was modified externally and the latest content has been applied automatically.',
     }
   }
   return {
     title: fileName ? `文件内容已更新 - ${fileName}` : '文件内容已更新',
     body: filePath
-      ? `检测到文件被外部修改，已自动应用最新内容。\n路径：${filePath}`
-      : '检测到文件被外部修改，已自动应用最新内容。',
+      ? `${isPromptMode
+        ? '检测到文件被外部修改，请返回编辑器查看并处理。'
+        : '检测到文件被外部修改，已自动应用最新内容。'}\n路径：${filePath}`
+      : isPromptMode
+        ? '检测到文件被外部修改，请返回编辑器查看并处理。'
+        : '检测到文件被外部修改，已自动应用最新内容。',
   }
 }
 
-function notifyExternalChangeApplied(winInfo) {
-  const content = getExternalChangeNotificationContent(winInfo)
+// 外部文件变更通知分为两类：
+// 1. applied: Electron 已经自动应用了最新内容
+// 2. prompt: Electron 发现外部修改，正在等用户回到编辑器处理
+// 两种场景都需要系统通知，但文案必须区分，避免把“待处理”误提示成“已自动应用”。
+function notifyExternalChange(winInfo, mode = 'applied') {
+  const content = getExternalChangeNotificationContent(winInfo, mode)
   const icon = path.resolve(__dirname, '../../../icon/256x256.png')
   if (Notification.isSupported()) {
     const notification = new Notification({
@@ -195,13 +220,15 @@ function handleExternalChange(winInfo, change, options = {}) {
       event: 'file-content-reloaded',
       data: getFileInfoPayload(winInfo),
     })
-    notifyExternalChangeApplied(winInfo)
+    notifyExternalChange(winInfo, 'applied')
     return 'applied'
   }
 
   // 提醒策略：Electron 保持真实值已更新，但不改 tempContent，
   // 只把 diff 数据发给前端，让用户决定“应用”还是“忽略”。
+  // 这里也要立刻发送系统通知，确保窗口未聚焦时用户仍能感知到“有外部修改待处理”。
   sendExternalChange(winInfo, change)
+  notifyExternalChange(winInfo, 'prompt')
   return 'prompted'
 }
 
@@ -210,7 +237,7 @@ function stopExternalWatch(winInfo) {
     return true
   }
   fileWatchUtil.stopWatching(winInfo.externalWatch)
-  return winInfo.externalWatch.watcher === null && winInfo.externalWatch.debounceTimer === null
+  return winInfo.externalWatch.watcher === null && winInfo.externalWatch.subscription === null
 }
 
 function startExternalWatch(winInfo) {
@@ -223,8 +250,8 @@ function startExternalWatch(winInfo) {
   if (winInfo.externalWatch.watchingPath === winInfo.path && winInfo.externalWatch.watcher) {
     return true
   }
+
   stopExternalWatch(winInfo)
-  winInfo.externalWatch = createExternalWatchState()
   fileWatchUtil.startWatching({
     state: winInfo.externalWatch,
     filePath: winInfo.path,
@@ -233,6 +260,16 @@ function startExternalWatch(winInfo) {
       // watcher 只产出“新的外部变化”，
       // 真正的业务处理全部统一收口到 handleExternalChange。
       handleExternalChange(winInfo, change)
+    },
+    // 目录监听模型下，外部 rename / 删除会表现为“原路径文件暂时不存在”。
+    // 这里不弹内容差异，也不自动追踪新文件名，只更新当前窗口对“原路径是否存在”的认知。
+    onMissing: () => {
+      markPathMissing(winInfo)
+    },
+    // 当原路径重新出现时，恢复为正常已存在状态。
+    // 后续若内容真的变化，再由 onExternalChange 继续走外部内容处理链路。
+    onRestored: () => {
+      markPathExists(winInfo)
     },
     onError: () => {
       sendUtil.send(winInfo.win, {
@@ -299,8 +336,7 @@ async function save(winInfo) {
     fileWatchUtil.markInternalSave(winInfo.externalWatch, winInfo.tempContent)
   }
   await fs.writeFile(winInfo.path, winInfo.tempContent)
-  winInfo.exists = true
-  winInfo.missingPath = null
+  markPathExists(winInfo)
   // 保存完成后，真实值与编辑值完全一致。
   winInfo.content = winInfo.tempContent
   if (!winInfo.externalWatch) {

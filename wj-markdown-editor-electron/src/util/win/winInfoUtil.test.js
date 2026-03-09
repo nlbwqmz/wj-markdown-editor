@@ -3,6 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const sendMock = vi.fn()
 const notificationShowMock = vi.fn()
 const notificationOnMock = vi.fn()
+const writeFileMock = vi.fn()
+const readFileMock = vi.fn()
+const pathExistsMock = vi.fn()
+const createWatchStateMock = vi.fn(() => ({ pendingChange: null }))
+const startWatchingMock = vi.fn()
+const stopWatchingMock = vi.fn()
+const markInternalSaveMock = vi.fn()
 const ignorePendingChangeMock = vi.fn((state) => {
   state.pendingChange = null
   state.lastHandledVersionHash = 'handled-from-ignore'
@@ -50,9 +57,9 @@ vi.mock('electron', () => {
 
 vi.mock('fs-extra', () => ({
   default: {
-    writeFile: vi.fn(),
-    readFile: vi.fn(),
-    pathExists: vi.fn(),
+    writeFile: writeFileMock,
+    readFile: readFileMock,
+    pathExists: pathExistsMock,
   },
 }))
 
@@ -83,12 +90,12 @@ vi.mock('../commonUtil.js', () => ({
 
 vi.mock('../fileWatchUtil.js', () => ({
   default: {
-    createWatchState: vi.fn(() => ({ pendingChange: null })),
+    createWatchState: createWatchStateMock,
     ignorePendingChange: ignorePendingChangeMock,
     settlePendingChange: settlePendingChangeMock,
-    stopWatching: vi.fn(),
-    startWatching: vi.fn(),
-    markInternalSave: vi.fn(),
+    stopWatching: stopWatchingMock,
+    startWatching: startWatchingMock,
+    markInternalSave: markInternalSaveMock,
   },
 }))
 
@@ -103,6 +110,13 @@ const { default: winInfoUtil } = await import('./winInfoUtil.js')
 describe('winInfoUtil.ignoreExternalPendingChange', () => {
   beforeEach(() => {
     sendMock.mockClear()
+    writeFileMock.mockClear()
+    readFileMock.mockClear()
+    pathExistsMock.mockClear()
+    createWatchStateMock.mockClear()
+    startWatchingMock.mockClear()
+    stopWatchingMock.mockClear()
+    markInternalSaveMock.mockClear()
     ignorePendingChangeMock.mockClear()
     settlePendingChangeMock.mockClear()
     notificationShowMock.mockClear()
@@ -267,6 +281,46 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
     expect(winInfo.externalWatch.pendingChange?.version).toBe(5)
   })
 
+  it('提醒策略下检测到外部修改时，也应发送系统通知，并使用待处理文案', () => {
+    const winInfo = {
+      win: {
+        isDestroyed: vi.fn(() => false),
+        isMinimized: vi.fn(() => false),
+        restore: vi.fn(),
+        show: vi.fn(),
+        focus: vi.fn(),
+      },
+      path: 'D:/prompt-demo.md',
+      exists: true,
+      isRecent: false,
+      content: '# 磁盘旧内容',
+      tempContent: '# 当前内容',
+      lastNotifiedSavedState: true,
+      externalWatch: {
+        pendingChange: {
+          version: 9,
+          versionHash: 'external-hash-9',
+          content: '# 外部最新内容',
+        },
+      },
+    }
+
+    const result = winInfoUtil.handleExternalChange(winInfo, {
+      version: 9,
+      versionHash: 'external-hash-9',
+      content: '# 外部最新内容',
+    }, {
+      strategy: 'prompt',
+    })
+
+    expect(result).toBe('prompted')
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+    expect(notificationShowMock.mock.calls[0][0].title).toContain('prompt-demo.md')
+    expect(notificationShowMock.mock.calls[0][0].body).toContain('请返回编辑器查看并处理')
+    expect(notificationShowMock.mock.calls[0][0].body).toContain('D:/prompt-demo.md')
+    expect(notificationShowMock.mock.calls[0][0].body).not.toContain('已自动应用')
+  })
+
   it('提醒策略下手动应用时，应由 Electron 更新内容并通知渲染端刷新', () => {
     const winInfo = {
       win: {},
@@ -367,5 +421,47 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
 
     expect(result).toBe(true)
     expect(notificationShowMock).not.toHaveBeenCalled()
+  })
+
+  it('未保存的新文件不应注册外部监听', () => {
+    const winInfo = {
+      win: {},
+      path: null,
+      externalWatch: {
+        pendingChange: null,
+      },
+    }
+
+    const result = winInfoUtil.startExternalWatch(winInfo)
+
+    expect(result).toBe(false)
+    expect(startWatchingMock).not.toHaveBeenCalled()
+  })
+
+  it('首次保存成功后应创建外部监听状态并注册目录监听', async () => {
+    const winInfo = {
+      win: {},
+      path: 'D:/demo.md',
+      tempContent: '# 当前内容',
+      content: '',
+      exists: false,
+      missingPath: 'D:/demo.md',
+      externalWatch: null,
+      lastNotifiedSavedState: false,
+    }
+
+    await winInfoUtil.save(winInfo)
+
+    expect(writeFileMock).toHaveBeenCalledTimes(1)
+    expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 当前内容')
+    expect(createWatchStateMock).toHaveBeenCalledTimes(1)
+    expect(startWatchingMock).toHaveBeenCalledTimes(1)
+    expect(startWatchingMock.mock.calls[0][0]).toMatchObject({
+      state: winInfo.externalWatch,
+      filePath: 'D:/demo.md',
+    })
+    expect(markInternalSaveMock).toHaveBeenCalledTimes(1)
+    expect(winInfo.exists).toBe(true)
+    expect(winInfo.missingPath).toBeNull()
   })
 })

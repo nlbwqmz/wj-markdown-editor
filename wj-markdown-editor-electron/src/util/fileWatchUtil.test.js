@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import path from 'node:path'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import fileWatchUtil from './fileWatchUtil.js'
 
 function sleep(ms = 0) {
@@ -15,7 +16,21 @@ function createDeferred() {
   return { promise, resolve, reject }
 }
 
+function createFilePath(...parts) {
+  return path.join(path.resolve('virtual-watch-root'), ...parts)
+}
+
+function createMissingError() {
+  const error = new Error('ENOENT: no such file or directory')
+  error.code = 'ENOENT'
+  return error
+}
+
 describe('fileWatchUtil', () => {
+  beforeEach(() => {
+    fileWatchUtil.resetRegistryForTest()
+  })
+
   it('应该忽略由软件内部保存触发的同内容变化', () => {
     const state = fileWatchUtil.createWatchState()
 
@@ -93,26 +108,199 @@ describe('fileWatchUtil', () => {
     })
   })
 
+  it('同一父目录下多个文件应共享同一个 watcher，并在最后一个订阅释放后关闭', () => {
+    const stateA = fileWatchUtil.createWatchState()
+    const stateB = fileWatchUtil.createWatchState()
+    const dirPath = createFilePath('docs')
+    const filePathA = path.join(dirPath, 'first.md')
+    const filePathB = path.join(dirPath, 'second.md')
+    const close = vi.fn()
+    const watch = vi.fn((_targetPath, _listener) => ({ close }))
+
+    fileWatchUtil.startWatching({
+      state: stateA,
+      filePath: filePathA,
+      watch,
+      readFile: vi.fn().mockResolvedValue('# first'),
+      onExternalChange: vi.fn(),
+    })
+
+    fileWatchUtil.startWatching({
+      state: stateB,
+      filePath: filePathB,
+      watch,
+      readFile: vi.fn().mockResolvedValue('# second'),
+      onExternalChange: vi.fn(),
+    })
+
+    expect(watch).toHaveBeenCalledTimes(1)
+    expect(watch).toHaveBeenCalledWith(dirPath, expect.any(Function))
+
+    fileWatchUtil.stopWatching(stateA)
+    expect(close).not.toHaveBeenCalled()
+
+    fileWatchUtil.stopWatching(stateB)
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('同一文件被多个窗口订阅时，应共享读盘结果并向每个窗口分发变化', async () => {
+    const stateA = fileWatchUtil.createWatchState()
+    const stateB = fileWatchUtil.createWatchState()
+    const filePath = createFilePath('docs', 'shared.md')
+    const readFile = vi.fn().mockResolvedValue('# 外部版本 1')
+    const onExternalChangeA = vi.fn()
+    const onExternalChangeB = vi.fn()
+    let listener
+
+    const watch = vi.fn((_targetPath, callback) => {
+      listener = callback
+      return { close: vi.fn() }
+    })
+
+    fileWatchUtil.startWatching({
+      state: stateA,
+      filePath,
+      debounceMs: 0,
+      readFile,
+      onExternalChange: onExternalChangeA,
+      watch,
+    })
+
+    fileWatchUtil.startWatching({
+      state: stateB,
+      filePath,
+      debounceMs: 0,
+      readFile,
+      onExternalChange: onExternalChangeB,
+      watch,
+    })
+
+    await listener('change', path.basename(filePath))
+    await sleep()
+    await sleep()
+
+    expect(readFile).toHaveBeenCalledTimes(1)
+    expect(onExternalChangeA).toHaveBeenCalledTimes(1)
+    expect(onExternalChangeB).toHaveBeenCalledTimes(1)
+    expect(onExternalChangeA.mock.calls[0][0]).toMatchObject({
+      version: 1,
+      content: '# 外部版本 1',
+    })
+    expect(onExternalChangeB.mock.calls[0][0]).toMatchObject({
+      version: 1,
+      content: '# 外部版本 1',
+    })
+  })
+
+  it('目录事件未提供文件名时，应对目录下所有已订阅文件触发检查', async () => {
+    const stateA = fileWatchUtil.createWatchState()
+    const stateB = fileWatchUtil.createWatchState()
+    const filePathA = createFilePath('docs', 'first.md')
+    const filePathB = createFilePath('docs', 'second.md')
+    const readFileA = vi.fn().mockResolvedValue('# first')
+    const readFileB = vi.fn().mockResolvedValue('# second')
+    const onExternalChangeA = vi.fn()
+    const onExternalChangeB = vi.fn()
+    let listener
+
+    const watch = vi.fn((_targetPath, callback) => {
+      listener = callback
+      return { close: vi.fn() }
+    })
+
+    fileWatchUtil.startWatching({
+      state: stateA,
+      filePath: filePathA,
+      debounceMs: 0,
+      readFile: readFileA,
+      onExternalChange: onExternalChangeA,
+      watch,
+    })
+
+    fileWatchUtil.startWatching({
+      state: stateB,
+      filePath: filePathB,
+      debounceMs: 0,
+      readFile: readFileB,
+      onExternalChange: onExternalChangeB,
+      watch,
+    })
+
+    await listener('rename')
+    await sleep()
+    await sleep()
+
+    expect(readFileA).toHaveBeenCalledTimes(1)
+    expect(readFileB).toHaveBeenCalledTimes(1)
+    expect(onExternalChangeA).toHaveBeenCalledTimes(1)
+    expect(onExternalChangeB).toHaveBeenCalledTimes(1)
+  })
+
+  it('文件被移走时应按缺失处理，原路径重新出现后应恢复监听', async () => {
+    const state = fileWatchUtil.createWatchState()
+    const filePath = createFilePath('docs', 'rename-target.md')
+    const readFile = vi.fn()
+      .mockRejectedValueOnce(createMissingError())
+      .mockResolvedValueOnce('# 恢复后的内容')
+    const onExternalChange = vi.fn()
+    const onMissing = vi.fn()
+    const onRestored = vi.fn()
+    let listener
+
+    fileWatchUtil.startWatching({
+      state,
+      filePath,
+      debounceMs: 0,
+      readFile,
+      onExternalChange,
+      onMissing,
+      onRestored,
+      watch: (_targetPath, callback) => {
+        listener = callback
+        return { close: vi.fn() }
+      },
+    })
+
+    await listener('rename', path.basename(filePath))
+    await sleep()
+    await sleep()
+
+    expect(onMissing).toHaveBeenCalledTimes(1)
+    expect(onExternalChange).not.toHaveBeenCalled()
+
+    await listener('rename', path.basename(filePath))
+    await sleep()
+    await sleep()
+
+    expect(onRestored).toHaveBeenCalledTimes(1)
+    expect(onExternalChange).toHaveBeenCalledTimes(1)
+    expect(onExternalChange.mock.calls[0][0]).toMatchObject({
+      version: 1,
+      content: '# 恢复后的内容',
+    })
+  })
+
   it('停止监听后不应再继续分发文件变化', async () => {
     const state = fileWatchUtil.createWatchState()
+    const filePath = createFilePath('docs', 'demo.md')
     const onExternalChange = vi.fn()
     const close = vi.fn()
     let listener
 
     fileWatchUtil.startWatching({
       state,
-      filePath: 'D:/demo.md',
+      filePath,
       debounceMs: 0,
       readFile: vi.fn().mockResolvedValue('# 外部版本 1'),
       onExternalChange,
-      watch: (_filePath, callback) => {
+      watch: (_targetPath, callback) => {
         listener = callback
         return { close }
       },
     })
 
     fileWatchUtil.stopWatching(state)
-    await listener()
+    await listener('change', path.basename(filePath))
     await sleep()
 
     expect(close).toHaveBeenCalledTimes(1)
@@ -126,6 +314,8 @@ describe('fileWatchUtil', () => {
     const listeners = []
     const firstOnExternalChange = vi.fn()
     const secondOnExternalChange = vi.fn()
+    const firstFilePath = createFilePath('docs-a', 'first.md')
+    const secondFilePath = createFilePath('docs-b', 'second.md')
 
     fileWatchUtil.markInternalSave(state, '# 已保存内容')
     fileWatchUtil.resolveExternalChange(state, '# 外部版本 1')
@@ -133,11 +323,11 @@ describe('fileWatchUtil', () => {
 
     fileWatchUtil.startWatching({
       state,
-      filePath: 'D:/first.md',
+      filePath: firstFilePath,
       debounceMs: 0,
       readFile: vi.fn().mockResolvedValue('# first'),
       onExternalChange: firstOnExternalChange,
-      watch: (_filePath, callback) => {
+      watch: (_targetPath, callback) => {
         listeners.push(callback)
         return { close: vi.fn() }
       },
@@ -145,64 +335,66 @@ describe('fileWatchUtil', () => {
 
     fileWatchUtil.startWatching({
       state,
-      filePath: 'D:/second.md',
+      filePath: secondFilePath,
       debounceMs: 0,
       readFile: vi.fn().mockResolvedValue('# second'),
       onExternalChange: secondOnExternalChange,
-      watch: (_filePath, callback) => {
+      watch: (_targetPath, callback) => {
         listeners.push(callback)
         return { close: vi.fn() }
       },
     })
 
-    await listeners[0]()
+    await listeners[0]('change', path.basename(firstFilePath))
     await sleep()
 
     expect(firstOnExternalChange).not.toHaveBeenCalled()
     expect(secondOnExternalChange).not.toHaveBeenCalled()
-    expect(state.watchingPath).toBe('D:/second.md')
+    expect(state.watchingPath).toBe(secondFilePath)
     expect(state.currentVersion).toBe(0)
     expect(state.lastInternalSaveAt).toBe(0)
     expect(state.lastInternalSavedVersion).toBeNull()
     expect(state.pendingChange).toBeNull()
   })
 
-  it('异步读盘乱序返回时，旧代际结果不应覆盖当前状态', async () => {
+  it('异步读盘乱序返回时，旧订阅结果不应覆盖当前状态', async () => {
     const state = fileWatchUtil.createWatchState()
     const listeners = []
     const firstRead = createDeferred()
     const secondRead = createDeferred()
     const firstOnExternalChange = vi.fn()
     const secondOnExternalChange = vi.fn()
+    const firstFilePath = createFilePath('docs-a', 'first.md')
+    const secondFilePath = createFilePath('docs-b', 'second.md')
 
     fileWatchUtil.startWatching({
       state,
-      filePath: 'D:/first.md',
+      filePath: firstFilePath,
       debounceMs: 0,
       readFile: vi.fn().mockImplementation(() => firstRead.promise),
       onExternalChange: firstOnExternalChange,
-      watch: (_filePath, callback) => {
+      watch: (_targetPath, callback) => {
         listeners.push(callback)
         return { close: vi.fn() }
       },
     })
 
-    await listeners[0]()
+    await listeners[0]('change', path.basename(firstFilePath))
     await sleep()
 
     fileWatchUtil.startWatching({
       state,
-      filePath: 'D:/second.md',
+      filePath: secondFilePath,
       debounceMs: 0,
       readFile: vi.fn().mockImplementation(() => secondRead.promise),
       onExternalChange: secondOnExternalChange,
-      watch: (_filePath, callback) => {
+      watch: (_targetPath, callback) => {
         listeners.push(callback)
         return { close: vi.fn() }
       },
     })
 
-    await listeners[1]()
+    await listeners[1]('change', path.basename(secondFilePath))
     await sleep()
 
     secondRead.resolve('# 新文件版本')
@@ -215,7 +407,7 @@ describe('fileWatchUtil', () => {
 
     expect(firstOnExternalChange).not.toHaveBeenCalled()
     expect(secondOnExternalChange).toHaveBeenCalledTimes(1)
-    expect(state.watchingPath).toBe('D:/second.md')
+    expect(state.watchingPath).toBe(secondFilePath)
     expect(state.currentVersion).toBe(1)
     expect(state.pendingChange).toEqual({
       version: 1,

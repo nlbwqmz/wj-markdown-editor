@@ -26,6 +26,8 @@ Powered by `Electron + Vue 3`, it provides a complete writing workflow covering 
 - Open, create, save, and save as local `Markdown (.md)` files
 - Recent files list and "open last file on startup"
 - Auto-save support (on window blur / on window close)
+- Built-in file watching detects external changes made by other programs to the current Markdown file
+- External change handling modes: auto-apply the latest disk content or open a diff prompt to choose apply / ignore manually
 - 30 configurable shortcuts (enable/disable and remap)
 - Quick toolbar insertion: headings, lists, task lists, quotes, code blocks, links, mark text, tables, alerts, containers, images, videos, audio, screenshots, and text colors
 - `/`-triggered auto-completion (headings, tables, code blocks, containers, alerts, media, etc.)
@@ -70,6 +72,8 @@ Powered by `Electron + Vue 3`, it provides a complete writing workflow covering 
 - `.md` file association and open-by-double-click
 - Single instance lock (prevents duplicate launches)
 - Automatic update checks (installer edition)
+- System notifications for external file changes, even when the window is unfocused
+- Missing/restored file state awareness when the original file is moved or removed, with listening resumed after the path returns
 - Always-on-top window and quick file locating in explorer
 - Bilingual interface (`zh-CN` / `en-US`)
 
