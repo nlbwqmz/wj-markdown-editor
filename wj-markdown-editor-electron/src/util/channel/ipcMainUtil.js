@@ -123,13 +123,17 @@ const handlerList = {
     return winInfoUtil.getFileInfoPayload(winInfo)
   },
   'file-content-update': (winInfo, content) => {
-    winInfo.tempContent = content
-    sendUtil.send(winInfo.win, { event: 'file-is-saved', data: winInfo.tempContent === winInfo.content })
+    // 渲染端所有编辑动作最终都收口到这里，
+    // Electron 只认这一个入口来更新 tempContent。
+    winInfoUtil.updateTempContent(winInfo, content)
   },
   'file-external-change-apply': (winInfo, data) => {
-    return winInfoUtil.applyExternalPendingChange(winInfo, data?.version, { notify: data?.notify === true })
+    // 提醒策略下，用户在 diff 弹窗中选择“应用”时走这里。
+    // 具体应用动作由 Electron 主导完成，再通知渲染端刷新。
+    return winInfoUtil.applyExternalPendingChange(winInfo, data?.version)
   },
   'file-external-change-ignore': (winInfo, data) => {
+    // 提醒策略下，用户在 diff 弹窗中选择“忽略”时走这里。
     return winInfoUtil.ignoreExternalPendingChange(winInfo, data?.version)
   },
   'create-new': () => {

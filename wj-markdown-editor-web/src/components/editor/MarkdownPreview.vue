@@ -1,10 +1,10 @@
 <script setup>
-import { useCommonStore } from '@/stores/counter.js'
-import { loadCodeTheme } from '@/util/codeThemeUtil.js'
-import md from '@/util/markdown-it/markdownItDefault.js'
 import mermaid from 'mermaid'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
+import { useCommonStore } from '@/stores/counter.js'
+import { loadCodeTheme } from '@/util/codeThemeUtil.js'
+import md from '@/util/markdown-it/markdownItDefault.js'
 
 const props = defineProps({
   content: {
@@ -348,6 +348,12 @@ function schedulePreviewRefresh(doc) {
 
 watch(() => props.content, (newValue) => {
   schedulePreviewRefresh(newValue)
+})
+
+watch(() => store.externalFileChange.visible, (visible) => {
+  if (visible) {
+    imagePreviewVisible.value = false
+  }
 })
 
 onMounted(() => {
