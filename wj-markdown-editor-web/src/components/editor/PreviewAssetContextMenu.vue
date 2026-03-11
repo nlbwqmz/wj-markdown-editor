@@ -1,0 +1,158 @@
+<script setup>
+import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { getPreviewAssetPopupContainer } from '@/util/editor/previewAssetContextMenuUtil.js'
+
+const props = defineProps({
+  open: {
+    type: Boolean,
+    default: false,
+  },
+  x: {
+    type: Number,
+    default: 0,
+  },
+  y: {
+    type: Number,
+    default: 0,
+  },
+})
+
+const emits = defineEmits(['close', 'openExplorer', 'delete'])
+
+const { t } = useI18n()
+
+const EDGE_PADDING = 12
+const MENU_WIDTH = 180
+const MENU_HEIGHT = 112
+const anchorClassName = 'preview-asset-context-anchor'
+const dropdownClassName = 'preview-asset-context-dropdown'
+
+function getViewportWidth() {
+  return typeof window === 'undefined' ? 0 : window.innerWidth
+}
+
+function getViewportHeight() {
+  return typeof window === 'undefined' ? 0 : window.innerHeight
+}
+
+function clampCoordinate(value, viewportSize) {
+  const maxValue = Math.max(EDGE_PADDING, viewportSize - EDGE_PADDING)
+  return Math.max(EDGE_PADDING, Math.min(value, maxValue))
+}
+
+function eventPathContainsClass(event, className) {
+  const eventPath = typeof event.composedPath === 'function' ? event.composedPath() : []
+  return eventPath.some(node => node instanceof HTMLElement && node.classList.contains(className))
+}
+
+const anchorStyle = computed(() => {
+  return {
+    left: `${clampCoordinate(props.x, getViewportWidth())}px`,
+    top: `${clampCoordinate(props.y, getViewportHeight())}px`,
+  }
+})
+
+const placement = computed(() => {
+  const verticalPlacement = props.y > getViewportHeight() - MENU_HEIGHT ? 'top' : 'bottom'
+  const horizontalPlacement = props.x > getViewportWidth() - MENU_WIDTH ? 'Right' : 'Left'
+  return `${verticalPlacement}${horizontalPlacement}`
+})
+
+function closeMenu() {
+  emits('close')
+}
+
+function onMenuClick({ key }) {
+  if (key === 'open-explorer') {
+    emits('openExplorer')
+  } else if (key === 'delete') {
+    emits('delete')
+  }
+  closeMenu()
+}
+
+function onGlobalPointerDown(event) {
+  if (!props.open) {
+    return
+  }
+  if (eventPathContainsClass(event, dropdownClassName) || eventPathContainsClass(event, anchorClassName)) {
+    return
+  }
+  closeMenu()
+}
+
+function onGlobalContextmenu(event) {
+  if (!props.open) {
+    return
+  }
+  if (eventPathContainsClass(event, dropdownClassName) || eventPathContainsClass(event, anchorClassName)) {
+    return
+  }
+  closeMenu()
+}
+
+function onGlobalScroll() {
+  if (props.open) {
+    closeMenu()
+  }
+}
+
+function onGlobalKeydown(event) {
+  if (props.open && event.key === 'Escape') {
+    closeMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onGlobalPointerDown, true)
+  document.addEventListener('contextmenu', onGlobalContextmenu, true)
+  window.addEventListener('scroll', onGlobalScroll, true)
+  window.addEventListener('resize', onGlobalScroll)
+  window.addEventListener('keydown', onGlobalKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onGlobalPointerDown, true)
+  document.removeEventListener('contextmenu', onGlobalContextmenu, true)
+  window.removeEventListener('scroll', onGlobalScroll, true)
+  window.removeEventListener('resize', onGlobalScroll)
+  window.removeEventListener('keydown', onGlobalKeydown)
+})
+</script>
+
+<template>
+  <a-dropdown
+    arrow
+    :open="open"
+    :trigger="[]"
+    destroy-popup-on-hide
+    :placement="placement"
+    :overlay-style="{ minWidth: '168px' }"
+    :get-popup-container="getPreviewAssetPopupContainer"
+    :overlay-class-name="dropdownClassName"
+    @open-change="(value) => { if (!value) closeMenu() }"
+  >
+    <div v-show="open" :class="anchorClassName" :style="anchorStyle" />
+    <template #overlay>
+      <a-menu @click="onMenuClick">
+        <a-menu-item key="open-explorer">
+          {{ t('top.openInExplorer') }}
+        </a-menu-item>
+        <a-menu-item key="delete" class="!color-red">
+          {{ t('previewAssetMenu.delete') }}
+        </a-menu-item>
+      </a-menu>
+    </template>
+  </a-dropdown>
+</template>
+
+<style scoped lang="scss">
+.preview-asset-context-anchor {
+  position: fixed;
+  z-index: 999;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+</style>

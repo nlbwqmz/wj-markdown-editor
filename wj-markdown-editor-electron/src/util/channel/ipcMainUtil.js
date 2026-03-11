@@ -3,9 +3,9 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
-import commonUtil from '../commonUtil.js'
 import fileUploadUtil from '../fileUploadUtil.js'
 import imgUtil from '../imgUtil.js'
+import resourceFileUtil from '../resourceFileUtil.js'
 import updateUtil from '../updateUtil.js'
 import aboutUtil from '../win/aboutUtil.js'
 import exportUtil from '../win/exportUtil.js'
@@ -60,15 +60,10 @@ const handlerList = {
   },
   'open-folder': (winInfo, data) => {
     if (data && typeof data === 'string') {
-      if (!data.startsWith('wj://')) {
+      const resolvedPath = resourceFileUtil.resolveLocalResourcePath(winInfo, data)
+      if (!resolvedPath) {
         return
       }
-      const filePath = commonUtil.decodeWjUrl(data)
-      const isAbsolute = path.isAbsolute(filePath)
-      if (!isAbsolute && !winInfo.path) {
-        return // 如果是相对路径且 winInfo.path 为空，直接返回
-      }
-      const resolvedPath = isAbsolute ? filePath : path.resolve(path.dirname(winInfo.path), filePath)
       shell.showItemInFolder(resolvedPath)
       return
     }
@@ -176,6 +171,9 @@ const handlerList = {
   },
   'upload-image': async (winInfo, data) => {
     return await uploadImage(winInfo, data)
+  },
+  'delete-local-resource': async (winInfo, data) => {
+    return await resourceFileUtil.deleteLocalResource(winInfo, data)
   },
   'screenshot': (winInfo, data) => {
     return new Promise((resolve) => {

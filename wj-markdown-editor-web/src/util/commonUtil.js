@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid'
 import { createVNode, h } from 'vue'
 import router from '@/router/index.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import { convertResourceUrl, stringToHex } from '@/util/resourceUrlUtil.js'
 
 const createId = () => `wj${nanoid()}`
 
@@ -47,42 +48,6 @@ function getUrlParam(name) {
   }
   const searchParams = new URL(window.location.href).searchParams
   return searchParams.get(name)
-}
-
-/**
- * 将字符串编码为 hex
- * @param {string} str - 要编码的字符串
- * @returns {string} - hex 编码的字符串
- */
-function stringToHex(str) {
-  return Array.from(new TextEncoder().encode(str))
-    .map(byte => byte.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-/**
- * 将资源地址转换为稳定的资源 URL。
- * 本地路径转换为 wj 协议地址，显式协议地址、锚点链接和协议相对地址保持原样。
- * @param {string} src - 资源地址
- * @returns {string} - 转换后的资源地址
- */
-function convertResourceUrl(src) {
-  if (!src) {
-    return src
-  }
-
-  if (src.startsWith('#') || src.startsWith('//')) {
-    return src
-  }
-
-  const hasExplicitScheme = /^[a-z][a-z\d+.-]*:/i.test(src)
-  const isWindowsAbsolutePath = /^[a-z]:[\\/]/i.test(src)
-
-  if (hasExplicitScheme && !isWindowsAbsolutePath) {
-    return src
-  }
-
-  return `wj://${stringToHex(src)}`
 }
 
 /**

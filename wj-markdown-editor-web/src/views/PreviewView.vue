@@ -110,8 +110,8 @@ function onAnchorChange(changedAnchorList) {
   anchorList.value = changedAnchorList
 }
 
-function onImageContextmenu(src) {
-  channelUtil.send({ event: 'open-folder', data: src })
+function onAssetContextmenu(assetInfo) {
+  channelUtil.send({ event: 'open-folder', data: assetInfo.resourceUrl })
 }
 </script>
 
@@ -134,7 +134,7 @@ function onImageContextmenu(src) {
     <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">
         <div class="h-full w-full" :style="{ width: `${config.previewWidth}%` }">
-          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" @anchor-change="onAnchorChange" @image-contextmenu="onImageContextmenu" />
+          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" @anchor-change="onAnchorChange" @asset-contextmenu="onAssetContextmenu" />
         </div>
       </div>
     </div>

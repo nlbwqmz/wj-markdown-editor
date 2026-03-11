@@ -31,6 +31,12 @@ export default {
     openSetting: 'Open settings',
     confirmExit: 'Confirm exit',
   },
+  previewAssetMenu: {
+    delete: 'Delete',
+    deleteConfirm: 'This action will delete the local resource permanently. Do you want to continue?',
+    removeMarkdownNotFound: 'The Markdown content for the current resource was not found. Delete has been cancelled.',
+    deleteFileFailed: 'Failed to delete the local resource.',
+  },
   externalFileChangeModal: {
     title: 'File Changed Externally',
     description: '{fileName} has been modified outside the editor. Please choose how to handle it.',

@@ -1,18 +1,30 @@
 <script setup>
+import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { createVNode, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import MarkdownEdit from '@/components/editor/MarkdownEdit.vue'
+import PreviewAssetContextMenu from '@/components/editor/PreviewAssetContextMenu.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
+import { removeAssetFromMarkdown } from '@/util/editor/previewAssetRemovalUtil.js'
 
 const content = ref('')
 // 确保content已获取再传入组件
 const ready = ref(false)
+const { t } = useI18n()
 const store = useCommonStore()
 const watermark = ref()
 const config = ref()
+const previewAssetMenu = ref({
+  open: false,
+  x: 0,
+  y: 0,
+  asset: null,
+})
 
 function save() {
   channelUtil.send({ event: 'save' })
@@ -79,13 +91,66 @@ watch(() => store.config, (newValue) => {
   config.value = newValue
 }, { deep: true, immediate: true })
 
-function onImageContextmenu(src) {
-  channelUtil.send({ event: 'open-folder', data: src })
+function closePreviewAssetMenu() {
+  previewAssetMenu.value.open = false
+  previewAssetMenu.value.asset = null
+}
+
+function onAssetContextmenu(assetInfo) {
+  previewAssetMenu.value = {
+    open: true,
+    x: assetInfo.clientX,
+    y: assetInfo.clientY,
+    asset: assetInfo,
+  }
+}
+
+function openPreviewAssetInExplorer() {
+  const assetInfo = previewAssetMenu.value.asset
+  if (!assetInfo?.resourceUrl) {
+    return
+  }
+  channelUtil.send({ event: 'open-folder', data: assetInfo.resourceUrl })
+}
+
+function deletePreviewAsset() {
+  const assetInfo = previewAssetMenu.value.asset
+  if (!assetInfo) {
+    return
+  }
+  Modal.confirm({
+    title: t('prompt'),
+    icon: createVNode(ExclamationCircleOutlined),
+    content: t('previewAssetMenu.deleteConfirm'),
+    okText: t('okText'),
+    cancelText: t('cancelText'),
+    onOk: async () => {
+      const removeResult = removeAssetFromMarkdown(content.value, assetInfo)
+      if (!removeResult.removed) {
+        message.warning(t('previewAssetMenu.removeMarkdownNotFound'))
+        return
+      }
+      const deleteResult = await channelUtil.send({ event: 'delete-local-resource', data: assetInfo.resourceUrl })
+      if (deleteResult !== true) {
+        message.warning(t('previewAssetMenu.deleteFileFailed'))
+        return
+      }
+      content.value = removeResult.content
+    },
+  })
 }
 </script>
 
 <template>
-  <MarkdownEdit v-if="ready" v-model="content" :association-highlight="config.editor.associationHighlight" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @image-contextmenu="onImageContextmenu" />
+  <MarkdownEdit v-if="ready" v-model="content" :association-highlight="config.editor.associationHighlight" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" />
+  <PreviewAssetContextMenu
+    :open="previewAssetMenu.open"
+    :x="previewAssetMenu.x"
+    :y="previewAssetMenu.y"
+    @close="closePreviewAssetMenu"
+    @open-explorer="openPreviewAssetInExplorer"
+    @delete="deletePreviewAsset"
+  />
 </template>
 
 <style scoped lang="scss">

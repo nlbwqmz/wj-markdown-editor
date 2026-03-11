@@ -1,4 +1,5 @@
 import commonUtil from '@/util/commonUtil.js'
+import { normalizeLocalResourcePath } from '@/util/resourceUrlUtil.js'
 
 /**
  * 给链接加上_blank
@@ -20,10 +21,15 @@ export default function (md) {
 
     const hrefIndex = tokens[idx].attrIndex('href')
     if (hrefIndex >= 0) {
-      // add new attribute
       const href = tokens[idx].attrs[hrefIndex][1]
       if (href) {
-        tokens[idx].attrs[hrefIndex][1] = commonUtil.convertResourceUrl(href)
+        const normalizedHref = normalizeLocalResourcePath(href)
+        const convertedHref = commonUtil.convertResourceUrl(normalizedHref)
+        tokens[idx].attrs[hrefIndex][1] = convertedHref
+        if (convertedHref.startsWith('wj://')) {
+          tokens[idx].attrSet('data-wj-resource-kind', 'link')
+          tokens[idx].attrSet('data-wj-resource-src', normalizedHref)
+        }
       }
     }
     // pass token to default renderer.

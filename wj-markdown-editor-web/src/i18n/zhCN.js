@@ -31,6 +31,12 @@ export default {
     openSetting: '打开设置',
     confirmExit: '确认退出',
   },
+  previewAssetMenu: {
+    delete: '删除',
+    deleteConfirm: '该操作将删除本地资源，且不可恢复，确认继续？',
+    removeMarkdownNotFound: '未找到当前资源对应的 Markdown 内容，已取消删除。',
+    deleteFileFailed: '删除本地资源失败。',
+  },
   externalFileChangeModal: {
     title: '文件已被外部修改',
     description: '检测到 {fileName} 已被外部修改，请选择如何处理。',

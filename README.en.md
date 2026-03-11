@@ -51,6 +51,7 @@ Powered by `Electron + Vue 3`, it provides a complete writing workflow covering 
 - Local and remote image insertion
 - Paste, drag-and-drop, and screenshot image upload
 - File, video, and audio insertion (including local assets)
+- In the editor preview pane, local images, videos, audio, and file links support a context menu to open the asset in explorer or delete the local file with precise cleanup of the current Markdown fragment
 - Asset save strategies: absolute path / relative path / file-name-based directory
 - Image bed upload support (GitHub, SM.MS)
 

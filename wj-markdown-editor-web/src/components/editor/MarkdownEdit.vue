@@ -48,7 +48,7 @@ const props = defineProps({
   },
 })
 
-const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange', 'imageContextmenu'])
+const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange', 'assetContextmenu'])
 
 const { t } = useI18n()
 const store = useCommonStore()
@@ -212,8 +212,8 @@ function onAnchorChange(changedAnchorList) {
   emits('anchorChange', changedAnchorList)
 }
 
-function onImageContextmenu(src) {
-  emits('imageContextmenu', src)
+function onAssetContextmenu(assetInfo) {
+  emits('assetContextmenu', assetInfo)
 }
 
 function onPreviewRefreshComplete() {
@@ -382,7 +382,7 @@ onBeforeUnmount(() => {
       <div
         v-if="previewController"
         ref="previewRef"
-        class="allow-search wj-scrollbar h-full p-2"
+        class="wj-scrollbar allow-search h-full p-2"
         :style="previewContainerStyle"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"
@@ -395,7 +395,7 @@ onBeforeUnmount(() => {
           :watermark="watermark"
           @refresh-complete="onPreviewRefreshComplete"
           @anchor-change="onAnchorChange"
-          @image-contextmenu="onImageContextmenu"
+          @asset-contextmenu="onAssetContextmenu"
         />
       </div>
       <div v-if="menuController && previewController" ref="gutterMenuRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />

@@ -30,8 +30,13 @@ export default function (md) {
 
   // 渲染音频标签
   md.renderer.rules.audio = (tokens, idx) => {
-    const src = commonUtil.convertResourceUrl(md.utils.escapeHtml(tokens[idx].content))
+    const rawSrc = tokens[idx].content.trim()
+    const convertedSrc = commonUtil.convertResourceUrl(md.utils.escapeHtml(rawSrc))
+    const isLocalResource = convertedSrc.startsWith('wj://')
+    const resourceAttr = isLocalResource
+      ? ` data-wj-resource-kind="audio" data-wj-resource-src="${md.utils.escapeHtml(rawSrc)}"`
+      : ''
 
-    return `<audio src="${src}" controls style="max-width: 100%"></audio>`
+    return `<audio src="${convertedSrc}" controls style="max-width: 100%"${resourceAttr}></audio>`
   }
 }

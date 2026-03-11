@@ -1,4 +1,5 @@
 import commonUtil from '@/util/commonUtil.js'
+import { normalizeLocalResourcePath } from '@/util/resourceUrlUtil.js'
 
 /**
  * 给本地图片加上自定义协议
@@ -17,7 +18,10 @@ export default function (md) {
         const src = token.attrs[srcIndex][1]
         if (src) {
           if (!src.match('^http') && !src.match('^data')) {
-            token.attrs[srcIndex][1] = `wj://${commonUtil.stringToHex(src)}?wj_date=${Date.now()}`
+            const normalizedSrc = normalizeLocalResourcePath(src)
+            token.attrSet('data-wj-resource-kind', 'image')
+            token.attrSet('data-wj-resource-src', normalizedSrc)
+            token.attrs[srcIndex][1] = `${commonUtil.convertResourceUrl(normalizedSrc)}?wj_date=${Date.now()}`
           }
         }
       }

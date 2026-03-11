@@ -25,7 +25,7 @@ const props = defineProps({
   },
 })
 
-const emits = defineEmits(['refreshComplete', 'anchorChange', 'imageContextmenu'])
+const emits = defineEmits(['refreshComplete', 'anchorChange', 'assetContextmenu'])
 
 const store = useCommonStore()
 
@@ -121,11 +121,32 @@ function handlePreviewClick(e) {
  * 统一处理预览区右键事件（事件委托）
  */
 function handlePreviewContextmenu(e) {
-  const img = e.target.closest('img')
-  if (img) {
-    e.preventDefault()
-    emits('imageContextmenu', img.src)
+  if (!(e.target instanceof Element)) {
+    return
   }
+  const assetDom = e.target.closest('img[data-wj-resource-src], video[data-wj-resource-src], audio[data-wj-resource-src], a[data-wj-resource-src]')
+  if (!(assetDom instanceof Element)) {
+    return
+  }
+  const resourceUrl = assetDom.getAttribute('src') || assetDom.getAttribute('href') || ''
+  const rawSrc = assetDom.dataset.wjResourceSrc
+  const kind = assetDom.dataset.wjResourceKind
+  if (!resourceUrl || !rawSrc || !kind) {
+    return
+  }
+  const lineDom = assetDom.closest('[data-line-start]')
+  const occurrence = Number.parseInt(assetDom.dataset.wjResourceOccurrence || '1', 10)
+  e.preventDefault()
+  emits('assetContextmenu', {
+    kind,
+    rawSrc,
+    resourceUrl,
+    occurrence: Number.isNaN(occurrence) ? 1 : occurrence,
+    lineStart: lineDom?.dataset.lineStart ? Number.parseInt(lineDom.dataset.lineStart, 10) : undefined,
+    lineEnd: lineDom?.dataset.lineEnd ? Number.parseInt(lineDom.dataset.lineEnd, 10) : undefined,
+    clientX: e.clientX,
+    clientY: e.clientY,
+  })
 }
 
 /**
@@ -145,9 +166,9 @@ function unbindPreviewEvents() {
 }
 
 /**
- * 更新图片索引（用于预览）
+ * 更新预览区资源元数据
  */
-function updateImageIndex() {
+function updatePreviewAssetMetadata() {
   const imageDomList = previewRef.value.querySelectorAll('img')
   const srcList = []
   imageDomList.forEach((item, index) => {
@@ -156,6 +177,20 @@ function updateImageIndex() {
     srcList.push(item.src)
   })
   imageSrcList.value = srcList
+
+  const assetOccurrenceMap = new Map()
+  const assetDomList = previewRef.value.querySelectorAll('img[data-wj-resource-src], video[data-wj-resource-src], audio[data-wj-resource-src], a[data-wj-resource-src]')
+  assetDomList.forEach((item) => {
+    const rawSrc = item.dataset.wjResourceSrc
+    const kind = item.dataset.wjResourceKind
+    if (!rawSrc || !kind) {
+      return
+    }
+    const mapKey = `${kind}:${rawSrc}`
+    const occurrence = (assetOccurrenceMap.get(mapKey) || 0) + 1
+    assetOccurrenceMap.set(mapKey, occurrence)
+    item.dataset.wjResourceOccurrence = String(occurrence)
+  })
 }
 
 const latestAnchorList = ref([])
@@ -303,7 +338,7 @@ function refreshPreview(doc, forceRefreshMermaid = false) {
   if (shouldRefreshMermaid) {
     mermaid.run()
   }
-  updateImageIndex()
+  updatePreviewAssetMetadata()
   pushAnchorList()
   emits('refreshComplete')
 }
