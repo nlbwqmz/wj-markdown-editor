@@ -2,6 +2,25 @@ import path from 'node:path'
 import fs from 'fs-extra'
 import commonUtil from './commonUtil.js'
 
+function createDeleteResult(ok, removed, reason, resolvedPath = null) {
+  return {
+    ok,
+    removed,
+    reason,
+    path: resolvedPath,
+  }
+}
+
+function createResourceInfoResult(ok, resolvedPath, options = {}) {
+  return {
+    ok,
+    exists: options.exists === true,
+    isDirectory: options.isDirectory === true,
+    isFile: options.isFile === true,
+    path: resolvedPath,
+  }
+}
+
 /**
  * 解析本地资源对应的真实文件路径
  * @param {object} winInfo - 当前窗口信息
@@ -32,19 +51,46 @@ function resolveLocalResourcePath(winInfo, resourceUrl) {
  * @returns {Promise<boolean>} 删除流程是否成功进入执行分支
  */
 async function deleteLocalResource(winInfo, resourceUrl) {
+  const resourceInfo = await getLocalResourceInfo(winInfo, resourceUrl)
+  if (resourceInfo.ok !== true) {
+    return createDeleteResult(false, false, 'invalid-resource')
+  }
+
+  if (resourceInfo.exists !== true) {
+    return createDeleteResult(true, false, 'not-found', resourceInfo.path)
+  }
+
+  if (resourceInfo.isDirectory === true) {
+    return createDeleteResult(false, false, 'directory-not-allowed', resourceInfo.path)
+  }
+  if (resourceInfo.isFile !== true) {
+    return createDeleteResult(false, false, 'unsupported-target', resourceInfo.path)
+  }
+
+  await fs.remove(resourceInfo.path)
+  return createDeleteResult(true, true, 'deleted', resourceInfo.path)
+}
+
+async function getLocalResourceInfo(winInfo, resourceUrl) {
   const resolvedPath = resolveLocalResourcePath(winInfo, resourceUrl)
   if (!resolvedPath) {
-    return false
+    return createResourceInfoResult(false, null)
   }
 
-  if (await fs.pathExists(resolvedPath)) {
-    await fs.remove(resolvedPath)
+  if (!await fs.pathExists(resolvedPath)) {
+    return createResourceInfoResult(true, resolvedPath)
   }
 
-  return true
+  const stat = await fs.stat(resolvedPath)
+  return createResourceInfoResult(true, resolvedPath, {
+    exists: true,
+    isDirectory: stat.isDirectory(),
+    isFile: stat.isFile(),
+  })
 }
 
 export default {
+  getLocalResourceInfo,
   resolveLocalResourcePath,
   deleteLocalResource,
 }

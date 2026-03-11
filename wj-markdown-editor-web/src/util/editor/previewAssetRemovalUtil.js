@@ -43,9 +43,14 @@ function getLineNumberByIndex(lineStartIndexes, index) {
   return target + 1
 }
 
+function shouldEscapeMarkdownCharacter(nextChar) {
+  return Boolean(nextChar) && /[()<>\\\s]/.test(nextChar)
+}
+
 function findClosingParenthesis(content, startIndex) {
   let escaped = false
   let inAngleBracket = false
+  let nestedParenthesisDepth = 0
 
   for (let i = startIndex; i < content.length; i++) {
     const char = content[i]
@@ -53,7 +58,7 @@ function findClosingParenthesis(content, startIndex) {
       escaped = false
       continue
     }
-    if (char === '\\') {
+    if (char === '\\' && shouldEscapeMarkdownCharacter(content[i + 1])) {
       escaped = true
       continue
     }
@@ -65,7 +70,15 @@ function findClosingParenthesis(content, startIndex) {
       inAngleBracket = false
       continue
     }
+    if (!inAngleBracket && char === '(') {
+      nestedParenthesisDepth += 1
+      continue
+    }
     if (char === ')' && !inAngleBracket) {
+      if (nestedParenthesisDepth > 0) {
+        nestedParenthesisDepth -= 1
+        continue
+      }
       return i
     }
   }
@@ -73,22 +86,54 @@ function findClosingParenthesis(content, startIndex) {
   return -1
 }
 
-function extractImagePath(descriptor) {
+function removeTrailingMarkdownTitle(descriptor) {
+  return descriptor
+    .replace(/\s+"(?:[^"\\]|\\.)*"$/, '')
+    .replace(/\s+'(?:[^'\\]|\\.)*'$/, '')
+}
+
+function unescapeMarkdownDestination(value) {
+  let result = ''
+
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i]
+    if (char === '\\' && shouldEscapeMarkdownCharacter(value[i + 1])) {
+      continue
+    }
+    result += char
+  }
+
+  return result
+}
+
+function extractDestinationPath(descriptor) {
   const trimmedDescriptor = descriptor.trim()
   if (!trimmedDescriptor) {
     return null
   }
 
   if (trimmedDescriptor.startsWith('<')) {
-    const closeIndex = trimmedDescriptor.indexOf('>')
-    if (closeIndex === -1) {
-      return null
+    let escaped = false
+    for (let i = 1; i < trimmedDescriptor.length; i++) {
+      const char = trimmedDescriptor[i]
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+      if (char === '>') {
+        return trimmedDescriptor.slice(1, i).trim()
+      }
     }
-    return trimmedDescriptor.slice(1, closeIndex).trim()
+    return null
   }
 
-  const pathMatch = /^[^\s)]+/.exec(trimmedDescriptor)
-  return pathMatch ? pathMatch[0].trim() : null
+  const trimmedPathValue = removeTrailingMarkdownTitle(trimmedDescriptor).trim()
+  const normalizedPathValue = unescapeMarkdownDestination(trimmedPathValue).trim()
+  return normalizedPathValue || null
 }
 
 function createAssetMatch(content, lineStartIndexes, kind, from, to, rawPath) {
@@ -124,7 +169,7 @@ function collectImageMatches(content, lineStartIndexes) {
       continue
     }
 
-    const rawPath = extractImagePath(content.slice(linkStartIndex + 2, endIndex))
+    const rawPath = extractDestinationPath(content.slice(linkStartIndex + 2, endIndex))
     if (rawPath) {
       matchList.push(createAssetMatch(content, lineStartIndexes, 'image', startIndex, endIndex + 1, rawPath))
     }
@@ -146,9 +191,10 @@ function collectVideoMatches(content, lineStartIndexes) {
       break
     }
 
-    const endIndex = content.indexOf(')', startIndex + prefix.length)
+    const endIndex = findClosingParenthesis(content, startIndex + prefix.length)
     if (endIndex === -1) {
-      break
+      searchIndex = startIndex + prefix.length
+      continue
     }
 
     const rawPath = content.slice(startIndex + prefix.length, endIndex).trim()
@@ -173,9 +219,10 @@ function collectAudioMatches(content, lineStartIndexes) {
       break
     }
 
-    const endIndex = content.indexOf(')', startIndex + prefix.length)
+    const endIndex = findClosingParenthesis(content, startIndex + prefix.length)
     if (endIndex === -1) {
-      break
+      searchIndex = startIndex + prefix.length
+      continue
     }
 
     const rawPath = content.slice(startIndex + prefix.length, endIndex).trim()
@@ -215,7 +262,7 @@ function collectLinkMatches(content, lineStartIndexes) {
       continue
     }
 
-    const rawPath = extractImagePath(content.slice(linkStartIndex + 2, endIndex))
+    const rawPath = extractDestinationPath(content.slice(linkStartIndex + 2, endIndex))
     if (rawPath) {
       matchList.push(createAssetMatch(content, lineStartIndexes, 'link', startIndex, endIndex + 1, rawPath))
     }
@@ -240,6 +287,15 @@ function collectAssetMatches(content, kind, lineStartIndexes) {
     return collectLinkMatches(content, lineStartIndexes)
   }
   return []
+}
+
+function collectAllAssetMatches(content, lineStartIndexes) {
+  return [
+    ...collectImageMatches(content, lineStartIndexes),
+    ...collectVideoMatches(content, lineStartIndexes),
+    ...collectAudioMatches(content, lineStartIndexes),
+    ...collectLinkMatches(content, lineStartIndexes),
+  ]
 }
 
 function isMatchInLineRange(match, lineStart, lineEnd) {
@@ -272,6 +328,42 @@ function getStandaloneLineRemovalRange(content, match) {
   }
 
   return { ...match, from, to }
+}
+
+function normalizeComparableAssetKey(value) {
+  const normalizedValue = normalizeAssetPath(value)
+  if (!normalizedValue) {
+    return ''
+  }
+  return /^[a-z]:\//i.test(normalizedValue) ? normalizedValue.toLowerCase() : normalizedValue
+}
+
+function resolveComparableAssetKey(rawPath, resolveComparablePath) {
+  if (!rawPath) {
+    return ''
+  }
+  const resolvedPath = typeof resolveComparablePath === 'function'
+    ? resolveComparablePath(rawPath)
+    : rawPath
+  return normalizeComparableAssetKey(resolvedPath)
+}
+
+function collectMatchedAssetListByComparablePath(content, asset, options = {}) {
+  if (!content || !asset?.rawSrc) {
+    return []
+  }
+
+  const targetAssetKey = resolveComparableAssetKey(asset.rawSrc, options.resolveComparablePath)
+  if (!targetAssetKey) {
+    return []
+  }
+
+  const lineStartIndexes = buildLineStartIndexes(content)
+  return collectAllAssetMatches(content, lineStartIndexes)
+    .filter((match) => {
+      const matchAssetKey = resolveComparableAssetKey(match.rawPath, options.resolveComparablePath)
+      return matchAssetKey && matchAssetKey === targetAssetKey
+    })
 }
 
 export function findAssetMarkdownRange(content, asset) {
@@ -326,7 +418,39 @@ export function removeAssetFromMarkdown(content, asset) {
   }
 }
 
+export function countRemainingAssetReferences(content, asset, options = {}) {
+  return collectMatchedAssetListByComparablePath(content, asset, options).length
+}
+
+export function removeAllAssetReferencesFromMarkdown(content, asset, options = {}) {
+  const matchedAssetList = collectMatchedAssetListByComparablePath(content, asset, options)
+  if (matchedAssetList.length === 0) {
+    return {
+      removed: false,
+      removedCount: 0,
+      content,
+    }
+  }
+
+  const removalRangeList = matchedAssetList
+    .map(match => getStandaloneLineRemovalRange(content, match))
+    .sort((a, b) => b.from - a.from)
+
+  let nextContent = content
+  for (const removalRange of removalRangeList) {
+    nextContent = nextContent.slice(0, removalRange.from) + nextContent.slice(removalRange.to)
+  }
+
+  return {
+    removed: true,
+    removedCount: matchedAssetList.length,
+    content: nextContent,
+  }
+}
+
 export default {
+  countRemainingAssetReferences,
   findAssetMarkdownRange,
+  removeAllAssetReferencesFromMarkdown,
   removeAssetFromMarkdown,
 }

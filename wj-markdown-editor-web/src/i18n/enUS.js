@@ -34,6 +34,12 @@ export default {
   previewAssetMenu: {
     delete: 'Delete',
     deleteConfirm: 'This action will delete the local resource permanently. Do you want to continue?',
+    deleteDirectoryNotAllowed: 'The current resource points to a folder and cannot be deleted directly.',
+    referenceCountTip: 'This resource is referenced {count} times in the current document. Choose the delete action to apply.',
+    deleteCurrentReferenceOnly: 'Delete current reference only',
+    deleteCurrentReferenceOnlyTip: 'Remove only the currently selected reference and keep the local file plus the remaining {count} references.',
+    deleteAllReferencesAndFile: 'Delete all references and file',
+    deleteAllReferencesAndFileTip: 'Remove all {count} references from the current document and permanently delete the local file.',
     removeMarkdownNotFound: 'The Markdown content for the current resource was not found. Delete has been cancelled.',
     deleteFileFailed: 'Failed to delete the local resource.',
   },

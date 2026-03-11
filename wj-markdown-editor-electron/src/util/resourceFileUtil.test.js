@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import resourceFileUtil from './resourceFileUtil.js'
 
-const { pathExists, remove } = vi.hoisted(() => {
+const { pathExists, remove, stat } = vi.hoisted(() => {
   return {
     pathExists: vi.fn(),
     remove: vi.fn(),
+    stat: vi.fn(),
   }
 })
 
@@ -14,6 +15,7 @@ vi.mock('fs-extra', () => {
     default: {
       pathExists,
       remove,
+      stat,
     },
   }
 })
@@ -48,17 +50,28 @@ describe('resourceFileUtil.deleteLocalResource', () => {
   beforeEach(() => {
     pathExists.mockReset()
     remove.mockReset()
+    stat.mockReset()
   })
 
   it('文件存在时，应该删除本地资源', async () => {
     pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
 
     const result = await resourceFileUtil.deleteLocalResource({
       path: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
-    expect(result).toBe(true)
+    expect(result).toEqual({
+      ok: true,
+      removed: true,
+      reason: 'deleted',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
     expect(pathExists).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png')
+    expect(stat).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png')
     expect(remove).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png')
   })
 
@@ -69,8 +82,114 @@ describe('resourceFileUtil.deleteLocalResource', () => {
       path: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
-    expect(result).toBe(true)
+    expect(result).toEqual({
+      ok: true,
+      removed: false,
+      reason: 'not-found',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
     expect(pathExists).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png')
+    expect(stat).not.toHaveBeenCalled()
     expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('目标是目录时，应该拒绝删除', async () => {
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => true,
+      isFile: () => false,
+    })
+
+    const result = await resourceFileUtil.deleteLocalResource({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://2e2f617373657473')
+
+    expect(result).toEqual({
+      ok: false,
+      removed: false,
+      reason: 'directory-not-allowed',
+      path: 'D:\\docs\\assets',
+    })
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('资源地址无法解析时，应该返回失败', async () => {
+    const result = await resourceFileUtil.deleteLocalResource({
+      path: 'D:\\docs\\note.md',
+    }, 'https://example.com/demo.png')
+
+    expect(result).toEqual({
+      ok: false,
+      removed: false,
+      reason: 'invalid-resource',
+      path: null,
+    })
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+    expect(remove).not.toHaveBeenCalled()
+  })
+})
+
+describe('resourceFileUtil.getLocalResourceInfo', () => {
+  beforeEach(() => {
+    pathExists.mockReset()
+    stat.mockReset()
+  })
+
+  it('文件存在时，应该返回文件资源信息', async () => {
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://2e2f6173736574732f64656d6f2e706e67')
+
+    expect(result).toEqual({
+      ok: true,
+      exists: true,
+      isDirectory: false,
+      isFile: true,
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+  })
+
+  it('目录存在时，应该返回目录资源信息', async () => {
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => true,
+      isFile: () => false,
+    })
+
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://2e2f617373657473')
+
+    expect(result).toEqual({
+      ok: true,
+      exists: true,
+      isDirectory: true,
+      isFile: false,
+      path: 'D:\\docs\\assets',
+    })
+  })
+
+  it('文件不存在时，也应该返回可解析路径', async () => {
+    pathExists.mockResolvedValue(false)
+
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://2e2f6173736574732f64656d6f2e706e67')
+
+    expect(result).toEqual({
+      ok: true,
+      exists: false,
+      isDirectory: false,
+      isFile: false,
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+    expect(stat).not.toHaveBeenCalled()
   })
 })

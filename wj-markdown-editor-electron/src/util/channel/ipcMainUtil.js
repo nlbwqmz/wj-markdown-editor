@@ -175,6 +175,9 @@ const handlerList = {
   'delete-local-resource': async (winInfo, data) => {
     return await resourceFileUtil.deleteLocalResource(winInfo, data)
   },
+  'get-local-resource-info': async (winInfo, data) => {
+    return await resourceFileUtil.getLocalResourceInfo(winInfo, data)
+  },
   'screenshot': (winInfo, data) => {
     return new Promise((resolve) => {
       const startCapture = () => {

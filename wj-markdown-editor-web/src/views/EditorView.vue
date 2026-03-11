@@ -10,7 +10,11 @@ import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
-import { removeAssetFromMarkdown } from '@/util/editor/previewAssetRemovalUtil.js'
+import {
+  countRemainingAssetReferences,
+  removeAllAssetReferencesFromMarkdown,
+  removeAssetFromMarkdown,
+} from '@/util/editor/previewAssetRemovalUtil.js'
 
 const content = ref('')
 // 确保content已获取再传入组件
@@ -24,6 +28,12 @@ const previewAssetMenu = ref({
   x: 0,
   y: 0,
   asset: null,
+})
+const multiReferenceDeleteModal = ref({
+  open: false,
+  asset: null,
+  referenceCount: 0,
+  loading: false,
 })
 
 function save() {
@@ -113,11 +123,71 @@ function openPreviewAssetInExplorer() {
   channelUtil.send({ event: 'open-folder', data: assetInfo.resourceUrl })
 }
 
-function deletePreviewAsset() {
-  const assetInfo = previewAssetMenu.value.asset
-  if (!assetInfo) {
+function resolveComparableAssetPath(rawPath) {
+  if (!rawPath) {
+    return null
+  }
+  return channelUtil.sendSync({ event: 'convert-to-absolute-path', data: rawPath }) || rawPath
+}
+
+function closeMultiReferenceDeleteModal() {
+  if (multiReferenceDeleteModal.value.loading) {
     return
   }
+  multiReferenceDeleteModal.value = {
+    open: false,
+    asset: null,
+    referenceCount: 0,
+    loading: false,
+  }
+}
+
+function getAssetReferenceCount(assetInfo) {
+  return countRemainingAssetReferences(content.value, assetInfo, {
+    resolveComparablePath: resolveComparableAssetPath,
+  })
+}
+
+async function applyAssetDelete(nextContent, assetInfo, options = {}) {
+  if (options.deleteFile !== true) {
+    content.value = nextContent
+    return true
+  }
+
+  const deleteResult = await channelUtil.send({ event: 'delete-local-resource', data: assetInfo.resourceUrl })
+  if (deleteResult?.ok === true) {
+    content.value = nextContent
+    return true
+  }
+  if (deleteResult?.reason === 'directory-not-allowed') {
+    message.warning(t('previewAssetMenu.deleteDirectoryNotAllowed'))
+    return false
+  }
+  message.warning(t('previewAssetMenu.deleteFileFailed'))
+  return false
+}
+
+async function deleteCurrentAssetReference(assetInfo, options = {}) {
+  const removeResult = removeAssetFromMarkdown(content.value, assetInfo)
+  if (!removeResult.removed) {
+    message.warning(t('previewAssetMenu.removeMarkdownNotFound'))
+    return false
+  }
+  return await applyAssetDelete(removeResult.content, assetInfo, options)
+}
+
+async function deleteAllAssetReferences(assetInfo) {
+  const removeResult = removeAllAssetReferencesFromMarkdown(content.value, assetInfo, {
+    resolveComparablePath: resolveComparableAssetPath,
+  })
+  if (!removeResult.removed) {
+    message.warning(t('previewAssetMenu.removeMarkdownNotFound'))
+    return false
+  }
+  return await applyAssetDelete(removeResult.content, assetInfo, { deleteFile: true })
+}
+
+async function requestSingleReferenceDelete(assetInfo) {
   Modal.confirm({
     title: t('prompt'),
     icon: createVNode(ExclamationCircleOutlined),
@@ -125,19 +195,65 @@ function deletePreviewAsset() {
     okText: t('okText'),
     cancelText: t('cancelText'),
     onOk: async () => {
-      const removeResult = removeAssetFromMarkdown(content.value, assetInfo)
-      if (!removeResult.removed) {
-        message.warning(t('previewAssetMenu.removeMarkdownNotFound'))
-        return
-      }
-      const deleteResult = await channelUtil.send({ event: 'delete-local-resource', data: assetInfo.resourceUrl })
-      if (deleteResult !== true) {
-        message.warning(t('previewAssetMenu.deleteFileFailed'))
-        return
-      }
-      content.value = removeResult.content
+      await deleteCurrentAssetReference(assetInfo, { deleteFile: true })
     },
   })
+}
+
+async function confirmDeleteAllReferencesAndFile() {
+  const assetInfo = multiReferenceDeleteModal.value.asset
+  if (!assetInfo || multiReferenceDeleteModal.value.loading) {
+    return
+  }
+  multiReferenceDeleteModal.value.loading = true
+  const success = await deleteAllAssetReferences(assetInfo)
+  multiReferenceDeleteModal.value.loading = false
+  if (success) {
+    closeMultiReferenceDeleteModal()
+  }
+}
+
+async function confirmDeleteCurrentReferenceOnly() {
+  const assetInfo = multiReferenceDeleteModal.value.asset
+  if (!assetInfo || multiReferenceDeleteModal.value.loading) {
+    return
+  }
+  multiReferenceDeleteModal.value.loading = true
+  const success = await deleteCurrentAssetReference(assetInfo, { deleteFile: false })
+  multiReferenceDeleteModal.value.loading = false
+  if (success) {
+    closeMultiReferenceDeleteModal()
+  }
+}
+
+async function deletePreviewAsset() {
+  const assetInfo = previewAssetMenu.value.asset
+  if (!assetInfo) {
+    return
+  }
+
+  const resourceInfo = await channelUtil.send({ event: 'get-local-resource-info', data: assetInfo.resourceUrl })
+  if (resourceInfo?.isDirectory === true) {
+    message.warning(t('previewAssetMenu.deleteDirectoryNotAllowed'))
+    return
+  }
+  if (resourceInfo?.ok !== true) {
+    message.warning(t('previewAssetMenu.deleteFileFailed'))
+    return
+  }
+
+  const referenceCount = getAssetReferenceCount(assetInfo)
+  if (referenceCount <= 1) {
+    await requestSingleReferenceDelete(assetInfo)
+    return
+  }
+
+  multiReferenceDeleteModal.value = {
+    open: true,
+    asset: assetInfo,
+    referenceCount,
+    loading: false,
+  }
 }
 </script>
 
@@ -151,7 +267,210 @@ function deletePreviewAsset() {
     @open-explorer="openPreviewAssetInExplorer"
     @delete="deletePreviewAsset"
   />
+  <a-modal
+    wrap-class-name="preview-asset-delete-modal"
+    :open="multiReferenceDeleteModal.open"
+    width="40rem"
+    :mask-closable="multiReferenceDeleteModal.loading === false"
+    :keyboard="multiReferenceDeleteModal.loading === false"
+    :closable="multiReferenceDeleteModal.loading === false"
+    centered
+    @cancel="closeMultiReferenceDeleteModal"
+  >
+    <template #title>
+      <div class="preview-asset-delete-title">
+        <ExclamationCircleOutlined class="preview-asset-delete-title-icon" />
+        <span>{{ t('prompt') }}</span>
+      </div>
+    </template>
+    <div class="preview-asset-delete-body">
+      <div class="preview-asset-delete-summary">
+        {{ t('previewAssetMenu.referenceCountTip', { count: multiReferenceDeleteModal.referenceCount }) }}
+      </div>
+      <div class="preview-asset-delete-option preview-asset-delete-option-warning">
+        <div class="preview-asset-delete-option-title">
+          {{ t('previewAssetMenu.deleteCurrentReferenceOnly') }}
+        </div>
+        <div class="preview-asset-delete-option-description">
+          {{ t('previewAssetMenu.deleteCurrentReferenceOnlyTip', { count: Math.max(multiReferenceDeleteModal.referenceCount - 1, 0) }) }}
+        </div>
+      </div>
+      <div class="preview-asset-delete-option preview-asset-delete-option-danger">
+        <div class="preview-asset-delete-option-title">
+          {{ t('previewAssetMenu.deleteAllReferencesAndFile') }}
+        </div>
+        <div class="preview-asset-delete-option-description">
+          {{ t('previewAssetMenu.deleteAllReferencesAndFileTip', { count: multiReferenceDeleteModal.referenceCount }) }}
+        </div>
+      </div>
+    </div>
+    <template #footer>
+      <div class="preview-asset-delete-footer">
+        <a-button :disabled="multiReferenceDeleteModal.loading" @click="closeMultiReferenceDeleteModal">
+          {{ t('cancelText') }}
+        </a-button>
+        <a-button :loading="multiReferenceDeleteModal.loading" @click="confirmDeleteCurrentReferenceOnly">
+          {{ t('previewAssetMenu.deleteCurrentReferenceOnly') }}
+        </a-button>
+        <a-button danger type="primary" :loading="multiReferenceDeleteModal.loading" @click="confirmDeleteAllReferencesAndFile">
+          {{ t('previewAssetMenu.deleteAllReferencesAndFile') }}
+        </a-button>
+      </div>
+    </template>
+  </a-modal>
 </template>
 
 <style scoped lang="scss">
+</style>
+
+<style lang="scss">
+.preview-asset-delete-modal {
+  .ant-modal-content {
+    overflow: hidden;
+  }
+
+  .preview-asset-delete-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .preview-asset-delete-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .preview-asset-delete-title-icon {
+    color: #faad14;
+    font-size: 18px;
+  }
+
+  .preview-asset-delete-summary {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #f5f7fa;
+    color: #1f2329;
+    font-size: 14px;
+    line-height: 22px;
+  }
+
+  .preview-asset-delete-option {
+    padding: 14px 16px;
+    border: 1px solid #d9e2f2;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .preview-asset-delete-option-title {
+    color: #1f2329;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 22px;
+  }
+
+  .preview-asset-delete-option-description {
+    margin-top: 6px;
+    color: #5c667a;
+    font-size: 13px;
+    line-height: 21px;
+  }
+
+  .preview-asset-delete-option-warning {
+    border-color: rgba(250, 173, 20, 0.3);
+    background: rgba(250, 173, 20, 0.08);
+
+    .preview-asset-delete-option-title {
+      color: #ad6800;
+    }
+
+    .preview-asset-delete-option-description {
+      color: #874d00;
+    }
+  }
+
+  .preview-asset-delete-option-danger {
+    border-color: rgba(245, 34, 45, 0.24);
+    background: rgba(245, 34, 45, 0.04);
+
+    .preview-asset-delete-option-title {
+      color: #cf1322;
+    }
+
+    .preview-asset-delete-option-description {
+      color: #7f1d1d;
+    }
+  }
+
+  .preview-asset-delete-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.2rem;
+
+    .ant-btn {
+      white-space: nowrap;
+    }
+  }
+}
+
+:root[theme='dark'] .preview-asset-delete-modal {
+  .preview-asset-delete-title-icon {
+    color: #ffd666;
+  }
+
+  .preview-asset-delete-summary {
+    background: var(--wj-markdown-bg-secondary);
+    color: var(--wj-markdown-text-primary);
+  }
+
+  .preview-asset-delete-option {
+    border-color: var(--wj-markdown-border-primary);
+    background: var(--wj-markdown-bg-secondary);
+  }
+
+  .preview-asset-delete-option-title {
+    color: var(--wj-markdown-text-primary);
+  }
+
+  .preview-asset-delete-option-description {
+    color: var(--wj-markdown-text-secondary);
+  }
+
+  .preview-asset-delete-option-warning {
+    border-color: rgba(255, 197, 61, 0.28);
+    background: rgba(250, 173, 20, 0.14);
+
+    .preview-asset-delete-option-title {
+      color: #ffd666;
+    }
+
+    .preview-asset-delete-option-description {
+      color: #ffe7ba;
+    }
+  }
+
+  .preview-asset-delete-option-danger {
+    border-color: rgba(255, 120, 117, 0.28);
+    background: rgba(255, 77, 79, 0.12);
+
+    .preview-asset-delete-option-title {
+      color: #ffb3b1;
+    }
+
+    .preview-asset-delete-option-description {
+      color: #ffd6d6;
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .preview-asset-delete-modal {
+    .preview-asset-delete-footer {
+      flex-direction: column;
+
+      .ant-btn {
+        width: 100%;
+      }
+    }
+  }
+}
 </style>

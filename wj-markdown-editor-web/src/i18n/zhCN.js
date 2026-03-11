@@ -34,6 +34,12 @@ export default {
   previewAssetMenu: {
     delete: '删除',
     deleteConfirm: '该操作将删除本地资源，且不可恢复，确认继续？',
+    deleteDirectoryNotAllowed: '当前资源是文件夹链接，不能直接删除。',
+    referenceCountTip: '检测到当前资源在文档中共有 {count} 处引用，请选择需要执行的删除方式。',
+    deleteCurrentReferenceOnly: '仅删除当前引用',
+    deleteCurrentReferenceOnlyTip: '只删除当前命中的这一处引用，保留本地文件和其余 {count} 处引用。',
+    deleteAllReferencesAndFile: '删除全部引用并删除文件',
+    deleteAllReferencesAndFileTip: '删除当前文档中的全部 {count} 处引用，并永久删除本地文件，且不可恢复。',
     removeMarkdownNotFound: '未找到当前资源对应的 Markdown 内容，已取消删除。',
     deleteFileFailed: '删除本地资源失败。',
   },
