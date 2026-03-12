@@ -2,6 +2,9 @@ name: Build And Release Desktop
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - '*.*.*'
 
 permissions:
   contents: write
@@ -11,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      release_notes_path: ${{ steps.version.outputs.release_notes_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,11 +28,64 @@ jobs:
         id: version
         shell: bash
         run: |
+          set -euo pipefail
           version="$(node -p "require('./wj-markdown-editor-electron/package.json').version")"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "release_notes_path=release-notes/${version}.md" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag matches package version
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_version="${{ steps.version.outputs.version }}"
+          pushed_tag="${{ github.ref_name }}"
+
+          if [[ "$pushed_tag" != "$expected_version" ]]; then
+            echo "推送的 tag ($pushed_tag) 与 package.json 版本 ($expected_version) 不一致"
+            exit 1
+          fi
+
+      - name: Validate release notes file
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes_path="${{ steps.version.outputs.release_notes_path }}"
+
+          if [[ ! -f "$notes_path" ]]; then
+            echo "未找到发布说明文件: $notes_path"
+            exit 1
+          fi
+
+          if [[ ! -s "$notes_path" ]]; then
+            echo "发布说明文件为空: $notes_path"
+            exit 1
+          fi
+
+  create-release:
+    needs: prepare-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create or update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-version.outputs.version }}
+          name: ${{ needs.prepare-version.outputs.version }}
+          body_path: ${{ needs.prepare-version.outputs.release_notes_path }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release-windows:
-    needs: prepare-version
+    needs:
+      - prepare-version
+      - create-release
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -81,10 +138,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare-version.outputs.version }}
-          name: ${{ needs.prepare-version.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          draft: false
-          prerelease: false
           overwrite_files: true
           files: |
             wj-markdown-editor-electron/electron-build/latest.yml
@@ -154,10 +207,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare-version.outputs.version }}
-          name: ${{ needs.prepare-version.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          draft: false
-          prerelease: false
           overwrite_files: true
           files: |
             wj-markdown-editor-electron/electron-build/latest-linux.yml
