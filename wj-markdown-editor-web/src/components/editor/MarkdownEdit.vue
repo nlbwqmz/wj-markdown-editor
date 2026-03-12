@@ -15,12 +15,22 @@ import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import commonUtil from '@/util/commonUtil.js'
+import { resolvePendingContentUpdateMeta } from '@/util/editor/contentUpdateMetaUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
 
 const props = defineProps({
   modelValue: {
     type: String,
     default: () => '',
+  },
+  contentUpdateMeta: {
+    type: Object,
+    default: () => ({
+      token: 0,
+      cursorPosition: null,
+      focus: false,
+      scrollIntoView: false,
+    }),
   },
   theme: {
     type: String,
@@ -74,6 +84,7 @@ const menuController = ref(false)
 const previewVisible = ref(true)
 const previewController = ref(true)
 const gridAnimation = ref(false)
+const handledContentUpdateToken = ref(0)
 
 const BOTTOM_GAP = '40vh'
 const EDITOR_EMIT_DEBOUNCE_MS = 160
@@ -236,18 +247,48 @@ watch(() => props.extension, (newValue) => {
   reconfigureExtensions(newValue)
 }, { deep: true })
 
-watch(() => props.modelValue, (newValue) => {
+watch(() => [props.modelValue, props.contentUpdateMeta?.token], ([newValue]) => {
   const view = editorView.value
   if (view) {
     const currentValue = view.state.doc.toString()
+    const pendingContentUpdateMeta = resolvePendingContentUpdateMeta({
+      handledToken: handledContentUpdateToken.value,
+      contentUpdateMeta: props.contentUpdateMeta,
+    })
+    handledContentUpdateToken.value = pendingContentUpdateMeta.nextHandledToken
+
+    const cursorPosition = pendingContentUpdateMeta.shouldApplySelection
+      ? Math.max(0, Math.min(newValue.length, pendingContentUpdateMeta.cursorPosition))
+      : null
+
     if (currentValue !== newValue) {
-      view.dispatch({
+      const transaction = {
         changes: {
           from: 0,
           to: currentValue.length,
           insert: newValue,
         },
+      }
+      if (cursorPosition !== null) {
+        transaction.selection = {
+          anchor: cursorPosition,
+          head: cursorPosition,
+        }
+        transaction.scrollIntoView = pendingContentUpdateMeta.scrollIntoView
+      }
+      view.dispatch(transaction)
+    } else if (cursorPosition !== null) {
+      view.dispatch({
+        selection: {
+          anchor: cursorPosition,
+          head: cursorPosition,
+        },
+        scrollIntoView: pendingContentUpdateMeta.scrollIntoView,
       })
+    }
+
+    if (cursorPosition !== null && pendingContentUpdateMeta.focus === true) {
+      view.focus()
     }
   }
   restorePreviewLinkedHighlight()
@@ -382,7 +423,7 @@ onBeforeUnmount(() => {
       <div
         v-if="previewController"
         ref="previewRef"
-        class="wj-scrollbar allow-search h-full p-2"
+        class="allow-search wj-scrollbar h-full p-2"
         :style="previewContainerStyle"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"

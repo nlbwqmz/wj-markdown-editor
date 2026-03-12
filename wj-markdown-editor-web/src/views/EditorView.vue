@@ -23,6 +23,12 @@ const { t } = useI18n()
 const store = useCommonStore()
 const watermark = ref()
 const config = ref()
+const contentUpdateMeta = ref({
+  token: 0,
+  cursorPosition: null,
+  focus: false,
+  scrollIntoView: false,
+})
 const previewAssetMenu = ref({
   open: false,
   x: 0,
@@ -35,6 +41,18 @@ const multiReferenceDeleteModal = ref({
   referenceCount: 0,
   loading: false,
 })
+let contentUpdateToken = 0
+
+function updateEditorContent(nextContent, options = {}) {
+  contentUpdateToken += 1
+  contentUpdateMeta.value = {
+    token: contentUpdateToken,
+    cursorPosition: Number.isInteger(options.cursorPosition) ? options.cursorPosition : null,
+    focus: options.focus === true,
+    scrollIntoView: options.scrollIntoView === true,
+  }
+  content.value = nextContent
+}
 
 function save() {
   channelUtil.send({ event: 'save' })
@@ -56,7 +74,7 @@ function updateFileInfo(data, options = { syncMeta: true }) {
   // - 初次打开文件
   // - 自动应用外部修改
   // - 用户在弹窗里手动应用外部修改
-  content.value = data.content
+  updateEditorContent(data.content)
   ready.value = true
   if (options.syncMeta === true) {
     syncFileMeta(data)
@@ -150,13 +168,13 @@ function getAssetReferenceCount(assetInfo) {
 
 async function applyAssetDelete(nextContent, assetInfo, options = {}) {
   if (options.deleteFile !== true) {
-    content.value = nextContent
+    updateEditorContent(nextContent, options)
     return true
   }
 
   const deleteResult = await channelUtil.send({ event: 'delete-local-resource', data: assetInfo.resourceUrl })
   if (deleteResult?.ok === true) {
-    content.value = nextContent
+    updateEditorContent(nextContent, options)
     return true
   }
   if (deleteResult?.reason === 'directory-not-allowed') {
@@ -173,7 +191,12 @@ async function deleteCurrentAssetReference(assetInfo, options = {}) {
     message.warning(t('previewAssetMenu.removeMarkdownNotFound'))
     return false
   }
-  return await applyAssetDelete(removeResult.content, assetInfo, options)
+  return await applyAssetDelete(removeResult.content, assetInfo, {
+    ...options,
+    cursorPosition: removeResult.cursorPosition,
+    focus: true,
+    scrollIntoView: true,
+  })
 }
 
 async function deleteAllAssetReferences(assetInfo) {
@@ -184,7 +207,12 @@ async function deleteAllAssetReferences(assetInfo) {
     message.warning(t('previewAssetMenu.removeMarkdownNotFound'))
     return false
   }
-  return await applyAssetDelete(removeResult.content, assetInfo, { deleteFile: true })
+  return await applyAssetDelete(removeResult.content, assetInfo, {
+    deleteFile: true,
+    cursorPosition: removeResult.cursorPosition,
+    focus: true,
+    scrollIntoView: true,
+  })
 }
 
 async function requestSingleReferenceDelete(assetInfo) {
@@ -258,7 +286,7 @@ async function deletePreviewAsset() {
 </script>
 
 <template>
-  <MarkdownEdit v-if="ready" v-model="content" :association-highlight="config.editor.associationHighlight" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" />
+  <MarkdownEdit v-if="ready" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" />
   <PreviewAssetContextMenu
     :open="previewAssetMenu.open"
     :x="previewAssetMenu.x"

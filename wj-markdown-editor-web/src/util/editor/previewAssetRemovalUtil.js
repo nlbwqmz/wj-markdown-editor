@@ -322,6 +322,58 @@ function collectMatchedAssetListByComparablePath(content, asset, options = {}) {
       const matchAssetKey = resolveComparableAssetKey(match.rawPath, options.resolveComparablePath)
       return matchAssetKey && matchAssetKey === targetAssetKey
     })
+    .sort((a, b) => a.from - b.from)
+}
+
+function clampCursorPosition(content, position) {
+  if (!Number.isFinite(position)) {
+    return 0
+  }
+  return Math.max(0, Math.min(content.length, position))
+}
+
+function getCursorPositionAfterRemoval(nextContent, removalRange) {
+  if (!removalRange) {
+    return 0
+  }
+  return clampCursorPosition(nextContent, removalRange.from)
+}
+
+function isSameRange(rangeA, rangeB) {
+  if (!rangeA || !rangeB) {
+    return false
+  }
+  return rangeA.from === rangeB.from && rangeA.to === rangeB.to
+}
+
+function getCursorPositionAfterBatchRemoval(nextContent, removalRangeList, targetRemovalRange) {
+  if (!targetRemovalRange) {
+    return 0
+  }
+
+  const removedLengthBeforeTarget = removalRangeList.reduce((total, currentRange) => {
+    if (currentRange.from >= targetRemovalRange.from) {
+      return total
+    }
+    return total + (currentRange.to - currentRange.from)
+  }, 0)
+
+  return clampCursorPosition(nextContent, targetRemovalRange.from - removedLengthBeforeTarget)
+}
+
+function resolveSelectedRemovalRange(content, asset, matchedAssetList) {
+  const selectedMatchedRange = findAssetMarkdownRange(content, asset)
+  if (selectedMatchedRange) {
+    return getStandaloneLineRemovalRange(content, selectedMatchedRange)
+  }
+
+  const occurrence = Number.parseInt(asset?.occurrence, 10)
+  if (Number.isNaN(occurrence) || occurrence <= 0) {
+    return null
+  }
+
+  const occurrenceMatch = matchedAssetList[occurrence - 1]
+  return occurrenceMatch ? getStandaloneLineRemovalRange(content, occurrenceMatch) : null
 }
 
 export function findAssetMarkdownRange(content, asset) {
@@ -373,6 +425,7 @@ export function removeAssetFromMarkdown(content, asset) {
     removed: true,
     content: content.slice(0, removalRange.from) + content.slice(removalRange.to),
     removedRange: removalRange,
+    cursorPosition: getCursorPositionAfterRemoval(content.slice(0, removalRange.from) + content.slice(removalRange.to), removalRange),
   }
 }
 
@@ -390,6 +443,7 @@ export function removeAllAssetReferencesFromMarkdown(content, asset, options = {
     }
   }
 
+  const selectedRemovalRange = resolveSelectedRemovalRange(content, asset, matchedAssetList)
   const removalRangeList = matchedAssetList
     .map(match => getStandaloneLineRemovalRange(content, match))
     .sort((a, b) => b.from - a.from)
@@ -403,6 +457,11 @@ export function removeAllAssetReferencesFromMarkdown(content, asset, options = {
     removed: true,
     removedCount: matchedAssetList.length,
     content: nextContent,
+    cursorPosition: getCursorPositionAfterBatchRemoval(
+      nextContent,
+      removalRangeList,
+      removalRangeList.find(removalRange => isSameRange(removalRange, selectedRemovalRange)) || selectedRemovalRange,
+    ),
   }
 }
 
