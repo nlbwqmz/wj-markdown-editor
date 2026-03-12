@@ -58,13 +58,15 @@ const handlerList = {
     winInfo.forceClose = true
     winInfo.win.close()
   },
-  'open-folder': (winInfo, data) => {
+  'open-folder': async (winInfo, data) => {
     if (data && typeof data === 'string') {
-      const resolvedPath = resourceFileUtil.resolveLocalResourcePath(winInfo, data)
-      if (!resolvedPath) {
+      const openResult = await resourceFileUtil.openLocalResourceInFolder(winInfo, data, shell.showItemInFolder)
+      if (openResult.ok !== true) {
         return
       }
-      shell.showItemInFolder(resolvedPath)
+      if (openResult.opened !== true && openResult.reason === 'not-found') {
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theFileDoesNotExist' } })
+      }
       return
     }
     if (!winInfo.path || !winInfo.exists) {

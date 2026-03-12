@@ -130,6 +130,30 @@ describe('resourceFileUtil.deleteLocalResource', () => {
   })
 })
 
+describe('resourceFileUtil.openLocalResourceInFolder', () => {
+  beforeEach(() => {
+    pathExists.mockReset()
+    stat.mockReset()
+  })
+
+  it('文件不存在时，应该拒绝在资源管理器中打开', async () => {
+    pathExists.mockResolvedValue(false)
+    const showItemInFolder = vi.fn()
+
+    const result = await resourceFileUtil.openLocalResourceInFolder({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://2e2f6173736574732f64656d6f2e706e67', showItemInFolder)
+
+    expect(result).toEqual({
+      ok: true,
+      opened: false,
+      reason: 'not-found',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+    expect(showItemInFolder).not.toHaveBeenCalled()
+  })
+})
+
 describe('resourceFileUtil.getLocalResourceInfo', () => {
   beforeEach(() => {
     pathExists.mockReset()

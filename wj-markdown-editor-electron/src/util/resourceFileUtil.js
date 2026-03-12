@@ -11,6 +11,15 @@ function createDeleteResult(ok, removed, reason, resolvedPath = null) {
   }
 }
 
+function createOpenFolderResult(ok, opened, reason, resolvedPath = null) {
+  return {
+    ok,
+    opened,
+    reason,
+    path: resolvedPath,
+  }
+}
+
 function createResourceInfoResult(ok, resolvedPath, options = {}) {
   return {
     ok,
@@ -71,6 +80,20 @@ async function deleteLocalResource(winInfo, resourceUrl) {
   return createDeleteResult(true, true, 'deleted', resourceInfo.path)
 }
 
+async function openLocalResourceInFolder(winInfo, resourceUrl, showItemInFolder) {
+  const resourceInfo = await getLocalResourceInfo(winInfo, resourceUrl)
+  if (resourceInfo.ok !== true) {
+    return createOpenFolderResult(false, false, 'invalid-resource')
+  }
+
+  if (resourceInfo.exists !== true) {
+    return createOpenFolderResult(true, false, 'not-found', resourceInfo.path)
+  }
+
+  showItemInFolder(resourceInfo.path)
+  return createOpenFolderResult(true, true, 'opened', resourceInfo.path)
+}
+
 async function getLocalResourceInfo(winInfo, resourceUrl) {
   const resolvedPath = resolveLocalResourcePath(winInfo, resourceUrl)
   if (!resolvedPath) {
@@ -90,6 +113,7 @@ async function getLocalResourceInfo(winInfo, resourceUrl) {
 }
 
 export default {
+  openLocalResourceInFolder,
   getLocalResourceInfo,
   resolveLocalResourcePath,
   deleteLocalResource,

@@ -1,3 +1,13 @@
+import MarkdownIt from 'markdown-it'
+import linkRule from 'markdown-it/lib/rules_inline/link.mjs'
+import StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs'
+
+const markdownItLinkMatcher = new MarkdownIt({
+  html: true,
+  linkify: true,
+  breaks: true,
+})
+
 function normalizeAssetPath(value) {
   if (!value) {
     return ''
@@ -251,23 +261,22 @@ function collectLinkMatches(content, lineStartIndexes) {
       continue
     }
 
-    const linkStartIndex = content.indexOf('](', startIndex + 1)
-    if (linkStartIndex === -1) {
-      break
-    }
+    const state = new StateInline(content, markdownItLinkMatcher, {}, [])
+    state.pos = startIndex
+    state.posMax = content.length
 
-    const endIndex = findClosingParenthesis(content, linkStartIndex + 2)
-    if (endIndex === -1) {
+    if (!linkRule(state, false)) {
       searchIndex = startIndex + 1
       continue
     }
 
-    const rawPath = extractDestinationPath(content.slice(linkStartIndex + 2, endIndex))
+    const linkOpenToken = state.tokens.find(token => token.type === 'link_open')
+    const rawPath = normalizeAssetPath(linkOpenToken?.attrGet('href'))
     if (rawPath) {
-      matchList.push(createAssetMatch(content, lineStartIndexes, 'link', startIndex, endIndex + 1, rawPath))
+      matchList.push(createAssetMatch(content, lineStartIndexes, 'link', startIndex, state.pos, rawPath))
     }
 
-    searchIndex = endIndex + 1
+    searchIndex = state.pos
   }
 
   return matchList

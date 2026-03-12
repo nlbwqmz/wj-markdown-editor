@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict'
+import {
+  removeAllAssetReferencesFromMarkdown,
+  removeAssetFromMarkdown,
+} from '../previewAssetRemovalUtil.js'
+
+const { test } = await import('node:test')
+
+test('删除本地链接时，不应把前面未闭合的中括号内容一起误删', () => {
+  const content = [
+    '前文里有一个孤立左括号 [不会闭合',
+    '这里还有普通文字',
+    '[近电体 v3.0.0 升级内容.md](<assets/近电体 v3.0.0 升级内容_4cDwS3.md>)',
+    '后文保留',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'link',
+    rawSrc: 'assets/近电体 v3.0.0 升级内容_4cDwS3.md',
+    occurrence: 1,
+    lineStart: 3,
+    lineEnd: 3,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, [
+    '前文里有一个孤立左括号 [不会闭合',
+    '这里还有普通文字',
+    '后文保留',
+  ].join('\n'))
+})
+
+test('删除本地链接时，应按 markdown-it 规则处理链接文本里的代码片段', () => {
+  const content = [
+    '[示例 `[` 文本](<assets/target.md>)',
+    '后文',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'link',
+    rawSrc: 'assets/target.md',
+    occurrence: 1,
+    lineStart: 1,
+    lineEnd: 1,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, '后文')
+})
+
+test('删除全部本地链接引用时，不应误删无关文本', () => {
+  const content = [
+    '前文里有一个孤立左括号 [不会闭合',
+    '[近电体 v3.0.0 升级内容.md](<assets/近电体 v3.0.0 升级内容_4cDwS3.md>)',
+    '这里还有普通文字',
+    '[近电体 v3.0.0 升级内容.md](<assets/近电体 v3.0.0 升级内容_4cDwS3.md>)',
+    '后文保留',
+  ].join('\n')
+
+  const result = removeAllAssetReferencesFromMarkdown(content, {
+    rawSrc: 'assets/近电体 v3.0.0 升级内容_4cDwS3.md',
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.removedCount, 2)
+  assert.equal(result.content, [
+    '前文里有一个孤立左括号 [不会闭合',
+    '这里还有普通文字',
+    '后文保留',
+  ].join('\n'))
+})
