@@ -44,6 +44,14 @@ describe('resourceFileUtil.resolveLocalResourcePath', () => {
 
     expect(result).toBeNull()
   })
+
+  it('非法 payload 时，应该安全返回 null 而不是抛错', () => {
+    const result = resourceFileUtil.resolveLocalResourcePath({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://zz')
+
+    expect(result).toBeNull()
+  })
 })
 
 describe('resourceFileUtil.deleteLocalResource', () => {
@@ -121,7 +129,23 @@ describe('resourceFileUtil.deleteLocalResource', () => {
     expect(result).toEqual({
       ok: false,
       removed: false,
-      reason: 'invalid-resource',
+      reason: 'invalid-resource-url',
+      path: null,
+    })
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('资源 payload 非法时，应该返回 invalid-resource-payload 且不抛错', async () => {
+    const result = await resourceFileUtil.deleteLocalResource({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://zz')
+
+    expect(result).toEqual({
+      ok: false,
+      removed: false,
+      reason: 'invalid-resource-payload',
       path: null,
     })
     expect(pathExists).not.toHaveBeenCalled()
@@ -152,6 +176,22 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
     })
     expect(showItemInFolder).not.toHaveBeenCalled()
   })
+
+  it('资源 payload 非法时，应该返回 invalid-resource-payload 且不抛错', async () => {
+    const showItemInFolder = vi.fn()
+
+    const result = await resourceFileUtil.openLocalResourceInFolder({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://zz', showItemInFolder)
+
+    expect(result).toEqual({
+      ok: false,
+      opened: false,
+      reason: 'invalid-resource-payload',
+      path: null,
+    })
+    expect(showItemInFolder).not.toHaveBeenCalled()
+  })
 })
 
 describe('resourceFileUtil.getLocalResourceInfo', () => {
@@ -173,6 +213,8 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
 
     expect(result).toEqual({
       ok: true,
+      reason: 'resolved',
+      decodedPath: './assets/demo.png',
       exists: true,
       isDirectory: false,
       isFile: true,
@@ -193,6 +235,8 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
 
     expect(result).toEqual({
       ok: true,
+      reason: 'resolved',
+      decodedPath: './assets',
       exists: true,
       isDirectory: true,
       isFile: false,
@@ -209,11 +253,49 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
 
     expect(result).toEqual({
       ok: true,
+      reason: 'resolved',
+      decodedPath: './assets/demo.png',
       exists: false,
       isDirectory: false,
       isFile: false,
       path: 'D:\\docs\\assets\\demo.png',
     })
+    expect(stat).not.toHaveBeenCalled()
+  })
+
+  it('资源 payload 非法时，应该返回 invalid-resource-payload 且不抛错', async () => {
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://zz')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid-resource-payload',
+      decodedPath: null,
+      exists: false,
+      isDirectory: false,
+      isFile: false,
+      path: null,
+    })
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+  })
+
+  it('当前文件未保存且资源为相对路径时，应该返回 relative-resource-without-document', async () => {
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      path: '',
+    }, 'wj://2e2f6173736574732f64656d6f2e706e67')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'relative-resource-without-document',
+      decodedPath: './assets/demo.png',
+      exists: false,
+      isDirectory: false,
+      isFile: false,
+      path: null,
+    })
+    expect(pathExists).not.toHaveBeenCalled()
     expect(stat).not.toHaveBeenCalled()
   })
 })

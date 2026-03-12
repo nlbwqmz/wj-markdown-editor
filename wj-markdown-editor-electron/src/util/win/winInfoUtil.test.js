@@ -6,6 +6,9 @@ const notificationOnMock = vi.fn()
 const writeFileMock = vi.fn()
 const readFileMock = vi.fn()
 const pathExistsMock = vi.fn()
+const openExternalMock = vi.fn()
+const showItemInFolderMock = vi.fn()
+const openLocalResourceInFolderMock = vi.fn()
 const createWatchStateMock = vi.fn(() => ({ pendingChange: null }))
 const startWatchingMock = vi.fn()
 const stopWatchingMock = vi.fn()
@@ -49,8 +52,8 @@ vi.mock('electron', () => {
       getPrimaryDisplay: vi.fn(() => ({ workAreaSize: { width: 1920, height: 1080 } })),
     },
     shell: {
-      openExternal: vi.fn(),
-      showItemInFolder: vi.fn(),
+      openExternal: openExternalMock,
+      showItemInFolder: showItemInFolderMock,
     },
   }
 })
@@ -88,6 +91,21 @@ vi.mock('../commonUtil.js', () => ({
   },
 }))
 
+vi.mock('../resourceFileUtil.js', () => ({
+  default: {
+    getLocalResourceFailureMessageKey: vi.fn((reason) => {
+      if (reason === 'invalid-resource-payload')
+        return 'message.invalidLocalResourceLink'
+      if (reason === 'relative-resource-without-document')
+        return 'message.relativeResourceRequiresSavedFile'
+      if (reason === 'not-found')
+        return 'message.theFileDoesNotExist'
+      return null
+    }),
+    openLocalResourceInFolder: openLocalResourceInFolderMock,
+  },
+}))
+
 vi.mock('../fileWatchUtil.js', () => ({
   default: {
     createWatchState: createWatchStateMock,
@@ -113,6 +131,9 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
     writeFileMock.mockClear()
     readFileMock.mockClear()
     pathExistsMock.mockClear()
+    openExternalMock.mockClear()
+    showItemInFolderMock.mockClear()
+    openLocalResourceInFolderMock.mockClear()
     createWatchStateMock.mockClear()
     startWatchingMock.mockClear()
     stopWatchingMock.mockClear()
@@ -575,5 +596,55 @@ describe('winInfoUtil.ignoreExternalPendingChange', () => {
 
     expect(writeFileMock).toHaveBeenCalledTimes(1)
     expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 当前内容')
+  })
+
+  it('点击无效 wj 资源链接时，不应抛错，应发送无效资源提示', async () => {
+    const win = { id: 1 }
+    const winInfo = {
+      path: 'D:/demo.md',
+    }
+    openLocalResourceInFolderMock.mockResolvedValue({
+      ok: false,
+      opened: false,
+      reason: 'invalid-resource-payload',
+      path: null,
+    })
+
+    await winInfoUtil.handleLocalResourceLinkOpen(win, winInfo, 'wj://zz')
+
+    expect(openLocalResourceInFolderMock).toHaveBeenCalledWith(winInfo, 'wj://zz', showItemInFolderMock)
+    expect(showItemInFolderMock).not.toHaveBeenCalled()
+    expect(sendMock).toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.invalidLocalResourceLink',
+      },
+    })
+  })
+
+  it('点击未保存文档中的相对资源时，应发送明确提示', async () => {
+    const win = { id: 1 }
+    const winInfo = {
+      path: '',
+    }
+    openLocalResourceInFolderMock.mockResolvedValue({
+      ok: false,
+      opened: false,
+      reason: 'relative-resource-without-document',
+      path: null,
+    })
+
+    await winInfoUtil.handleLocalResourceLinkOpen(win, winInfo, 'wj://2e2f6173736574732f64656d6f2e706e67')
+
+    expect(openLocalResourceInFolderMock).toHaveBeenCalledWith(winInfo, 'wj://2e2f6173736574732f64656d6f2e706e67', showItemInFolderMock)
+    expect(showItemInFolderMock).not.toHaveBeenCalled()
+    expect(sendMock).toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.relativeResourceRequiresSavedFile',
+      },
+    })
   })
 })

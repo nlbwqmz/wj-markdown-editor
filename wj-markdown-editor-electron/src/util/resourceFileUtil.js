@@ -2,6 +2,31 @@ import path from 'node:path'
 import fs from 'fs-extra'
 import commonUtil from './commonUtil.js'
 
+function createResolveResult(ok, reason, options = {}) {
+  return {
+    ok,
+    reason,
+    decodedPath: options.decodedPath ?? null,
+    exists: options.exists === true,
+    isDirectory: options.isDirectory === true,
+    isFile: options.isFile === true,
+    path: options.path ?? null,
+  }
+}
+
+function getLocalResourceFailureMessageKey(reason) {
+  if (reason === 'not-found') {
+    return 'message.theFileDoesNotExist'
+  }
+  if (reason === 'relative-resource-without-document') {
+    return 'message.relativeResourceRequiresSavedFile'
+  }
+  if (reason === 'invalid-resource-url' || reason === 'invalid-resource-payload') {
+    return 'message.invalidLocalResourceLink'
+  }
+  return null
+}
+
 function createDeleteResult(ok, removed, reason, resolvedPath = null) {
   return {
     ok,
@@ -23,11 +48,59 @@ function createOpenFolderResult(ok, opened, reason, resolvedPath = null) {
 function createResourceInfoResult(ok, resolvedPath, options = {}) {
   return {
     ok,
+    reason: options.reason ?? (ok === true ? 'resolved' : 'invalid-resource'),
+    decodedPath: options.decodedPath ?? null,
     exists: options.exists === true,
     isDirectory: options.isDirectory === true,
     isFile: options.isFile === true,
     path: resolvedPath,
   }
+}
+
+async function enrichResolvedPath(decodedPath, resolvedPath) {
+  if (!await fs.pathExists(resolvedPath)) {
+    return createResolveResult(true, 'resolved', {
+      decodedPath,
+      path: resolvedPath,
+    })
+  }
+
+  const resourceStat = await fs.stat(resolvedPath)
+  return createResolveResult(true, 'resolved', {
+    decodedPath,
+    path: resolvedPath,
+    exists: true,
+    isDirectory: resourceStat.isDirectory(),
+    isFile: resourceStat.isFile(),
+  })
+}
+
+async function resolveLocalResource(winInfo, resourceUrl) {
+  if (!resourceUrl || typeof resourceUrl !== 'string' || !resourceUrl.startsWith('wj://')) {
+    return createResolveResult(false, 'invalid-resource-url')
+  }
+
+  let decodedPath = null
+  try {
+    decodedPath = commonUtil.decodeWjUrl(resourceUrl)
+  } catch {
+    return createResolveResult(false, 'invalid-resource-payload')
+  }
+
+  if (path.isAbsolute(decodedPath)) {
+    return await enrichResolvedPath(decodedPath, decodedPath)
+  }
+
+  if (!winInfo?.path) {
+    return createResolveResult(false, 'relative-resource-without-document', {
+      decodedPath,
+    })
+  }
+
+  return await enrichResolvedPath(
+    decodedPath,
+    path.resolve(path.dirname(winInfo.path), decodedPath),
+  )
 }
 
 /**
@@ -41,11 +114,16 @@ function resolveLocalResourcePath(winInfo, resourceUrl) {
     return null
   }
 
-  const decodedPath = commonUtil.decodeWjUrl(resourceUrl)
+  let decodedPath = null
+  try {
+    decodedPath = commonUtil.decodeWjUrl(resourceUrl)
+  } catch {
+    return null
+  }
+
   if (path.isAbsolute(decodedPath)) {
     return decodedPath
   }
-
   if (!winInfo?.path) {
     return null
   }
@@ -60,9 +138,9 @@ function resolveLocalResourcePath(winInfo, resourceUrl) {
  * @returns {Promise<boolean>} 删除流程是否成功进入执行分支
  */
 async function deleteLocalResource(winInfo, resourceUrl) {
-  const resourceInfo = await getLocalResourceInfo(winInfo, resourceUrl)
+  const resourceInfo = await resolveLocalResource(winInfo, resourceUrl)
   if (resourceInfo.ok !== true) {
-    return createDeleteResult(false, false, 'invalid-resource')
+    return createDeleteResult(false, false, resourceInfo.reason, resourceInfo.path)
   }
 
   if (resourceInfo.exists !== true) {
@@ -81,9 +159,9 @@ async function deleteLocalResource(winInfo, resourceUrl) {
 }
 
 async function openLocalResourceInFolder(winInfo, resourceUrl, showItemInFolder) {
-  const resourceInfo = await getLocalResourceInfo(winInfo, resourceUrl)
+  const resourceInfo = await resolveLocalResource(winInfo, resourceUrl)
   if (resourceInfo.ok !== true) {
-    return createOpenFolderResult(false, false, 'invalid-resource')
+    return createOpenFolderResult(false, false, resourceInfo.reason, resourceInfo.path)
   }
 
   if (resourceInfo.exists !== true) {
@@ -95,26 +173,15 @@ async function openLocalResourceInFolder(winInfo, resourceUrl, showItemInFolder)
 }
 
 async function getLocalResourceInfo(winInfo, resourceUrl) {
-  const resolvedPath = resolveLocalResourcePath(winInfo, resourceUrl)
-  if (!resolvedPath) {
-    return createResourceInfoResult(false, null)
-  }
-
-  if (!await fs.pathExists(resolvedPath)) {
-    return createResourceInfoResult(true, resolvedPath)
-  }
-
-  const stat = await fs.stat(resolvedPath)
-  return createResourceInfoResult(true, resolvedPath, {
-    exists: true,
-    isDirectory: stat.isDirectory(),
-    isFile: stat.isFile(),
-  })
+  const resolveResult = await resolveLocalResource(winInfo, resourceUrl)
+  return createResourceInfoResult(resolveResult.ok, resolveResult.path, resolveResult)
 }
 
 export default {
+  getLocalResourceFailureMessageKey,
   openLocalResourceInFolder,
   getLocalResourceInfo,
+  resolveLocalResource,
   resolveLocalResourcePath,
   deleteLocalResource,
 }

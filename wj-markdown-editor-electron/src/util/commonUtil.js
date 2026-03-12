@@ -29,7 +29,10 @@ function decodeWjUrl(url) {
   }
 
   const hexValue = parsedUrl.host || parsedUrl.pathname.replace(/^\/+|\/+$/g, '')
-  return decodeURIComponent(hexToString(hexValue))
+  if (!hexValue || !/^[\da-f]+$/i.test(hexValue) || hexValue.length % 2 !== 0) {
+    throw new Error('Invalid wj protocol payload')
+  }
+  return hexToString(hexValue)
 }
 
 function createUniqueFileName(name) {

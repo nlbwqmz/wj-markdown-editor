@@ -93,6 +93,15 @@ vi.mock('../imgUtil.js', () => {
 vi.mock('../resourceFileUtil.js', () => {
   return {
     default: {
+      getLocalResourceFailureMessageKey: vi.fn((reason) => {
+        if (reason === 'invalid-resource-payload')
+          return 'message.invalidLocalResourceLink'
+        if (reason === 'relative-resource-without-document')
+          return 'message.relativeResourceRequiresSavedFile'
+        if (reason === 'not-found')
+          return 'message.theFileDoesNotExist'
+        return null
+      }),
       openLocalResourceInFolder,
       deleteLocalResource: vi.fn(),
       getLocalResourceInfo: vi.fn(),
@@ -190,7 +199,7 @@ describe('ipcMainUtil open-folder', () => {
     send.mockReset()
   })
 
-  it('资源不存在时，应该向渲染进程发送文件不存在提示', async () => {
+  async function setupOpenFolderHandler() {
     let sendToMainHandler
     ipcMainHandle.mockImplementation((channel, handler) => {
       if (channel === 'sendToMain') {
@@ -201,6 +210,18 @@ describe('ipcMainUtil open-folder', () => {
     const sender = { id: 9527 }
     const win = { id: 1 }
     browserWindowFromWebContents.mockReturnValue(win)
+
+    await import('./ipcMainUtil.js')
+
+    return {
+      sender,
+      win,
+      sendToMainHandler,
+    }
+  }
+
+  it('资源不存在时，应该向渲染进程发送文件不存在提示', async () => {
+    const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
     openLocalResourceInFolder.mockResolvedValue({
       ok: true,
       opened: false,
@@ -208,7 +229,6 @@ describe('ipcMainUtil open-folder', () => {
       path: 'D:\\docs\\assets\\missing.md',
     })
 
-    await import('./ipcMainUtil.js')
     await sendToMainHandler({ sender }, {
       event: 'open-folder',
       data: 'wj://2e2f6173736574732f6d697373696e672e6d64',
@@ -220,6 +240,52 @@ describe('ipcMainUtil open-folder', () => {
       data: {
         type: 'warning',
         content: 'message.theFileDoesNotExist',
+      },
+    })
+  })
+
+  it('资源 payload 非法时，应该向渲染进程发送无效资源提示', async () => {
+    const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
+    openLocalResourceInFolder.mockResolvedValue({
+      ok: false,
+      opened: false,
+      reason: 'invalid-resource-payload',
+      path: null,
+    })
+
+    await sendToMainHandler({ sender }, {
+      event: 'open-folder',
+      data: 'wj://zz',
+    })
+
+    expect(send).toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.invalidLocalResourceLink',
+      },
+    })
+  })
+
+  it('未保存文档中的相对资源打开失败时，应该向渲染进程发送明确提示', async () => {
+    const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
+    openLocalResourceInFolder.mockResolvedValue({
+      ok: false,
+      opened: false,
+      reason: 'relative-resource-without-document',
+      path: null,
+    })
+
+    await sendToMainHandler({ sender }, {
+      event: 'open-folder',
+      data: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    })
+
+    expect(send).toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.relativeResourceRequiresSavedFile',
       },
     })
   })

@@ -62,6 +62,10 @@ const handlerList = {
     if (data && typeof data === 'string') {
       const openResult = await resourceFileUtil.openLocalResourceInFolder(winInfo, data, shell.showItemInFolder)
       if (openResult.ok !== true) {
+        const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
+        if (messageKey) {
+          sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: messageKey } })
+        }
         return
       }
       if (openResult.opened !== true && openResult.reason === 'not-found') {

@@ -11,6 +11,11 @@ import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
 import {
+  getPreviewAssetDeleteReasonMessageKey,
+  resolvePreviewAssetDeletePlan,
+  shouldContinueMarkdownCleanup,
+} from '@/util/editor/previewAssetDeleteDecisionUtil.js'
+import {
   countRemainingAssetReferences,
   removeAllAssetReferencesFromMarkdown,
   removeAssetFromMarkdown,
@@ -39,6 +44,8 @@ const multiReferenceDeleteModal = ref({
   open: false,
   asset: null,
   referenceCount: 0,
+  deleteFileEnabled: false,
+  reasonMessageKey: null,
   loading: false,
 })
 let contentUpdateToken = 0
@@ -156,6 +163,8 @@ function closeMultiReferenceDeleteModal() {
     open: false,
     asset: null,
     referenceCount: 0,
+    deleteFileEnabled: false,
+    reasonMessageKey: null,
     loading: false,
   }
 }
@@ -167,21 +176,33 @@ function getAssetReferenceCount(assetInfo) {
 }
 
 async function applyAssetDelete(nextContent, assetInfo, options = {}) {
-  if (options.deleteFile !== true) {
+  const updateMarkdownContent = () => {
     updateEditorContent(nextContent, options)
+  }
+
+  if (options.deleteFile !== true) {
+    updateMarkdownContent()
     return true
   }
 
   const deleteResult = await channelUtil.send({ event: 'delete-local-resource', data: assetInfo.resourceUrl })
   if (deleteResult?.ok === true) {
-    updateEditorContent(nextContent, options)
+    updateMarkdownContent()
+    const reasonMessageKey = getPreviewAssetDeleteReasonMessageKey(deleteResult.reason)
+    if (deleteResult.reason !== 'deleted' && reasonMessageKey) {
+      message.warning(t(reasonMessageKey))
+    }
     return true
   }
-  if (deleteResult?.reason === 'directory-not-allowed') {
-    message.warning(t('previewAssetMenu.deleteDirectoryNotAllowed'))
-    return false
+
+  const reasonMessageKey = getPreviewAssetDeleteReasonMessageKey(deleteResult?.reason)
+  if (shouldContinueMarkdownCleanup(deleteResult?.reason)) {
+    updateMarkdownContent()
+    message.warning(t(reasonMessageKey || 'previewAssetMenu.deleteFileFailed'))
+    return true
   }
-  message.warning(t('previewAssetMenu.deleteFileFailed'))
+
+  message.warning(t(reasonMessageKey || 'previewAssetMenu.deleteFileFailed'))
   return false
 }
 
@@ -199,7 +220,7 @@ async function deleteCurrentAssetReference(assetInfo, options = {}) {
   })
 }
 
-async function deleteAllAssetReferences(assetInfo) {
+async function deleteAllAssetReferences(assetInfo, options = {}) {
   const removeResult = removeAllAssetReferencesFromMarkdown(content.value, assetInfo, {
     resolveComparablePath: resolveComparableAssetPath,
   })
@@ -208,33 +229,42 @@ async function deleteAllAssetReferences(assetInfo) {
     return false
   }
   return await applyAssetDelete(removeResult.content, assetInfo, {
-    deleteFile: true,
+    deleteFile: options.deleteFile === true,
     cursorPosition: removeResult.cursorPosition,
     focus: true,
     scrollIntoView: true,
   })
 }
 
-async function requestSingleReferenceDelete(assetInfo) {
+async function requestSingleReferenceDelete(assetInfo, deletePlan) {
+  const deleteFile = deletePlan?.deleteFileEnabled === true
+  const reasonMessage = deletePlan?.reasonMessageKey
+    ? t(deletePlan.reasonMessageKey)
+    : t('previewAssetMenu.deleteFileFailed')
+
   Modal.confirm({
     title: t('prompt'),
     icon: createVNode(ExclamationCircleOutlined),
-    content: t('previewAssetMenu.deleteConfirm'),
+    content: deleteFile
+      ? t('previewAssetMenu.deleteConfirm')
+      : t('previewAssetMenu.referenceOnlyDeleteConfirm', { reason: reasonMessage }),
     okText: t('okText'),
     cancelText: t('cancelText'),
     onOk: async () => {
-      await deleteCurrentAssetReference(assetInfo, { deleteFile: true })
+      await deleteCurrentAssetReference(assetInfo, { deleteFile })
     },
   })
 }
 
-async function confirmDeleteAllReferencesAndFile() {
+async function confirmDeleteAllReferences() {
   const assetInfo = multiReferenceDeleteModal.value.asset
   if (!assetInfo || multiReferenceDeleteModal.value.loading) {
     return
   }
   multiReferenceDeleteModal.value.loading = true
-  const success = await deleteAllAssetReferences(assetInfo)
+  const success = await deleteAllAssetReferences(assetInfo, {
+    deleteFile: multiReferenceDeleteModal.value.deleteFileEnabled === true,
+  })
   multiReferenceDeleteModal.value.loading = false
   if (success) {
     closeMultiReferenceDeleteModal()
@@ -260,19 +290,16 @@ async function deletePreviewAsset() {
     return
   }
 
+  const referenceCount = getAssetReferenceCount(assetInfo)
   const resourceInfo = await channelUtil.send({ event: 'get-local-resource-info', data: assetInfo.resourceUrl })
-  if (resourceInfo?.isDirectory === true) {
-    message.warning(t('previewAssetMenu.deleteDirectoryNotAllowed'))
-    return
-  }
-  if (resourceInfo?.ok !== true) {
-    message.warning(t('previewAssetMenu.deleteFileFailed'))
+  const deletePlan = resolvePreviewAssetDeletePlan(resourceInfo, referenceCount)
+  if (deletePlan.mode === 'blocked') {
+    message.warning(t(deletePlan.blockMessageKey || 'previewAssetMenu.deleteFileFailed'))
     return
   }
 
-  const referenceCount = getAssetReferenceCount(assetInfo)
   if (referenceCount <= 1) {
-    await requestSingleReferenceDelete(assetInfo)
+    await requestSingleReferenceDelete(assetInfo, deletePlan)
     return
   }
 
@@ -280,6 +307,8 @@ async function deletePreviewAsset() {
     open: true,
     asset: assetInfo,
     referenceCount,
+    deleteFileEnabled: deletePlan.deleteFileEnabled,
+    reasonMessageKey: deletePlan.reasonMessageKey,
     loading: false,
   }
 }
@@ -315,20 +344,29 @@ async function deletePreviewAsset() {
       <div class="preview-asset-delete-summary">
         {{ t('previewAssetMenu.referenceCountTip', { count: multiReferenceDeleteModal.referenceCount }) }}
       </div>
+      <div v-if="multiReferenceDeleteModal.reasonMessageKey" class="preview-asset-delete-tip">
+        {{ t('previewAssetMenu.referenceOnlyModeTip', { reason: t(multiReferenceDeleteModal.reasonMessageKey) }) }}
+      </div>
       <div class="preview-asset-delete-option preview-asset-delete-option-warning">
         <div class="preview-asset-delete-option-title">
           {{ t('previewAssetMenu.deleteCurrentReferenceOnly') }}
         </div>
         <div class="preview-asset-delete-option-description">
-          {{ t('previewAssetMenu.deleteCurrentReferenceOnlyTip', { count: Math.max(multiReferenceDeleteModal.referenceCount - 1, 0) }) }}
+          {{ multiReferenceDeleteModal.deleteFileEnabled
+            ? t('previewAssetMenu.deleteCurrentReferenceOnlyTip', { count: Math.max(multiReferenceDeleteModal.referenceCount - 1, 0) })
+            : t('previewAssetMenu.deleteCurrentReferenceOnlyMarkdownTip', { count: Math.max(multiReferenceDeleteModal.referenceCount - 1, 0) }) }}
         </div>
       </div>
-      <div class="preview-asset-delete-option preview-asset-delete-option-danger">
+      <div class="preview-asset-delete-option" :class="multiReferenceDeleteModal.deleteFileEnabled ? 'preview-asset-delete-option-danger' : 'preview-asset-delete-option-primary'">
         <div class="preview-asset-delete-option-title">
-          {{ t('previewAssetMenu.deleteAllReferencesAndFile') }}
+          {{ multiReferenceDeleteModal.deleteFileEnabled
+            ? t('previewAssetMenu.deleteAllReferencesAndFile')
+            : t('previewAssetMenu.deleteAllReferencesOnly') }}
         </div>
         <div class="preview-asset-delete-option-description">
-          {{ t('previewAssetMenu.deleteAllReferencesAndFileTip', { count: multiReferenceDeleteModal.referenceCount }) }}
+          {{ multiReferenceDeleteModal.deleteFileEnabled
+            ? t('previewAssetMenu.deleteAllReferencesAndFileTip', { count: multiReferenceDeleteModal.referenceCount })
+            : t('previewAssetMenu.deleteAllReferencesOnlyTip', { count: multiReferenceDeleteModal.referenceCount }) }}
         </div>
       </div>
     </div>
@@ -340,8 +378,10 @@ async function deletePreviewAsset() {
         <a-button :loading="multiReferenceDeleteModal.loading" @click="confirmDeleteCurrentReferenceOnly">
           {{ t('previewAssetMenu.deleteCurrentReferenceOnly') }}
         </a-button>
-        <a-button danger type="primary" :loading="multiReferenceDeleteModal.loading" @click="confirmDeleteAllReferencesAndFile">
-          {{ t('previewAssetMenu.deleteAllReferencesAndFile') }}
+        <a-button :danger="multiReferenceDeleteModal.deleteFileEnabled" type="primary" :loading="multiReferenceDeleteModal.loading" @click="confirmDeleteAllReferences">
+          {{ multiReferenceDeleteModal.deleteFileEnabled
+            ? t('previewAssetMenu.deleteAllReferencesAndFile')
+            : t('previewAssetMenu.deleteAllReferencesOnly') }}
         </a-button>
       </div>
     </template>
@@ -380,6 +420,15 @@ async function deletePreviewAsset() {
     color: #1f2329;
     font-size: 14px;
     line-height: 22px;
+  }
+
+  .preview-asset-delete-tip {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(250, 173, 20, 0.1);
+    color: #874d00;
+    font-size: 13px;
+    line-height: 21px;
   }
 
   .preview-asset-delete-option {
@@ -429,6 +478,19 @@ async function deletePreviewAsset() {
     }
   }
 
+  .preview-asset-delete-option-primary {
+    border-color: rgba(22, 119, 255, 0.2);
+    background: rgba(22, 119, 255, 0.04);
+
+    .preview-asset-delete-option-title {
+      color: #0958d9;
+    }
+
+    .preview-asset-delete-option-description {
+      color: #1d39c4;
+    }
+  }
+
   .preview-asset-delete-footer {
     display: flex;
     justify-content: flex-end;
@@ -448,6 +510,11 @@ async function deletePreviewAsset() {
   .preview-asset-delete-summary {
     background: var(--wj-markdown-bg-secondary);
     color: var(--wj-markdown-text-primary);
+  }
+
+  .preview-asset-delete-tip {
+    background: rgba(250, 173, 20, 0.14);
+    color: #ffe7ba;
   }
 
   .preview-asset-delete-option {
@@ -486,6 +553,19 @@ async function deletePreviewAsset() {
 
     .preview-asset-delete-option-description {
       color: #ffd6d6;
+    }
+  }
+
+  .preview-asset-delete-option-primary {
+    border-color: rgba(64, 169, 255, 0.24);
+    background: rgba(22, 119, 255, 0.12);
+
+    .preview-asset-delete-option-title {
+      color: #91caff;
+    }
+
+    .preview-asset-delete-option-description {
+      color: #d6e4ff;
     }
   }
 }

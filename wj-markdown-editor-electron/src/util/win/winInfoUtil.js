@@ -8,6 +8,7 @@ import recent from '../../data/recent.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
 import fileWatchUtil from '../fileWatchUtil.js'
+import resourceFileUtil from '../resourceFileUtil.js'
 import updateUtil from '../updateUtil.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -262,6 +263,38 @@ function sendExternalChange(winInfo, change) {
       externalContent: change.content,
     },
   })
+}
+
+async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
+  const openResult = await resourceFileUtil.openLocalResourceInFolder(winInfo, resourceUrl, shell.showItemInFolder)
+  if (openResult.ok !== true) {
+    const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
+    if (messageKey) {
+      sendUtil.send(win, {
+        event: 'message',
+        data: {
+          type: 'warning',
+          content: messageKey,
+        },
+      })
+    }
+    return openResult
+  }
+
+  if (openResult.opened !== true) {
+    const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
+    if (messageKey) {
+      sendUtil.send(win, {
+        event: 'message',
+        data: {
+          type: 'warning',
+          content: messageKey,
+        },
+      })
+    }
+  }
+
+  return openResult
 }
 
 /**
@@ -546,22 +579,8 @@ export default {
       if (url.match('^http')) {
         shell.openExternal(url).then(() => {})
       } else if (url.match('^wj://')) {
-        const filePath = commonUtil.decodeWjUrl(url)
-        if (path.isAbsolute(filePath)) {
-          shell.showItemInFolder(filePath)
-        } else {
-          const winInfo = winInfoList.find(item => item.id === id)
-          if (winInfo.path) {
-            const fullPath = path.resolve(path.dirname(winInfo.path), filePath)
-            fs.pathExists(fullPath).then((exists) => {
-              if (exists) {
-                shell.showItemInFolder(fullPath)
-              } else {
-                sendUtil.send(win, { event: 'message', data: { type: 'warning', content: 'message.theFileDoesNotExist' } })
-              }
-            }).catch(() => {})
-          }
-        }
+        const currentWinInfo = winInfoList.find(item => item.id === id)
+        handleLocalResourceLinkOpen(win, currentWinInfo, url).then(() => {}).catch(() => {})
       }
 
       return { action: 'deny' }
@@ -609,6 +628,7 @@ export default {
     return winInfoList.find(item => item.win.webContents.id === webContentsId)
   },
   getFileInfoPayload,
+  handleLocalResourceLinkOpen,
   updateTempContent,
   handleExternalChange,
   handleFileMissing,
