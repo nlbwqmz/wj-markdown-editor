@@ -221,7 +221,7 @@ export function usePreviewSync({
     const elements = Array.from(previewRef.value.querySelectorAll('[data-line-start]'))
     let target = elements[0]
     for (const element of elements) {
-      if (element.offsetTop <= scrollTop) {
+      if (getElementToTopDistance(element, previewRef.value) <= scrollTop) {
         target = element
       } else {
         break
