@@ -96,56 +96,6 @@ function findClosingParenthesis(content, startIndex) {
   return -1
 }
 
-function removeTrailingMarkdownTitle(descriptor) {
-  return descriptor
-    .replace(/\s+"(?:[^"\\]|\\.)*"$/, '')
-    .replace(/\s+'(?:[^'\\]|\\.)*'$/, '')
-}
-
-function unescapeMarkdownDestination(value) {
-  let result = ''
-
-  for (let i = 0; i < value.length; i++) {
-    const char = value[i]
-    if (char === '\\' && shouldEscapeMarkdownCharacter(value[i + 1])) {
-      continue
-    }
-    result += char
-  }
-
-  return result
-}
-
-function extractDestinationPath(descriptor) {
-  const trimmedDescriptor = descriptor.trim()
-  if (!trimmedDescriptor) {
-    return null
-  }
-
-  if (trimmedDescriptor.startsWith('<')) {
-    let escaped = false
-    for (let i = 1; i < trimmedDescriptor.length; i++) {
-      const char = trimmedDescriptor[i]
-      if (escaped) {
-        escaped = false
-        continue
-      }
-      if (char === '\\') {
-        escaped = true
-        continue
-      }
-      if (char === '>') {
-        return trimmedDescriptor.slice(1, i).trim()
-      }
-    }
-    return null
-  }
-
-  const trimmedPathValue = removeTrailingMarkdownTitle(trimmedDescriptor).trim()
-  const normalizedPathValue = unescapeMarkdownDestination(trimmedPathValue).trim()
-  return normalizedPathValue || null
-}
-
 function createAssetMatch(content, lineStartIndexes, kind, from, to, rawPath) {
   return {
     kind,
@@ -168,23 +118,22 @@ function collectImageMatches(content, lineStartIndexes) {
       break
     }
 
-    const linkStartIndex = content.indexOf('](', startIndex + 2)
-    if (linkStartIndex === -1) {
-      break
-    }
+    const state = new StateInline(content, markdownItLinkMatcher, {}, [])
+    state.pos = startIndex
+    state.posMax = content.length
 
-    const endIndex = findClosingParenthesis(content, linkStartIndex + 2)
-    if (endIndex === -1) {
+    if (!state.md.inline.ruler.getRules('').some(rule => rule(state, false) && state.tokens.some(token => token.type === 'image'))) {
       searchIndex = startIndex + 2
       continue
     }
 
-    const rawPath = extractDestinationPath(content.slice(linkStartIndex + 2, endIndex))
+    const imageToken = state.tokens.find(token => token.type === 'image')
+    const rawPath = normalizeAssetPath(imageToken?.attrGet('src'))
     if (rawPath) {
-      matchList.push(createAssetMatch(content, lineStartIndexes, 'image', startIndex, endIndex + 1, rawPath))
+      matchList.push(createAssetMatch(content, lineStartIndexes, 'image', startIndex, state.pos, rawPath))
     }
 
-    searchIndex = endIndex + 1
+    searchIndex = state.pos
   }
 
   return matchList

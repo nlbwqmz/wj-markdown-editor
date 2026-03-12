@@ -115,7 +115,7 @@ describe('removeAssetFromMarkdown', () => {
   })
 
   it('删除图片时，应该兼容文件名中包含右括号', () => {
-    const content = '![图](./image (1).png)'
+    const content = '![图](<./image (1).png>)'
 
     const result = removeAssetFromMarkdown(content, {
       kind: 'image',
