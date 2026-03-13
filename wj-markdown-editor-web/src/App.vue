@@ -1,13 +1,14 @@
 <script setup>
-import SearchBar from '@/components/SearchBar.vue'
-import router from '@/router/index.js'
-
-import { useCommonStore } from '@/stores/counter.js'
-import constant from '@/util/constant.js'
-import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { px2remTransformer } from 'ant-design-vue'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+
 import { useI18n } from 'vue-i18n'
+import SearchBar from '@/components/SearchBar.vue'
+import router from '@/router/index.js'
+import { useCommonStore } from '@/stores/counter.js'
+import constant from '@/util/constant.js'
+import { previewSearchBarController } from '@/util/searchBarController.js'
+import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const defaultFontFamily = {
   editArea: `source-code-pro,Menlo,Monaco,Consolas,'Courier New',monospace`,
@@ -62,7 +63,7 @@ function onKeydown(e) {
       store.editorSearchBarVisible = false
     }
     if (store.searchBarVisible === true) {
-      store.searchBarVisible = false
+      previewSearchBarController.close(store)
     }
   } else if (shortcutKeyUtil.isShortcutKey(e)) {
     const shortcutKey = shortcutKeyUtil.getShortcutKey(e)
@@ -70,7 +71,11 @@ function onKeydown(e) {
       if (store.editorSearchBarVisible === true) {
         store.editorSearchBarVisible = false
       }
-      store.searchBarVisible = !store.searchBarVisible
+      if (store.searchBarVisible === true) {
+        previewSearchBarController.close(store)
+      } else {
+        store.searchBarVisible = true
+      }
     }
   }
 }

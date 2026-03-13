@@ -1,10 +1,12 @@
 <script setup>
-import { useCommonStore } from '@/stores/counter.js'
 import Mark from 'mark.js'
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useCommonStore } from '@/stores/counter.js'
+import { previewSearchBarController } from '@/util/searchBarController.js'
 
 const inputRef = ref()
 const searchBarRef = ref()
+const store = useCommonStore()
 let markInstance = null
 // 因是跨标签匹配，所以每一项为一个下标数组
 const markIndexGroup = ref([])
@@ -144,19 +146,32 @@ function stopDrag() {
   window.removeEventListener('mouseup', stopDrag)
 }
 
+function clearSearchHighlight() {
+  markInstance?.unmark()
+  markIndexGroup.value = []
+  result.value = {
+    total: 0,
+    current: 0,
+  }
+}
+
 // 组件卸载时清理
 onUnmounted(() => {
+  const shouldCleanupOnUnmount = previewSearchBarController.unregisterCleanup(clearSearchHighlight)
+  if (shouldCleanupOnUnmount) {
+    clearSearchHighlight()
+  }
   window.removeEventListener('mousemove', handleDrag)
   window.removeEventListener('mouseup', stopDrag)
 })
 
 onMounted(() => {
+  previewSearchBarController.registerCleanup(clearSearchHighlight)
   inputRef.value.focus()
 })
 
 function onCloseSearchBar() {
-  getMarkInstance().unmark()
-  useCommonStore().searchBarVisible = false
+  previewSearchBarController.close(store)
 }
 </script>
 

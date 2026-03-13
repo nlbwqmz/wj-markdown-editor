@@ -17,6 +17,7 @@ import { useCommonStore } from '@/stores/counter.js'
 import commonUtil from '@/util/commonUtil.js'
 import { resolvePendingContentUpdateMeta } from '@/util/editor/contentUpdateMetaUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
+import { previewSearchBarController } from '@/util/searchBarController.js'
 
 const props = defineProps({
   modelValue: {
@@ -207,7 +208,7 @@ function refreshKeymap() {
     stopPropagation: true,
     run: () => {
       if (store.searchBarVisible === true) {
-        store.searchBarVisible = false
+        previewSearchBarController.close(store)
       }
       store.editorSearchBarVisible = !store.editorSearchBarVisible
       return true
@@ -427,7 +428,7 @@ onBeforeUnmount(() => {
       <div
         v-if="previewController"
         ref="previewRef"
-        class="wj-scrollbar allow-search h-full p-2"
+        class="allow-search wj-scrollbar h-full p-2"
         :style="previewContainerStyle"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"
