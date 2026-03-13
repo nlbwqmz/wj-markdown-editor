@@ -152,7 +152,7 @@ function resolveComparableAssetPath(rawPath) {
   if (!rawPath) {
     return null
   }
-  return channelUtil.sendSync({ event: 'convert-to-absolute-path', data: rawPath }) || rawPath
+  return channelUtil.sendSync({ event: 'get-local-resource-comparable-key', data: rawPath }) || rawPath
 }
 
 function closeMultiReferenceDeleteModal() {

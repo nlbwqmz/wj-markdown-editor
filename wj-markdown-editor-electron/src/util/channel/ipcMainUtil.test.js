@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   appGetVersion,
   browserWindowFromWebContents,
+  getLocalResourceComparableKey,
   ipcMainHandle,
   ipcMainOn,
   openLocalResourceInFolder,
@@ -11,6 +12,7 @@ const {
   return {
     appGetVersion: vi.fn(() => '2.15.0'),
     browserWindowFromWebContents: vi.fn(),
+    getLocalResourceComparableKey: vi.fn(),
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
     openLocalResourceInFolder: vi.fn(),
@@ -105,6 +107,7 @@ vi.mock('../resourceFileUtil.js', () => {
       openLocalResourceInFolder,
       deleteLocalResource: vi.fn(),
       getLocalResourceInfo: vi.fn(),
+      getLocalResourceComparableKey,
       resolveLocalResourcePath: vi.fn(),
     },
   }
@@ -192,6 +195,7 @@ vi.mock('./sendUtil.js', () => {
 describe('ipcMainUtil open-folder', () => {
   beforeEach(() => {
     vi.resetModules()
+    getLocalResourceComparableKey.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
@@ -288,5 +292,44 @@ describe('ipcMainUtil open-folder', () => {
         content: 'message.relativeResourceRequiresSavedFile',
       },
     })
+  })
+})
+
+describe('ipcMainUtil sync comparable key', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    getLocalResourceComparableKey.mockReset()
+    ipcMainHandle.mockReset()
+    ipcMainOn.mockReset()
+    browserWindowFromWebContents.mockReset()
+  })
+
+  it('应该通过 sendToMainSync 暴露本地资源比较 key 解析能力', async () => {
+    let sendToMainSyncHandler
+    ipcMainOn.mockImplementation((channel, handler) => {
+      if (channel === 'sendToMainSync') {
+        sendToMainSyncHandler = handler
+      }
+    })
+
+    const sender = { id: 9527 }
+    const win = { id: 1 }
+    browserWindowFromWebContents.mockReturnValue(win)
+    getLocalResourceComparableKey.mockReturnValue('wj-local-file:d:/docs/index.html')
+
+    await import('./ipcMainUtil.js')
+
+    const event = { sender, returnValue: null }
+    sendToMainSyncHandler(event, {
+      event: 'get-local-resource-comparable-key',
+      data: './docs/index.html#guide',
+    })
+
+    expect(getLocalResourceComparableKey).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, './docs/index.html#guide')
+    expect(event.returnValue).toBe('wj-local-file:d:/docs/index.html')
   })
 })

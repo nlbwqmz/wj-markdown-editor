@@ -271,6 +271,9 @@ const handlerListSync = {
     }
     return null
   },
+  'get-local-resource-comparable-key': (winInfo, rawPath) => {
+    return resourceFileUtil.getLocalResourceComparableKey(winInfo, rawPath)
+  },
 }
 
 ipcMain.handle('sendToMain', async (event, json) => {

@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import resourceFileUtil from './resourceFileUtil.js'
 
-const { pathExists, remove, stat } = vi.hoisted(() => {
+const { pathExists, pathExistsSync, remove, stat } = vi.hoisted(() => {
   return {
     pathExists: vi.fn(),
+    pathExistsSync: vi.fn(),
     remove: vi.fn(),
     stat: vi.fn(),
   }
@@ -14,6 +15,7 @@ vi.mock('fs-extra', () => {
   return {
     default: {
       pathExists,
+      pathExistsSync,
       remove,
       stat,
     },
@@ -297,5 +299,53 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
     })
     expect(pathExists).not.toHaveBeenCalled()
     expect(stat).not.toHaveBeenCalled()
+  })
+})
+
+describe('resourceFileUtil.getLocalResourceComparableKey', () => {
+  beforeEach(() => {
+    pathExistsSync.mockReset()
+  })
+
+  it('完整路径文件存在且文件名包含 # 时，应优先按完整路径生成比较 key', () => {
+    pathExistsSync.mockImplementation(targetPath => targetPath === 'D:\\docs\\assets\\a#b.md')
+
+    const result = resourceFileUtil.getLocalResourceComparableKey({
+      path: 'D:\\docs\\note.md',
+    }, './assets/a#b.md')
+
+    expect(result).toBe('wj-local-file:d:/docs/assets/a#b.md')
+  })
+
+  it('完整路径不存在但去掉 hash 后的文件存在时，应按真实文件路径生成比较 key', () => {
+    pathExistsSync.mockImplementation((targetPath) => {
+      return targetPath === 'D:\\docs\\docs\\index.html'
+    })
+
+    const result = resourceFileUtil.getLocalResourceComparableKey({
+      path: 'D:\\docs\\note.md',
+    }, './docs/index.html#guide')
+
+    expect(result).toBe('wj-local-file:d:/docs/docs/index.html')
+  })
+
+  it('已保存文档中的普通相对路径即使文件不存在，也应返回可比较 key', () => {
+    pathExistsSync.mockReturnValue(false)
+
+    const result = resourceFileUtil.getLocalResourceComparableKey({
+      path: 'D:\\docs\\note.md',
+    }, './assets/demo.png')
+
+    expect(result).toBe('wj-local-file:d:/docs/assets/demo.png')
+  })
+
+  it('未保存文档中的相对路径且包含 # 时，无法证明资源身份时应返回 null', () => {
+    pathExistsSync.mockReturnValue(false)
+
+    const result = resourceFileUtil.getLocalResourceComparableKey({
+      path: '',
+    }, './docs/index.html#guide')
+
+    expect(result).toBeNull()
   })
 })

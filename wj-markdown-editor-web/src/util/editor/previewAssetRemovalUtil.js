@@ -293,7 +293,54 @@ function normalizeComparableAssetKey(value) {
   if (!normalizedValue) {
     return ''
   }
-  return /^[a-z]:\//i.test(normalizedValue) ? normalizedValue.toLowerCase() : normalizedValue
+
+  if (normalizedValue.startsWith('#') || normalizedValue.startsWith('//')) {
+    return normalizedValue
+  }
+
+  const hasExplicitScheme = /^[a-z][a-z\d+.-]*:/i.test(normalizedValue)
+  const isWindowsAbsolutePath = /^[a-z]:\//i.test(normalizedValue)
+  if (hasExplicitScheme && !isWindowsAbsolutePath) {
+    return normalizedValue
+  }
+
+  const comparableValue = (normalizedValue.includes('?') || normalizedValue.includes('#'))
+    ? normalizedValue
+    : normalizePathSegments(normalizedValue, isWindowsAbsolutePath)
+
+  return isWindowsAbsolutePath ? comparableValue.toLowerCase() : comparableValue
+}
+
+function normalizePathSegments(value, isAbsolutePath) {
+  const pathPrefix = isAbsolutePath
+    ? value.slice(0, 3)
+    : value.startsWith('/')
+      ? '/'
+      : ''
+  const rawSegmentValue = pathPrefix ? value.slice(pathPrefix.length) : value
+  const normalizedSegmentList = []
+
+  for (const segment of rawSegmentValue.split('/')) {
+    if (!segment || segment === '.') {
+      continue
+    }
+    if (segment === '..') {
+      const lastSegment = normalizedSegmentList[normalizedSegmentList.length - 1]
+      if (lastSegment && lastSegment !== '..') {
+        normalizedSegmentList.pop()
+      } else if (!pathPrefix) {
+        normalizedSegmentList.push(segment)
+      }
+      continue
+    }
+    normalizedSegmentList.push(segment)
+  }
+
+  if (normalizedSegmentList.length === 0) {
+    return pathPrefix || '.'
+  }
+
+  return `${pathPrefix}${normalizedSegmentList.join('/')}`
 }
 
 function resolveComparableAssetKey(rawPath, resolveComparablePath) {

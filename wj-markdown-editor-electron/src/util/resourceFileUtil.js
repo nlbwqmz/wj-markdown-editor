@@ -57,6 +57,74 @@ function createResourceInfoResult(ok, resolvedPath, options = {}) {
   }
 }
 
+function createComparableKey(resolvedPath) {
+  if (!resolvedPath) {
+    return null
+  }
+  const normalizedPath = resolvedPath.replace(/\\/g, '/')
+  const comparablePath = /^[a-z]:\//i.test(normalizedPath) ? normalizedPath.toLowerCase() : normalizedPath
+  return `wj-local-file:${comparablePath}`
+}
+
+function resolveRawLocalPath(winInfo, rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') {
+    return null
+  }
+  if (path.isAbsolute(rawPath)) {
+    return path.normalize(rawPath)
+  }
+  if (!winInfo?.path) {
+    return null
+  }
+  return path.resolve(path.dirname(winInfo.path), rawPath)
+}
+
+function extractRawPathname(rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') {
+    return rawPath
+  }
+  const queryIndex = rawPath.indexOf('?')
+  const hashIndex = rawPath.indexOf('#')
+  const suffixIndexList = [queryIndex, hashIndex].filter(index => index >= 0)
+  if (suffixIndexList.length === 0) {
+    return rawPath
+  }
+  return rawPath.slice(0, Math.min(...suffixIndexList))
+}
+
+function getLocalResourceComparableKey(winInfo, rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') {
+    return null
+  }
+
+  const trimmedRawPath = rawPath.trim()
+  if (!trimmedRawPath || trimmedRawPath.startsWith('#') || trimmedRawPath.startsWith('//')) {
+    return null
+  }
+
+  const hasExplicitScheme = /^[a-z][a-z\d+.-]*:/i.test(trimmedRawPath)
+  const isWindowsAbsolutePath = /^[a-z]:[\\/]/i.test(trimmedRawPath)
+  if (hasExplicitScheme && !isWindowsAbsolutePath) {
+    return null
+  }
+
+  const exactResolvedPath = resolveRawLocalPath(winInfo, trimmedRawPath)
+  if (exactResolvedPath && fs.pathExistsSync(exactResolvedPath)) {
+    return createComparableKey(exactResolvedPath)
+  }
+
+  const pathname = extractRawPathname(trimmedRawPath)
+  if (pathname !== trimmedRawPath) {
+    const pathnameResolvedPath = resolveRawLocalPath(winInfo, pathname)
+    if (pathnameResolvedPath && fs.pathExistsSync(pathnameResolvedPath)) {
+      return createComparableKey(pathnameResolvedPath)
+    }
+    return null
+  }
+
+  return createComparableKey(exactResolvedPath)
+}
+
 async function enrichResolvedPath(decodedPath, resolvedPath) {
   if (!await fs.pathExists(resolvedPath)) {
     return createResolveResult(true, 'resolved', {
@@ -179,6 +247,7 @@ async function getLocalResourceInfo(winInfo, resourceUrl) {
 
 export default {
   getLocalResourceFailureMessageKey,
+  getLocalResourceComparableKey,
   openLocalResourceInFolder,
   getLocalResourceInfo,
   resolveLocalResource,
