@@ -145,7 +145,26 @@ function openPreviewAssetInExplorer() {
   if (!assetInfo?.resourceUrl) {
     return
   }
-  channelUtil.send({ event: 'open-folder', data: assetInfo.resourceUrl })
+  channelUtil.send({
+    event: 'open-folder',
+    data: {
+      resourceUrl: assetInfo.resourceUrl,
+      rawPath: assetInfo.rawPath,
+    },
+  })
+}
+
+function onAssetOpen(assetInfo) {
+  if (!assetInfo?.resourceUrl) {
+    return
+  }
+  channelUtil.send({
+    event: 'open-folder',
+    data: {
+      resourceUrl: assetInfo.resourceUrl,
+      rawPath: assetInfo.rawPath,
+    },
+  })
 }
 
 function resolveComparableAssetPath(rawPath) {
@@ -315,7 +334,7 @@ async function deletePreviewAsset() {
 </script>
 
 <template>
-  <MarkdownEdit v-if="ready" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" />
+  <MarkdownEdit v-if="ready" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
   <PreviewAssetContextMenu
     :open="previewAssetMenu.open"
     :x="previewAssetMenu.x"

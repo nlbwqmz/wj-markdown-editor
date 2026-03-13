@@ -20,6 +20,14 @@ describe('convertResourceUrl', () => {
     expect(convertResourceUrl('D:%5Cdemo%5Ctest.pdf')).toBe('wj://443a2f64656d6f2f746573742e706466')
   })
 
+  it('文件名中以百分号编码的 # 字符，应作为路径本体参与编码', () => {
+    expect(convertResourceUrl('./docs/demo%23guide.md')).toBe('wj://2e2f646f63732f64656d6f2367756964652e6d64')
+  })
+
+  it('文件名中以百分号编码的 ? 字符，应作为路径本体参与编码', () => {
+    expect(convertResourceUrl('./docs/demo%3Fguide.md')).toBe('wj://2e2f646f63732f64656d6f3f67756964652e6d64')
+  })
+
   it('应该保持显式协议链接不变', () => {
     expect(convertResourceUrl('https://example.com/demo.pdf')).toBe('https://example.com/demo.pdf')
   })

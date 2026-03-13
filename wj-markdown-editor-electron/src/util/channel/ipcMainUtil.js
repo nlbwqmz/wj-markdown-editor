@@ -59,7 +59,7 @@ const handlerList = {
     winInfo.win.close()
   },
   'open-folder': async (winInfo, data) => {
-    if (data && typeof data === 'string') {
+    if (typeof data === 'string' || (data && typeof data === 'object' && typeof data.resourceUrl === 'string')) {
       const openResult = await resourceFileUtil.openLocalResourceInFolder(winInfo, data, shell.showItemInFolder)
       if (openResult.ok !== true) {
         const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)

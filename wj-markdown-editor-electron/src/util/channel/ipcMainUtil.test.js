@@ -293,6 +293,33 @@ describe('ipcMainUtil open-folder', () => {
       },
     })
   })
+
+  it('打开请求携带原始路径提示时，应该原样透传给资源打开逻辑', async () => {
+    const { sender, sendToMainHandler } = await setupOpenFolderHandler()
+    openLocalResourceInFolder.mockResolvedValue({
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: 'D:\\docs\\docs\\index.html',
+    })
+
+    await sendToMainHandler({ sender }, {
+      event: 'open-folder',
+      data: {
+        resourceUrl: 'wj://2e2f646f63732f696e6465782e68746d6c236775696465',
+        rawPath: './docs/index.html#guide',
+      },
+    })
+
+    expect(openLocalResourceInFolder).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, {
+      resourceUrl: 'wj://2e2f646f63732f696e6465782e68746d6c236775696465',
+      rawPath: './docs/index.html#guide',
+    }, expect.any(Function))
+  })
 })
 
 describe('ipcMainUtil sync comparable key', () => {

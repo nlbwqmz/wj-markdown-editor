@@ -25,7 +25,7 @@ const props = defineProps({
   },
 })
 
-const emits = defineEmits(['refreshComplete', 'anchorChange', 'assetContextmenu'])
+const emits = defineEmits(['refreshComplete', 'anchorChange', 'assetContextmenu', 'assetOpen'])
 
 const store = useCommonStore()
 
@@ -88,10 +88,37 @@ function clearPreviewRefreshScheduler() {
   }
 }
 
+function getAssetInfoFromDom(assetDom, event) {
+  const resourceUrl = assetDom.getAttribute('src') || assetDom.getAttribute('href') || ''
+  const rawSrc = assetDom.dataset.wjResourceSrc
+  const rawPath = assetDom.dataset.wjResourceRaw || rawSrc
+  const kind = assetDom.dataset.wjResourceKind
+  if (!resourceUrl || !rawSrc || !kind) {
+    return null
+  }
+  const lineDom = assetDom.closest('[data-line-start]')
+  const occurrence = Number.parseInt(assetDom.dataset.wjResourceOccurrence || '1', 10)
+  return {
+    kind,
+    rawSrc,
+    rawPath,
+    resourceUrl,
+    occurrence: Number.isNaN(occurrence) ? 1 : occurrence,
+    lineStart: lineDom?.dataset.lineStart ? Number.parseInt(lineDom.dataset.lineStart, 10) : undefined,
+    lineEnd: lineDom?.dataset.lineEnd ? Number.parseInt(lineDom.dataset.lineEnd, 10) : undefined,
+    clientX: event?.clientX,
+    clientY: event?.clientY,
+  }
+}
+
 /**
  * 统一处理预览区点击事件（事件委托）
  */
 function handlePreviewClick(e) {
+  if (!(e.target instanceof Element)) {
+    return
+  }
+
   // 处理图片点击
   const img = e.target.closest('img')
   if (img) {
@@ -99,6 +126,16 @@ function handlePreviewClick(e) {
     imagePreviewVisible.value = true
     imagePreviewCurrentIndex.value = index
     return
+  }
+
+  const assetLink = e.target.closest('a[data-wj-resource-src][data-wj-resource-kind="link"]')
+  if (assetLink instanceof Element) {
+    const assetInfo = getAssetInfoFromDom(assetLink, e)
+    if (assetInfo?.resourceUrl) {
+      e.preventDefault()
+      emits('assetOpen', assetInfo)
+      return
+    }
   }
 
   // 处理脚注链接点击
@@ -128,25 +165,12 @@ function handlePreviewContextmenu(e) {
   if (!(assetDom instanceof Element)) {
     return
   }
-  const resourceUrl = assetDom.getAttribute('src') || assetDom.getAttribute('href') || ''
-  const rawSrc = assetDom.dataset.wjResourceSrc
-  const kind = assetDom.dataset.wjResourceKind
-  if (!resourceUrl || !rawSrc || !kind) {
+  const assetInfo = getAssetInfoFromDom(assetDom, e)
+  if (!assetInfo) {
     return
   }
-  const lineDom = assetDom.closest('[data-line-start]')
-  const occurrence = Number.parseInt(assetDom.dataset.wjResourceOccurrence || '1', 10)
   e.preventDefault()
-  emits('assetContextmenu', {
-    kind,
-    rawSrc,
-    resourceUrl,
-    occurrence: Number.isNaN(occurrence) ? 1 : occurrence,
-    lineStart: lineDom?.dataset.lineStart ? Number.parseInt(lineDom.dataset.lineStart, 10) : undefined,
-    lineEnd: lineDom?.dataset.lineEnd ? Number.parseInt(lineDom.dataset.lineEnd, 10) : undefined,
-    clientX: e.clientX,
-    clientY: e.clientY,
-  })
+  emits('assetContextmenu', assetInfo)
 }
 
 /**

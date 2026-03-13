@@ -29,6 +29,7 @@ export default function (md) {
         if (convertedHref.startsWith('wj://')) {
           tokens[idx].attrSet('data-wj-resource-kind', 'link')
           tokens[idx].attrSet('data-wj-resource-src', normalizedHref)
+          tokens[idx].attrSet('data-wj-resource-raw', href)
         }
       }
     }

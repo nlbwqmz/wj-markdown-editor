@@ -111,7 +111,26 @@ function onAnchorChange(changedAnchorList) {
 }
 
 function onAssetContextmenu(assetInfo) {
-  channelUtil.send({ event: 'open-folder', data: assetInfo.resourceUrl })
+  channelUtil.send({
+    event: 'open-folder',
+    data: {
+      resourceUrl: assetInfo.resourceUrl,
+      rawPath: assetInfo.rawPath,
+    },
+  })
+}
+
+function onAssetOpen(assetInfo) {
+  if (!assetInfo?.resourceUrl) {
+    return
+  }
+  channelUtil.send({
+    event: 'open-folder',
+    data: {
+      resourceUrl: assetInfo.resourceUrl,
+      rawPath: assetInfo.rawPath,
+    },
+  })
 }
 </script>
 
@@ -134,7 +153,7 @@ function onAssetContextmenu(assetInfo) {
     <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">
         <div class="h-full w-full" :style="{ width: `${config.previewWidth}%` }">
-          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" @anchor-change="onAnchorChange" @asset-contextmenu="onAssetContextmenu" />
+          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" @anchor-change="onAnchorChange" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
         </div>
       </div>
     </div>

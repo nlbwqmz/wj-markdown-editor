@@ -83,7 +83,7 @@ export default function (md) {
     const convertedSrc = commonUtil.convertResourceUrl(normalizedSrc)
     const isLocalResource = convertedSrc.startsWith('wj://')
     const resourceAttr = isLocalResource
-      ? ` data-wj-resource-kind="audio" data-wj-resource-src="${md.utils.escapeHtml(normalizedSrc)}"`
+      ? ` data-wj-resource-kind="audio" data-wj-resource-src="${md.utils.escapeHtml(normalizedSrc)}" data-wj-resource-raw="${md.utils.escapeHtml(rawSrc)}"`
       : ''
 
     return `<audio src="${md.utils.escapeHtml(convertedSrc)}" controls style="max-width: 100%"${resourceAttr}></audio>`

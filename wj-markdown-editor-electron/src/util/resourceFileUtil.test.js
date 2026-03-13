@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { convertResourceUrl } from '../../../wj-markdown-editor-web/src/util/resourceUrlUtil.js'
 import resourceFileUtil from './resourceFileUtil.js'
 
 const { pathExists, pathExistsSync, remove, stat } = vi.hoisted(() => {
@@ -154,6 +155,27 @@ describe('resourceFileUtil.deleteLocalResource', () => {
     expect(stat).not.toHaveBeenCalled()
     expect(remove).not.toHaveBeenCalled()
   })
+
+  it('字面量 # 文件不存在但剥离 hash 后文件存在时，不应误删其他文件', async () => {
+    pathExists.mockImplementation(async (targetPath) => {
+      return targetPath === 'D:\\docs\\assets\\demo.md'
+    })
+
+    const result = await resourceFileUtil.deleteLocalResource({
+      path: 'D:\\docs\\note.md',
+    }, convertResourceUrl('./assets/demo%23guide.md'))
+
+    expect(result).toEqual({
+      ok: true,
+      removed: false,
+      reason: 'not-found',
+      path: 'D:\\docs\\assets\\demo#guide.md',
+    })
+    expect(pathExists).toHaveBeenCalledTimes(1)
+    expect(pathExists).toHaveBeenCalledWith('D:\\docs\\assets\\demo#guide.md')
+    expect(stat).not.toHaveBeenCalled()
+    expect(remove).not.toHaveBeenCalled()
+  })
 })
 
 describe('resourceFileUtil.openLocalResourceInFolder', () => {
@@ -192,6 +214,114 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
       reason: 'invalid-resource-payload',
       path: null,
     })
+    expect(showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('打开本地资源时，原始路径带 query 且对应文件存在时，应打开真实文件所在位置', async () => {
+    pathExists.mockImplementation(async (targetPath) => {
+      return targetPath === 'D:\\docs\\docs\\index.html'
+    })
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    const showItemInFolder = vi.fn()
+
+    const result = await resourceFileUtil.openLocalResourceInFolder({
+      path: 'D:\\docs\\note.md',
+    }, {
+      resourceUrl: convertResourceUrl('./docs/index.html?tab=a'),
+      rawPath: './docs/index.html?tab=a',
+    }, showItemInFolder)
+
+    expect(result).toEqual({
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: 'D:\\docs\\docs\\index.html',
+    })
+    expect(pathExists).toHaveBeenNthCalledWith(1, 'D:\\docs\\docs\\index.html?tab=a')
+    expect(pathExists).toHaveBeenNthCalledWith(2, 'D:\\docs\\docs\\index.html')
+    expect(showItemInFolder).toHaveBeenCalledWith('D:\\docs\\docs\\index.html')
+  })
+
+  it('打开本地资源时，原始路径带 hash 且对应文件存在时，应打开真实文件所在位置', async () => {
+    pathExists.mockImplementation(async (targetPath) => {
+      return targetPath === 'D:\\docs\\docs\\index.html'
+    })
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    const showItemInFolder = vi.fn()
+
+    const result = await resourceFileUtil.openLocalResourceInFolder({
+      path: 'D:\\docs\\note.md',
+    }, {
+      resourceUrl: convertResourceUrl('./docs/index.html#guide'),
+      rawPath: './docs/index.html#guide',
+    }, showItemInFolder)
+
+    expect(result).toEqual({
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: 'D:\\docs\\docs\\index.html',
+    })
+    expect(pathExists).toHaveBeenNthCalledWith(1, 'D:\\docs\\docs\\index.html#guide')
+    expect(pathExists).toHaveBeenNthCalledWith(2, 'D:\\docs\\docs\\index.html')
+    expect(showItemInFolder).toHaveBeenCalledWith('D:\\docs\\docs\\index.html')
+  })
+
+  it('打开本地资源时，原始路径里的字面量 # 已存在，应优先打开完整文件路径', async () => {
+    pathExists.mockImplementation(async (targetPath) => {
+      return targetPath === 'D:\\docs\\assets\\a#b.md'
+    })
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    const showItemInFolder = vi.fn()
+
+    const result = await resourceFileUtil.openLocalResourceInFolder({
+      path: 'D:\\docs\\note.md',
+    }, {
+      resourceUrl: convertResourceUrl('./assets/a#b.md'),
+      rawPath: './assets/a#b.md',
+    }, showItemInFolder)
+
+    expect(result).toEqual({
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: 'D:\\docs\\assets\\a#b.md',
+    })
+    expect(pathExists).toHaveBeenCalledTimes(1)
+    expect(pathExists).toHaveBeenCalledWith('D:\\docs\\assets\\a#b.md')
+    expect(showItemInFolder).toHaveBeenCalledWith('D:\\docs\\assets\\a#b.md')
+  })
+
+  it('打开本地资源时，字面量 %3F 文件不存在但去掉问号后文件存在时，不应误开其他文件', async () => {
+    pathExists.mockImplementation(async (targetPath) => {
+      return targetPath === 'D:\\docs\\assets\\demo.md'
+    })
+    const showItemInFolder = vi.fn()
+
+    const result = await resourceFileUtil.openLocalResourceInFolder({
+      path: 'D:\\docs\\note.md',
+    }, {
+      resourceUrl: convertResourceUrl('./assets/demo%3Fguide.md'),
+      rawPath: './assets/demo%3Fguide.md',
+    }, showItemInFolder)
+
+    expect(result).toEqual({
+      ok: true,
+      opened: false,
+      reason: 'not-found',
+      path: 'D:\\docs\\assets\\demo?guide.md',
+    })
+    expect(pathExists).toHaveBeenCalledTimes(1)
+    expect(pathExists).toHaveBeenCalledWith('D:\\docs\\assets\\demo?guide.md')
     expect(showItemInFolder).not.toHaveBeenCalled()
   })
 })
@@ -337,6 +467,16 @@ describe('resourceFileUtil.getLocalResourceComparableKey', () => {
     }, './assets/demo.png')
 
     expect(result).toBe('wj-local-file:d:/docs/assets/demo.png')
+  })
+
+  it('绝对路径包含点段时，比较 key 应基于归一化后的真实路径', () => {
+    pathExistsSync.mockReturnValue(false)
+
+    const result = resourceFileUtil.getLocalResourceComparableKey({
+      path: 'D:\\docs\\note.md',
+    }, 'D:/docs/../assets/demo.png')
+
+    expect(result).toBe('wj-local-file:d:/assets/demo.png')
   })
 
   it('未保存文档中的相对路径且包含 # 时，无法证明资源身份时应返回 null', () => {

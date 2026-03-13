@@ -21,6 +21,7 @@ export default function (md) {
             const normalizedSrc = normalizeLocalResourcePath(src)
             token.attrSet('data-wj-resource-kind', 'image')
             token.attrSet('data-wj-resource-src', normalizedSrc)
+            token.attrSet('data-wj-resource-raw', src)
             token.attrs[srcIndex][1] = `${commonUtil.convertResourceUrl(normalizedSrc)}?wj_date=${Date.now()}`
           }
         }

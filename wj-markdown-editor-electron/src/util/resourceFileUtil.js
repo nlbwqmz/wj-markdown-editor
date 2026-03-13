@@ -66,6 +66,19 @@ function createComparableKey(resolvedPath) {
   return `wj-local-file:${comparablePath}`
 }
 
+function normalizeResourceOpenInput(resourceData) {
+  if (resourceData && typeof resourceData === 'object') {
+    return {
+      resourceUrl: typeof resourceData.resourceUrl === 'string' ? resourceData.resourceUrl : null,
+      rawPath: typeof resourceData.rawPath === 'string' ? resourceData.rawPath : null,
+    }
+  }
+  return {
+    resourceUrl: typeof resourceData === 'string' ? resourceData : null,
+    rawPath: null,
+  }
+}
+
 function resolveRawLocalPath(winInfo, rawPath) {
   if (!rawPath || typeof rawPath !== 'string') {
     return null
@@ -77,6 +90,19 @@ function resolveRawLocalPath(winInfo, rawPath) {
     return null
   }
   return path.resolve(path.dirname(winInfo.path), rawPath)
+}
+
+function decodeRawLocalPath(rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') {
+    return rawPath
+  }
+  let decodedPath = rawPath
+  try {
+    decodedPath = decodeURIComponent(rawPath)
+  } catch {
+    decodedPath = rawPath
+  }
+  return decodedPath.replace(/\\/g, '/')
 }
 
 function extractRawPathname(rawPath) {
@@ -227,9 +253,21 @@ async function deleteLocalResource(winInfo, resourceUrl) {
 }
 
 async function openLocalResourceInFolder(winInfo, resourceUrl, showItemInFolder) {
-  const resourceInfo = await resolveLocalResource(winInfo, resourceUrl)
+  const { resourceUrl: normalizedResourceUrl, rawPath } = normalizeResourceOpenInput(resourceUrl)
+  const resourceInfo = await resolveLocalResource(winInfo, normalizedResourceUrl)
   if (resourceInfo.ok !== true) {
     return createOpenFolderResult(false, false, resourceInfo.reason, resourceInfo.path)
+  }
+
+  if (resourceInfo.exists !== true && rawPath) {
+    const pathname = extractRawPathname(rawPath)
+    if (pathname !== rawPath) {
+      const pathnameResolvedPath = resolveRawLocalPath(winInfo, decodeRawLocalPath(pathname))
+      if (pathnameResolvedPath && await fs.pathExists(pathnameResolvedPath)) {
+        showItemInFolder(pathnameResolvedPath)
+        return createOpenFolderResult(true, true, 'opened', pathnameResolvedPath)
+      }
+    }
   }
 
   if (resourceInfo.exists !== true) {
