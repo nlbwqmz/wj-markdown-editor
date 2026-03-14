@@ -1,13 +1,16 @@
 <script setup>
 import dayjs from 'dayjs'
 import Split from 'split-grid'
-import { nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
+import { previewSearchBarController } from '@/util/searchBarController.js'
+import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
+import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
 
 const router = useRouter()
 
@@ -23,8 +26,38 @@ const menuController = ref(false)
 const previewContainer = ref()
 const config = ref({})
 const ready = ref(false)
+let previewSearchTargetActive = false
 
 const watermark = ref()
+
+function getPreviewSearchTargetElements() {
+  return collectSearchTargetElements(previewContainer.value)
+}
+
+const previewSearchTargetProvider = () => getPreviewSearchTargetElements()
+
+function activatePreviewSearchTarget() {
+  if (previewSearchTargetActive === true) {
+    return
+  }
+  previewSearchTargetActive = true
+  previewSearchBarController.registerTargetProvider(previewSearchTargetProvider)
+}
+
+function deactivatePreviewSearchTarget() {
+  if (previewSearchTargetActive === false) {
+    return
+  }
+  previewSearchTargetActive = false
+  previewSearchBarController.unregisterTargetProvider(previewSearchTargetProvider)
+}
+
+function closePreviewSearchBar() {
+  closeSearchBarIfVisible({
+    controller: previewSearchBarController,
+    store,
+  })
+}
 
 function syncFileMeta(data) {
   window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
@@ -67,16 +100,21 @@ watch(() => store.config, (newValue) => {
 
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
+  activatePreviewSearchTarget()
   // 当 Electron 自动应用外部修改，或者用户手动应用完成后，
   // 预览页会收到统一的刷新事件。
   eventEmit.on('file-content-reloaded', onFileContentReloaded)
 })
 
 onBeforeUnmount(() => {
+  closePreviewSearchBar()
+  deactivatePreviewSearchTarget()
   eventEmit.remove('file-content-reloaded', onFileContentReloaded)
 })
 
 watch(() => menuVisible.value, (newValue) => {
+  closePreviewSearchBar()
+
   if (newValue) {
     menuController.value = true
     nextTick(() => {
@@ -96,8 +134,15 @@ watch(() => menuVisible.value, (newValue) => {
 })
 
 onActivated(async () => {
+  activatePreviewSearchTarget()
+  closePreviewSearchBar()
   const data = await channelUtil.send({ event: 'get-file-info' })
   updateFileInfo(data, { syncMeta: true })
+})
+
+onDeactivated(() => {
+  closePreviewSearchBar()
+  deactivatePreviewSearchTarget()
 })
 
 function toEdit() {
@@ -108,6 +153,10 @@ function toEdit() {
 
 function onAnchorChange(changedAnchorList) {
   anchorList.value = changedAnchorList
+}
+
+function onPreviewRefreshComplete() {
+  closePreviewSearchBar()
 }
 
 function onAssetContextmenu(assetInfo) {
@@ -153,7 +202,7 @@ function onAssetOpen(assetInfo) {
     <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">
         <div class="h-full w-full" :style="{ width: `${config.previewWidth}%` }">
-          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" @anchor-change="onAnchorChange" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
+          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" @refresh-complete="onPreviewRefreshComplete" @anchor-change="onAnchorChange" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
         </div>
       </div>
     </div>

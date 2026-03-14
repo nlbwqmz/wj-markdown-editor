@@ -1,7 +1,7 @@
 <script setup>
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { computed, createVNode, h, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, createVNode, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ColorPicker } from 'vue3-colorpicker'
 import { useI18n } from 'vue-i18n'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
@@ -9,6 +9,10 @@ import TypographerDescription from '@/components/TypographerDescription.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import constant from '@/util/constant.js'
+import { previewSearchBarController } from '@/util/searchBarController.js'
+import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
+import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
+import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const { t } = useI18n()
@@ -16,6 +20,11 @@ const { t } = useI18n()
 const store = useCommonStore()
 
 const config = ref()
+const settingContainerRef = ref()
+const settingSearchTargetBridge = createSearchTargetBridge({
+  controller: previewSearchBarController,
+  getTargetElements: () => collectSearchTargetElements(settingContainerRef.value),
+})
 
 // 用于更新字体大小时，刷新锚点组件
 const anchorKey = ref(1)
@@ -92,8 +101,16 @@ function getAnchorContainer() {
   return window.document.getElementById('wj-other-layout-container')
 }
 
+function closePreviewSearchBar() {
+  closeSearchBarIfVisible({
+    controller: previewSearchBarController,
+    store,
+  })
+}
+
 watch(() => config.value, (newValue) => {
   channelUtil.send({ event: 'user-update-config', data: JSON.parse(JSON.stringify(newValue)) })
+  closePreviewSearchBar()
 }, { deep: true })
 
 // 是否显示图片绝对路径
@@ -109,17 +126,23 @@ onMounted(async () => {
   config.value = await channelUtil.send({ event: 'get-config' })
   refreshSystemFontList()
   window.addEventListener('visibilitychange', refreshSystemFontList)
+  await nextTick()
+  settingSearchTargetBridge.activate()
   watch(() => config.value.fontSize, () => {
     anchorKey.value++
   })
 })
 
 onUnmounted(() => {
+  closePreviewSearchBar()
+  settingSearchTargetBridge.deactivate({ preserveCleanupTarget: false })
   window.removeEventListener('visibilitychange', refreshSystemFontList)
 })
 
-watch(() => store.config.language, () => {
+watch(() => store.config.language, async () => {
   window.document.title = t('config.modalTitle')
+  await nextTick()
+  closePreviewSearchBar()
 }, { immediate: true })
 
 watch(() => store.config.theme.global, (newValue) => {
@@ -236,7 +259,7 @@ function reset() {
         <div class="i-tabler:x" />
       </div>
     </template>
-    <div v-if="config" class="allow-search w-full flex gap-2 p-2 p-t-0">
+    <div v-if="config" ref="settingContainerRef" class="allow-search w-full flex gap-2 p-2 p-t-0">
       <div class="w-full flex flex-1 flex-col">
         <a-descriptions bordered :column="1" size="small">
           <template #title>

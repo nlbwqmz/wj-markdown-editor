@@ -1,6 +1,6 @@
 <script setup>
 import Split from 'split-grid'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isPointerSelectionUpdate } from '@/components/editor/composables/selectionUpdateUtil.js'
 import { useAssetInsert } from '@/components/editor/composables/useAssetInsert.js'
@@ -18,6 +18,8 @@ import commonUtil from '@/util/commonUtil.js'
 import { resolvePendingContentUpdateMeta } from '@/util/editor/contentUpdateMetaUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
+import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
+import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
 
 const props = defineProps({
   modelValue: {
@@ -89,9 +91,39 @@ const handledContentUpdateToken = ref(0)
 
 const BOTTOM_GAP = '40vh'
 const EDITOR_EMIT_DEBOUNCE_MS = 160
+let previewSearchTargetActive = false
+
+function getPreviewSearchTargetElements() {
+  return collectSearchTargetElements(editorContainer.value)
+}
+
+const previewSearchTargetProvider = () => getPreviewSearchTargetElements()
+
+function activatePreviewSearchTarget() {
+  if (previewSearchTargetActive === true) {
+    return
+  }
+  previewSearchTargetActive = true
+  previewSearchBarController.registerTargetProvider(previewSearchTargetProvider)
+}
+
+function deactivatePreviewSearchTarget() {
+  if (previewSearchTargetActive === false) {
+    return
+  }
+  previewSearchTargetActive = false
+  previewSearchBarController.unregisterTargetProvider(previewSearchTargetProvider)
+}
 
 function onEditorSearchBarClose() {
   store.editorSearchBarVisible = false
+}
+
+function closePreviewSearchBar() {
+  closeSearchBarIfVisible({
+    controller: previewSearchBarController,
+    store,
+  })
 }
 
 const {
@@ -234,6 +266,7 @@ function onAssetOpen(assetInfo) {
 
 function onPreviewRefreshComplete() {
   restorePreviewLinkedHighlight()
+  closePreviewSearchBar()
 }
 
 async function onInsertNetworkImage() {
@@ -316,6 +349,8 @@ watch(() => store.config.shortcutKeyList, (newValue) => {
 }, { deep: true, immediate: true })
 
 watch(() => [menuVisible.value, previewVisible.value], () => {
+  closePreviewSearchBar()
+
   if (editorContainer.value) {
     editorContainer.value.style['grid-template-columns'] = ''
   }
@@ -362,6 +397,7 @@ watch(() => [menuVisible.value, previewVisible.value], () => {
 
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
+  activatePreviewSearchTarget()
   splitInstance = Split({
     columnGutters: [{ track: 1, element: gutterRef.value }],
     minSize: 200,
@@ -407,7 +443,19 @@ onMounted(() => {
   })
 })
 
+onActivated(() => {
+  activatePreviewSearchTarget()
+  closePreviewSearchBar()
+})
+
+onDeactivated(() => {
+  closePreviewSearchBar()
+  deactivatePreviewSearchTarget()
+})
+
 onBeforeUnmount(() => {
+  closePreviewSearchBar()
+  deactivatePreviewSearchTarget()
   cancelScheduledCursorHighlight()
   clearAllLinkedHighlight()
   unbindEvents()
