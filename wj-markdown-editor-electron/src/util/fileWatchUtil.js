@@ -202,6 +202,19 @@ function isMissingError(error) {
   return error?.code === 'ENOENT'
 }
 
+function createCallbackMeta(subscription, baseMeta = {}) {
+  return {
+    ...baseMeta,
+    bindingToken: Number.isFinite(subscription?.bindingToken)
+      ? subscription.bindingToken
+      : null,
+    watchingPath: subscription?.filePath || null,
+    observedAt: Number.isFinite(baseMeta?.observedAt)
+      ? baseMeta.observedAt
+      : Date.now(),
+  }
+}
+
 /**
  * 标记一次“软件内部保存”。
  *
@@ -305,7 +318,7 @@ function ignorePendingChange(state) {
   return settlePendingChange(state, state.pendingChange.versionHash)
 }
 
-async function notifyMissing(subscriptions, error) {
+async function notifyMissing(subscriptions, error, observedAt) {
   for (const subscription of subscriptions) {
     if (!isSubscriptionCurrent(subscription)) {
       continue
@@ -319,14 +332,20 @@ async function notifyMissing(subscriptions, error) {
     }
 
     try {
-      await subscription.onMissing(error, { stage: 'missing' })
+      await subscription.onMissing(error, createCallbackMeta(subscription, {
+        stage: 'missing',
+        observedAt,
+      }))
     } catch (callbackError) {
-      subscription.onError && subscription.onError(callbackError, { stage: 'missing-callback' })
+      subscription.onError && subscription.onError(callbackError, createCallbackMeta(subscription, {
+        stage: 'missing-callback',
+        observedAt,
+      }))
     }
   }
 }
 
-async function notifyRestored(subscriptions, diskContent) {
+async function notifyRestored(subscriptions, diskContent, observedAt) {
   for (const subscription of subscriptions) {
     if (!isSubscriptionCurrent(subscription)) {
       continue
@@ -340,19 +359,28 @@ async function notifyRestored(subscriptions, diskContent) {
     }
 
     try {
-      await subscription.onRestored(diskContent, { stage: 'restored' })
+      await subscription.onRestored(diskContent, createCallbackMeta(subscription, {
+        stage: 'restored',
+        observedAt,
+      }))
     } catch (callbackError) {
-      subscription.onError && subscription.onError(callbackError, { stage: 'restored-callback' })
+      subscription.onError && subscription.onError(callbackError, createCallbackMeta(subscription, {
+        stage: 'restored-callback',
+        observedAt,
+      }))
     }
   }
 }
 
-async function notifyReadError(subscriptions, error) {
+async function notifyReadError(subscriptions, error, observedAt) {
   for (const subscription of subscriptions) {
     if (!isSubscriptionCurrent(subscription) || !subscription.onError) {
       continue
     }
-    subscription.onError(error, { stage: 'read' })
+    subscription.onError(error, createCallbackMeta(subscription, {
+      stage: 'read',
+      observedAt,
+    }))
   }
 }
 
@@ -362,6 +390,7 @@ async function runResolveChange(fileEntry, runToken) {
     return null
   }
 
+  const restoredObservedAt = Date.now()
   const reader = getReadFile(subscriptionsBeforeRead[0])
   let diskContent
 
@@ -384,7 +413,7 @@ async function runResolveChange(fileEntry, runToken) {
     }
 
     if (isMissingError(error)) {
-      await notifyMissing(currentSubscriptions, error)
+      await notifyMissing(currentSubscriptions, error, restoredObservedAt)
       return {
         changed: false,
         reason: 'missing',
@@ -392,7 +421,7 @@ async function runResolveChange(fileEntry, runToken) {
       }
     }
 
-    await notifyReadError(currentSubscriptions, error)
+    await notifyReadError(currentSubscriptions, error, restoredObservedAt)
     return {
       changed: false,
       reason: 'read-error',
@@ -415,7 +444,12 @@ async function runResolveChange(fileEntry, runToken) {
     }
   }
 
-  await notifyRestored(subscriptionsAfterRead, diskContent)
+  await notifyRestored(subscriptionsAfterRead, diskContent, restoredObservedAt)
+
+  // “文件刚恢复”与“恢复后的首次有效读盘内容”是两条不同业务事件。
+  // 如果它们共用同一个 observedAt，命令层先处理 restored 再处理 changed 时，
+  // event floor 会把这次首个有效读盘误判成迟到事件吞掉。
+  const changeObservedAt = Math.max(Date.now(), restoredObservedAt + 1)
 
   const resultList = []
 
@@ -425,6 +459,11 @@ async function runResolveChange(fileEntry, runToken) {
     }
 
     const result = resolveExternalChange(subscription.state, diskContent)
+    result.bindingToken = Number.isFinite(subscription.bindingToken)
+      ? subscription.bindingToken
+      : null
+    result.watchingPath = subscription.filePath
+    result.observedAt = changeObservedAt
     resultList.push(result)
 
     if (result.changed !== true || !subscription.onExternalChange || !isSubscriptionCurrent(subscription)) {
@@ -434,7 +473,10 @@ async function runResolveChange(fileEntry, runToken) {
     try {
       await subscription.onExternalChange(result.change, result)
     } catch (error) {
-      subscription.onError && subscription.onError(error, { stage: 'callback' })
+      subscription.onError && subscription.onError(error, createCallbackMeta(subscription, {
+        stage: 'callback',
+        observedAt: changeObservedAt,
+      }))
     }
   }
 
@@ -518,6 +560,7 @@ function detachSubscription(subscription) {
 function startWatching({
   state,
   filePath,
+  bindingToken = null,
   debounceMs = 120,
   readFile = targetPath => fs.readFile(targetPath, 'utf-8'),
   onExternalChange,
@@ -548,6 +591,7 @@ function startWatching({
     state,
     filePath,
     directoryPath,
+    bindingToken: Number.isFinite(bindingToken) ? bindingToken : null,
     debounceMs,
     readFile,
     onExternalChange,

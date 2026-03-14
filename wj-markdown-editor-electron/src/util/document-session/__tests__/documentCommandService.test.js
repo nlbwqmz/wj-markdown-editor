@@ -4,7 +4,10 @@ import { createBoundFileSession, createDraftSession } from '../documentSessionFa
 import { createDocumentSessionStore } from '../documentSessionStore.js'
 import { createSaveCoordinator } from '../saveCoordinator.js'
 
-function createTestContext(autoSave = []) {
+function createTestContext(config = []) {
+  const normalizedConfig = Array.isArray(config)
+    ? { autoSave: config }
+    : { autoSave: [], ...config }
   let jobIndex = 1
   const store = createDocumentSessionStore()
   const saveCoordinator = createSaveCoordinator({
@@ -15,7 +18,7 @@ function createTestContext(autoSave = []) {
     store,
     saveCoordinator,
     getConfig: () => ({
-      autoSave,
+      ...normalizedConfig,
     }),
     now: () => 1700000002000 + jobIndex,
   })
@@ -789,5 +792,697 @@ describe('documentCommandService', () => {
       awaitingPathSelection: false,
       forceClose: false,
     })
+  })
+
+  it('watch.file-changed 在 prompt 模式下创建 pending 后，继续 document.edit 也不能清掉外部待处理项', () => {
+    const { store, service } = createTestContext({
+      externalFileChangeStrategy: 'prompt',
+    })
+    const session = createBoundFileSession({
+      sessionId: 'watch-prompt-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002120,
+    })
+    const windowId = bindSession(store, session)
+
+    session.watchRuntime.bindingToken = 1
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/demo.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+
+    const watched = service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002121,
+        diskContent: '# 外部版本 1',
+        diskStat: {
+          mtimeMs: 1700000002121,
+        },
+      },
+    })
+    const edited = service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 用户继续编辑',
+      },
+    })
+
+    expect(watched.snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 1,
+      localContent: '# 原始内容',
+      externalContent: '# 外部版本 1',
+      fileName: 'demo.md',
+    })
+    expect(edited.snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 1,
+      localContent: '# 用户继续编辑',
+      externalContent: '# 外部版本 1',
+      fileName: 'demo.md',
+    })
+    expect(edited.session.externalRuntime.pendingExternalChange).toMatchObject({
+      version: 1,
+      diskContent: '# 外部版本 1',
+      watchBindingToken: 1,
+    })
+  })
+
+  it('watch.file-changed 在 apply 模式下必须自动应用磁盘内容，而不是创建 pendingExternalChange', () => {
+    const { store, service } = createTestContext({
+      externalFileChangeStrategy: 'apply',
+    })
+    const session = createBoundFileSession({
+      sessionId: 'watch-apply-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002130,
+    })
+    const windowId = bindSession(store, session)
+
+    session.watchRuntime.bindingToken = 1
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/demo.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 本地未保存内容',
+      },
+    })
+
+    const watched = service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002131,
+        diskContent: '# 外部最新内容',
+        diskStat: {
+          mtimeMs: 1700000002131,
+        },
+      },
+    })
+
+    expect(watched.snapshot.content).toBe('# 外部最新内容')
+    expect(watched.snapshot.saved).toBe(true)
+    expect(watched.snapshot.externalPrompt).toBeNull()
+    expect(watched.session.externalRuntime.pendingExternalChange).toBeNull()
+    expect(watched.session.externalRuntime.lastResolutionResult).toBe('applied')
+    expect(watched.session.externalRuntime.lastHandledVersionHash)
+      .toBe(watched.session.diskSnapshot.versionHash)
+  })
+
+  it('document.external.apply / document.external.ignore 必须通过命令层更新外部修改审计字段', () => {
+    const { store, service } = createTestContext({
+      externalFileChangeStrategy: 'prompt',
+    })
+    const session = createBoundFileSession({
+      sessionId: 'watch-external-command-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002140,
+    })
+    const windowId = bindSession(store, session)
+
+    session.watchRuntime.bindingToken = 1
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/demo.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 用户本地内容',
+      },
+    })
+
+    service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002141,
+        diskContent: '# 外部版本 1',
+        diskStat: {
+          mtimeMs: 1700000002141,
+        },
+      },
+    })
+    const ignored = service.dispatch({
+      windowId,
+      command: 'document.external.ignore',
+    })
+
+    expect(ignored.snapshot.content).toBe('# 用户本地内容')
+    expect(ignored.snapshot.externalPrompt).toBeNull()
+    expect(ignored.session.externalRuntime.lastResolutionResult).toBe('ignored')
+    expect(ignored.session.externalRuntime.lastHandledVersionHash).toBeTruthy()
+
+    service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002142,
+        diskContent: '# 外部版本 2',
+        diskStat: {
+          mtimeMs: 1700000002142,
+        },
+      },
+    })
+    const applied = service.dispatch({
+      windowId,
+      command: 'document.external.apply',
+    })
+
+    expect(applied.snapshot.content).toBe('# 外部版本 2')
+    expect(applied.snapshot.saved).toBe(true)
+    expect(applied.snapshot.externalPrompt).toBeNull()
+    expect(applied.session.externalRuntime.lastResolutionResult).toBe('applied')
+    expect(applied.session.externalRuntime.lastHandledVersionHash)
+      .toBe(applied.session.diskSnapshot.versionHash)
+  })
+
+  it('document.external.apply / document.external.ignore 遇到 stale prompt version 时，命令层必须保持当前 pending 不变', () => {
+    const { store, service } = createTestContext({
+      externalFileChangeStrategy: 'prompt',
+    })
+    const session = createBoundFileSession({
+      sessionId: 'watch-external-stale-version-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002143,
+    })
+    const windowId = bindSession(store, session)
+
+    session.watchRuntime.bindingToken = 1
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/demo.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+    session.externalRuntime.lastResolutionResult = 'ignored'
+    session.externalRuntime.lastHandledVersionHash = 'handled-before'
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 用户本地内容',
+      },
+    })
+
+    service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002144,
+        diskContent: '# 外部版本 1',
+        diskStat: {
+          mtimeMs: 1700000002144,
+        },
+      },
+    })
+    const latestPending = service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002145,
+        diskContent: '# 外部版本 2',
+        diskStat: {
+          mtimeMs: 1700000002145,
+        },
+      },
+    })
+    const beforeStaleActionPrompt = latestPending.snapshot.externalPrompt
+    const beforeStaleActionResolutionResult = latestPending.session.externalRuntime.lastResolutionResult
+    const beforeStaleActionHandledVersionHash = latestPending.session.externalRuntime.lastHandledVersionHash
+
+    const staleApplied = service.dispatch({
+      windowId,
+      command: 'document.external.apply',
+      payload: {
+        version: 1,
+      },
+    })
+
+    expect(staleApplied.snapshot.content).toBe('# 用户本地内容')
+    expect(staleApplied.snapshot.externalPrompt).toEqual(beforeStaleActionPrompt)
+    expect(staleApplied.session.externalRuntime.pendingExternalChange).toMatchObject({
+      version: 2,
+      diskContent: '# 外部版本 2',
+    })
+    expect(staleApplied.session.externalRuntime.lastResolutionResult).toBe(beforeStaleActionResolutionResult)
+    expect(staleApplied.session.externalRuntime.lastHandledVersionHash).toBe(beforeStaleActionHandledVersionHash)
+
+    const staleIgnored = service.dispatch({
+      windowId,
+      command: 'document.external.ignore',
+      payload: {
+        version: 1,
+      },
+    })
+
+    expect(staleIgnored.snapshot.content).toBe('# 用户本地内容')
+    expect(staleIgnored.snapshot.externalPrompt).toEqual(beforeStaleActionPrompt)
+    expect(staleIgnored.session.externalRuntime.pendingExternalChange).toMatchObject({
+      version: 2,
+      diskContent: '# 外部版本 2',
+    })
+    expect(staleIgnored.session.externalRuntime.lastResolutionResult).toBe(beforeStaleActionResolutionResult)
+    expect(staleIgnored.session.externalRuntime.lastHandledVersionHash).toBe(beforeStaleActionHandledVersionHash)
+  })
+
+  it('save.succeeded 如果把既有外部差异消解掉，必须收敛为 noop 并清掉 pendingExternalChange', () => {
+    const { store, service } = createTestContext({
+      externalFileChangeStrategy: 'prompt',
+    })
+    const session = createBoundFileSession({
+      sessionId: 'save-noop-after-pending-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002145,
+    })
+    const windowId = bindSession(store, session)
+
+    session.watchRuntime.bindingToken = 1
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/demo.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 本地未保存内容',
+      },
+    })
+
+    const watched = service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002146,
+        diskContent: '# 外部版本 1',
+        diskStat: {
+          mtimeMs: 1700000002146,
+        },
+      },
+    })
+    const pendingVersionHash = watched.session.externalRuntime.pendingExternalChange?.versionHash
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 外部版本 1',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.save',
+    })
+
+    const saveSucceeded = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-1',
+        revision: 2,
+        content: '# 外部版本 1',
+        path: 'C:/docs/demo.md',
+        trigger: 'manual-save',
+        savedAt: 1700000002147,
+        stat: {
+          mtimeMs: 1700000002147,
+        },
+      },
+    })
+
+    expect(saveSucceeded.snapshot.content).toBe('# 外部版本 1')
+    expect(saveSucceeded.snapshot.saved).toBe(true)
+    expect(saveSucceeded.snapshot.externalPrompt).toBeNull()
+    expect(saveSucceeded.session.externalRuntime.pendingExternalChange).toBeNull()
+    expect(saveSucceeded.session.externalRuntime.resolutionState).toBe('resolved')
+    expect(saveSucceeded.session.externalRuntime.lastResolutionResult).toBe('noop')
+    expect(saveSucceeded.session.externalRuntime.lastHandledVersionHash).toBe(pendingVersionHash)
+  })
+
+  it('save.succeeded 不得把保存途中出现的新外部版本误收敛成 noop', () => {
+    const { store, service } = createTestContext({
+      externalFileChangeStrategy: 'prompt',
+    })
+    const session = createBoundFileSession({
+      sessionId: 'save-should-keep-midflight-external-pending-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002147,
+    })
+    const windowId = bindSession(store, session)
+
+    session.watchRuntime.bindingToken = 1
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/demo.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 本地内容',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.save',
+    })
+
+    const watched = service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002148,
+        diskContent: '# 外部版本',
+        diskStat: {
+          mtimeMs: 1700000002148,
+        },
+      },
+    })
+    const pendingVersionHash = watched.session.externalRuntime.pendingExternalChange?.versionHash
+
+    const saveSucceeded = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-1',
+        revision: 1,
+        content: '# 本地内容',
+        path: 'C:/docs/demo.md',
+        trigger: 'manual-save',
+        savedAt: 1700000002149,
+        stat: {
+          mtimeMs: 1700000002149,
+        },
+      },
+    })
+
+    expect(saveSucceeded.snapshot.content).toBe('# 本地内容')
+    expect(saveSucceeded.snapshot.saved).toBe(true)
+    expect(saveSucceeded.snapshot.externalPrompt).toMatchObject({
+      version: 1,
+      externalContent: '# 外部版本',
+    })
+    expect(saveSucceeded.session.externalRuntime.pendingExternalChange).toMatchObject({
+      version: 1,
+      versionHash: pendingVersionHash,
+      diskContent: '# 外部版本',
+    })
+    expect(saveSucceeded.session.externalRuntime.resolutionState).toBe('pending-user')
+    expect(saveSucceeded.session.externalRuntime.lastResolutionResult).toBe('none')
+    expect(saveSucceeded.session.externalRuntime.lastHandledVersionHash).toBeNull()
+  })
+
+  it('同一路径 watch.error 重绑后，save.succeeded 不得吞掉旧 pendingExternalChange', () => {
+    const { store, service } = createTestContext({
+      externalFileChangeStrategy: 'prompt',
+    })
+    const session = createBoundFileSession({
+      sessionId: 'save-should-keep-pending-after-same-path-rebind-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002150,
+    })
+    const windowId = bindSession(store, session)
+
+    session.watchRuntime.bindingToken = 1
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/demo.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 本地内容',
+      },
+    })
+
+    const watched = service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002151,
+        diskContent: '# 外部版本',
+        diskStat: {
+          mtimeMs: 1700000002151,
+        },
+      },
+    })
+    const pendingVersionHash = watched.session.externalRuntime.pendingExternalChange?.versionHash
+
+    const rebindRequested = service.dispatch({
+      windowId,
+      command: 'watch.error',
+      payload: {
+        bindingToken: 1,
+        watchingPath: 'C:/docs/demo.md',
+        error: {
+          name: 'Error',
+          message: 'watch crashed',
+          code: 'EIO',
+        },
+      },
+    })
+
+    expect(rebindRequested.session.watchRuntime.bindingToken).toBe(2)
+    expect(rebindRequested.session.watchRuntime.watchingPath).toBe('C:/docs/demo.md')
+
+    service.dispatch({
+      windowId,
+      command: 'document.save',
+    })
+
+    const saveSucceeded = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-1',
+        revision: 1,
+        content: '# 本地内容',
+        path: 'C:/docs/demo.md',
+        trigger: 'manual-save',
+        savedAt: 1700000002152,
+        stat: {
+          mtimeMs: 1700000002152,
+        },
+      },
+    })
+
+    expect(saveSucceeded.snapshot.content).toBe('# 本地内容')
+    expect(saveSucceeded.snapshot.saved).toBe(true)
+    expect(saveSucceeded.snapshot.externalPrompt).toMatchObject({
+      version: 1,
+      externalContent: '# 外部版本',
+    })
+    expect(saveSucceeded.session.externalRuntime.pendingExternalChange).toMatchObject({
+      version: 1,
+      versionHash: pendingVersionHash,
+      diskContent: '# 外部版本',
+      watchBindingToken: 1,
+    })
+    expect(saveSucceeded.session.externalRuntime.resolutionState).toBe('pending-user')
+    expect(saveSucceeded.session.externalRuntime.lastResolutionResult).toBe('none')
+    expect(saveSucceeded.session.externalRuntime.lastHandledVersionHash).toBeNull()
+  })
+
+  it('save.succeeded 如果切换到了新路径，不得用旧 bindingToken 的 pendingExternalChange 做 noop 收敛', () => {
+    const { store, service } = createTestContext({
+      externalFileChangeStrategy: 'prompt',
+    })
+    const session = createBoundFileSession({
+      sessionId: 'save-path-switch-with-stale-pending-session',
+      path: 'C:/docs/old.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002148,
+    })
+    const windowId = bindSession(store, session)
+
+    session.watchRuntime.bindingToken = 1
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/old.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 本地旧路径内容',
+      },
+    })
+
+    service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002149,
+        diskContent: '# 旧路径外部冲突内容',
+        diskStat: {
+          mtimeMs: 1700000002149,
+        },
+      },
+    })
+
+    service.dispatch({
+      windowId,
+      command: 'document.save',
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 旧路径外部冲突内容',
+      },
+    })
+
+    const saveSucceeded = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-1',
+        revision: 1,
+        content: '# 本地旧路径内容',
+        path: 'C:/docs/new.md',
+        trigger: 'manual-save',
+        savedAt: 1700000002150,
+        stat: {
+          mtimeMs: 1700000002150,
+        },
+      },
+    })
+
+    expect(saveSucceeded.session.documentSource.path).toBe('C:/docs/new.md')
+    expect(saveSucceeded.session.watchRuntime.bindingToken).toBe(2)
+    expect(saveSucceeded.session.externalRuntime.pendingExternalChange).toBeNull()
+    expect(saveSucceeded.session.externalRuntime.lastHandledVersionHash).toBeNull()
+    expect(saveSucceeded.session.externalRuntime.lastResolutionResult).not.toBe('noop')
+    expect(saveSucceeded.snapshot.externalPrompt).toBeNull()
+  })
+
+  it('watch.error 必须生成新 token 的重绑 effect，且旧 token 的迟到事件不能污染当前路径', () => {
+    const { store, service } = createTestContext({
+      externalFileChangeStrategy: 'prompt',
+    })
+    const session = createBoundFileSession({
+      sessionId: 'watch-rebind-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002150,
+    })
+    const windowId = bindSession(store, session)
+
+    session.watchRuntime.bindingToken = 1
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/demo.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+
+    const rebindRequested = service.dispatch({
+      windowId,
+      command: 'watch.error',
+      payload: {
+        bindingToken: 1,
+        watchingPath: 'C:/docs/demo.md',
+        error: {
+          name: 'Error',
+          message: 'watch crashed',
+          code: 'EIO',
+        },
+      },
+    })
+
+    expect(rebindRequested.session.watchRuntime.bindingToken).toBe(2)
+    expect(rebindRequested.session.watchRuntime.status).toBe('rebinding')
+    expect(rebindRequested.effects).toEqual([
+      {
+        type: 'notify-watch-warning',
+        level: 'warning',
+        reason: 'watch-error',
+        error: {
+          name: 'Error',
+          message: 'watch crashed',
+          code: 'EIO',
+        },
+      },
+      {
+        type: 'rebind-watch',
+        bindingToken: 2,
+        watchingPath: 'C:/docs/demo.md',
+      },
+    ])
+
+    const staleChanged = service.dispatch({
+      windowId,
+      command: 'watch.file-changed',
+      payload: {
+        bindingToken: 1,
+        observedAt: 1700000002151,
+        diskContent: '# 旧 token 的迟到内容',
+        diskStat: {
+          mtimeMs: 1700000002151,
+        },
+      },
+    })
+
+    expect(staleChanged.snapshot.content).toBe('# 原始内容')
+    expect(staleChanged.session.diskSnapshot.content).toBe('# 原始内容')
+    expect(staleChanged.session.watchRuntime.bindingToken).toBe(2)
+
+    const degraded = service.dispatch({
+      windowId,
+      command: 'watch.rebind-failed',
+      payload: {
+        bindingToken: 2,
+        watchingPath: 'C:/docs/demo.md',
+        error: {
+          name: 'Error',
+          message: 'rebind failed',
+          code: 'EACCES',
+        },
+      },
+    })
+
+    expect(degraded.session.watchRuntime.status).toBe('degraded')
+    expect(degraded.effects).toEqual([
+      {
+        type: 'notify-watch-warning',
+        level: 'warning',
+        reason: 'watch-rebind-failed',
+        error: {
+          name: 'Error',
+          message: 'rebind failed',
+          code: 'EACCES',
+        },
+      },
+    ])
   })
 })

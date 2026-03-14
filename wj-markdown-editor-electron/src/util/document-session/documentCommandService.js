@@ -1,4 +1,5 @@
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
+import { createWatchCoordinator } from './watchCoordinator.js'
 
 function ensureCloseRuntime(session) {
   if (!session.closeRuntime) {
@@ -63,10 +64,13 @@ export function createDocumentCommandService({
   getConfig = () => ({}),
   now = () => Date.now(),
 }) {
+  const watchCoordinator = createWatchCoordinator({ now })
+
   function dispatch({ windowId, command, payload }) {
     const session = getSessionByWindowIdOrThrow(store, windowId)
     ensureSaveRuntime(session)
     ensureCloseRuntime(session)
+    watchCoordinator.prepareSession(session)
     const effects = []
     const config = getConfig()
 
@@ -220,6 +224,7 @@ export function createDocumentCommandService({
 
       case 'save.succeeded':
         effects.push(...saveCoordinator.handleSaveSucceeded(session, payload).effects)
+        effects.push(...watchCoordinator.reconcileAfterSave(session).effects)
         break
 
       case 'save.failed':
@@ -232,6 +237,22 @@ export function createDocumentCommandService({
 
       case 'copy-save.failed':
         effects.push(...saveCoordinator.handleCopySaveFailed(session, payload).effects)
+        break
+
+      case 'watch.file-changed':
+      case 'watch.file-missing':
+      case 'watch.file-restored':
+      case 'watch.error':
+      case 'watch.bound':
+      case 'watch.unbound':
+      case 'watch.rebind-failed':
+      case 'document.external.apply':
+      case 'document.external.ignore':
+        effects.push(...watchCoordinator.dispatch(session, {
+          command,
+          payload,
+          externalChangeStrategy: config.externalFileChangeStrategy || 'prompt',
+        }).effects)
         break
 
       default:
