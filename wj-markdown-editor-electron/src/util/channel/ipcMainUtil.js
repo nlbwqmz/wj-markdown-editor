@@ -1,6 +1,5 @@
 import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
 import fileUploadUtil from '../fileUploadUtil.js'
@@ -27,26 +26,14 @@ async function uploadImage(winInfo, data) {
   return imgUtil.save(winInfo, data, config)
 }
 
-/**
- * 顶层 IPC 发送前的窗口可用性判断。
- *
- * `sendUtil.send()` 当前保持薄封装，不主动吞掉所有非法发送；
- * 因此在像“保存成功提示”这类跨异步链路的入口处，需要先确认窗口和 webContents 仍然存活。
- * 这样可以避免：
- * 1. 强制关闭后的中止保存仍被上层误判成成功
- * 2. 对已销毁窗口继续发送成功提示，触发孤儿 IPC
- */
-function canSendToWindow(win) {
-  if (!win) {
+function toLegacyOpenFileResult(result) {
+  // `open-file` 是旧 renderer 仍在使用的兼容 IPC。
+  // 对缺失路径这类历史上依赖 `=== false` 的场景，这里必须回退成旧布尔语义；
+  // 但新命令层/副作用层内部仍保留结构化结果，避免污染新契约。
+  if (result?.ok === false && result?.reason === 'open-target-missing') {
     return false
   }
-  if (typeof win.isDestroyed === 'function' && win.isDestroyed()) {
-    return false
-  }
-  if (win.webContents && typeof win.webContents.isDestroyed === 'function' && win.webContents.isDestroyed()) {
-    return false
-  }
-  return true
+  return result
 }
 
 const handlerList = {
@@ -101,52 +88,13 @@ const handlerList = {
     }
     shell.showItemInFolder(winInfo.path)
   },
-  'save-other': async (winInfo) => {
-    let otherPath = dialog.showSaveDialogSync({
-      title: 'Save As',
-      filters: [
-        { name: 'Markdown File', extensions: ['md'] },
-      ],
-    })
-    if (otherPath) {
-      // 自动添加后缀
-      const extname = path.extname(otherPath)
-      if (!extname || extname.toLowerCase() !== '.md') {
-        otherPath += '.md'
-      }
-      await fs.writeFile(otherPath, winInfo.tempContent)
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.saveAsSuccessfully' } })
-    } else {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cancelSaveAs' } })
-    }
-  },
-  'save': async (winInfo) => {
-    if (!winInfo.path) {
-      winInfo.path = dialog.showSaveDialogSync({
-        title: 'Save',
-        filters: [
-          { name: 'Markdown File', extensions: ['md'] },
-        ],
-      })
-    }
-    if (winInfo.path) {
-      // 自动添加后缀
-      const extname = path.extname(winInfo.path)
-      if (!extname || extname.toLowerCase() !== '.md') {
-        winInfo.path += '.md'
-      }
-      await recent.add(winInfo.path)
-      const saved = await winInfoUtil.save(winInfo)
-      if (saved && canSendToWindow(winInfo.win)) {
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.saveSuccessfully' } })
-      }
-      return saved
-    } else {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cancelSave' } })
-    }
-  },
+  'save-other': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save-copy', null),
+  'save': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save', null),
   'get-file-info': (winInfo) => {
     return winInfoUtil.getFileInfoPayload(winInfo)
+  },
+  'document.get-session-snapshot': async (winInfo) => {
+    return await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot', null)
   },
   'file-content-update': (winInfo, content) => {
     // 渲染端所有编辑动作最终都收口到这里，
@@ -167,35 +115,12 @@ const handlerList = {
   },
   'open-file': async (winInfo, targetPath) => {
     if (targetPath) {
-      if (await fs.pathExists(targetPath)) {
-        winInfoUtil.createNew(targetPath).then(() => {
-          if (!winInfo.path && winInfo.content === winInfo.tempContent) {
-            winInfo.win.close()
-          }
-        })
-        return true
-      }
-      return false
-    } else {
-      const filePath = dialog.showOpenDialogSync({
-        title: 'Open Markdown File',
-        properties: ['openFile'],
-        filters: [
-          { name: 'markdown file', extensions: ['md'] },
-        ],
+      const result = await winInfoUtil.executeCommand(winInfo, 'dialog.open-target-selected', {
+        path: targetPath,
       })
-      if (filePath && filePath.length > 0) {
-        if (path.extname(filePath[0]) === '.md') {
-          winInfoUtil.createNew(filePath[0]).then(() => {
-            if (!winInfo.path && winInfo.content === winInfo.tempContent) {
-              winInfo.win.close()
-            }
-          })
-        } else {
-          sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.pleaseSelectMarkdownFile' } })
-        }
-      }
+      return toLegacyOpenFileResult(result)
     }
+    return await winInfoUtil.executeCommand(winInfo, 'document.request-open-dialog', null)
   },
   'get-config': () => {
     return configUtil.getConfig()
@@ -206,9 +131,8 @@ const handlerList = {
   'delete-local-resource': async (winInfo, data) => {
     return await resourceFileUtil.deleteLocalResource(winInfo, data)
   },
-  'get-local-resource-info': async (winInfo, data) => {
-    return await resourceFileUtil.getLocalResourceInfo(winInfo, data)
-  },
+  'get-local-resource-info': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'resource.get-info', data),
+  'resource.get-info': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'resource.get-info', data),
   'screenshot': (winInfo, data) => {
     return new Promise((resolve) => {
       const startCapture = () => {
@@ -269,20 +193,20 @@ const handlerList = {
   'execute-update': () => {
     updateUtil.executeUpdate()
   },
-  'recent-clear': () => {
-    recent.clear().then(() => {})
-  },
-  'recent-remove': (winInfo, data) => {
-    recent.remove(data).then(() => {})
-  },
-  'get-recent-list': () => {
-    return recent.get()
-  },
+  'recent-clear': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.clear', null),
+  'recent.clear': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.clear', null),
+  'recent-remove': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'recent.remove', data),
+  'recent.remove': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'recent.remove', data),
+  'get-recent-list': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.get-list', null),
+  'recent.get-list': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.get-list', null),
   'file-upload': (winInfo, filePath) => {
     return fileUploadUtil.save(winInfo, filePath, configUtil.getConfig())
   },
   'get-global-theme': () => {
     return configUtil.getConfig().theme.global
+  },
+  'resource.get-comparable-key': async (winInfo, rawPath) => {
+    return await winInfoUtil.executeCommand(winInfo, 'resource.get-comparable-key', rawPath)
   },
 }
 
@@ -297,6 +221,13 @@ const handlerListSync = {
     return null
   },
   'get-local-resource-comparable-key': (winInfo, rawPath) => {
+    return resourceFileUtil.getLocalResourceComparableKey(winInfo, rawPath)
+  },
+  // 新旧契约在 Task 4 期间并存：
+  // 旧 renderer 仍然通过 `get-local-resource-comparable-key` 走同步查询，
+  // 新契约 `resource.get-comparable-key` 也必须继续保持同步语义，
+  // 否则后续 renderer 迁移时会把当前依赖同步比较 key 的资源逻辑整体拖成异步。
+  'resource.get-comparable-key': (winInfo, rawPath) => {
     return resourceFileUtil.getLocalResourceComparableKey(winInfo, rawPath)
   },
 }

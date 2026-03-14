@@ -40,6 +40,8 @@ function ensureCopySaveRuntime(session) {
       pendingSelection: false,
       targetPath: null,
       lastError: null,
+      lastResult: 'idle',
+      lastFailureReason: null,
     }
   }
 }
@@ -263,6 +265,8 @@ export function createSaveCoordinator({
       session.copySaveRuntime.pendingSelection = true
       session.copySaveRuntime.targetPath = null
       session.copySaveRuntime.lastError = null
+      session.copySaveRuntime.lastResult = 'pending'
+      session.copySaveRuntime.lastFailureReason = null
 
       return {
         session,
@@ -329,6 +333,9 @@ export function createSaveCoordinator({
       session.copySaveRuntime.pendingSelection = false
       session.copySaveRuntime.status = 'idle'
       session.copySaveRuntime.targetPath = targetPath
+      session.copySaveRuntime.lastError = null
+      session.copySaveRuntime.lastResult = 'pending'
+      session.copySaveRuntime.lastFailureReason = null
 
       if (normalizeComparablePath(targetPath) && normalizeComparablePath(targetPath) === normalizeComparablePath(session.documentSource?.path)) {
         return {
@@ -374,6 +381,9 @@ export function createSaveCoordinator({
       session.copySaveRuntime.pendingSelection = false
       session.copySaveRuntime.status = 'idle'
       session.copySaveRuntime.targetPath = null
+      session.copySaveRuntime.lastError = null
+      session.copySaveRuntime.lastResult = 'cancelled'
+      session.copySaveRuntime.lastFailureReason = null
 
       return {
         session,
@@ -559,6 +569,8 @@ export function createSaveCoordinator({
       session.copySaveRuntime.status = 'idle'
       session.copySaveRuntime.activeJobId = null
       session.copySaveRuntime.lastError = null
+      session.copySaveRuntime.lastResult = 'succeeded'
+      session.copySaveRuntime.lastFailureReason = null
       return {
         session,
         effects: [],
@@ -570,6 +582,8 @@ export function createSaveCoordinator({
       session.copySaveRuntime.status = 'idle'
       session.copySaveRuntime.activeJobId = null
       session.copySaveRuntime.lastError = serializeError(payload?.error)
+      session.copySaveRuntime.lastResult = 'failed'
+      session.copySaveRuntime.lastFailureReason = payload?.reason || null
       return {
         session,
         effects: [],

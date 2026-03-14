@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   appGetVersion,
   browserWindowFromWebContents,
+  dialogShowOpenDialogSync,
+  dialogShowSaveDialogSync,
+  executeCommand,
   getLocalResourceComparableKey,
   ipcMainHandle,
   ipcMainOn,
@@ -12,6 +15,9 @@ const {
   return {
     appGetVersion: vi.fn(() => '2.15.0'),
     browserWindowFromWebContents: vi.fn(),
+    dialogShowOpenDialogSync: vi.fn(),
+    dialogShowSaveDialogSync: vi.fn(),
+    executeCommand: vi.fn(),
     getLocalResourceComparableKey: vi.fn(),
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
@@ -29,8 +35,8 @@ vi.mock('electron', () => {
       fromWebContents: browserWindowFromWebContents,
     },
     dialog: {
-      showOpenDialogSync: vi.fn(),
-      showSaveDialogSync: vi.fn(),
+      showOpenDialogSync: dialogShowOpenDialogSync,
+      showSaveDialogSync: dialogShowSaveDialogSync,
     },
     ipcMain: {
       handle: ipcMainHandle,
@@ -175,6 +181,7 @@ vi.mock('../win/winInfoUtil.js', () => {
       })),
       getAll: vi.fn(() => []),
       createNew: vi.fn(),
+      executeCommand,
       save: vi.fn(),
       getFileInfoPayload: vi.fn(),
       updateTempContent: vi.fn(),
@@ -195,6 +202,9 @@ vi.mock('./sendUtil.js', () => {
 describe('ipcMainUtil open-folder', () => {
   beforeEach(() => {
     vi.resetModules()
+    dialogShowOpenDialogSync.mockReset()
+    dialogShowSaveDialogSync.mockReset()
+    executeCommand.mockReset()
     getLocalResourceComparableKey.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
@@ -325,6 +335,9 @@ describe('ipcMainUtil open-folder', () => {
 describe('ipcMainUtil sync comparable key', () => {
   beforeEach(() => {
     vi.resetModules()
+    dialogShowOpenDialogSync.mockReset()
+    dialogShowSaveDialogSync.mockReset()
+    executeCommand.mockReset()
     getLocalResourceComparableKey.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
@@ -359,11 +372,43 @@ describe('ipcMainUtil sync comparable key', () => {
     }, './docs/index.html#guide')
     expect(event.returnValue).toBe('wj-local-file:d:/docs/index.html')
   })
+
+  it('新的 resource.get-comparable-key 契约也必须保持同步查询语义', async () => {
+    let sendToMainSyncHandler
+    ipcMainOn.mockImplementation((channel, handler) => {
+      if (channel === 'sendToMainSync') {
+        sendToMainSyncHandler = handler
+      }
+    })
+
+    const sender = { id: 9527 }
+    const win = { id: 1 }
+    browserWindowFromWebContents.mockReturnValue(win)
+    getLocalResourceComparableKey.mockReturnValue('wj-local-file:d:/docs/demo.png')
+
+    await import('./ipcMainUtil.js')
+
+    const event = { sender, returnValue: null }
+    sendToMainSyncHandler(event, {
+      event: 'resource.get-comparable-key',
+      data: './docs/demo.png?size=full',
+    })
+
+    expect(getLocalResourceComparableKey).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, './docs/demo.png?size=full')
+    expect(event.returnValue).toBe('wj-local-file:d:/docs/demo.png')
+  })
 })
 
 describe('ipcMainUtil save', () => {
   beforeEach(() => {
     vi.resetModules()
+    dialogShowOpenDialogSync.mockReset()
+    dialogShowSaveDialogSync.mockReset()
+    executeCommand.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
@@ -395,13 +440,18 @@ describe('ipcMainUtil save', () => {
 
   it('保存被中止时，不应继续发送保存成功提示', async () => {
     const { sender, win, sendToMainHandler, winInfoUtil } = await setupSaveHandler()
-    winInfoUtil.save.mockResolvedValueOnce(false)
+    winInfoUtil.executeCommand.mockResolvedValueOnce(false)
 
     await sendToMainHandler({ sender }, {
       event: 'save',
       data: null,
     })
 
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.save', null)
     expect(send).not.toHaveBeenCalledWith(win, {
       event: 'message',
       data: {
@@ -409,5 +459,116 @@ describe('ipcMainUtil save', () => {
         content: 'message.saveSuccessfully',
       },
     })
+  })
+})
+
+describe('ipcMainUtil command mapping', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    dialogShowOpenDialogSync.mockReset()
+    executeCommand.mockReset()
+    ipcMainHandle.mockReset()
+    ipcMainOn.mockReset()
+    browserWindowFromWebContents.mockReset()
+  })
+
+  async function setupCommandHandler() {
+    let sendToMainHandler
+    ipcMainHandle.mockImplementation((channel, handler) => {
+      if (channel === 'sendToMain') {
+        sendToMainHandler = handler
+      }
+    })
+
+    const sender = { id: 9527 }
+    const win = { id: 1 }
+    browserWindowFromWebContents.mockReturnValue(win)
+
+    await import('./ipcMainUtil.js')
+    const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
+
+    return {
+      sender,
+      sendToMainHandler,
+      winInfoUtil,
+    }
+  }
+
+  it('open-file 未传路径时，必须映射到 document.request-open-dialog，而不是在 IPC handler 里直接弹框', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'open-file',
+      data: null,
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.request-open-dialog', null)
+    expect(dialogShowOpenDialogSync).not.toHaveBeenCalled()
+  })
+
+  it('open-file 直接携带目标路径时，必须通过 dialog.open-target-selected 进入新命令模型', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'open-file',
+      data: 'D:\\docs\\opened.md',
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'dialog.open-target-selected', {
+      path: 'D:\\docs\\opened.md',
+    })
+  })
+
+  it('open-file 直接携带缺失路径时，旧 compat 返回值必须仍为 false，供旧 renderer 继续走移除历史记录提示', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    winInfoUtil.executeCommand.mockResolvedValueOnce({
+      ok: false,
+      reason: 'open-target-missing',
+      path: 'D:\\docs\\missing.md',
+    })
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'open-file',
+      data: 'D:\\docs\\missing.md',
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'dialog.open-target-selected', {
+      path: 'D:\\docs\\missing.md',
+    })
+    expect(result).toBe(false)
+  })
+
+  it('document.get-session-snapshot 必须通过统一命令入口返回会话快照', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    const snapshot = {
+      sessionId: 'session-1',
+      content: '# 内容',
+      saved: false,
+    }
+    winInfoUtil.executeCommand.mockResolvedValueOnce(snapshot)
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.get-session-snapshot',
+      data: null,
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.get-session-snapshot', null)
+    expect(result).toEqual(snapshot)
   })
 })

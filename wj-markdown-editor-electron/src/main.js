@@ -66,6 +66,7 @@ if (!lock) {
   logUtil.init()
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null)
+    winInfoUtil.initializeSessionRuntime()
     await configUtil.initConfig((config) => {
       winInfoUtil.getAll().forEach((item) => {
         sendUtil.send(item.win, { event: 'update-config', data: config })
@@ -84,9 +85,7 @@ if (!lock) {
       }
     })
     await recent.initRecent(configUtil.getConfig().recentMax, (recentList) => {
-      winInfoUtil.getAll().forEach((item) => {
-        sendUtil.send(item.win, { event: 'update-recent', data: recentList })
-      })
+      winInfoUtil.notifyRecentListChanged(recentList)
     })
 
     // 初始化协议处理器，捕获可能的错误
@@ -106,7 +105,10 @@ if (!lock) {
     } else if (configUtil.getConfig().openRecent) {
       const recentList = recent.get()
       if (recentList && recentList.length > 0) {
-        await winInfoUtil.createNew(recentList[0].path, true)
+        await winInfoUtil.executeCommand(null, 'document.open-recent', {
+          path: recentList[0].path,
+          trigger: 'startup',
+        })
       } else {
         await winInfoUtil.createNew(null)
       }

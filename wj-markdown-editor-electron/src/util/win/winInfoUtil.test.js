@@ -385,6 +385,95 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(saveResult).toBe(true)
   })
 
+  it('草稿首存写盘失败时，只能提示保存失败，不能再追加取消保存提示', async () => {
+    writeFileMock.mockRejectedValueOnce(new Error('磁盘已满'))
+    showSaveDialogSyncMock.mockReturnValueOnce('D:/draft-save-failed.md')
+
+    await winInfoUtil.createNew(null)
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 待保存内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 待保存内容')
+    })
+    sendMock.mockClear()
+
+    const saveResult = await winInfoUtil.save(winInfo)
+
+    expect(saveResult).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'error',
+        content: '保存失败。 磁盘已满',
+      },
+    })
+    expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.cancelSave',
+      },
+    })
+  })
+
+  it('save-copy 命中 same-path 时，compat 提示不能误报另存为成功', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    showSaveDialogSyncMock.mockReturnValueOnce('D:/demo.md')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    sendMock.mockClear()
+
+    await winInfoUtil.executeCommand(winInfo, 'document.save-copy')
+
+    expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.saveAsSuccessfully',
+      },
+    })
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: '另存为失败，副本路径不能与当前文档相同。',
+      },
+    })
+  })
+
+  it('save-copy 真正写盘失败时，compat 层必须给出失败提示，不能静默结束', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    showSaveDialogSyncMock.mockReturnValueOnce('D:/copy-failed.md')
+    writeFileMock.mockRejectedValueOnce(new Error('设备不可用'))
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    sendMock.mockClear()
+
+    await winInfoUtil.executeCommand(winInfo, 'document.save-copy')
+
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'error',
+        content: '另存为失败。 设备不可用',
+      },
+    })
+    expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.saveAsSuccessfully',
+      },
+    })
+  })
+
   it('handleFileMissing 发给 renderer 的 payload 必须反映最新 exists=false 与正确 saved 状态，而不是旧 session 快照', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
@@ -398,6 +487,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     expect(result).toBe('missing')
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, { event: 'file-is-saved', data: false })
+    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'file-is-saved')).toHaveLength(1)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'file-missing',
       data: expect.objectContaining({
@@ -460,6 +550,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     expect(result).toBe('applied')
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, { event: 'file-is-saved', data: true })
+    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'file-is-saved')).toHaveLength(1)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'file-content-reloaded',
       data: expect.objectContaining({
@@ -467,6 +558,40 @@ describe('winInfoUtil 兼容 facade', () => {
         exists: true,
         saved: true,
       }),
+    })
+  })
+
+  it('handleExternalChange 在 strategy=prompt 时，file-external-changed 只能发送一次，避免 bridge 与兼容层重复推送', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+    })
+    sendMock.mockClear()
+
+    const result = winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容',
+      version: 'version-2',
+      versionHash: 'hash-version-2',
+    }, {
+      strategy: 'prompt',
+    })
+
+    expect(result).toBe('prompted')
+    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'file-external-changed')).toHaveLength(1)
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'file-external-changed',
+      data: {
+        fileName: 'demo.md',
+        version: 'version-2',
+        localContent: '# 本地编辑内容',
+        externalContent: '# 外部新内容',
+      },
     })
   })
 
