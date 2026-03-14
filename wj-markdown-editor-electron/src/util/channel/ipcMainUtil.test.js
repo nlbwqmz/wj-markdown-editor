@@ -360,3 +360,54 @@ describe('ipcMainUtil sync comparable key', () => {
     expect(event.returnValue).toBe('wj-local-file:d:/docs/index.html')
   })
 })
+
+describe('ipcMainUtil save', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    ipcMainHandle.mockReset()
+    ipcMainOn.mockReset()
+    browserWindowFromWebContents.mockReset()
+    send.mockReset()
+  })
+
+  async function setupSaveHandler() {
+    let sendToMainHandler
+    ipcMainHandle.mockImplementation((channel, handler) => {
+      if (channel === 'sendToMain') {
+        sendToMainHandler = handler
+      }
+    })
+
+    const sender = { id: 9527 }
+    const win = { id: 1 }
+    browserWindowFromWebContents.mockReturnValue(win)
+
+    await import('./ipcMainUtil.js')
+    const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
+
+    return {
+      sender,
+      win,
+      sendToMainHandler,
+      winInfoUtil,
+    }
+  }
+
+  it('保存被中止时，不应继续发送保存成功提示', async () => {
+    const { sender, win, sendToMainHandler, winInfoUtil } = await setupSaveHandler()
+    winInfoUtil.save.mockResolvedValueOnce(false)
+
+    await sendToMainHandler({ sender }, {
+      event: 'save',
+      data: null,
+    })
+
+    expect(send).not.toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.saveSuccessfully',
+      },
+    })
+  })
+})

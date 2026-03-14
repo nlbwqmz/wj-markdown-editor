@@ -27,6 +27,28 @@ async function uploadImage(winInfo, data) {
   return imgUtil.save(winInfo, data, config)
 }
 
+/**
+ * 顶层 IPC 发送前的窗口可用性判断。
+ *
+ * `sendUtil.send()` 当前保持薄封装，不主动吞掉所有非法发送；
+ * 因此在像“保存成功提示”这类跨异步链路的入口处，需要先确认窗口和 webContents 仍然存活。
+ * 这样可以避免：
+ * 1. 强制关闭后的中止保存仍被上层误判成成功
+ * 2. 对已销毁窗口继续发送成功提示，触发孤儿 IPC
+ */
+function canSendToWindow(win) {
+  if (!win) {
+    return false
+  }
+  if (typeof win.isDestroyed === 'function' && win.isDestroyed()) {
+    return false
+  }
+  if (win.webContents && typeof win.webContents.isDestroyed === 'function' && win.webContents.isDestroyed()) {
+    return false
+  }
+  return true
+}
+
 const handlerList = {
   ...settingUtil.channel,
   ...exportUtil.channel,
@@ -114,8 +136,11 @@ const handlerList = {
         winInfo.path += '.md'
       }
       await recent.add(winInfo.path)
-      await winInfoUtil.save(winInfo)
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.saveSuccessfully' } })
+      const saved = await winInfoUtil.save(winInfo)
+      if (saved && canSendToWindow(winInfo.win)) {
+        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.saveSuccessfully' } })
+      }
+      return saved
     } else {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cancelSave' } })
     }

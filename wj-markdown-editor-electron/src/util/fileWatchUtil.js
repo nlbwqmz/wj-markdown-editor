@@ -37,6 +37,7 @@ function createWatchState() {
     internalSaveWindowMs: 2000,
     lastInternalSaveAt: 0,
     lastInternalSavedVersion: null,
+    recentInternalSaves: [],
     lastHandledVersionHash: null,
     pendingChange: null,
     fileExists: null,
@@ -50,9 +51,34 @@ function resetTrackedState(state) {
   state.currentVersion = 0
   state.lastInternalSaveAt = 0
   state.lastInternalSavedVersion = null
+  state.recentInternalSaves = []
   state.lastHandledVersionHash = null
   state.pendingChange = null
   state.fileExists = null
+}
+
+/**
+ * 清理 internal-save 抑制窗口之外的历史记录。
+ *
+ * 连续补写时，同一个文件可能在极短时间内产生多轮内部写盘。
+ * watcher 事件并不保证严格按“写盘完成顺序”被我们读到，
+ * 所以不能只保留最后一轮 hash，而要在抑制窗口内保留最近几轮。
+ */
+function pruneExpiredInternalSaves(state, now = Date.now()) {
+  if (!Array.isArray(state?.recentInternalSaves) || state.recentInternalSaves.length === 0) {
+    state.recentInternalSaves = []
+    state.lastInternalSaveAt = 0
+    state.lastInternalSavedVersion = null
+    return state.recentInternalSaves
+  }
+
+  state.recentInternalSaves = state.recentInternalSaves
+    .filter(item => now - item.savedAt <= state.internalSaveWindowMs)
+
+  const latestInternalSave = state.recentInternalSaves.at(-1) || null
+  state.lastInternalSaveAt = latestInternalSave?.savedAt || 0
+  state.lastInternalSavedVersion = latestInternalSave?.versionHash || null
+  return state.recentInternalSaves
 }
 
 function isSubscriptionCurrent(subscription) {
@@ -184,8 +210,17 @@ function isMissingError(error) {
  * 同内容事件会直接被识别为 internal-save 并跳过。
  */
 function markInternalSave(state, content) {
-  state.lastInternalSaveAt = Date.now()
-  state.lastInternalSavedVersion = createContentVersion(content)
+  const savedAt = Date.now()
+  const versionHash = createContentVersion(content)
+  const recentInternalSaves = pruneExpiredInternalSaves(state, savedAt)
+
+  // 相同内容可能被重复写盘，这里只保留最新一次时间戳，
+  // 避免历史数组因为重复 hash 无意义增长。
+  state.recentInternalSaves = recentInternalSaves
+    .filter(item => item.versionHash !== versionHash)
+    .concat({ versionHash, savedAt })
+  state.lastInternalSaveAt = savedAt
+  state.lastInternalSavedVersion = versionHash
   state.pendingChange = null
   state.fileExists = true
 }
@@ -220,11 +255,9 @@ function resolveExternalChange(state, diskContent) {
   }
 
   const versionHash = createContentVersion(diskContent)
+  const recentInternalSaves = pruneExpiredInternalSaves(state)
 
-  if (
-    versionHash === state.lastInternalSavedVersion
-    && Date.now() - state.lastInternalSaveAt <= state.internalSaveWindowMs
-  ) {
+  if (recentInternalSaves.some(item => item.versionHash === versionHash)) {
     return {
       changed: false,
       reason: 'internal-save',

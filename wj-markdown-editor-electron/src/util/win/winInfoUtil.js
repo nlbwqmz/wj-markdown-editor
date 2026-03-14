@@ -109,6 +109,26 @@ function isSaved(winInfo) {
   return winInfo.content === winInfo.tempContent
 }
 
+function isWindowAlive(win) {
+  return Boolean(win) && (typeof win.isDestroyed !== 'function' || win.isDestroyed() === false)
+}
+
+/**
+ * 标记窗口是否已经完成关闭收尾。
+ *
+ * 这里不用 `win.isDestroyed()` 作为唯一依据，原因有两个：
+ * 1. 保存队列和 watcher 逻辑拿到的是 `winInfo`，它们需要一个稳定的业务态判断
+ * 2. 强制关闭时，我们在窗口对象真正销毁前就会先做清理，因此需要一个更早可见的终止信号
+ *
+ * 一旦这里返回 true，就表示：
+ * - 当前窗口后续不应再继续保存队列
+ * - 不应再重绑 watcher
+ * - 不应再尝试向渲染端发送 IPC
+ */
+function isWindowFinalized(winInfo) {
+  return winInfo?.closed === true
+}
+
 /**
  * 同步“是否已保存”状态到渲染端。
  *
@@ -128,6 +148,143 @@ function syncSavedState(winInfo) {
   }
   sendUtil.send(winInfo.win, { event: 'file-is-saved', data: saved })
   return saved
+}
+
+function shouldAutoSave(winInfo, trigger) {
+  return Boolean(winInfo?.path)
+    && configUtil.getConfig().autoSave.includes(trigger)
+    && isSaved(winInfo) === false
+}
+
+function getAutoSaveFailedMessage(error) {
+  const detail = typeof error?.message === 'string' && error.message
+    ? ` ${error.message}`
+    : ''
+  if (configUtil.getConfig().language === 'en-US') {
+    return `Auto save failed.${detail}`
+  }
+  return `自动保存失败。${detail}`
+}
+
+function notifyAutoSaveFailed(winInfo, error) {
+  if (isWindowAlive(winInfo?.win) === false || isWindowFinalized(winInfo)) {
+    return
+  }
+  sendUtil.send(winInfo.win, {
+    event: 'message',
+    data: {
+      type: 'error',
+      content: getAutoSaveFailedMessage(error),
+    },
+  })
+}
+
+/**
+ * 同一轮自动保存可能会被 blur / close 多次复用同一个 `saveTask`。
+ *
+ * 如果每次复用都重新挂一个 `.catch()`，那么一旦这轮写盘失败，
+ * 所有 catch 都会被依次触发，最终把同一条错误消息弹出多次。
+ *
+ * 这里按“失败所属的 saveTask Promise”去重：
+ * - 同一个 saveTask 失败，只允许通知一次
+ * - 下一轮新的 saveTask 失败时，仍然会正常再通知一次
+ */
+function notifyAutoSaveFailedOnce(winInfo, saveTask, error) {
+  if (!winInfo || winInfo.lastAutoSaveFailedTask === saveTask) {
+    return
+  }
+  winInfo.lastAutoSaveFailedTask = saveTask
+  notifyAutoSaveFailed(winInfo, error)
+}
+
+function finalizeWindowClose(winInfo, id) {
+  // 一旦进入最终关闭收尾，就必须先向所有异步链路广播“窗口已终止”。
+  // 这样保存队列、写盘后的 watcher 重建、以及后续 IPC 发送都能及时停下。
+  winInfo.closed = true
+  stopExternalWatch(winInfo)
+  deleteEditorWin(id)
+  checkWinList()
+}
+
+function continueWindowClose(winInfo) {
+  if (!isWindowAlive(winInfo?.win)) {
+    return false
+  }
+  winInfo.allowImmediateClose = true
+  winInfo.win.close()
+  return true
+}
+
+function handlePendingCloseAfterSave(winInfo) {
+  if (winInfo.pendingCloseAfterSave !== true) {
+    return
+  }
+  winInfo.pendingCloseAfterSave = false
+
+  if (isSaved(winInfo)) {
+    continueWindowClose(winInfo)
+    return
+  }
+
+  if (winInfo.forceClose !== true && isWindowAlive(winInfo.win)) {
+    sendUtil.send(winInfo.win, { event: 'unsaved' })
+  }
+}
+
+async function flushSaveQueue(winInfo) {
+  while (winInfo?.path && isWindowFinalized(winInfo) === false) {
+    const contentToSave = winInfo.tempContent
+    const writeCompleted = await writeSnapshot(winInfo, contentToSave)
+    if (writeCompleted === false && isWindowFinalized(winInfo)) {
+      return false
+    }
+    if (winInfo.tempContent === contentToSave) {
+      return true
+    }
+  }
+  return false
+}
+
+function save(winInfo) {
+  if (!winInfo?.path) {
+    return Promise.resolve(false)
+  }
+  if (winInfo.saveTask) {
+    return winInfo.saveTask
+  }
+  // `content === tempContent` 只代表“内存内容一致”，
+  // 不代表目标路径已经存在并且完成过落盘。
+  // 空白新文件首次保存、或文件缺失后空内容恢复时，
+  // 仍然必须实际写盘来创建/恢复文件并重建 watcher。
+  if (isSaved(winInfo) && winInfo.exists !== false) {
+    return Promise.resolve(true)
+  }
+
+  // 新一轮 saveTask 开始前先清掉上一次失败去重标记。
+  // 这样后续如果又发生新的自动保存失败，仍然会正常提示一次。
+  winInfo.lastAutoSaveFailedTask = null
+  winInfo.saveTask = flushSaveQueue(winInfo)
+    .finally(() => {
+      winInfo.saveTask = null
+      handlePendingCloseAfterSave(winInfo)
+    })
+
+  return winInfo.saveTask
+}
+
+function queueWindowSave(winInfo, options = {}) {
+  if (!winInfo?.path) {
+    return Promise.resolve(false)
+  }
+  if (options.closeAfterSave === true) {
+    winInfo.pendingCloseAfterSave = true
+  }
+  const saveTask = save(winInfo)
+  return saveTask
+    .catch((error) => {
+      notifyAutoSaveFailedOnce(winInfo, saveTask, error)
+      return false
+    })
 }
 
 // 当前这次外部变更已经被“收敛处理完成”时，统一走这里清理 watcher 状态。
@@ -488,26 +645,39 @@ function ignoreExternalPendingChange(winInfo, version) {
   return true
 }
 
-async function save(winInfo) {
+async function writeSnapshot(winInfo, contentToSave = winInfo.tempContent) {
+  // 强制关闭后的保存语义是“放弃后续编辑”，因此只要窗口已经完成关闭，
+  // 后续排队到这里的写盘就必须直接终止，不能继续把新内容补写到磁盘。
+  if (!winInfo?.path || isWindowFinalized(winInfo)) {
+    return false
+  }
   if (winInfo.path && winInfo.externalWatch?.watcher) {
     // 先标记内部保存，再写盘，避免本次写盘被 watcher 误判成外部修改。
-    fileWatchUtil.markInternalSave(winInfo.externalWatch, winInfo.tempContent)
+    fileWatchUtil.markInternalSave(winInfo.externalWatch, contentToSave)
   }
-  await fs.writeFile(winInfo.path, winInfo.tempContent)
+  await fs.writeFile(winInfo.path, contentToSave)
+  if (isWindowFinalized(winInfo)) {
+    return false
+  }
   markPathExists(winInfo)
-  // 保存完成后，真实值与编辑值完全一致。
-  winInfo.content = winInfo.tempContent
+  // 真实值必须以“本次实际写盘的快照”作为准绳，
+  // 不能被保存过程中的后续编辑覆盖。
+  winInfo.content = contentToSave
   if (!winInfo.externalWatch) {
     winInfo.externalWatch = createExternalWatchState()
   }
   startExternalWatch(winInfo)
   // 这里再补一次标记，确保 watcher 在保存完成后的第一轮事件里也能识别这次写盘。
-  fileWatchUtil.markInternalSave(winInfo.externalWatch, winInfo.tempContent)
-  winInfo.lastNotifiedSavedState = true
-  sendUtil.send(winInfo.win, { event: 'save-success', data: {
-    fileName: path.basename(winInfo.path),
-    saved: true,
-  } })
+  fileWatchUtil.markInternalSave(winInfo.externalWatch, contentToSave)
+  const saved = isSaved(winInfo)
+  winInfo.lastNotifiedSavedState = saved
+  if (isWindowAlive(winInfo.win)) {
+    sendUtil.send(winInfo.win, { event: 'save-success', data: {
+      fileName: path.basename(winInfo.path),
+      saved,
+    } })
+  }
+  return saved
 }
 
 export default {
@@ -553,6 +723,10 @@ export default {
       isRecent,
       externalWatch: createExternalWatchState(),
       lastNotifiedSavedState: true,
+      // 只用于“同一轮 saveTask 失败提示去重”，不是业务真相。
+      // 每次创建新的 saveTask 时都会重置。
+      lastAutoSaveFailedTask: null,
+      closed: false,
     })
     const winInfo = winInfoList.find(item => item.id === id)
     if (exists) {
@@ -587,24 +761,36 @@ export default {
     })
     win.on('close', async (e) => {
       const winInfo = findByWin(win)
-      if (winInfo.path && configUtil.getConfig().autoSave.includes('close') && winInfo.content !== winInfo.tempContent) {
-        await save(winInfo)
+      if (!winInfo) {
+        return
+      }
+      if (winInfo.allowImmediateClose === true) {
+        winInfo.allowImmediateClose = false
+        finalizeWindowClose(winInfo, id)
+        return
+      }
+      if (winInfo.forceClose === true) {
+        finalizeWindowClose(winInfo, id)
+        return
+      }
+      if (shouldAutoSave(winInfo, 'close')) {
+        e.preventDefault()
+        queueWindowSave(winInfo, { closeAfterSave: true }).then(() => {})
+        return false
       }
       if (winInfo.forceClose !== true) {
-        if (winInfo.content !== winInfo.tempContent) {
+        if (isSaved(winInfo) === false) {
           sendUtil.send(win, { event: 'unsaved' })
           e.preventDefault()
           return false
         }
       }
-      stopExternalWatch(winInfo)
-      deleteEditorWin(id)
-      checkWinList()
+      finalizeWindowClose(winInfo, id)
     })
     win.on('blur', () => {
       const winInfo = findByWin(win)
-      if (winInfo.path && configUtil.getConfig().autoSave.includes('blur') && winInfo.content !== winInfo.tempContent) {
-        save(winInfo)
+      if (shouldAutoSave(winInfo, 'blur')) {
+        queueWindowSave(winInfo).then(() => {})
       }
     })
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {

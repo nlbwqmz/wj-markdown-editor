@@ -49,12 +49,31 @@ describe('fileWatchUtil', () => {
 
     fileWatchUtil.markInternalSave(state, '# 标题')
     state.lastInternalSaveAt -= 10
+    state.recentInternalSaves[0].savedAt -= 10
 
     const result = fileWatchUtil.resolveExternalChange(state, '# 标题')
 
     expect(result.changed).toBe(true)
     expect(result.reason).toBe('external-change')
     expect(result.change.version).toBe(1)
+  })
+
+  it('连续内部保存时，较早一轮写盘内容在抑制窗口内晚到，也应继续识别为内部保存', () => {
+    const state = fileWatchUtil.createWatchState()
+
+    // 模拟连续补写：
+    // 先记录第一轮内部写盘，再立刻记录第二轮内部写盘。
+    // 如果此时 watcher 晚到的是第一轮的磁盘内容，仍然必须识别为 internal-save，
+    // 不能因为“最新槽位已被第二轮覆盖”就误判成外部修改。
+    fileWatchUtil.markInternalSave(state, '# 第一轮内容')
+    fileWatchUtil.markInternalSave(state, '# 第二轮内容')
+
+    const result = fileWatchUtil.resolveExternalChange(state, '# 第一轮内容')
+
+    expect(result.changed).toBe(false)
+    expect(result.reason).toBe('internal-save')
+    expect(state.currentVersion).toBe(0)
+    expect(state.pendingChange).toBeNull()
   })
 
   it('应该在忽略后清理状态，并抑制同一版本的重复事件', () => {
