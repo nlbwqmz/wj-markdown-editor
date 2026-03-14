@@ -469,7 +469,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
   })
 
-  it('handleFileMissing 发给 renderer 的 payload 必须反映最新 exists=false 与正确 saved 状态，而不是旧 session 快照', async () => {
+  it('handleFileMissing 只能通过 snapshot 推送最新 exists=false 与 saved=false，不能再发送 legacy file-missing / file-is-saved', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -481,12 +481,11 @@ describe('winInfoUtil 兼容 facade', () => {
     const result = winInfoUtil.handleFileMissing(winInfo)
 
     expect(result).toBe('missing')
-    expect(sendMock).toHaveBeenCalledWith(winInfo.win, { event: 'file-is-saved', data: false })
-    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'file-is-saved')).toHaveLength(1)
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-is-saved')).toBe(false)
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-missing')).toBe(false)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'file-missing',
+      event: 'document.snapshot.changed',
       data: expect.objectContaining({
-        content: '# 原始内容',
         exists: false,
         saved: false,
       }),
@@ -522,7 +521,7 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(winInfo.externalWatch.pendingChange).toBeNull()
   })
 
-  it('handleExternalChange 在 strategy=apply 时，file-content-reloaded / file-is-saved 必须基于最新 session 真相', async () => {
+  it('handleExternalChange 在 strategy=apply 时，只能通过 snapshot 收敛，不应再发送 file-content-reloaded / file-is-saved', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -544,10 +543,10 @@ describe('winInfoUtil 兼容 facade', () => {
     })
 
     expect(result).toBe('applied')
-    expect(sendMock).toHaveBeenCalledWith(winInfo.win, { event: 'file-is-saved', data: true })
-    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'file-is-saved')).toHaveLength(1)
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-is-saved')).toBe(false)
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-content-reloaded')).toBe(false)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'file-content-reloaded',
+      event: 'document.snapshot.changed',
       data: expect.objectContaining({
         content: '# 外部新内容',
         exists: true,
@@ -556,7 +555,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
   })
 
-  it('handleExternalChange 在 strategy=prompt 时，file-external-changed 只能发送一次，避免 bridge 与兼容层重复推送', async () => {
+  it('handleExternalChange 在 strategy=prompt 时，只能通过 snapshot.externalPrompt 推送冲突，不能再发送 file-external-changed', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -578,15 +577,17 @@ describe('winInfoUtil 兼容 facade', () => {
     })
 
     expect(result).toBe('prompted')
-    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'file-external-changed')).toHaveLength(1)
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-external-changed')).toBe(false)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'file-external-changed',
-      data: {
-        fileName: 'demo.md',
-        version: 1,
-        localContent: '# 本地编辑内容',
-        externalContent: '# 外部新内容',
-      },
+      event: 'document.snapshot.changed',
+      data: expect.objectContaining({
+        externalPrompt: expect.objectContaining({
+          fileName: 'demo.md',
+          version: 1,
+          localContent: '# 本地编辑内容',
+          externalContent: '# 外部新内容',
+        }),
+      }),
     })
   })
 
@@ -621,7 +622,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
   })
 
-  it('旧弹窗已经打开时，如果又来了新的外部版本，仍必须再次发送 file-external-changed 覆盖旧 diff', async () => {
+  it('旧弹窗已经打开时，如果又来了新的外部版本，snapshot.externalPrompt 必须更新为最新 diff，且不能再发送 file-external-changed', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -650,14 +651,15 @@ describe('winInfoUtil 兼容 facade', () => {
       strategy: 'prompt',
     })
 
-    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'file-external-changed',
-      data: {
-        fileName: 'demo.md',
-        version: 2,
-        localContent: '# 本地编辑内容',
-        externalContent: '# 外部新内容 2',
-      },
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-external-changed')).toBe(false)
+    expect(snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 2,
+      localContent: '# 本地编辑内容',
+      externalContent: '# 外部新内容 2',
+      fileName: 'demo.md',
     })
   })
 
@@ -842,6 +844,30 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(restoredPayload.saved).toBe(true)
   })
 
+  it('缺失后恢复时，即使后续 change 被 internal-save / handled 去重吞掉，也必须立刻推送最新 snapshot 清掉缺失态', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    const watchOptions = startWatchingMock.mock.calls[0][0]
+
+    winInfoUtil.handleFileMissing(winInfo)
+    sendMock.mockClear()
+
+    watchOptions.onRestored('# 原始内容')
+
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'document.snapshot.changed',
+      data: expect.objectContaining({
+        exists: true,
+        content: '# 原始内容',
+        saved: true,
+      }),
+    })
+  })
+
   it('force-close 会走 confirm-force-close 语义，直接关闭窗口且不再启动保存', async () => {
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startPage: 'editor' })
     pathExistsMock.mockResolvedValue(true)
@@ -939,6 +965,6 @@ describe('winInfoUtil 兼容 facade', () => {
     ])
 
     expect(sendMock.mock.calls.filter(call => call[1]?.event === 'window.effect.recent-list-changed')).toHaveLength(2)
-    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'update-recent')).toHaveLength(2)
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'update-recent')).toBe(false)
   })
 })

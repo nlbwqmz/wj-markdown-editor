@@ -65,8 +65,8 @@ async function ignoreExternalChange() {
 
 async function applyExternalChange() {
   // 应用动作由 Electron 主导完成：
-  // Electron 会直接更新 tempContent / 保存状态，
-  // 然后再通过 `file-content-reloaded` 通知渲染端刷新。
+  // Electron 会直接更新会话内容与保存状态，
+  // renderer 只通过最新 snapshot 收敛 UI。
   if (externalFileChange.value.loading) {
     return
   }

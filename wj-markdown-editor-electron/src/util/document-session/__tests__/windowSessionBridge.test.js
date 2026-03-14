@@ -99,10 +99,7 @@ describe('windowSessionBridge', () => {
       event: 'window.effect.recent-list-changed',
       data: recentList,
     })
-    expect(sendToRenderer).toHaveBeenCalledWith(win, {
-      event: 'update-recent',
-      data: recentList,
-    })
+    expect(sendToRenderer.mock.calls.some(call => call[1]?.event === 'update-recent')).toBe(false)
   })
 
   it('recent 列表内容未变化时，不能重复广播 window.effect.recent-list-changed', async () => {
@@ -127,8 +124,8 @@ describe('windowSessionBridge', () => {
     expect(sendToRenderer).not.toHaveBeenCalled()
   })
 
-  it('snapshot.saved 变化时，桥层才允许兼容代发 file-is-saved，且不能顺带代发 file-content-reloaded', async () => {
-    const { bridge, sendToRenderer, win } = await createBridgeContext()
+  it('snapshot.saved 变化时，桥层只能继续发布 snapshot 真相，不能再代发 file-is-saved / file-content-reloaded', async () => {
+    const { bridge, sendToRenderer } = await createBridgeContext()
 
     bridge.publishSnapshotChanged({
       windowId: 1001,
@@ -149,15 +146,12 @@ describe('windowSessionBridge', () => {
       },
     })
 
-    expect(sendToRenderer).toHaveBeenCalledWith(win, {
-      event: 'file-is-saved',
-      data: true,
-    })
+    expect(sendToRenderer.mock.calls.some(call => call[1]?.event === 'file-is-saved')).toBe(false)
     expect(sendToRenderer.mock.calls.some(call => call[1]?.event === 'file-content-reloaded')).toBe(false)
   })
 
-  it('snapshot.externalPrompt 出现时，桥层可以兼容代发 file-external-changed，但不能代发 file-missing', async () => {
-    const { bridge, sendToRenderer, win } = await createBridgeContext()
+  it('snapshot.externalPrompt 出现时，桥层只能通过 snapshot 收敛，不能再代发 file-external-changed / file-missing', async () => {
+    const { bridge, sendToRenderer } = await createBridgeContext()
 
     bridge.publishSnapshotChanged({
       windowId: 1001,
@@ -173,20 +167,12 @@ describe('windowSessionBridge', () => {
       },
     })
 
-    expect(sendToRenderer).toHaveBeenCalledWith(win, {
-      event: 'file-external-changed',
-      data: {
-        fileName: 'demo.md',
-        version: 'version-2',
-        localContent: '# 本地内容',
-        externalContent: '# 外部内容',
-      },
-    })
+    expect(sendToRenderer.mock.calls.some(call => call[1]?.event === 'file-external-changed')).toBe(false)
     expect(sendToRenderer.mock.calls.some(call => call[1]?.event === 'file-missing')).toBe(false)
   })
 
-  it('旧 renderer 仍在使用时，只要 externalPrompt.version 变化，桥层就必须再次代发 file-external-changed 覆盖旧弹窗内容', async () => {
-    const { bridge, sendToRenderer, win } = await createBridgeContext()
+  it('externalPrompt.version 变化时，桥层仍必须把最新版本写进 snapshot，但不能再补发 file-external-changed', async () => {
+    const { bridge, sendToRenderer } = await createBridgeContext()
 
     bridge.publishSnapshotChanged({
       windowId: 1001,
@@ -217,14 +203,15 @@ describe('windowSessionBridge', () => {
       },
     })
 
-    expect(sendToRenderer).toHaveBeenCalledWith(win, {
-      event: 'file-external-changed',
-      data: {
-        fileName: 'demo.md',
-        version: 2,
-        localContent: '# 本地内容',
-        externalContent: '# 外部内容 2',
-      },
+    expect(sendToRenderer.mock.calls.some(call => call[1]?.event === 'file-external-changed')).toBe(false)
+    expect(sendToRenderer).toHaveBeenCalledWith(expect.anything(), {
+      event: 'document.snapshot.changed',
+      data: expect.objectContaining({
+        externalPrompt: expect.objectContaining({
+          version: 2,
+          externalContent: '# 外部内容 2',
+        }),
+      }),
     })
   })
 })

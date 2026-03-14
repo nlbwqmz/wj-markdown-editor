@@ -171,9 +171,8 @@ function syncSavedState(winInfo) {
   winInfo.lastNotifiedSavedState = saved
 
   // `winInfo.lastNotifiedSavedState` 仍然保留，方便旧 facade 在调试或兼容逻辑里拿到最近一次
-  // 已投影的保存态镜像；但真正发给 renderer 的 `file-is-saved` 事件必须只允许 bridge 代发。
-  // 否则一旦这里和 `publishSnapshotChanged()` 同时执行，就会让旧 renderer 收到重复事件，
-  // 轻则触发多次 UI 刷新，重则让后续迁移阶段难以判断“谁才是最终状态出口”。
+  // 已投影的保存态镜像；真正发给 renderer 的文档状态只能走 `document.snapshot.changed`。
+  // 否则这里一旦再次直接推事件，就会把已经收敛到 bridge 的单一真相重新拆成两套出口。
   return saved
 }
 
@@ -366,8 +365,8 @@ function applyLegacyPendingExternalChangeToSession(winInfo, change) {
     const pendingVersion = getLegacyPendingVersion(winInfo, previousPendingChange, nextVersionHash)
 
     // legacy watcher 提醒链路虽然还没有完全切到 watchCoordinator，
-    // 但 renderer 迁移前必须先把“待处理外部版本”写进 session 真相。
-    // 否则前端一旦停止监听旧 `file-external-changed`，externalPrompt 就会凭空消失。
+    // 但 renderer 已经改成只看 session snapshot。
+    // 因此这里必须先把“待处理外部版本”写进 session 真相，不能再依赖额外的 legacy 事件补洞。
     session.externalRuntime.pendingExternalChange = {
       version: pendingVersion,
       versionHash: nextVersionHash,
@@ -527,6 +526,12 @@ function startExternalWatch(winInfo) {
     },
     onRestored: (diskContent, meta = {}) => {
       markLegacyRestoredInSession(winInfo, diskContent, meta)
+
+      // “文件已恢复”本身就是一个必须立即投影给 renderer 的状态变化。
+      // 如果这里只更新 session 而不推 snapshot，后续首次读盘又因为 internal-save / handled 去重被吞掉，
+      // 界面就会继续停在旧的 missing 态，看起来像是文件从未恢复。
+      syncSavedState(winInfo)
+      publishSnapshotChanged(winInfo)
     },
     onError: () => {
       sendUtil.send(winInfo.win, {
@@ -657,10 +662,6 @@ function handleFileMissing(winInfo) {
   applyLegacyMissingToSession(winInfo)
   syncSavedState(winInfo)
   publishSnapshotChanged(winInfo)
-  sendUtil.send(winInfo.win, {
-    event: 'file-missing',
-    data: getFileInfoPayload(winInfo),
-  })
   return 'missing'
 }
 
@@ -693,10 +694,6 @@ function handleExternalChange(winInfo, change, options = {}) {
     }
     syncSavedState(winInfo)
     publishSnapshotChanged(winInfo)
-    sendUtil.send(winInfo.win, {
-      event: 'file-content-reloaded',
-      data: getFileInfoPayload(winInfo),
-    })
     return 'applied'
   }
 
@@ -731,13 +728,6 @@ async function handleLegacyExternalCommand(winInfo, command, payload = {}) {
     fileWatchUtil.ignorePendingChange(winInfo.externalWatch)
   }
 
-  if (payload?.compatLegacyReloadEvent === true && isApplied && isWindowAlive(winInfo?.win)) {
-    sendUtil.send(winInfo.win, {
-      event: 'file-content-reloaded',
-      data: getFileInfoPayload(winInfo),
-    })
-  }
-
   return {
     commandResult: result,
     handledPending,
@@ -749,7 +739,6 @@ async function handleLegacyExternalCommand(winInfo, command, payload = {}) {
 async function applyExternalPendingChange(winInfo, version) {
   const legacyResult = await handleLegacyExternalCommand(winInfo, 'document.external.apply', {
     version,
-    compatLegacyReloadEvent: true,
   })
   return legacyResult.isApplied
 }

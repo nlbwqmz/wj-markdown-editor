@@ -21,7 +21,8 @@ function isWindowUsable(win) {
  * 2. `window.effect.message` 只承载一次性提示，不能混入持久状态
  * 3. `window.effect.recent-list-changed` 只承载完整 recent 列表刷新
  *
- * 这样可以把“状态”和“一次性副作用”彻底拆开，避免渲染层再去猜当前保存态。
+ * Task 7 起不再补发 `file-is-saved`、`file-external-changed`、`update-recent`
+ * 这类 legacy 文档事件，避免主进程再次长出第二套状态出口。
  */
 export function createWindowSessionBridge({
   store,
@@ -31,53 +32,6 @@ export function createWindowSessionBridge({
 }) {
   const lastSnapshotMap = new Map()
   let lastRecentListSignature = null
-
-  function shouldPublishLegacyExternalChanged(previousExternalPrompt, nextExternalPrompt) {
-    if (!nextExternalPrompt?.visible) {
-      return false
-    }
-
-    if (!previousExternalPrompt?.visible) {
-      return true
-    }
-
-    // 旧 renderer 还依赖 `file-external-changed` 来覆盖弹窗中的 diff/version。
-    // 因此只要这次 pending 指向了新的外部版本，就必须再次代发一次；
-    // 但普通 saved/title 等快照变化不能把它变成高频噪声事件。
-    return previousExternalPrompt.version !== nextExternalPrompt.version
-      || previousExternalPrompt.externalContent !== nextExternalPrompt.externalContent
-      || previousExternalPrompt.fileName !== nextExternalPrompt.fileName
-  }
-
-  function publishLegacySnapshotAliases(win, snapshot, previousSnapshot) {
-    if (!snapshot) {
-      return
-    }
-
-    // `file-is-saved` 仍被旧 renderer 直接消费，
-    // 但它只能从 snapshot.saved 的边沿变化窄口代发，不能再回头读 winInfo 镜像。
-    if (previousSnapshot && previousSnapshot.saved !== snapshot.saved) {
-      sendToRenderer(win, {
-        event: 'file-is-saved',
-        data: snapshot.saved,
-      })
-    }
-
-    // `file-external-changed` 仍然是旧 diff 提示入口，
-    // 旧 renderer 在弹窗已经打开时，如果又来了更晚的外部版本，
-    // 仍然需要收到一次覆盖事件来刷新 diff/version。
-    if (shouldPublishLegacyExternalChanged(previousSnapshot?.externalPrompt, snapshot.externalPrompt)) {
-      sendToRenderer(win, {
-        event: 'file-external-changed',
-        data: {
-          fileName: snapshot.externalPrompt.fileName,
-          version: snapshot.externalPrompt.version,
-          localContent: snapshot.externalPrompt.localContent,
-          externalContent: snapshot.externalPrompt.externalContent,
-        },
-      })
-    }
-  }
 
   function getSessionSnapshot(windowId) {
     const session = store?.getSessionByWindowId(windowId)
@@ -89,13 +43,11 @@ export function createWindowSessionBridge({
     if (!snapshot || !isWindowUsable(win)) {
       return snapshot
     }
-    const previousSnapshot = lastSnapshotMap.get(windowId) || null
     lastSnapshotMap.set(windowId, snapshot)
     sendToRenderer(win, {
       event: 'document.snapshot.changed',
       data: snapshot,
     })
-    publishLegacySnapshotAliases(win, snapshot, previousSnapshot)
     return snapshot
   }
 
@@ -123,7 +75,7 @@ export function createWindowSessionBridge({
   function publishRecentListChanged(recentList) {
     // recent 列表允许被多个入口重复回调，例如保存后 recent.add 写回、启动时 recent 初始化等。
     // 这里必须用“完整列表签名”做一次幂等收口，确保只有列表内容真的变化时才广播，
-    // 避免 renderer 因重复 `update-recent` / `window.effect.recent-list-changed` 进入无意义刷新。
+    // 避免 renderer 因重复 recent 刷新进入无意义重渲染。
     const nextRecentList = Array.isArray(recentList) ? recentList : []
     const nextSignature = JSON.stringify(nextRecentList)
     if (nextSignature === lastRecentListSignature) {
@@ -137,10 +89,6 @@ export function createWindowSessionBridge({
       }
       sendToRenderer(win, {
         event: 'window.effect.recent-list-changed',
-        data: nextRecentList,
-      })
-      sendToRenderer(win, {
-        event: 'update-recent',
         data: nextRecentList,
       })
     })
