@@ -11,6 +11,11 @@ import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
 import {
+  createDocumentSessionBootstrapGuard,
+  DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
+} from '@/util/document-session/documentSessionEventUtil.js'
+import { shouldSuppressNextContentSync } from '@/util/editor/contentUpdateMetaUtil.js'
+import {
   getPreviewAssetDeleteReasonMessageKey,
   resolvePreviewAssetDeletePlan,
   shouldContinueMarkdownCleanup,
@@ -49,9 +54,17 @@ const multiReferenceDeleteModal = ref({
   loading: false,
 })
 let contentUpdateToken = 0
+let applyingSessionContent = false
+let recentMissingPrompted = false
+const documentSessionBootstrapGuard = createDocumentSessionBootstrapGuard()
 
 function updateEditorContent(nextContent, options = {}) {
   contentUpdateToken += 1
+  applyingSessionContent = shouldSuppressNextContentSync({
+    currentContent: content.value,
+    nextContent,
+    skipContentSync: options.skipContentSync === true,
+  })
   contentUpdateMeta.value = {
     token: contentUpdateToken,
     cursorPosition: Number.isInteger(options.cursorPosition) ? options.cursorPosition : null,
@@ -65,49 +78,63 @@ function save() {
   channelUtil.send({ event: 'save' })
 }
 
-function syncFileMeta(data) {
-  window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
-  store.$patch({
-    fileName: data.fileName,
-    saved: data.saved,
+function applyDocumentSessionSnapshot(snapshot, options = {}) {
+  if (!snapshot) {
+    return
+  }
+
+  if (options.promptRecentMissing === true && snapshot.isRecentMissing === true && snapshot.recentMissingPath && recentMissingPrompted === false) {
+    recentMissingPrompted = true
+    commonUtil.recentFileNotExists(snapshot.recentMissingPath)
+  } else if (snapshot.isRecentMissing !== true) {
+    recentMissingPrompted = false
+  }
+
+  // 编辑器内容现在只从 document session snapshot 同步，
+  // 避免再和旧的 file-content-reloaded / get-file-info 元信息混写。
+  updateEditorContent(snapshot.content, {
+    skipContentSync: true,
+  })
+  ready.value = true
+}
+
+function onDocumentSessionSnapshotChanged(snapshot) {
+  documentSessionBootstrapGuard.markSnapshotApplied()
+  applyDocumentSessionSnapshot(snapshot)
+}
+
+async function loadCurrentDocumentSessionSnapshot() {
+  const requestContext = documentSessionBootstrapGuard.beginRequest()
+  const snapshot = await channelUtil.send({ event: 'document.get-session-snapshot' })
+  if (documentSessionBootstrapGuard.shouldApplyRequestResult(requestContext) !== true) {
+    return
+  }
+  const normalizedSnapshot = store.applyDocumentSessionSnapshot(snapshot)
+  window.document.title = normalizedSnapshot.windowTitle
+  applyDocumentSessionSnapshot(normalizedSnapshot, {
+    promptRecentMissing: true,
   })
 }
 
-function updateFileInfo(data, options = { syncMeta: true }) {
-  if (data.isRecent && !data.exists) {
-    commonUtil.recentFileNotExists(data.path)
-  }
-  // 这里接收的是 Electron 最终确认后的内容：
-  // - 初次打开文件
-  // - 自动应用外部修改
-  // - 用户在弹窗里手动应用外部修改
-  updateEditorContent(data.content)
-  ready.value = true
-  if (options.syncMeta === true) {
-    syncFileMeta(data)
-  }
-}
-
-function onFileContentReloaded(data) {
-  // fileName / saved / title 由全局事件层统一更新，
-  // 这里仅刷新编辑内容，避免重复状态同步。
-  updateFileInfo(data, { syncMeta: false })
-}
-
 onMounted(async () => {
-  // 页面初始化时先拉一份当前窗口的文件状态，
-  // 后续如果 Electron 主动刷新内容，会再通过 `file-content-reloaded` 推过来。
-  const data = await channelUtil.send({ event: 'get-file-info' })
-  updateFileInfo(data, { syncMeta: true })
-  eventEmit.on('file-content-reloaded', onFileContentReloaded)
+  eventEmit.on(DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT, onDocumentSessionSnapshotChanged)
+  // 页面初始化时主动拉一次当前 session snapshot，
+  // 确保首屏和后续主进程推送走的是同一套结构。
+  await loadCurrentDocumentSessionSnapshot()
 })
 
 onBeforeUnmount(() => {
-  eventEmit.remove('file-content-reloaded', onFileContentReloaded)
+  eventEmit.remove(DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT, onDocumentSessionSnapshotChanged)
 })
 
 watch(() => content.value, (newValue, oldValue) => {
   if (newValue !== oldValue) {
+    if (applyingSessionContent) {
+      // 由 snapshot 驱动的内容替换不应再次回写主进程，
+      // 否则容易把“外部应用后的最终内容”误当成新的手工编辑。
+      applyingSessionContent = false
+      return
+    }
     // 编辑器里每次真实内容变化，都会同步给 Electron 更新 tempContent。
     // 保存状态、外部变更收敛等逻辑都在 Electron 侧统一判断。
     channelUtil.send({ event: 'file-content-update', data: newValue })

@@ -572,6 +572,29 @@ describe('ipcMainUtil command mapping', () => {
     expect(result).toEqual(snapshot)
   })
 
+  it('recent.get-list 必须通过统一命令入口返回最近文件列表', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    const recentList = [
+      {
+        path: 'D:\\docs\\note.md',
+        name: 'note.md',
+      },
+    ]
+    winInfoUtil.executeCommand.mockResolvedValueOnce(recentList)
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'recent.get-list',
+      data: null,
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'recent.get-list', null)
+    expect(result).toEqual(recentList)
+  })
+
   it('document.external.apply / document.external.ignore 必须暴露为新的统一 IPC 命令', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
 
@@ -602,6 +625,30 @@ describe('ipcMainUtil command mapping', () => {
     }, 'document.external.ignore', {
       version: 3,
     })
+  })
+
+  it('document.cancel-close / document.confirm-force-close 必须暴露为新的关闭确认命令', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'document.cancel-close',
+      data: null,
+    })
+    await sendToMainHandler({ sender }, {
+      event: 'document.confirm-force-close',
+      data: null,
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(1, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.cancel-close', null)
+    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(2, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.confirm-force-close', null)
   })
 
   it('旧 file-external-change-apply / ignore 兼容入口也必须回流到新的统一命令', async () => {

@@ -8,6 +8,10 @@ import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
+import {
+  createDocumentSessionBootstrapGuard,
+  DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
+} from '@/util/document-session/documentSessionEventUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
@@ -27,6 +31,7 @@ const previewContainer = ref()
 const config = ref({})
 const ready = ref(false)
 let previewSearchTargetActive = false
+const documentSessionBootstrapGuard = createDocumentSessionBootstrapGuard()
 
 const watermark = ref()
 
@@ -59,31 +64,34 @@ function closePreviewSearchBar() {
   })
 }
 
-function syncFileMeta(data) {
-  window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
-  store.$patch({
-    fileName: data.fileName,
-    saved: data.saved,
-  })
-}
-
-function updateFileInfo(data, options = { syncMeta: true }) {
-  // 预览页也是被动接收 Electron 已确认的最终内容，
-  // 不参与外部修改的应用决策，只负责展示结果。
-  content.value = data.content
-  ready.value = true
-  if (options.syncMeta === true) {
-    syncFileMeta(data)
+function applyDocumentSessionSnapshot(snapshot) {
+  if (!snapshot) {
+    return
   }
+
+  // 预览页只消费已经收敛完毕的 session snapshot，
+  // 不直接参与保存态或外部修改态推导。
+  content.value = snapshot.content
+  ready.value = true
   if (!content.value) {
     anchorList.value = []
   }
 }
 
-function onFileContentReloaded(data) {
-  // fileName / saved / title 由全局事件层统一更新，
-  // 这里仅刷新预览内容，避免重复状态同步。
-  updateFileInfo(data, { syncMeta: false })
+function onDocumentSessionSnapshotChanged(snapshot) {
+  documentSessionBootstrapGuard.markSnapshotApplied()
+  applyDocumentSessionSnapshot(snapshot)
+}
+
+async function loadCurrentDocumentSessionSnapshot() {
+  const requestContext = documentSessionBootstrapGuard.beginRequest()
+  const snapshot = await channelUtil.send({ event: 'document.get-session-snapshot' })
+  if (documentSessionBootstrapGuard.shouldApplyRequestResult(requestContext) !== true) {
+    return
+  }
+  const normalizedSnapshot = store.applyDocumentSessionSnapshot(snapshot)
+  window.document.title = normalizedSnapshot.windowTitle
+  applyDocumentSessionSnapshot(normalizedSnapshot)
 }
 
 watch(() => store.config, (newValue) => {
@@ -101,15 +109,14 @@ watch(() => store.config, (newValue) => {
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
   activatePreviewSearchTarget()
-  // 当 Electron 自动应用外部修改，或者用户手动应用完成后，
-  // 预览页会收到统一的刷新事件。
-  eventEmit.on('file-content-reloaded', onFileContentReloaded)
+  eventEmit.on(DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT, onDocumentSessionSnapshotChanged)
+  loadCurrentDocumentSessionSnapshot().then(() => {})
 })
 
 onBeforeUnmount(() => {
   closePreviewSearchBar()
   deactivatePreviewSearchTarget()
-  eventEmit.remove('file-content-reloaded', onFileContentReloaded)
+  eventEmit.remove(DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT, onDocumentSessionSnapshotChanged)
 })
 
 watch(() => menuVisible.value, (newValue) => {
@@ -136,8 +143,9 @@ watch(() => menuVisible.value, (newValue) => {
 onActivated(async () => {
   activatePreviewSearchTarget()
   closePreviewSearchBar()
-  const data = await channelUtil.send({ event: 'get-file-info' })
-  updateFileInfo(data, { syncMeta: true })
+  // 预览页被 keep-alive 恢复时，直接从全局 snapshot 真相重放一次内容，
+  // 避免停用期间错过推送后仍显示旧正文。
+  applyDocumentSessionSnapshot(store.documentSessionSnapshot)
 })
 
 onDeactivated(() => {

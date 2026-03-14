@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { resolvePendingContentUpdateMeta } from '../contentUpdateMetaUtil.js'
+import {
+  resolvePendingContentUpdateMeta,
+  shouldSuppressNextContentSync,
+} from '../contentUpdateMetaUtil.js'
 
 const { test } = await import('node:test')
 
@@ -35,4 +38,18 @@ test('新的内容更新元数据只应消费一次', () => {
   assert.equal(secondResult.focus, false)
   assert.equal(secondResult.scrollIntoView, false)
   assert.equal(secondResult.nextHandledToken, 3)
+})
+
+test('session 快照回放为 no-op 时，不应继续吞掉下一次真实用户输入', () => {
+  assert.equal(shouldSuppressNextContentSync({
+    currentContent: '',
+    nextContent: '',
+    skipContentSync: true,
+  }), false)
+
+  assert.equal(shouldSuppressNextContentSync({
+    currentContent: '# old',
+    nextContent: '# new',
+    skipContentSync: true,
+  }), true)
 })

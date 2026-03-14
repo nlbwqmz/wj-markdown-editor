@@ -101,6 +101,8 @@ const handlerList = {
     // Electron 只认这一个入口来更新 tempContent。
     winInfoUtil.updateTempContent(winInfo, content)
   },
+  'document.cancel-close': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.cancel-close', null),
+  'document.confirm-force-close': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.confirm-force-close', null),
   'document.external.apply': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'document.external.apply', data),
   'document.external.ignore': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'document.external.ignore', data),
   'file-external-change-apply': async (winInfo, data) => await winInfoUtil.applyExternalPendingChange(winInfo, data?.version),

@@ -1,47 +1,51 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import channelUtil from '@/util/channel/channelUtil.js'
+import {
+  createDefaultClosePromptState,
+  createDefaultDocumentSessionSnapshot,
+  createDefaultExternalFileChangeState,
+  deriveDocumentSessionStoreState,
+  normalizeRecentList,
+} from '@/util/document-session/documentSessionSnapshotUtil.js'
 
 const configData = await channelUtil.send({ event: 'get-config' })
-const recentListData = await channelUtil.send({ event: 'get-recent-list' })
-
-function createDefaultExternalFileChange() {
-  return {
-    visible: false,
-    loading: false,
-    fileName: '',
-    version: 0,
-    localContent: '',
-    externalContent: '',
-  }
-}
+const recentListData = await channelUtil.send({ event: 'recent.get-list' })
 
 const useCommonStore = defineStore('common', () => {
-  const fileName = ref('')
+  const documentSessionSnapshot = ref(createDefaultDocumentSessionSnapshot())
+  const fileName = ref(documentSessionSnapshot.value.fileName)
   const saved = ref(true)
+  const displayPath = ref(null)
+  const recentMissingPath = ref(null)
+  const exists = ref(false)
   const isMaximize = ref(false)
   const config = ref(configData)
   const searchBarVisible = ref(false)
   const editorSearchBarVisible = ref(false)
   const hasNewVersion = ref(false)
   const isAlwaysOnTop = ref(false)
-  const recentList = ref(recentListData)
-  const externalFileChange = ref(createDefaultExternalFileChange())
+  const recentList = ref(normalizeRecentList(recentListData))
+  const closePrompt = ref(createDefaultClosePromptState())
+  const externalFileChange = ref(createDefaultExternalFileChangeState())
 
-  function showExternalFileChange(data) {
-    // 每次收到新的外部 diff 数据时，都覆盖掉上一次弹窗状态，
-    // 避免旧版本内容残留在弹窗里。
-    externalFileChange.value = {
-      ...createDefaultExternalFileChange(),
-      ...data,
-      visible: true,
-      loading: false,
-    }
+  function applyDocumentSessionSnapshot(snapshot) {
+    const nextState = deriveDocumentSessionStoreState(snapshot, externalFileChange.value)
+    documentSessionSnapshot.value = nextState.documentSessionSnapshot
+    fileName.value = nextState.fileName
+    saved.value = nextState.saved
+    displayPath.value = nextState.displayPath
+    recentMissingPath.value = nextState.recentMissingPath
+    exists.value = nextState.exists
+    closePrompt.value = nextState.closePrompt
+    externalFileChange.value = nextState.externalFileChange
+    return nextState.documentSessionSnapshot
   }
 
-  function resetExternalFileChange() {
-    // 用户完成决策，或者 Electron 已经自动应用并通知刷新后，统一回到初始状态。
-    externalFileChange.value = createDefaultExternalFileChange()
+  function replaceRecentList(nextRecentList) {
+    const normalizedRecentList = normalizeRecentList(nextRecentList)
+    recentList.value = normalizedRecentList
+    return normalizedRecentList
   }
 
   function setExternalFileChangeLoading(loading) {
@@ -52,8 +56,12 @@ const useCommonStore = defineStore('common', () => {
   }
 
   return {
+    documentSessionSnapshot,
     fileName,
     saved,
+    displayPath,
+    recentMissingPath,
+    exists,
     isMaximize,
     config,
     searchBarVisible,
@@ -61,9 +69,10 @@ const useCommonStore = defineStore('common', () => {
     isAlwaysOnTop,
     recentList,
     editorSearchBarVisible,
+    closePrompt,
     externalFileChange,
-    showExternalFileChange,
-    resetExternalFileChange,
+    applyDocumentSessionSnapshot,
+    replaceRecentList,
     setExternalFileChangeLoading,
   }
 })
