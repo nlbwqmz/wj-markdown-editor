@@ -169,7 +169,7 @@ function onPreviewRefreshComplete() {
 
 function onAssetContextmenu(assetInfo) {
   channelUtil.send({
-    event: 'open-folder',
+    event: 'document.resource.open-in-folder',
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
@@ -182,7 +182,7 @@ function onAssetOpen(assetInfo) {
     return
   }
   channelUtil.send({
-    event: 'open-folder',
+    event: 'document.resource.open-in-folder',
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,

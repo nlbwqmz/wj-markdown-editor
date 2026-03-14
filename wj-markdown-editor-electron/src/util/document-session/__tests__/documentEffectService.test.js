@@ -143,6 +143,62 @@ describe('documentEffectService', () => {
     expect(recentStore.clear).not.toHaveBeenCalled()
   })
 
+  it('recent.remove 命中不存在的路径时，必须保持幂等且不触发真实删除副作用', async () => {
+    const { service, recentStore } = await createServiceContext()
+    recentStore.get.mockReturnValue([
+      {
+        name: 'demo.md',
+        path: 'C:/docs/demo.md',
+      },
+    ])
+
+    const result = await service.executeCommand({
+      command: 'recent.remove',
+      payload: {
+        path: 'C:/docs/missing.md',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      changed: false,
+      list: [
+        {
+          name: 'demo.md',
+          path: 'C:/docs/demo.md',
+        },
+      ],
+    })
+    expect(recentStore.remove).not.toHaveBeenCalled()
+  })
+
+  it('resource.get-info / resource.get-comparable-key 不应继续由 effectService 处理，避免绕过 documentResourceService', async () => {
+    const { service, resourceUtil } = await createServiceContext()
+
+    await expect(service.executeCommand({
+      command: 'resource.get-info',
+      payload: {
+        resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+      },
+      winInfo: {
+        path: 'C:/docs/demo.md',
+      },
+    })).rejects.toThrow('未知副作用命令: resource.get-info')
+
+    await expect(service.executeCommand({
+      command: 'resource.get-comparable-key',
+      payload: {
+        rawPath: './assets/demo.png',
+      },
+      winInfo: {
+        path: 'C:/docs/demo.md',
+      },
+    })).rejects.toThrow('未知副作用命令: resource.get-comparable-key')
+
+    expect(resourceUtil.getLocalResourceInfo).not.toHaveBeenCalled()
+    expect(resourceUtil.getLocalResourceComparableKey).not.toHaveBeenCalled()
+  })
+
   it('writeFile 已成功时，即使 recent.add 失败，也必须继续回流 save.succeeded，不能把真实保存误判成失败', async () => {
     const { service, fsModule, recentStore } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({})

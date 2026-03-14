@@ -180,6 +180,56 @@ describe('documentCommandService', () => {
     expect(cancelled.session.watchRuntime.bindingToken).toBe(0)
   })
 
+  it('save-copy 成功后，当前 active session 的 path、saved、watch 绑定与标题都不变化', () => {
+    const { store, service } = createTestContext([])
+    const session = createBoundFileSession({
+      sessionId: 'copy-success-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002021,
+    })
+    session.watchRuntime.bindingToken = 7
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = 'C:/docs/demo.md'
+    session.watchRuntime.watchingDirectoryPath = 'C:/docs'
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 未保存内容',
+      },
+    })
+
+    service.dispatch({
+      windowId,
+      command: 'document.save-copy',
+    })
+    service.dispatch({
+      windowId,
+      command: 'dialog.copy-target-selected',
+      payload: {
+        path: 'C:/docs/demo-copy.md',
+      },
+    })
+    const copySucceeded = service.dispatch({
+      windowId,
+      command: 'copy-save.succeeded',
+      payload: {
+        path: 'C:/docs/demo-copy.md',
+      },
+    })
+
+    expect(copySucceeded.session.documentSource.path).toBe('C:/docs/demo.md')
+    expect(copySucceeded.session.persistedSnapshot.path).toBe('C:/docs/demo.md')
+    expect(copySucceeded.snapshot.saved).toBe(false)
+    expect(copySucceeded.snapshot.windowTitle).toBe('demo.md')
+    expect(copySucceeded.session.watchRuntime.bindingToken).toBe(7)
+    expect(copySucceeded.session.watchRuntime.watchingPath).toBe('C:/docs/demo.md')
+  })
+
   it('关闭请求命中 autoSave=close 且已有有效路径时，必须走同一保存管线而不是旁路写盘', () => {
     const { store, service } = createTestContext(['close'])
     const session = createBoundFileSession({

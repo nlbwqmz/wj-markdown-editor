@@ -36,6 +36,33 @@ function toLegacyOpenFileResult(result) {
   return result
 }
 
+/**
+ * 旧 `open-folder` 兼容入口和新资源命令都复用同一条提示裁决。
+ *
+ * 这里故意只保留“把结构化 reason 翻译成旧消息事件”的兼容职责，
+ * 真正的路径解析、query/hash 回退和未保存文档判定都必须交给 documentResourceService，
+ * 避免 IPC 层再次长出第二套资源语义。
+ */
+async function handleResourceOpen(winInfo, data) {
+  const openResult = await winInfoUtil.executeResourceCommand(winInfo, 'document.resource.open-in-folder', data)
+  if (!openResult) {
+    return openResult
+  }
+
+  if (openResult.ok !== true) {
+    const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
+    if (messageKey) {
+      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: messageKey } })
+    }
+    return openResult
+  }
+
+  if (openResult.opened !== true && openResult.reason === 'not-found') {
+    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theFileDoesNotExist' } })
+  }
+  return openResult
+}
+
 const handlerList = {
   ...settingUtil.channel,
   ...exportUtil.channel,
@@ -69,18 +96,7 @@ const handlerList = {
   },
   'open-folder': async (winInfo, data) => {
     if (typeof data === 'string' || (data && typeof data === 'object' && typeof data.resourceUrl === 'string')) {
-      const openResult = await resourceFileUtil.openLocalResourceInFolder(winInfo, data, shell.showItemInFolder)
-      if (openResult.ok !== true) {
-        const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
-        if (messageKey) {
-          sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: messageKey } })
-        }
-        return
-      }
-      if (openResult.opened !== true && openResult.reason === 'not-found') {
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theFileDoesNotExist' } })
-      }
-      return
+      return await handleResourceOpen(winInfo, data)
     }
     if (!winInfo.path || !winInfo.exists) {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theCurrentFileIsNotSaved' } })
@@ -88,6 +104,7 @@ const handlerList = {
     }
     shell.showItemInFolder(winInfo.path)
   },
+  'document.resource.open-in-folder': async (winInfo, data) => await handleResourceOpen(winInfo, data),
   'save-other': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save-copy', null),
   'save': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save', null),
   'get-file-info': (winInfo) => {
@@ -125,11 +142,10 @@ const handlerList = {
   'upload-image': async (winInfo, data) => {
     return await uploadImage(winInfo, data)
   },
-  'delete-local-resource': async (winInfo, data) => {
-    return await resourceFileUtil.deleteLocalResource(winInfo, data)
-  },
-  'get-local-resource-info': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'resource.get-info', data),
-  'resource.get-info': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'resource.get-info', data),
+  'delete-local-resource': async (winInfo, data) => await winInfoUtil.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
+  'document.resource.delete-local': async (winInfo, data) => await winInfoUtil.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
+  'get-local-resource-info': async (winInfo, data) => await winInfoUtil.executeResourceCommand(winInfo, 'resource.get-info', data),
+  'resource.get-info': async (winInfo, data) => await winInfoUtil.executeResourceCommand(winInfo, 'resource.get-info', data),
   'screenshot': (winInfo, data) => {
     return new Promise((resolve) => {
       const startCapture = () => {
@@ -202,9 +218,6 @@ const handlerList = {
   'get-global-theme': () => {
     return configUtil.getConfig().theme.global
   },
-  'resource.get-comparable-key': async (winInfo, rawPath) => {
-    return await winInfoUtil.executeCommand(winInfo, 'resource.get-comparable-key', rawPath)
-  },
 }
 
 const handlerListSync = {
@@ -218,14 +231,14 @@ const handlerListSync = {
     return null
   },
   'get-local-resource-comparable-key': (winInfo, rawPath) => {
-    return resourceFileUtil.getLocalResourceComparableKey(winInfo, rawPath)
+    return winInfoUtil.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
   },
   // 新旧契约在 Task 4 期间并存：
   // 旧 renderer 仍然通过 `get-local-resource-comparable-key` 走同步查询，
   // 新契约 `resource.get-comparable-key` 也必须继续保持同步语义，
   // 否则后续 renderer 迁移时会把当前依赖同步比较 key 的资源逻辑整体拖成异步。
   'resource.get-comparable-key': (winInfo, rawPath) => {
-    return resourceFileUtil.getLocalResourceComparableKey(winInfo, rawPath)
+    return winInfoUtil.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
   },
 }
 

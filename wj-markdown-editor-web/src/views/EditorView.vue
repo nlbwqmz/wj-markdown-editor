@@ -18,12 +18,12 @@ import { shouldSuppressNextContentSync } from '@/util/editor/contentUpdateMetaUt
 import {
   getPreviewAssetDeleteReasonMessageKey,
   resolvePreviewAssetDeletePlan,
-  shouldContinueMarkdownCleanup,
 } from '@/util/editor/previewAssetDeleteDecisionUtil.js'
 import {
   countRemainingAssetReferences,
   removeAllAssetReferencesFromMarkdown,
   removeAssetFromMarkdown,
+  shouldCleanupMarkdownAfterDeleteResult,
 } from '@/util/editor/previewAssetRemovalUtil.js'
 
 const content = ref('')
@@ -173,7 +173,7 @@ function openPreviewAssetInExplorer() {
     return
   }
   channelUtil.send({
-    event: 'open-folder',
+    event: 'document.resource.open-in-folder',
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
@@ -186,7 +186,7 @@ function onAssetOpen(assetInfo) {
     return
   }
   channelUtil.send({
-    event: 'open-folder',
+    event: 'document.resource.open-in-folder',
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
@@ -198,7 +198,12 @@ function resolveComparableAssetPath(rawPath) {
   if (!rawPath) {
     return null
   }
-  return channelUtil.sendSync({ event: 'get-local-resource-comparable-key', data: rawPath }) || rawPath
+  return channelUtil.sendSync({
+    event: 'resource.get-comparable-key',
+    data: {
+      rawPath,
+    },
+  }) || rawPath
 }
 
 function closeMultiReferenceDeleteModal() {
@@ -231,7 +236,12 @@ async function applyAssetDelete(nextContent, assetInfo, options = {}) {
     return true
   }
 
-  const deleteResult = await channelUtil.send({ event: 'delete-local-resource', data: assetInfo.resourceUrl })
+  const deleteResult = await channelUtil.send({
+    event: 'document.resource.delete-local',
+    data: {
+      resourceUrl: assetInfo.resourceUrl,
+    },
+  })
   if (deleteResult?.ok === true) {
     updateMarkdownContent()
     const reasonMessageKey = getPreviewAssetDeleteReasonMessageKey(deleteResult.reason)
@@ -242,7 +252,7 @@ async function applyAssetDelete(nextContent, assetInfo, options = {}) {
   }
 
   const reasonMessageKey = getPreviewAssetDeleteReasonMessageKey(deleteResult?.reason)
-  if (shouldContinueMarkdownCleanup(deleteResult?.reason)) {
+  if (shouldCleanupMarkdownAfterDeleteResult(deleteResult)) {
     updateMarkdownContent()
     message.warning(t(reasonMessageKey || 'previewAssetMenu.deleteFileFailed'))
     return true
@@ -337,7 +347,12 @@ async function deletePreviewAsset() {
   }
 
   const referenceCount = getAssetReferenceCount(assetInfo)
-  const resourceInfo = await channelUtil.send({ event: 'get-local-resource-info', data: assetInfo.resourceUrl })
+  const resourceInfo = await channelUtil.send({
+    event: 'resource.get-info',
+    data: {
+      resourceUrl: assetInfo.resourceUrl,
+    },
+  })
   const deletePlan = resolvePreviewAssetDeletePlan(resourceInfo, referenceCount)
   if (deletePlan.mode === 'blocked') {
     message.warning(t(deletePlan.blockMessageKey || 'previewAssetMenu.deleteFileFailed'))

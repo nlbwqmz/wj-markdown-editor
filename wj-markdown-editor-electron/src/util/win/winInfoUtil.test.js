@@ -186,20 +186,15 @@ vi.mock('../commonUtil.js', () => ({
   },
 }))
 
-vi.mock('../resourceFileUtil.js', () => ({
-  default: {
-    getLocalResourceFailureMessageKey: vi.fn((reason) => {
-      if (reason === 'invalid-resource-payload')
-        return 'message.invalidLocalResourceLink'
-      if (reason === 'relative-resource-without-document')
-        return 'message.relativeResourceRequiresSavedFile'
-      if (reason === 'not-found')
-        return 'message.theFileDoesNotExist'
-      return null
-    }),
-    openLocalResourceInFolder: openLocalResourceInFolderMock,
-  },
-}))
+vi.mock('../resourceFileUtil.js', async () => {
+  const actual = await vi.importActual('../resourceFileUtil.js')
+  return {
+    default: {
+      ...actual.default,
+      openLocalResourceInFolder: openLocalResourceInFolderMock,
+    },
+  }
+})
 
 vi.mock('../fileWatchUtil.js', () => ({
   default: {
@@ -888,5 +883,62 @@ describe('winInfoUtil 兼容 facade', () => {
 
     expect(payload.saved).toBe(false)
     expect(payload.content).toBe('# 已修改内容')
+  })
+
+  it('窗口内本地资源链接打开失败时，必须给出明确提示，不能静默结束', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    openLocalResourceInFolderMock.mockResolvedValue({
+      ok: false,
+      opened: false,
+      reason: 'open-failed',
+      path: 'D:/assets/demo.png',
+    })
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    sendMock.mockClear()
+
+    const result = await winInfoUtil.handleLocalResourceLinkOpen(winInfo.win, winInfo, 'wj://2e2f6173736574732f64656d6f2e706e67')
+
+    expect(result).toEqual({
+      ok: false,
+      opened: false,
+      reason: 'open-failed',
+      path: 'D:/assets/demo.png',
+    })
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.openResourceLocationFailed',
+      },
+    })
+  })
+
+  it('notifyRecentListChanged 只应在列表真实变化时广播 recent 刷新事件', async () => {
+    await winInfoUtil.createNew(null)
+    await winInfoUtil.createNew(null)
+
+    const recentList = [
+      {
+        name: 'demo.md',
+        path: 'D:/docs/demo.md',
+      },
+    ]
+
+    sendMock.mockClear()
+
+    winInfoUtil.notifyRecentListChanged(recentList)
+    winInfoUtil.notifyRecentListChanged([
+      {
+        name: 'demo.md',
+        path: 'D:/docs/demo.md',
+      },
+    ])
+
+    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'window.effect.recent-list-changed')).toHaveLength(2)
+    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'update-recent')).toHaveLength(2)
   })
 })

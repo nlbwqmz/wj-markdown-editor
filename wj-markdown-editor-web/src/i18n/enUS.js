@@ -278,6 +278,7 @@ export default {
     theFileIsSavedSuccessfully: 'The file is saved successfully.',
     theCurrentFileIsNotSaved: 'The current file is not saved',
     relativeResourceRequiresSavedFile: 'The current document is not saved, so the relative resource cannot be resolved.',
+    openResourceLocationFailed: 'Failed to open the resource location.',
     cannotBeSavedToARelativePath: 'The current file is not saved and the resource cannot be saved to a relative path.',
     theAbsolutePathToSaveIsNotSet: 'The absolute path to save is not set.',
     theRelativePathToSaveIsNotSet: 'The relative path to save is not set.',

@@ -176,6 +176,26 @@ describe('resourceFileUtil.deleteLocalResource', () => {
     expect(stat).not.toHaveBeenCalled()
     expect(remove).not.toHaveBeenCalled()
   })
+
+  it('删除真实文件时如果文件系统抛错，应该标准化为 delete-failed 而不是把异常抛给调用方', async () => {
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    remove.mockRejectedValue(new Error('permission denied'))
+
+    const result = await resourceFileUtil.deleteLocalResource({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://2e2f6173736574732f64656d6f2e706e67')
+
+    expect(result).toEqual({
+      ok: false,
+      removed: false,
+      reason: 'delete-failed',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+  })
 })
 
 describe('resourceFileUtil.openLocalResourceInFolder', () => {
@@ -324,6 +344,28 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
     expect(pathExists).toHaveBeenCalledWith('D:\\docs\\assets\\demo?guide.md')
     expect(showItemInFolder).not.toHaveBeenCalled()
   })
+
+  it('打开资源管理器时如果底层 showItemInFolder 抛错，应该标准化为 open-failed', async () => {
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    const showItemInFolder = vi.fn(() => {
+      throw new Error('shell failed')
+    })
+
+    const result = await resourceFileUtil.openLocalResourceInFolder({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://2e2f6173736574732f64656d6f2e706e67', showItemInFolder)
+
+    expect(result).toEqual({
+      ok: false,
+      opened: false,
+      reason: 'open-failed',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+  })
 })
 
 describe('resourceFileUtil.getLocalResourceInfo', () => {
@@ -429,6 +471,25 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
     })
     expect(pathExists).not.toHaveBeenCalled()
     expect(stat).not.toHaveBeenCalled()
+  })
+
+  it('读取资源信息时如果 stat 抛错，应该标准化为 info-failed 而不是把异常抛给调用方', async () => {
+    pathExists.mockResolvedValue(true)
+    stat.mockRejectedValue(new Error('stat failed'))
+
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://2e2f6173736574732f64656d6f2e706e67')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'info-failed',
+      decodedPath: './assets/demo.png',
+      exists: false,
+      isDirectory: false,
+      isFile: false,
+      path: 'D:\\docs\\assets\\demo.png',
+    })
   })
 })
 

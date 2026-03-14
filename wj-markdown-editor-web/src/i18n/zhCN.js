@@ -278,6 +278,7 @@ export default {
     theFileIsSavedSuccessfully: '文件保存成功',
     theCurrentFileIsNotSaved: '当前文件未保存',
     relativeResourceRequiresSavedFile: '当前文件未保存，无法定位相对资源。',
+    openResourceLocationFailed: '打开资源所在位置失败。',
     cannotBeSavedToARelativePath: '当前文件未保存，不能将资源保存到相对路径',
     theAbsolutePathToSaveIsNotSet: '未设置保存绝对路径',
     theRelativePathToSaveIsNotSet: '未设置保存相对路径',

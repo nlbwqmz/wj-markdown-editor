@@ -10,6 +10,7 @@ import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
 import { createDocumentCommandService } from '../document-session/documentCommandService.js'
 import { createDocumentEffectService } from '../document-session/documentEffectService.js'
+import { createDocumentResourceService } from '../document-session/documentResourceService.js'
 import {
   createBoundFileSession,
   createDraftSession,
@@ -55,6 +56,11 @@ const windowSessionBridge = createWindowSessionBridge({
     return winInfoList.find(item => item.id === windowId)?.win || null
   },
   getAllWindows: () => winInfoList.map(item => item.win),
+})
+const documentResourceService = createDocumentResourceService({
+  store: documentSessionStore,
+  resourceUtil: resourceFileUtil,
+  showItemInFolder: shell.showItemInFolder,
 })
 
 function deleteEditorWin(id) {
@@ -756,7 +762,7 @@ async function ignoreExternalPendingChange(winInfo, version) {
 }
 
 async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
-  const openResult = await resourceFileUtil.openLocalResourceInFolder(winInfo, resourceUrl, shell.showItemInFolder)
+  const openResult = await executeResourceCommand(winInfo, 'document.resource.open-in-folder', resourceUrl)
   if (openResult.ok !== true) {
     const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
     if (messageKey) {
@@ -868,6 +874,56 @@ function getSessionSnapshot(winInfo) {
   return windowSessionBridge.getSessionSnapshot(winInfo.id)
 }
 
+async function executeResourceCommand(winInfo, command, payload) {
+  if (!winInfo?.id) {
+    return null
+  }
+
+  // 资源命令单独分流到 documentResourceService，
+  // 是为了把“当前 active session 上下文裁决”和“底层文件系统操作”固定收口到一条边界。
+  // 这样旧 IPC 名称、新 IPC 名称、窗口内链接点击三条入口就不会再各自偷读 winInfo 状态。
+  switch (command) {
+    case 'document.resource.open-in-folder':
+      return await documentResourceService.openInFolder({
+        windowId: winInfo.id,
+        payload,
+      })
+
+    case 'document.resource.delete-local':
+      return await documentResourceService.deleteLocal({
+        windowId: winInfo.id,
+        payload,
+      })
+
+    case 'resource.get-info':
+      return await documentResourceService.getInfo({
+        windowId: winInfo.id,
+        payload,
+      })
+
+    default:
+      throw new Error(`未知资源命令: ${command}`)
+  }
+}
+
+function executeResourceCommandSync(winInfo, command, payload) {
+  if (!winInfo?.id) {
+    return null
+  }
+
+  if (command === 'resource.get-comparable-key') {
+    // 比较 key 仍然保留同步语义，
+    // 因为编辑区统计引用数和批量删除裁决都在同一次交互里立即完成，
+    // 如果这里改成异步，旧逻辑会在“统计前先删文案/打开弹窗”之间产生新的竞态窗口。
+    return documentResourceService.getComparableKey({
+      windowId: winInfo.id,
+      payload,
+    })
+  }
+
+  throw new Error(`未知同步资源命令: ${command}`)
+}
+
 async function openDocumentWindow(targetPath, {
   isRecent = false,
   trigger = 'user',
@@ -931,6 +987,14 @@ async function executeCommand(winInfo, command, payload) {
     case 'document.external.ignore':
       return (await handleLegacyExternalCommand(winInfo, command, payload || {})).commandResult
 
+    case 'document.resource.open-in-folder':
+    case 'document.resource.delete-local':
+    case 'resource.get-info':
+      return await executeResourceCommand(winInfo, command, payload)
+
+    case 'resource.get-comparable-key':
+      return executeResourceCommandSync(winInfo, command, payload)
+
     case 'document.request-open-dialog':
     case 'dialog.open-target-selected':
     case 'dialog.open-target-cancelled':
@@ -938,8 +1002,6 @@ async function executeCommand(winInfo, command, payload) {
     case 'recent.get-list':
     case 'recent.remove':
     case 'recent.clear':
-    case 'resource.get-info':
-    case 'resource.get-comparable-key':
       return await documentEffectService.executeCommand({
         command,
         payload,
@@ -968,6 +1030,7 @@ function initializeSessionRuntime() {
     commandService: documentCommandService,
     effectService: documentEffectService,
     windowBridge: windowSessionBridge,
+    resourceService: documentResourceService,
   }
 }
 
@@ -1131,6 +1194,8 @@ export default {
   initializeSessionRuntime,
   notifyRecentListChanged,
   executeCommand,
+  executeResourceCommand,
+  executeResourceCommandSync,
   getWinInfo: (win) => {
     if (typeof win === 'string') {
       return winInfoList.find(item => item.id === win)

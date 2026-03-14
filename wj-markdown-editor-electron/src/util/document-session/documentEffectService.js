@@ -1,6 +1,5 @@
 import { dialog } from 'electron'
 import fs from 'fs-extra'
-import resourceFileUtil from '../resourceFileUtil.js'
 
 function getRecentTargetPath(payload) {
   if (typeof payload === 'string') {
@@ -35,7 +34,6 @@ export function createDocumentEffectService({
     clear: async () => {},
     get: () => [],
   },
-  resourceUtil = resourceFileUtil,
   getConfig = () => ({}),
 }) {
   function getFailedSaveMessage(trigger, error) {
@@ -170,12 +168,6 @@ export function createDocumentEffectService({
           list: recentStore.get(),
         }
       }
-
-      case 'resource.get-info':
-        return await resourceUtil.getLocalResourceInfo(winInfo, payload)
-
-      case 'resource.get-comparable-key':
-        return resourceUtil.getLocalResourceComparableKey(winInfo, payload)
 
       default:
         throw new Error(`未知副作用命令: ${command}`)

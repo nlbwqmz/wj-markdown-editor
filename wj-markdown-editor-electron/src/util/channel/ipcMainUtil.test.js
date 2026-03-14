@@ -6,6 +6,8 @@ const {
   dialogShowOpenDialogSync,
   dialogShowSaveDialogSync,
   executeCommand,
+  executeResourceCommand,
+  executeResourceCommandSync,
   getLocalResourceComparableKey,
   ipcMainHandle,
   ipcMainOn,
@@ -18,6 +20,8 @@ const {
     dialogShowOpenDialogSync: vi.fn(),
     dialogShowSaveDialogSync: vi.fn(),
     executeCommand: vi.fn(),
+    executeResourceCommand: vi.fn(),
+    executeResourceCommandSync: vi.fn(),
     getLocalResourceComparableKey: vi.fn(),
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
@@ -98,18 +102,11 @@ vi.mock('../imgUtil.js', () => {
   }
 })
 
-vi.mock('../resourceFileUtil.js', () => {
+vi.mock('../resourceFileUtil.js', async () => {
+  const actual = await vi.importActual('../resourceFileUtil.js')
   return {
     default: {
-      getLocalResourceFailureMessageKey: vi.fn((reason) => {
-        if (reason === 'invalid-resource-payload')
-          return 'message.invalidLocalResourceLink'
-        if (reason === 'relative-resource-without-document')
-          return 'message.relativeResourceRequiresSavedFile'
-        if (reason === 'not-found')
-          return 'message.theFileDoesNotExist'
-        return null
-      }),
+      ...actual.default,
       openLocalResourceInFolder,
       deleteLocalResource: vi.fn(),
       getLocalResourceInfo: vi.fn(),
@@ -182,6 +179,8 @@ vi.mock('../win/winInfoUtil.js', () => {
       getAll: vi.fn(() => []),
       createNew: vi.fn(),
       executeCommand,
+      executeResourceCommand,
+      executeResourceCommandSync,
       save: vi.fn(),
       getFileInfoPayload: vi.fn(),
       updateTempContent: vi.fn(),
@@ -205,6 +204,8 @@ describe('ipcMainUtil open-folder', () => {
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
     executeCommand.mockReset()
+    executeResourceCommand.mockReset()
+    executeResourceCommandSync.mockReset()
     getLocalResourceComparableKey.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
@@ -236,7 +237,7 @@ describe('ipcMainUtil open-folder', () => {
 
   it('资源不存在时，应该向渲染进程发送文件不存在提示', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
-    openLocalResourceInFolder.mockResolvedValue({
+    executeResourceCommand.mockResolvedValue({
       ok: true,
       opened: false,
       reason: 'not-found',
@@ -248,7 +249,11 @@ describe('ipcMainUtil open-folder', () => {
       data: 'wj://2e2f6173736574732f6d697373696e672e6d64',
     })
 
-    expect(openLocalResourceInFolder).toHaveBeenCalled()
+    expect(executeResourceCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.resource.open-in-folder', 'wj://2e2f6173736574732f6d697373696e672e6d64')
     expect(send).toHaveBeenCalledWith(win, {
       event: 'message',
       data: {
@@ -260,7 +265,7 @@ describe('ipcMainUtil open-folder', () => {
 
   it('资源 payload 非法时，应该向渲染进程发送无效资源提示', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
-    openLocalResourceInFolder.mockResolvedValue({
+    executeResourceCommand.mockResolvedValue({
       ok: false,
       opened: false,
       reason: 'invalid-resource-payload',
@@ -283,7 +288,7 @@ describe('ipcMainUtil open-folder', () => {
 
   it('未保存文档中的相对资源打开失败时，应该向渲染进程发送明确提示', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
-    openLocalResourceInFolder.mockResolvedValue({
+    executeResourceCommand.mockResolvedValue({
       ok: false,
       opened: false,
       reason: 'relative-resource-without-document',
@@ -306,7 +311,7 @@ describe('ipcMainUtil open-folder', () => {
 
   it('打开请求携带原始路径提示时，应该原样透传给资源打开逻辑', async () => {
     const { sender, sendToMainHandler } = await setupOpenFolderHandler()
-    openLocalResourceInFolder.mockResolvedValue({
+    executeResourceCommand.mockResolvedValue({
       ok: true,
       opened: true,
       reason: 'opened',
@@ -321,14 +326,62 @@ describe('ipcMainUtil open-folder', () => {
       },
     })
 
-    expect(openLocalResourceInFolder).toHaveBeenCalledWith({
+    expect(executeResourceCommand).toHaveBeenCalledWith({
       path: 'D:\\docs\\note.md',
       exists: true,
       win: { id: 1 },
-    }, {
+    }, 'document.resource.open-in-folder', {
       resourceUrl: 'wj://2e2f646f63732f696e6465782e68746d6c236775696465',
       rawPath: './docs/index.html#guide',
-    }, expect.any(Function))
+    })
+  })
+
+  it('新的 document.resource.open-in-folder 契约也必须走统一资源服务边界', async () => {
+    const { sender, sendToMainHandler } = await setupOpenFolderHandler()
+    executeResourceCommand.mockResolvedValue({
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+
+    await sendToMainHandler({ sender }, {
+      event: 'document.resource.open-in-folder',
+      data: {
+        resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+      },
+    })
+
+    expect(executeResourceCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.resource.open-in-folder', {
+      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    })
+  })
+
+  it('资源管理器打开失败时，应该向渲染进程发送明确失败提示，而不是静默吞掉', async () => {
+    const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
+    executeResourceCommand.mockResolvedValue({
+      ok: false,
+      opened: false,
+      reason: 'open-failed',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+
+    await sendToMainHandler({ sender }, {
+      event: 'open-folder',
+      data: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    })
+
+    expect(send).toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.openResourceLocationFailed',
+      },
+    })
   })
 })
 
@@ -338,6 +391,8 @@ describe('ipcMainUtil sync comparable key', () => {
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
     executeCommand.mockReset()
+    executeResourceCommand.mockReset()
+    executeResourceCommandSync.mockReset()
     getLocalResourceComparableKey.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
@@ -355,7 +410,7 @@ describe('ipcMainUtil sync comparable key', () => {
     const sender = { id: 9527 }
     const win = { id: 1 }
     browserWindowFromWebContents.mockReturnValue(win)
-    getLocalResourceComparableKey.mockReturnValue('wj-local-file:d:/docs/index.html')
+    executeResourceCommandSync.mockReturnValue('wj-local-file:d:/docs/index.html')
 
     await import('./ipcMainUtil.js')
 
@@ -365,11 +420,11 @@ describe('ipcMainUtil sync comparable key', () => {
       data: './docs/index.html#guide',
     })
 
-    expect(getLocalResourceComparableKey).toHaveBeenCalledWith({
+    expect(executeResourceCommandSync).toHaveBeenCalledWith({
       path: 'D:\\docs\\note.md',
       exists: true,
       win: { id: 1 },
-    }, './docs/index.html#guide')
+    }, 'resource.get-comparable-key', './docs/index.html#guide')
     expect(event.returnValue).toBe('wj-local-file:d:/docs/index.html')
   })
 
@@ -384,7 +439,7 @@ describe('ipcMainUtil sync comparable key', () => {
     const sender = { id: 9527 }
     const win = { id: 1 }
     browserWindowFromWebContents.mockReturnValue(win)
-    getLocalResourceComparableKey.mockReturnValue('wj-local-file:d:/docs/demo.png')
+    executeResourceCommandSync.mockReturnValue('wj-local-file:d:/docs/demo.png')
 
     await import('./ipcMainUtil.js')
 
@@ -394,12 +449,36 @@ describe('ipcMainUtil sync comparable key', () => {
       data: './docs/demo.png?size=full',
     })
 
-    expect(getLocalResourceComparableKey).toHaveBeenCalledWith({
+    expect(executeResourceCommandSync).toHaveBeenCalledWith({
       path: 'D:\\docs\\note.md',
       exists: true,
       win: { id: 1 },
-    }, './docs/demo.png?size=full')
+    }, 'resource.get-comparable-key', './docs/demo.png?size=full')
     expect(event.returnValue).toBe('wj-local-file:d:/docs/demo.png')
+  })
+
+  it('resource.get-comparable-key 不应继续暴露在异步 sendToMain 通道', async () => {
+    let sendToMainHandler
+    ipcMainHandle.mockImplementation((channel, handler) => {
+      if (channel === 'sendToMain') {
+        sendToMainHandler = handler
+      }
+    })
+
+    const sender = { id: 9527 }
+    const win = { id: 1 }
+    browserWindowFromWebContents.mockReturnValue(win)
+
+    await import('./ipcMainUtil.js')
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'resource.get-comparable-key',
+      data: './docs/demo.png?size=full',
+    })
+
+    expect(result).toBe(false)
+    expect(executeResourceCommandSync).not.toHaveBeenCalled()
+    expect(executeResourceCommand).not.toHaveBeenCalled()
   })
 })
 
@@ -409,6 +488,8 @@ describe('ipcMainUtil save', () => {
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
     executeCommand.mockReset()
+    executeResourceCommand.mockReset()
+    executeResourceCommandSync.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
@@ -467,6 +548,8 @@ describe('ipcMainUtil command mapping', () => {
     vi.resetModules()
     dialogShowOpenDialogSync.mockReset()
     executeCommand.mockReset()
+    executeResourceCommand.mockReset()
+    executeResourceCommandSync.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
@@ -593,6 +676,77 @@ describe('ipcMainUtil command mapping', () => {
       win: { id: 1 },
     }, 'recent.get-list', null)
     expect(result).toEqual(recentList)
+  })
+
+  it('get-local-resource-info / resource.get-info 必须统一委托给 documentResourceService 边界', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    winInfoUtil.executeResourceCommand.mockResolvedValue({
+      ok: true,
+      reason: 'resolved',
+      decodedPath: './assets/demo.png',
+      exists: true,
+      isDirectory: false,
+      isFile: true,
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+
+    await sendToMainHandler({ sender }, {
+      event: 'get-local-resource-info',
+      data: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    })
+    await sendToMainHandler({ sender }, {
+      event: 'resource.get-info',
+      data: {
+        resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+      },
+    })
+
+    expect(winInfoUtil.executeResourceCommand).toHaveBeenNthCalledWith(1, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'resource.get-info', 'wj://2e2f6173736574732f64656d6f2e706e67')
+    expect(winInfoUtil.executeResourceCommand).toHaveBeenNthCalledWith(2, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'resource.get-info', {
+      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    })
+  })
+
+  it('delete-local-resource / document.resource.delete-local 必须统一委托给 documentResourceService 边界', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    winInfoUtil.executeResourceCommand.mockResolvedValue({
+      ok: true,
+      removed: true,
+      reason: 'deleted',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+
+    await sendToMainHandler({ sender }, {
+      event: 'delete-local-resource',
+      data: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    })
+    await sendToMainHandler({ sender }, {
+      event: 'document.resource.delete-local',
+      data: {
+        resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+      },
+    })
+
+    expect(winInfoUtil.executeResourceCommand).toHaveBeenNthCalledWith(1, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.resource.delete-local', 'wj://2e2f6173736574732f64656d6f2e706e67')
+    expect(winInfoUtil.executeResourceCommand).toHaveBeenNthCalledWith(2, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.resource.delete-local', {
+      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    })
   })
 
   it('document.external.apply / document.external.ignore 必须暴露为新的统一 IPC 命令', async () => {
