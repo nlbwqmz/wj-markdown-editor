@@ -32,6 +32,23 @@ export function createWindowSessionBridge({
   const lastSnapshotMap = new Map()
   let lastRecentListSignature = null
 
+  function shouldPublishLegacyExternalChanged(previousExternalPrompt, nextExternalPrompt) {
+    if (!nextExternalPrompt?.visible) {
+      return false
+    }
+
+    if (!previousExternalPrompt?.visible) {
+      return true
+    }
+
+    // 旧 renderer 还依赖 `file-external-changed` 来覆盖弹窗中的 diff/version。
+    // 因此只要这次 pending 指向了新的外部版本，就必须再次代发一次；
+    // 但普通 saved/title 等快照变化不能把它变成高频噪声事件。
+    return previousExternalPrompt.version !== nextExternalPrompt.version
+      || previousExternalPrompt.externalContent !== nextExternalPrompt.externalContent
+      || previousExternalPrompt.fileName !== nextExternalPrompt.fileName
+  }
+
   function publishLegacySnapshotAliases(win, snapshot, previousSnapshot) {
     if (!snapshot) {
       return
@@ -47,8 +64,9 @@ export function createWindowSessionBridge({
     }
 
     // `file-external-changed` 仍然是旧 diff 提示入口，
-    // 这里只在 externalPrompt 从“无”到“有”时代发，避免每次普通快照都误触发覆盖弹窗。
-    if (!previousSnapshot?.externalPrompt && snapshot.externalPrompt?.visible) {
+    // 旧 renderer 在弹窗已经打开时，如果又来了更晚的外部版本，
+    // 仍然需要收到一次覆盖事件来刷新 diff/version。
+    if (shouldPublishLegacyExternalChanged(previousSnapshot?.externalPrompt, snapshot.externalPrompt)) {
       sendToRenderer(win, {
         event: 'file-external-changed',
         data: {

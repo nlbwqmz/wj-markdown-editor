@@ -101,15 +101,10 @@ const handlerList = {
     // Electron 只认这一个入口来更新 tempContent。
     winInfoUtil.updateTempContent(winInfo, content)
   },
-  'file-external-change-apply': (winInfo, data) => {
-    // 提醒策略下，用户在 diff 弹窗中选择“应用”时走这里。
-    // 具体应用动作由 Electron 主导完成，再通知渲染端刷新。
-    return winInfoUtil.applyExternalPendingChange(winInfo, data?.version)
-  },
-  'file-external-change-ignore': (winInfo, data) => {
-    // 提醒策略下，用户在 diff 弹窗中选择“忽略”时走这里。
-    return winInfoUtil.ignoreExternalPendingChange(winInfo, data?.version)
-  },
+  'document.external.apply': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'document.external.apply', data),
+  'document.external.ignore': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'document.external.ignore', data),
+  'file-external-change-apply': async (winInfo, data) => await winInfoUtil.applyExternalPendingChange(winInfo, data?.version),
+  'file-external-change-ignore': async (winInfo, data) => await winInfoUtil.ignoreExternalPendingChange(winInfo, data?.version),
   'create-new': () => {
     winInfoUtil.createNew().then(() => {})
   },

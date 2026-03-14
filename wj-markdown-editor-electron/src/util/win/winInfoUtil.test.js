@@ -588,11 +588,209 @@ describe('winInfoUtil 兼容 facade', () => {
       event: 'file-external-changed',
       data: {
         fileName: 'demo.md',
-        version: 'version-2',
+        version: 1,
         localContent: '# 本地编辑内容',
         externalContent: '# 外部新内容',
       },
     })
+  })
+
+  it('handleExternalChange 在 strategy=prompt 时，必须把 pendingExternalChange 写回 session 快照，供 renderer 改走 externalPrompt 真相', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+    })
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容',
+      version: 'version-2',
+      versionHash: 'hash-version-2',
+    }, {
+      strategy: 'prompt',
+    })
+
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 1,
+      localContent: '# 本地编辑内容',
+      externalContent: '# 外部新内容',
+      fileName: 'demo.md',
+    })
+  })
+
+  it('旧弹窗已经打开时，如果又来了新的外部版本，仍必须再次发送 file-external-changed 覆盖旧 diff', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+    })
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容 1',
+      version: 'version-2',
+      versionHash: 'hash-version-2',
+    }, {
+      strategy: 'prompt',
+    })
+    sendMock.mockClear()
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容 2',
+      version: 'version-3',
+      versionHash: 'hash-version-3',
+    }, {
+      strategy: 'prompt',
+    })
+
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'file-external-changed',
+      data: {
+        fileName: 'demo.md',
+        version: 2,
+        localContent: '# 本地编辑内容',
+        externalContent: '# 外部新内容 2',
+      },
+    })
+  })
+
+  it('document.external.apply / document.external.ignore 必须通过统一命令入口消费 legacy prompt，并让 snapshot.externalPrompt 正确收敛', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+    })
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容 1',
+      version: 'version-2',
+      versionHash: 'hash-version-2',
+    }, {
+      strategy: 'prompt',
+    })
+
+    const ignored = await winInfoUtil.executeCommand(winInfo, 'document.external.ignore', {
+      version: 1,
+    })
+
+    expect(ignored.snapshot.externalPrompt).toBeNull()
+    expect(ignored.snapshot.content).toBe('# 本地编辑内容')
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容 2',
+      version: 'version-3',
+      versionHash: 'hash-version-3',
+    }, {
+      strategy: 'prompt',
+    })
+
+    const applied = await winInfoUtil.executeCommand(winInfo, 'document.external.apply', {
+      version: 2,
+    })
+
+    expect(applied.snapshot.externalPrompt).toBeNull()
+    expect(applied.snapshot.content).toBe('# 外部新内容 2')
+    expect(applied.snapshot.saved).toBe(true)
+  })
+
+  it('legacy 外部修改兼容入口遇到 stale version 时，必须返回 false，且不能误清当前 prompt', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+    })
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容 1',
+      version: 'version-2',
+      versionHash: 'hash-version-2',
+    }, {
+      strategy: 'prompt',
+    })
+    await winInfoUtil.ignoreExternalPendingChange(winInfo, 1)
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容 2',
+      version: 'version-3',
+      versionHash: 'hash-version-3',
+    }, {
+      strategy: 'prompt',
+    })
+
+    const staleIgnored = await winInfoUtil.ignoreExternalPendingChange(winInfo, 1)
+    const staleApplied = await winInfoUtil.applyExternalPendingChange(winInfo, 1)
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(staleIgnored).toBe(false)
+    expect(staleApplied).toBe(false)
+    expect(snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 2,
+      localContent: '# 本地编辑内容',
+      externalContent: '# 外部新内容 2',
+      fileName: 'demo.md',
+    })
+  })
+
+  it('外部冲突如果已经被用户本地内容自行消解，handleExternalChange 必须把过期 externalPrompt 收敛掉', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+    })
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容',
+      version: 'version-2',
+      versionHash: 'hash-version-2',
+    }, {
+      strategy: 'prompt',
+    })
+
+    winInfoUtil.updateTempContent(winInfo, '# 外部新内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 外部新内容')
+    })
+
+    const result = winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容',
+      version: 'version-3',
+      versionHash: 'hash-version-2',
+    }, {
+      strategy: 'prompt',
+    })
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(result).toBe('resolved')
+    expect(snapshot.saved).toBe(true)
+    expect(snapshot.externalPrompt).toBeNull()
   })
 
   it('恢复链路 onRestored 使用传入的 diskContent 更新当前会话的 exists/content/saved 投影', async () => {

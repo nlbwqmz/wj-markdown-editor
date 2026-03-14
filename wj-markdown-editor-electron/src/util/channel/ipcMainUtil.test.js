@@ -571,4 +571,64 @@ describe('ipcMainUtil command mapping', () => {
     }, 'document.get-session-snapshot', null)
     expect(result).toEqual(snapshot)
   })
+
+  it('document.external.apply / document.external.ignore 必须暴露为新的统一 IPC 命令', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'document.external.apply',
+      data: {
+        version: 2,
+      },
+    })
+    await sendToMainHandler({ sender }, {
+      event: 'document.external.ignore',
+      data: {
+        version: 3,
+      },
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(1, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.external.apply', {
+      version: 2,
+    })
+    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(2, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.external.ignore', {
+      version: 3,
+    })
+  })
+
+  it('旧 file-external-change-apply / ignore 兼容入口也必须回流到新的统一命令', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'file-external-change-apply',
+      data: {
+        version: 4,
+      },
+    })
+    await sendToMainHandler({ sender }, {
+      event: 'file-external-change-ignore',
+      data: {
+        version: 5,
+      },
+    })
+
+    expect(winInfoUtil.applyExternalPendingChange).toHaveBeenNthCalledWith(1, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 4)
+    expect(winInfoUtil.ignoreExternalPendingChange).toHaveBeenNthCalledWith(1, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 5)
+  })
 })

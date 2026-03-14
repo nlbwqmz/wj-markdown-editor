@@ -92,6 +92,19 @@ function createContentHash(content = '') {
   return crypto.createHash('sha256').update(content, 'utf8').digest('hex')
 }
 
+function normalizeComparablePath(targetPath) {
+  if (typeof targetPath !== 'string' || targetPath.trim() === '') {
+    return null
+  }
+
+  const normalizedPath = targetPath.trim()
+  if (/^[a-z]:[\\/]/i.test(normalizedPath) || normalizedPath.startsWith('\\\\')) {
+    return path.win32.resolve(normalizedPath.replaceAll('/', '\\')).toLowerCase()
+  }
+
+  return path.posix.resolve(normalizedPath.replaceAll('\\', '/'))
+}
+
 function canUseMissingPathForDisplay(winInfo) {
   return Boolean(winInfo?.missingPath)
     && winInfo?.missingPathReason === MISSING_PATH_REASON.OPEN_TARGET_MISSING
@@ -216,6 +229,48 @@ function updateSessionForLegacyExternalEvent(winInfo, updater) {
   return session
 }
 
+function ensureLegacyExternalWatchPending(winInfo, {
+  version,
+  versionHash,
+  content,
+}) {
+  if (!winInfo?.externalWatch) {
+    return null
+  }
+
+  const normalizedVersion = Number.isFinite(version)
+    ? version
+    : ((winInfo.externalWatch.currentVersion || 0) + 1)
+  winInfo.externalWatch.currentVersion = Math.max(
+    winInfo.externalWatch.currentVersion || 0,
+    normalizedVersion,
+  )
+  winInfo.externalWatch.pendingChange = {
+    version: normalizedVersion,
+    versionHash,
+    content,
+  }
+  return winInfo.externalWatch.pendingChange
+}
+
+function getLegacyPendingVersion(winInfo, previousPendingChange, nextVersionHash) {
+  const legacyPendingChange = winInfo?.externalWatch?.pendingChange
+  if (Number.isFinite(legacyPendingChange?.version)
+    && legacyPendingChange?.versionHash === nextVersionHash) {
+    return legacyPendingChange.version
+  }
+
+  if (Number.isFinite(previousPendingChange?.version)) {
+    return previousPendingChange.version + 1
+  }
+
+  if (Number.isFinite(winInfo?.externalWatch?.currentVersion)) {
+    return (winInfo.externalWatch.currentVersion || 0) + 1
+  }
+
+  return 1
+}
+
 function resetLegacyExternalWatchHistory(externalWatch) {
   if (!externalWatch) {
     return
@@ -259,7 +314,7 @@ function applyLegacyMissingToSession(winInfo) {
 }
 
 function applyLegacyExternalDiskToSession(winInfo, change, { applyToEditor = false } = {}) {
-  const now = Date.now()
+  const observedAt = Number.isFinite(change?.observedAt) ? change.observedAt : Date.now()
   const nextContent = change?.content ?? ''
   const nextVersionHash = change?.versionHash || createContentHash(nextContent)
   return updateSessionForLegacyExternalEvent(winInfo, (session) => {
@@ -270,13 +325,13 @@ function applyLegacyExternalDiskToSession(winInfo, change, { applyToEditor = fal
     session.diskSnapshot.versionHash = nextVersionHash
     session.diskSnapshot.exists = true
     session.diskSnapshot.stat = change?.stat || null
-    session.diskSnapshot.observedAt = now
+    session.diskSnapshot.observedAt = observedAt
     session.diskSnapshot.source = 'legacy-watch-change'
 
     if (applyToEditor) {
       session.editorSnapshot.content = nextContent
       session.editorSnapshot.revision = (session.editorSnapshot.revision || 0) + 1
-      session.editorSnapshot.updatedAt = now
+      session.editorSnapshot.updatedAt = observedAt
     }
 
     if (session.externalRuntime) {
@@ -294,8 +349,64 @@ function applyLegacyExternalDiskToSession(winInfo, change, { applyToEditor = fal
   })
 }
 
-function markLegacyRestoredInSession(winInfo, diskContent = '') {
-  const now = Date.now()
+function applyLegacyPendingExternalChangeToSession(winInfo, change) {
+  const observedAt = Number.isFinite(change?.observedAt) ? change.observedAt : Date.now()
+  const nextContent = change?.content ?? ''
+  const nextVersionHash = change?.versionHash || createContentHash(nextContent)
+  const watchingPath = change?.watchingPath || winInfo?.path || null
+
+  return updateSessionForLegacyExternalEvent(winInfo, (session) => {
+    const previousPendingChange = session.externalRuntime?.pendingExternalChange || null
+    const pendingVersion = getLegacyPendingVersion(winInfo, previousPendingChange, nextVersionHash)
+
+    // legacy watcher 提醒链路虽然还没有完全切到 watchCoordinator，
+    // 但 renderer 迁移前必须先把“待处理外部版本”写进 session 真相。
+    // 否则前端一旦停止监听旧 `file-external-changed`，externalPrompt 就会凭空消失。
+    session.externalRuntime.pendingExternalChange = {
+      version: pendingVersion,
+      versionHash: nextVersionHash,
+      diskContent: nextContent,
+      diskStat: change?.stat || null,
+      detectedAt: observedAt,
+      watchBindingToken: Number.isFinite(change?.bindingToken) ? change.bindingToken : null,
+      watchingPath,
+      comparablePath: normalizeComparablePath(watchingPath),
+    }
+    session.externalRuntime.resolutionState = 'pending-user'
+
+    if (previousPendingChange && previousPendingChange.versionHash !== nextVersionHash) {
+      session.externalRuntime.lastResolutionResult = 'superseded'
+    }
+
+    ensureLegacyExternalWatchPending(winInfo, {
+      version: pendingVersion,
+      versionHash: nextVersionHash,
+      content: nextContent,
+    })
+  })
+}
+
+function resolveLegacyPendingExternalChange(winInfo, {
+  versionHash,
+  resolutionResult = 'noop',
+}) {
+  return updateSessionForLegacyExternalEvent(winInfo, (session) => {
+    if (!session.externalRuntime?.pendingExternalChange) {
+      return
+    }
+
+    // legacy 路径也必须遵守和 watchCoordinator 一致的收敛语义：
+    // 一旦当前编辑内容已经和磁盘真相重新一致，就不能再保留旧 pending，
+    // 否则 renderer 会在 saved=true 时仍看到过期 externalPrompt。
+    session.externalRuntime.pendingExternalChange = null
+    session.externalRuntime.resolutionState = 'resolved'
+    session.externalRuntime.lastResolutionResult = resolutionResult
+    session.externalRuntime.lastHandledVersionHash = versionHash || null
+  })
+}
+
+function markLegacyRestoredInSession(winInfo, diskContent = '', meta = {}) {
+  const observedAt = Number.isFinite(meta?.observedAt) ? meta.observedAt : Date.now()
   const restoredContent = diskContent ?? ''
   const restoredVersionHash = createContentHash(restoredContent)
   return updateSessionForLegacyExternalEvent(winInfo, (session) => {
@@ -309,7 +420,7 @@ function markLegacyRestoredInSession(winInfo, diskContent = '') {
     session.diskSnapshot.versionHash = restoredVersionHash
     session.diskSnapshot.exists = true
     session.diskSnapshot.stat = null
-    session.diskSnapshot.observedAt = now
+    session.diskSnapshot.observedAt = observedAt
     session.diskSnapshot.source = 'legacy-watch-restored'
 
     if (session.externalRuntime) {
@@ -397,14 +508,19 @@ function startExternalWatch(winInfo) {
     state: winInfo.externalWatch,
     filePath: winInfo.path,
     watch,
-    onExternalChange: (change) => {
-      handleExternalChange(winInfo, change)
+    onExternalChange: (change, meta = {}) => {
+      handleExternalChange(winInfo, {
+        ...change,
+        bindingToken: meta.bindingToken ?? change?.bindingToken,
+        watchingPath: meta.watchingPath ?? change?.watchingPath,
+        observedAt: meta.observedAt ?? change?.observedAt,
+      })
     },
-    onMissing: () => {
-      handleFileMissing(winInfo)
+    onMissing: (_error, meta = {}) => {
+      handleFileMissing(winInfo, meta)
     },
-    onRestored: (diskContent) => {
-      markLegacyRestoredInSession(winInfo, diskContent)
+    onRestored: (diskContent, meta = {}) => {
+      markLegacyRestoredInSession(winInfo, diskContent, meta)
     },
     onError: () => {
       sendUtil.send(winInfo.win, {
@@ -549,6 +665,10 @@ function handleExternalChange(winInfo, change, options = {}) {
 
   const diskUpdatedSession = applyLegacyExternalDiskToSession(winInfo, change)
   if (diskUpdatedSession && deriveDocumentSnapshot(diskUpdatedSession).saved) {
+    resolveLegacyPendingExternalChange(winInfo, {
+      versionHash: change?.versionHash || createContentHash(change?.content ?? ''),
+      resolutionResult: 'noop',
+    })
     syncSavedState(winInfo)
     publishSnapshotChanged(winInfo)
     if (winInfo.externalWatch) {
@@ -574,47 +694,65 @@ function handleExternalChange(winInfo, change, options = {}) {
     return 'applied'
   }
 
+  applyLegacyPendingExternalChangeToSession(winInfo, change)
   syncSavedState(winInfo)
   publishSnapshotChanged(winInfo)
-  sendUtil.send(winInfo.win, {
-    event: 'file-external-changed',
-    data: {
-      fileName: getFileInfoPayload(winInfo).fileName,
-      version: change.version,
-      localContent: winInfo.tempContent,
-      externalContent: change.content,
-    },
-  })
   return 'prompted'
 }
 
-function applyExternalPendingChange(winInfo, version) {
-  const pendingChange = winInfo?.externalWatch?.pendingChange
-  if (!pendingChange || pendingChange.version !== version) {
-    return false
-  }
-  applyLegacyExternalDiskToSession(winInfo, pendingChange, {
-    applyToEditor: true,
-  })
-  if (winInfo.externalWatch) {
-    fileWatchUtil.settlePendingChange(winInfo.externalWatch, pendingChange.versionHash)
-  }
-  syncSavedState(winInfo)
-  publishSnapshotChanged(winInfo)
-  sendUtil.send(winInfo.win, {
-    event: 'file-content-reloaded',
-    data: getFileInfoPayload(winInfo),
-  })
-  return true
+function getLegacyPendingPromptVersion(winInfo) {
+  return getSessionByWinInfo(winInfo)?.externalRuntime?.pendingExternalChange?.version ?? null
 }
 
-function ignoreExternalPendingChange(winInfo, version) {
-  const pendingChange = winInfo?.externalWatch?.pendingChange
-  if (!pendingChange || pendingChange.version !== version) {
-    return false
+async function handleLegacyExternalCommand(winInfo, command, payload = {}) {
+  const beforePendingVersion = getLegacyPendingPromptVersion(winInfo)
+  const result = await dispatchCommand(winInfo, command, payload)
+  const afterPendingVersion = result?.session?.externalRuntime?.pendingExternalChange?.version ?? null
+  const expectedVersion = payload?.version ?? beforePendingVersion
+  const resolutionResult = result?.session?.externalRuntime?.lastResolutionResult
+  const handledPending = beforePendingVersion != null
+    && expectedVersion === beforePendingVersion
+    && afterPendingVersion !== beforePendingVersion
+  const isApplied = handledPending && resolutionResult === 'applied'
+  const isIgnored = handledPending && resolutionResult === 'ignored'
+
+  if (isApplied && winInfo?.externalWatch) {
+    const settledVersionHash = result?.session?.diskSnapshot?.versionHash
+      || winInfo.externalWatch.pendingChange?.versionHash
+      || null
+    fileWatchUtil.settlePendingChange(winInfo.externalWatch, settledVersionHash)
+  } else if (isIgnored && winInfo?.externalWatch) {
+    fileWatchUtil.ignorePendingChange(winInfo.externalWatch)
   }
-  fileWatchUtil.ignorePendingChange(winInfo.externalWatch)
-  return true
+
+  if (payload?.compatLegacyReloadEvent === true && isApplied && isWindowAlive(winInfo?.win)) {
+    sendUtil.send(winInfo.win, {
+      event: 'file-content-reloaded',
+      data: getFileInfoPayload(winInfo),
+    })
+  }
+
+  return {
+    commandResult: result,
+    handledPending,
+    isApplied,
+    isIgnored,
+  }
+}
+
+async function applyExternalPendingChange(winInfo, version) {
+  const legacyResult = await handleLegacyExternalCommand(winInfo, 'document.external.apply', {
+    version,
+    compatLegacyReloadEvent: true,
+  })
+  return legacyResult.isApplied
+}
+
+async function ignoreExternalPendingChange(winInfo, version) {
+  const legacyResult = await handleLegacyExternalCommand(winInfo, 'document.external.ignore', {
+    version,
+  })
+  return legacyResult.isIgnored
 }
 
 async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
@@ -788,6 +926,10 @@ async function executeCommand(winInfo, command, payload) {
 
     case 'document.get-session-snapshot':
       return getSessionSnapshot(winInfo)
+
+    case 'document.external.apply':
+    case 'document.external.ignore':
+      return (await handleLegacyExternalCommand(winInfo, command, payload || {})).commandResult
 
     case 'document.request-open-dialog':
     case 'dialog.open-target-selected':

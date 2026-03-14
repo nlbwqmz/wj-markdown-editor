@@ -184,4 +184,47 @@ describe('windowSessionBridge', () => {
     })
     expect(sendToRenderer.mock.calls.some(call => call[1]?.event === 'file-missing')).toBe(false)
   })
+
+  it('旧 renderer 仍在使用时，只要 externalPrompt.version 变化，桥层就必须再次代发 file-external-changed 覆盖旧弹窗内容', async () => {
+    const { bridge, sendToRenderer, win } = await createBridgeContext()
+
+    bridge.publishSnapshotChanged({
+      windowId: 1001,
+      snapshot: {
+        ...bridge.getSessionSnapshot(1001),
+        externalPrompt: {
+          visible: true,
+          version: 1,
+          fileName: 'demo.md',
+          localContent: '# 本地内容',
+          externalContent: '# 外部内容 1',
+        },
+      },
+    })
+    sendToRenderer.mockClear()
+
+    bridge.publishSnapshotChanged({
+      windowId: 1001,
+      snapshot: {
+        ...bridge.getSessionSnapshot(1001),
+        externalPrompt: {
+          visible: true,
+          version: 2,
+          fileName: 'demo.md',
+          localContent: '# 本地内容',
+          externalContent: '# 外部内容 2',
+        },
+      },
+    })
+
+    expect(sendToRenderer).toHaveBeenCalledWith(win, {
+      event: 'file-external-changed',
+      data: {
+        fileName: 'demo.md',
+        version: 2,
+        localContent: '# 本地内容',
+        externalContent: '# 外部内容 2',
+      },
+    })
+  })
 })
