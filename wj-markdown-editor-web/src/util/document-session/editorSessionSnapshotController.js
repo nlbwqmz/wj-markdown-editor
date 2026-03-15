@@ -24,11 +24,6 @@ function createEditorSessionSnapshotController({
     beginBootstrapRequest() {
       return bootstrapGuard.beginRequest()
     },
-    // 暴露这个判定主要是为了给测试和极少数外层桥接场景复用。
-    // 当前 EditorView 已直接调用 `applyBootstrapSnapshot()`，不会再手写双重判断。
-    shouldApplyBootstrapRequest(requestContext) {
-      return bootstrapGuard.shouldApplyRequestResult(requestContext) === true
-    },
     // bootstrap 结果必须在 guard 通过后，才能做三件事：
     // 1. 归一化并写入 store
     // 2. 更新窗口标题
