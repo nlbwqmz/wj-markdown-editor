@@ -233,4 +233,114 @@ describe('documentEffectService', () => {
     }))
     expect(dispatchCommand.mock.calls.some(call => call[0] === 'save.failed')).toBe(false)
   })
+
+  it('notify-watch-warning 必须回流统一消息出口，而不是被 applyEffect 静默吞掉', async () => {
+    const { service } = await createServiceContext()
+    const showWindowMessage = vi.fn()
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-watch-warning',
+        level: 'warning',
+        reason: 'watch-error',
+        error: {
+          name: 'Error',
+          message: 'watch crashed',
+          code: 'EIO',
+        },
+      },
+      showWindowMessage,
+    })
+
+    expect(showWindowMessage).toHaveBeenCalledWith({
+      type: 'warning',
+      content: 'message.fileExternalChangeReadFailed',
+    })
+  })
+
+  it('rebind-watch 必须启动新的 watcher 绑定，并在成功后回流 watch.bound', async () => {
+    const { service } = await createServiceContext()
+    const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
+    const startExternalWatch = vi.fn().mockResolvedValue({
+      ok: true,
+      watchingPath: 'C:/docs/demo.md',
+      watchingDirectoryPath: 'C:/docs',
+    })
+
+    await service.applyEffect({
+      effect: {
+        type: 'rebind-watch',
+        bindingToken: 2,
+        watchingPath: 'C:/docs/demo.md',
+      },
+      dispatchCommand,
+      startExternalWatch,
+    })
+
+    expect(startExternalWatch).toHaveBeenCalledWith({
+      bindingToken: 2,
+      watchingPath: 'C:/docs/demo.md',
+    })
+    expect(dispatchCommand).toHaveBeenCalledWith('watch.bound', {
+      bindingToken: 2,
+      watchingPath: 'C:/docs/demo.md',
+      watchingDirectoryPath: 'C:/docs',
+    })
+    expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.rebind-failed')).toBe(false)
+  })
+
+  it('rebind-watch 如果重新绑定失败，必须回流 watch.rebind-failed', async () => {
+    const { service } = await createServiceContext()
+    const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
+    const startExternalWatch = vi.fn().mockRejectedValue(new Error('watch crashed'))
+
+    await service.applyEffect({
+      effect: {
+        type: 'rebind-watch',
+        bindingToken: 3,
+        watchingPath: 'C:/docs/demo.md',
+      },
+      dispatchCommand,
+      startExternalWatch,
+    })
+
+    expect(dispatchCommand).toHaveBeenCalledWith('watch.rebind-failed', {
+      bindingToken: 3,
+      watchingPath: 'C:/docs/demo.md',
+      error: expect.objectContaining({
+        name: 'Error',
+        message: 'watch crashed',
+      }),
+    })
+    expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.bound')).toBe(false)
+  })
+
+  it('rebind-watch 在 startExternalWatch 显式返回 ok=false 时，也必须回流 watch.rebind-failed', async () => {
+    const { service } = await createServiceContext()
+    const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
+    const startExternalWatch = vi.fn().mockResolvedValue({
+      ok: false,
+      error: new Error('watch path missing'),
+    })
+
+    await service.applyEffect({
+      effect: {
+        type: 'rebind-watch',
+        bindingToken: 4,
+        watchingPath: 'C:/docs/demo.md',
+      },
+      dispatchCommand,
+      startExternalWatch,
+    })
+
+    expect(dispatchCommand).toHaveBeenCalledWith('watch.rebind-failed', {
+      bindingToken: 4,
+      watchingPath: 'C:/docs/demo.md',
+      error: expect.objectContaining({
+        name: 'Error',
+        message: 'watch path missing',
+      }),
+    })
+    expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.bound')).toBe(false)
+  })
 })

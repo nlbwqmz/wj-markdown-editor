@@ -320,7 +320,7 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(startWatchingMock).not.toHaveBeenCalled()
   })
 
-  it('关闭链路命中草稿首次保存且 dialog.save-target-cancelled 时，必须回到未保存确认态', async () => {
+  it('关闭链路命中草稿首次保存且 dialog.save-target-cancelled 时，必须直接取消关闭流程并保持窗口打开', async () => {
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startPage: 'editor' })
     showSaveDialogSyncMock.mockReturnValueOnce(undefined)
 
@@ -338,7 +338,7 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(writeFileMock).not.toHaveBeenCalled()
     expect(winInfoUtil.getAll()).toHaveLength(1)
     expect(winInfo.path).toBeNull()
-    expect(sendMock.mock.calls.some(call => call[1]?.event === 'unsaved')).toBe(true)
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'unsaved')).toBe(false)
   })
 
   it('winInfoUtil.save 在兼容旧调用方先选好路径时，仍只走一次标准选路且不会双弹窗，最终能够正确保存', async () => {
@@ -866,6 +866,44 @@ describe('winInfoUtil 兼容 facade', () => {
         saved: true,
       }),
     })
+  })
+
+  it('watcher onError 触发后，必须走 watch.error 命令流并自动发起重绑，而不是只发 legacy warning', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    const watchOptions = startWatchingMock.mock.calls[0][0]
+    sendMock.mockClear()
+
+    watchOptions.onError?.(new Error('watch crashed'), {
+      bindingToken: 0,
+      watchingPath: 'D:/demo.md',
+      observedAt: 1700000004001,
+    })
+
+    await vi.waitFor(() => {
+      expect(startWatchingMock).toHaveBeenCalledTimes(2)
+    })
+
+    const initialWatchOptions = startWatchingMock.mock.calls[0][0]
+    const reboundWatchOptions = startWatchingMock.mock.calls[1][0]
+
+    expect(reboundWatchOptions).toEqual(expect.objectContaining({
+      filePath: 'D:/demo.md',
+      bindingToken: expect.any(Number),
+    }))
+    expect(reboundWatchOptions.bindingToken).toBeGreaterThan(initialWatchOptions.bindingToken)
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.fileExternalChangeReadFailed',
+      },
+    })
+    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'message')).toHaveLength(1)
   })
 
   it('force-close 会走 confirm-force-close 语义，直接关闭窗口且不再启动保存', async () => {

@@ -12,6 +12,26 @@ function getLanguage(getConfig) {
   return getConfig?.()?.language || 'zh-CN'
 }
 
+function serializeError(error) {
+  if (!error) {
+    return null
+  }
+
+  return {
+    name: typeof error.name === 'string' ? error.name : 'Error',
+    message: typeof error.message === 'string' ? error.message : String(error),
+    code: typeof error.code === 'string' ? error.code : null,
+  }
+}
+
+function getWatchWarningMessage(effect) {
+  return {
+    type: effect?.level || 'warning',
+    // 当前 renderer 侧已有这条 i18n key，先统一复用，避免为了补重绑链路再扩散新的文案契约。
+    content: 'message.fileExternalChangeReadFailed',
+  }
+}
+
 /**
  * 主进程统一副作用层。
  *
@@ -183,6 +203,7 @@ export function createDocumentEffectService({
     continueWindowClose,
     showUnsavedPrompt,
     showSaveFailedMessage,
+    showWindowMessage,
     shouldRebindExternalWatchAfterSave,
     startExternalWatch,
     markInternalSave,
@@ -283,6 +304,38 @@ export function createDocumentEffectService({
           type: 'error',
           content: getFailedSaveMessage(effect.trigger, effect.error),
         })
+        return null
+
+      case 'notify-watch-warning':
+        showWindowMessage?.(getWatchWarningMessage(effect))
+        return null
+
+      case 'rebind-watch':
+        {
+          const watchingPath = effect.watchingPath || null
+          try {
+            const rebindResult = await startExternalWatch?.({
+              bindingToken: effect.bindingToken,
+              watchingPath,
+            })
+
+            if (rebindResult === false || rebindResult?.ok === false) {
+              throw rebindResult?.error || new Error('watch rebind failed')
+            }
+
+            await dispatchCommand?.('watch.bound', {
+              bindingToken: effect.bindingToken,
+              watchingPath: rebindResult?.watchingPath || watchingPath,
+              watchingDirectoryPath: rebindResult?.watchingDirectoryPath || null,
+            })
+          } catch (error) {
+            await dispatchCommand?.('watch.rebind-failed', {
+              bindingToken: effect.bindingToken,
+              watchingPath,
+              error: serializeError(error),
+            })
+          }
+        }
         return null
 
       default:

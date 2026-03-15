@@ -204,13 +204,10 @@ export function createDocumentCommandService({
             && session.closeRuntime.awaitingPathSelection === true
           effects.push(...saveCoordinator.cancelPendingSaveTarget(session).effects)
           if (wasCloseFirstSave) {
-            session.closeRuntime.intent = 'close'
-            session.closeRuntime.promptReason = 'unsaved-changes'
-            session.closeRuntime.waitingSaveJobId = null
-            session.closeRuntime.awaitingPathSelection = false
-            effects.push({
-              type: 'show-unsaved-prompt',
-            })
+            // 关闭链路里的“首次保存选路径”属于 close-auto-save 的前置步骤。
+            // 设计明确要求：如果用户在这里取消，表示整个关闭请求被取消，
+            // 应当直接退出关闭链路并继续编辑，而不是再额外弹一次未保存确认。
+            resetCloseRuntime(session)
           }
         }
         break

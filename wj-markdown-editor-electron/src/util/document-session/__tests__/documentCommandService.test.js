@@ -764,7 +764,7 @@ describe('documentCommandService', () => {
     })
   })
 
-  it('dialog.save-target-cancelled 发生在关闭链路的首次保存分支时，必须回到未保存确认态', () => {
+  it('dialog.save-target-cancelled 发生在关闭链路的首次保存分支时，必须清空 closeRuntime 并保持窗口打开', () => {
     const { store, service } = createTestContext(['close'])
     const session = createDraftSession({
       sessionId: 'draft-close-session',
@@ -799,16 +799,79 @@ describe('documentCommandService', () => {
     ])
     expect(cancelled.session.documentSource.path).toBeNull()
     expect(cancelled.session.closeRuntime).toEqual({
-      intent: 'close',
-      promptReason: 'unsaved-changes',
+      intent: null,
+      promptReason: null,
       waitingSaveJobId: null,
       awaitingPathSelection: false,
       forceClose: false,
     })
-    expect(cancelled.effects).toContainEqual({
-      type: 'show-unsaved-prompt',
-    })
+    expect(cancelled.effects.find(effect => effect.type === 'show-unsaved-prompt')).toBeUndefined()
     expect(cancelled.effects.find(effect => effect.type === 'close-window')).toBeUndefined()
+  })
+
+  it('关闭链路首次保存已选路径并进入 in-flight 后，迟到的 dialog.save-target-cancelled 不得把状态拖回未保存确认态', () => {
+    const { store, service } = createTestContext(['close'])
+    const session = createDraftSession({
+      sessionId: 'draft-close-stale-cancel-session',
+      now: 1700000002083,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 草稿内容',
+      },
+    })
+
+    const closeRequested = service.dispatch({
+      windowId,
+      command: 'document.request-close',
+    })
+    const pathSelected = service.dispatch({
+      windowId,
+      command: 'dialog.save-target-selected',
+      payload: {
+        path: 'C:/docs/draft-close.md',
+      },
+    })
+    const staleCancelled = service.dispatch({
+      windowId,
+      command: 'dialog.save-target-cancelled',
+    })
+
+    expect(closeRequested.effects).toEqual([
+      {
+        type: 'hold-window-close',
+      },
+      {
+        type: 'open-save-dialog',
+        trigger: 'close-auto-save',
+      },
+    ])
+    expect(pathSelected.effects).toEqual([
+      {
+        type: 'execute-save',
+        job: expect.objectContaining({
+          jobId: 'job-1',
+          path: 'C:/docs/draft-close.md',
+          trigger: 'close-auto-save',
+        }),
+      },
+    ])
+    expect(staleCancelled.effects.find(effect => effect.type === 'show-unsaved-prompt')).toBeUndefined()
+    expect(staleCancelled.effects.find(effect => effect.type === 'close-window')).toBeUndefined()
+    expect(staleCancelled.session.closeRuntime).toEqual({
+      intent: 'close',
+      promptReason: null,
+      waitingSaveJobId: 'job-1',
+      awaitingPathSelection: false,
+      forceClose: false,
+    })
+    expect(staleCancelled.session.saveRuntime.inFlightJobId).toBe('job-1')
+    expect(staleCancelled.session.saveRuntime.status).toBe('queued')
+    expect(staleCancelled.session.saveRuntime.trigger).toBe('close-auto-save')
   })
 
   it('草稿手动保存时，即使带了 payload.path，document.save 首次也必须先产出 open-save-dialog，不能直接 execute-save', () => {

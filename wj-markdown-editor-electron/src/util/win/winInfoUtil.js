@@ -497,21 +497,49 @@ function stopExternalWatch(winInfo) {
   return winInfo.externalWatch.watcher === null && winInfo.externalWatch.subscription === null
 }
 
-function startExternalWatch(winInfo) {
-  if (!winInfo?.path) {
-    return false
+function getCurrentWatchBindingToken(winInfo) {
+  const session = getSessionByWinInfo(winInfo)
+  return Number.isFinite(session?.watchRuntime?.bindingToken)
+    ? session.watchRuntime.bindingToken
+    : null
+}
+
+function startExternalWatch(winInfo, options = {}) {
+  const requestedPath = typeof options?.watchingPath === 'string' && options.watchingPath.trim() !== ''
+    ? options.watchingPath
+    : winInfo?.path
+  if (!requestedPath) {
+    return {
+      ok: false,
+      watchingPath: null,
+      watchingDirectoryPath: null,
+      error: new Error('watch path missing'),
+    }
   }
   if (!winInfo.externalWatch) {
     winInfo.externalWatch = createExternalWatchState()
   }
-  if (winInfo.externalWatch.watchingPath === winInfo.path && winInfo.externalWatch.watcher) {
-    return true
+  const bindingToken = Number.isFinite(options?.bindingToken)
+    ? options.bindingToken
+    : getCurrentWatchBindingToken(winInfo)
+  const currentSubscriptionBindingToken = Number.isFinite(winInfo.externalWatch?.subscription?.bindingToken)
+    ? winInfo.externalWatch.subscription.bindingToken
+    : null
+  if (winInfo.externalWatch.watchingPath === requestedPath
+    && winInfo.externalWatch.watcher
+    && currentSubscriptionBindingToken === bindingToken) {
+    return {
+      ok: true,
+      watchingPath: requestedPath,
+      watchingDirectoryPath: winInfo.externalWatch.watchingDirectoryPath || path.dirname(requestedPath),
+    }
   }
 
   stopExternalWatch(winInfo)
   fileWatchUtil.startWatching({
     state: winInfo.externalWatch,
-    filePath: winInfo.path,
+    filePath: requestedPath,
+    bindingToken,
     watch,
     onExternalChange: (change, meta = {}) => {
       handleExternalChange(winInfo, {
@@ -533,17 +561,22 @@ function startExternalWatch(winInfo) {
       syncSavedState(winInfo)
       publishSnapshotChanged(winInfo)
     },
-    onError: () => {
-      sendUtil.send(winInfo.win, {
-        event: 'message',
-        data: {
-          type: 'warning',
-          content: 'message.fileExternalChangeReadFailed',
-        },
+    onError: (error, meta = {}) => {
+      // watcher 读盘失败必须进入统一命令流，才能触发 warning + 新 token + 自动重绑。
+      // 这里只负责把底层 watcher 回调标准化后回流到 commandService，
+      // 不能再直接旁路发 legacy message，否则重绑 effect 永远不会被执行。
+      void dispatchCommand(winInfo, 'watch.error', {
+        bindingToken: meta.bindingToken ?? bindingToken,
+        watchingPath: meta.watchingPath ?? requestedPath,
+        error,
       })
     },
   })
-  return true
+  return {
+    ok: true,
+    watchingPath: requestedPath,
+    watchingDirectoryPath: winInfo.externalWatch.watchingDirectoryPath || path.dirname(requestedPath),
+  }
 }
 
 function finalizeWindowClose(winInfo, id) {
@@ -641,8 +674,13 @@ async function applyEffects(winInfo, effects = []) {
           publishWindowMessage(winInfo, data)
         }
       },
+      showWindowMessage: (data) => {
+        if (isWindowAlive(winInfo?.win)) {
+          publishWindowMessage(winInfo, data)
+        }
+      },
       shouldRebindExternalWatchAfterSave: () => shouldRebindExternalWatchAfterSave(winInfo),
-      startExternalWatch: () => startExternalWatch(winInfo),
+      startExternalWatch: options => startExternalWatch(winInfo, options),
       markInternalSave: (content) => {
         if (winInfo.externalWatch?.watcher) {
           fileWatchUtil.markInternalSave(winInfo.externalWatch, content)
