@@ -1,5 +1,10 @@
 import router from '@/router/index.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import {
+  requestDocumentOpenDialog,
+  requestDocumentSave,
+  requestDocumentSaveCopy,
+} from '@/util/document-session/rendererDocumentCommandUtil.js'
 
 /**
  * 按键映射 与codemirror的快捷键映射规则保持一致
@@ -94,7 +99,7 @@ const webShortcutKeyHandler = {
     channelUtil.send({ event: 'create-new' }).then(() => {})
   },
   openFile: () => {
-    channelUtil.send({ event: 'open-file' }).then(() => {})
+    requestDocumentOpenDialog().then(() => {})
   },
   switchView: () => {
     if (router.currentRoute.value.name === 'editor') {
@@ -104,10 +109,10 @@ const webShortcutKeyHandler = {
     }
   },
   save: () => {
-    channelUtil.send({ event: 'save' }).then(() => {})
+    requestDocumentSave().then(() => {})
   },
   saveOther: () => {
-    channelUtil.send({ event: 'save-other' }).then(() => {})
+    requestDocumentSaveCopy().then(() => {})
   },
   setting: () => {
     channelUtil.send({ event: 'open-setting' }).then(() => {})

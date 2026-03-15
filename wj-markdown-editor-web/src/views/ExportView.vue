@@ -1,10 +1,11 @@
 <script setup>
+import dayjs from 'dayjs'
+import { onBeforeMount, ref, watch } from 'vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
-import dayjs from 'dayjs'
-import { onBeforeMount, ref, watch } from 'vue'
+import { requestDocumentSessionSnapshot } from '@/util/document-session/rendererDocumentCommandUtil.js'
 
 const content = ref('')
 
@@ -31,8 +32,10 @@ function waitingExport(type, filePath) {
 }
 
 onBeforeMount(async () => {
-  const data = await channelUtil.send({ event: 'get-file-info' })
-  content.value = data.content
+  const snapshot = await requestDocumentSessionSnapshot()
+  // 导出页只需要当前正文内容；
+  // 这里直接从 session snapshot 读取，避免继续依赖历史兼容返回结构。
+  content.value = snapshot?.content || ''
   // 隐藏滚动条 （一次性页面 直接设置即可）防止打印出滚动条
   document.body.classList.add('wj-scrollbar-hide')
 })

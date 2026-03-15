@@ -26,16 +26,6 @@ async function uploadImage(winInfo, data) {
   return imgUtil.save(winInfo, data, config)
 }
 
-function toLegacyOpenFileResult(result) {
-  // `open-file` 是旧 renderer 仍在使用的兼容 IPC。
-  // 对缺失路径这类历史上依赖 `=== false` 的场景，这里必须回退成旧布尔语义；
-  // 但新命令层/副作用层内部仍保留结构化结果，避免污染新契约。
-  if (result?.ok === false && result?.reason === 'open-target-missing') {
-    return false
-  }
-  return result
-}
-
 /**
  * 旧 `open-folder` 兼容入口和新资源命令都复用同一条提示裁决。
  *
@@ -105,11 +95,9 @@ const handlerList = {
     shell.showItemInFolder(winInfo.path)
   },
   'document.resource.open-in-folder': async (winInfo, data) => await handleResourceOpen(winInfo, data),
-  'save-other': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save-copy', null),
-  'save': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save', null),
-  'get-file-info': (winInfo) => {
-    return winInfoUtil.getFileInfoPayload(winInfo)
-  },
+  // renderer 已经切到新的 session 命令名，这里只保留直连入口。
+  'document.save-copy': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save-copy', null),
+  'document.save': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save', null),
   'document.get-session-snapshot': async (winInfo) => {
     return await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot', null)
   },
@@ -122,19 +110,14 @@ const handlerList = {
   'document.confirm-force-close': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.confirm-force-close', null),
   'document.external.apply': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'document.external.apply', data),
   'document.external.ignore': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'document.external.ignore', data),
-  'file-external-change-apply': async (winInfo, data) => await winInfoUtil.applyExternalPendingChange(winInfo, data?.version),
-  'file-external-change-ignore': async (winInfo, data) => await winInfoUtil.ignoreExternalPendingChange(winInfo, data?.version),
   'create-new': () => {
     winInfoUtil.createNew().then(() => {})
   },
-  'open-file': async (winInfo, targetPath) => {
-    if (targetPath) {
-      const result = await winInfoUtil.executeCommand(winInfo, 'dialog.open-target-selected', {
-        path: targetPath,
-      })
-      return toLegacyOpenFileResult(result)
-    }
+  'document.request-open-dialog': async (winInfo) => {
     return await winInfoUtil.executeCommand(winInfo, 'document.request-open-dialog', null)
+  },
+  'document.open-path': async (winInfo, data) => {
+    return await winInfoUtil.executeCommand(winInfo, 'document.open-path', data)
   },
   'get-config': () => {
     return configUtil.getConfig()
@@ -206,11 +189,8 @@ const handlerList = {
   'execute-update': () => {
     updateUtil.executeUpdate()
   },
-  'recent-clear': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.clear', null),
   'recent.clear': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.clear', null),
-  'recent-remove': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'recent.remove', data),
   'recent.remove': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'recent.remove', data),
-  'get-recent-list': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.get-list', null),
   'recent.get-list': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.get-list', null),
   'file-upload': (winInfo, filePath) => {
     return fileUploadUtil.save(winInfo, filePath, configUtil.getConfig())

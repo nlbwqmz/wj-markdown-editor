@@ -45,20 +45,6 @@ export function createDefaultExternalFileChangeState() {
   }
 }
 
-/**
- * 关闭确认弹窗的 renderer 状态默认值。
- *
- * 关闭提示未来可以继续拆成独立组件，
- * 但当前先统一收敛成固定结构，避免页面再去猜字段是否存在。
- */
-export function createDefaultClosePromptState() {
-  return {
-    visible: false,
-    reason: null,
-    allowForceClose: false,
-  }
-}
-
 function normalizeClosePrompt(closePrompt) {
   if (!closePrompt || closePrompt.visible !== true) {
     return null
@@ -185,48 +171,31 @@ export function deriveExternalFileChangeState(snapshot, currentExternalFileChang
 }
 
 /**
- * 从快照推导关闭确认态的 renderer 结构。
- */
-export function deriveClosePromptState(snapshot) {
-  const normalizedSnapshot = normalizeDocumentSessionSnapshot(snapshot)
-  return normalizedSnapshot.closePrompt?.visible
-    ? normalizedSnapshot.closePrompt
-    : createDefaultClosePromptState()
-}
-
-/**
  * 将 snapshot 投影成当前 Pinia store 需要维护的兼容字段。
  *
  * store 虽然会新增完整快照真相，
- * 但现有组件仍大量依赖 `fileName`、`saved`、`externalFileChange` 这些旧字段。
+ * 但现有组件仍直接依赖 `fileName`、`saved`、`externalFileChange` 这些旧字段。
+ * 其余展示细节已经统一回收到 `documentSessionSnapshot`，避免 store 再长出
+ * `displayPath` / `closePromptVisible` 这类没人消费的镜像噪音。
  * 这里统一产出派生结果，避免状态在多个文件里各算一遍。
  */
 export function deriveDocumentSessionStoreState(snapshot, currentExternalFileChange = createDefaultExternalFileChangeState()) {
   const documentSessionSnapshot = normalizeDocumentSessionSnapshot(snapshot)
   const externalFileChange = deriveExternalFileChangeState(documentSessionSnapshot, currentExternalFileChange)
-  const closePrompt = deriveClosePromptState(documentSessionSnapshot)
 
   return {
     documentSessionSnapshot,
     fileName: documentSessionSnapshot.fileName,
     saved: documentSessionSnapshot.saved,
-    displayPath: documentSessionSnapshot.displayPath,
-    recentMissingPath: documentSessionSnapshot.recentMissingPath,
-    exists: documentSessionSnapshot.exists,
-    closePrompt,
-    closePromptVisible: closePrompt.visible === true,
     externalFileChange,
-    externalPromptVisible: externalFileChange.visible === true,
   }
 }
 
 export default {
   createDefaultDocumentSessionSnapshot,
   createDefaultExternalFileChangeState,
-  createDefaultClosePromptState,
   normalizeDocumentSessionSnapshot,
   normalizeRecentList,
   deriveExternalFileChangeState,
-  deriveClosePromptState,
   deriveDocumentSessionStoreState,
 }

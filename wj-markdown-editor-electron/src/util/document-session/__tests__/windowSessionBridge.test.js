@@ -53,7 +53,7 @@ describe('windowSessionBridge', () => {
     })
   })
 
-  it('命令收敛后发送一次性消息时，必须先推快照，再推 window.effect.message', async () => {
+  it('命令收敛后发送一次性消息时，必须先推快照，再推 window.effect.message，且不能再补发 legacy message', async () => {
     const { bridge, sendToRenderer, win } = await createBridgeContext()
 
     bridge.publishMessage({
@@ -75,13 +75,7 @@ describe('windowSessionBridge', () => {
         content: 'message.saveSuccessfully',
       },
     })
-    expect(sendToRenderer).toHaveBeenNthCalledWith(3, win, {
-      event: 'message',
-      data: {
-        type: 'success',
-        content: 'message.saveSuccessfully',
-      },
-    })
+    expect(sendToRenderer.mock.calls.some(call => call[1]?.event === 'message')).toBe(false)
   })
 
   it('recent 列表变更时，window.effect.recent-list-changed 必须直接携带完整列表', async () => {

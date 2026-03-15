@@ -3,7 +3,7 @@ import { message, Modal, Tooltip } from 'ant-design-vue'
 import { nanoid } from 'nanoid'
 import { createVNode, h } from 'vue'
 import router from '@/router/index.js'
-import channelUtil from '@/util/channel/channelUtil.js'
+import { requestRecentRemove } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import { convertResourceUrl, stringToHex } from '@/util/resourceUrlUtil.js'
 
 const createId = () => `wj${nanoid()}`
@@ -133,7 +133,7 @@ export default {
             okText: '确认',
             cancelText: '取消',
             onOk: () => {
-              channelUtil.send({ event: 'recent-remove', data: path }).then(() => {})
+              requestRecentRemove(path).then(() => {})
             },
           })
         },
@@ -150,7 +150,7 @@ export default {
       okText: '确认',
       cancelText: '取消',
       onOk: () => {
-        channelUtil.send({ event: 'recent-remove', data: filePath }).then(() => {})
+        requestRecentRemove(filePath).then(() => {})
       },
     })
   },

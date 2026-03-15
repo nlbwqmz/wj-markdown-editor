@@ -8,7 +8,7 @@ import {
 
 const { test } = await import('node:test')
 
-test('recent-missing 快照应映射出当前 store 需要的展示路径与提示可见性', () => {
+test('recent-missing 快照应只保留当前 store 仍在消费的派生字段，展示路径等细节继续留在 snapshot 真相里', () => {
   const storeState = deriveDocumentSessionStoreState({
     sessionId: 'session-1',
     content: '# current',
@@ -41,10 +41,20 @@ test('recent-missing 快照应映射出当前 store 需要的展示路径与提�
 
   assert.equal(storeState.fileName, 'Unnamed')
   assert.equal(storeState.saved, false)
-  assert.equal(storeState.displayPath, 'C:/docs/missing.md')
-  assert.equal(storeState.closePromptVisible, true)
-  assert.equal(storeState.externalPromptVisible, true)
+  assert.equal('displayPath' in storeState, false)
+  assert.equal('recentMissingPath' in storeState, false)
+  assert.equal('exists' in storeState, false)
+  assert.equal('closePrompt' in storeState, false)
+  assert.equal('closePromptVisible' in storeState, false)
+  assert.equal('externalPromptVisible' in storeState, false)
+  assert.equal(storeState.externalFileChange.visible, true)
   assert.equal(storeState.documentSessionSnapshot.recentMissingPath, 'C:/docs/missing.md')
+  assert.equal(storeState.documentSessionSnapshot.displayPath, 'C:/docs/missing.md')
+  assert.deepEqual(storeState.documentSessionSnapshot.closePrompt, {
+    visible: true,
+    reason: 'unsaved-changes',
+    allowForceClose: true,
+  })
 })
 
 test('外部修改 prompt 为同一版本时应保留 loading，新版本则必须重置 loading', () => {

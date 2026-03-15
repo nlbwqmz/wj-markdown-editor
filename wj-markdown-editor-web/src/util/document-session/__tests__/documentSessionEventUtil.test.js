@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 
-import {
+import * as documentSessionEventUtil from '../documentSessionEventUtil.js'
+
+const {
   createDocumentSessionBootstrapGuard,
   createDocumentSessionEventHandlers,
-  createWindowEffectMessageDeduper,
   DOCUMENT_EXTERNAL_APPLY_COMMAND,
   DOCUMENT_EXTERNAL_IGNORE_COMMAND,
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
-} from '../documentSessionEventUtil.js'
+} = documentSessionEventUtil
 
 const { test } = await import('node:test')
 
@@ -115,23 +116,6 @@ test('更晚到达的 snapshot 推送出现后，首屏拉取返回的旧结果�
   assert.equal(guard.shouldApplyRequestResult(secondRequest), true)
 })
 
-test('window.effect.message 与 legacy message 连续双发时，不应重复展示同一条提示', () => {
-  let currentNow = 1_000
-  const deduper = createWindowEffectMessageDeduper({
-    now: () => currentNow,
-    dedupeWindowMs: 100,
-  })
-
-  const effect = {
-    type: 'success',
-    content: 'message.saved',
-    key: null,
-    duration: 3,
-  }
-
-  assert.equal(deduper.shouldDisplay(effect), true)
-  assert.equal(deduper.shouldDisplay(effect), false)
-
-  currentNow += 200
-  assert.equal(deduper.shouldDisplay(effect), true)
+test('renderer session 事件适配层不应继续导出只服务 legacy message 双发的 deduper', () => {
+  assert.equal('createWindowEffectMessageDeduper' in documentSessionEventUtil, false)
 })

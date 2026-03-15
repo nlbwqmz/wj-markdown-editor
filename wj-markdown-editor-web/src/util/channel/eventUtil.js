@@ -5,12 +5,10 @@ import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.j
 import eventEmit from '@/util/channel/eventEmit.js'
 import {
   createDocumentSessionEventHandlers,
-  createWindowEffectMessageDeduper,
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
 
 const { t } = i18n.global
-const windowEffectMessageDeduper = createWindowEffectMessageDeduper()
 
 function setDocumentTitle(title) {
   window.document.title = title || 'wj-markdown-editor'
@@ -18,9 +16,6 @@ function setDocumentTitle(title) {
 
 function showWindowEffectMessage(data) {
   if (!data?.type || typeof message[data.type] !== 'function') {
-    return
-  }
-  if (windowEffectMessageDeduper.shouldDisplay(data) !== true) {
     return
   }
 
@@ -57,8 +52,8 @@ export default {
     Object.entries(documentSessionEventHandlers).forEach(([eventName, handler]) => {
       eventEmit.on(eventName, handler)
     })
-    // 旧 `message` 事件仍被导出、上传等非 session 流程使用，
-    // 因此在 renderer 完成全量迁移前要继续保留兼容入口。
+    // session 路径的一次性提示已经收口到 `window.effect.message`。
+    // 这里继续保留 legacy `message` 监听，只为了兼容导出、上传等非 session 流程。
     eventEmit.on('message', (data) => {
       showWindowEffectMessage(data)
     })

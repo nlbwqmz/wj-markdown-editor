@@ -22,7 +22,8 @@ function isWindowUsable(win) {
  * 3. `window.effect.recent-list-changed` 只承载完整 recent 列表刷新
  *
  * Task 7 起不再补发 `file-is-saved`、`file-external-changed`、`update-recent`
- * 这类 legacy 文档事件，避免主进程再次长出第二套状态出口。
+ * 这类 legacy 文档事件；Task 5 起 session 路径上的一次性提示也不再补发
+ * legacy `message`，避免主进程再次长出第二套状态出口。
  */
 export function createWindowSessionBridge({
   store,
@@ -63,10 +64,6 @@ export function createWindowSessionBridge({
     })
     sendToRenderer(win, {
       event: 'window.effect.message',
-      data,
-    })
-    sendToRenderer(win, {
-      event: 'message',
       data,
     })
     return latestSnapshot

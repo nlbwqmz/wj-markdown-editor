@@ -351,7 +351,7 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'unsaved')).toBe(false)
   })
 
-  it('winInfoUtil.save 在兼容旧调用方先选好路径时，仍只走一次标准选路且不会双弹窗，最终能够正确保存', async () => {
+  it('document.save 在兼容旧调用方先选好路径时，仍只走一次标准选路且不会双弹窗，最终能够正确保存', async () => {
     await winInfoUtil.createNew(null)
 
     const [winInfo] = winInfoUtil.getAll()
@@ -362,7 +362,7 @@ describe('winInfoUtil 兼容 facade', () => {
     // 不能再由 document.save 直接带 payload.path 绕过标准命令流。
     winInfo.path = 'D:/compat-draft.md'
 
-    await winInfoUtil.save(winInfo)
+    await winInfoUtil.executeCommand(winInfo, 'document.save')
 
     expect(showSaveDialogSyncMock).not.toHaveBeenCalled()
     expect(writeFileMock).toHaveBeenCalledTimes(1)
@@ -372,7 +372,7 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(winInfo.tempContent).toBe('# 草稿内容')
   })
 
-  it('winInfoUtil.save 在真实写盘成功后必须返回 true，而不是 effects 执行前的旧快照结果', async () => {
+  it('document.save 在真实写盘成功后必须返回 true，而不是 effects 执行前的旧快照结果', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -384,7 +384,7 @@ describe('winInfoUtil 兼容 facade', () => {
       expect(winInfo.tempContent).toBe('# 已保存的新内容')
     })
 
-    const saveResult = await winInfoUtil.save(winInfo)
+    const saveResult = await winInfoUtil.executeCommand(winInfo, 'document.save')
 
     expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 已保存的新内容')
     expect(saveResult).toBe(true)
@@ -405,19 +405,19 @@ describe('winInfoUtil 兼容 facade', () => {
     })
     sendMock.mockClear()
 
-    await expect(winInfoUtil.save(winInfo)).resolves.toBe(true)
+    await expect(winInfoUtil.executeCommand(winInfo, 'document.save')).resolves.toBe(true)
 
     expect(writeFileMock).toHaveBeenCalledWith('D:/draft.md', '# 草稿内容')
     expect(winInfo.path).toBe('D:/draft.md')
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'warning',
         content: 'message.fileExternalChangeReadFailed',
       },
     })
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'success',
         content: 'message.saveSuccessfully',
@@ -425,7 +425,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
   })
 
-  it('blur-auto-save 进行中按 Ctrl+S 时，winInfoUtil.save 必须等待当前保存链路完成并返回手动保存成功', async () => {
+  it('blur-auto-save 进行中按 Ctrl+S 时，document.save 必须等待当前保存链路完成并返回手动保存成功', async () => {
     const saveDeferred = createDeferred()
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
     pathExistsMock.mockResolvedValue(true)
@@ -448,7 +448,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     sendMock.mockClear()
     let saveResolved = false
-    const manualSavePromise = winInfoUtil.save(winInfo).then((result) => {
+    const manualSavePromise = winInfoUtil.executeCommand(winInfo, 'document.save').then((result) => {
       saveResolved = true
       return result
     })
@@ -463,7 +463,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     expect(saveResult).toBe(true)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'success',
         content: 'message.saveSuccessfully',
@@ -495,7 +495,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
 
     sendMock.mockClear()
-    const manualSavePromise = winInfoUtil.save(winInfo)
+    const manualSavePromise = winInfoUtil.executeCommand(winInfo, 'document.save')
 
     saveDeferred.resolve()
     await saveDeferred.promise
@@ -504,7 +504,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     expect(saveResult).toBe(true)
     expect(winInfoUtil.getAll()).toHaveLength(0)
-    expect(sendMock.mock.calls.some(call => call[1]?.event === 'message')).toBe(false)
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'window.effect.message')).toBe(false)
   })
 
   it('挂靠中的 Ctrl+S 只能等待自己绑定的那条保存链路，不能被后续新的 auto-save 抢走结果', async () => {
@@ -532,7 +532,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
 
     sendMock.mockClear()
-    const manualSavePromise = winInfoUtil.save(winInfo)
+    const manualSavePromise = winInfoUtil.executeCommand(winInfo, 'document.save')
 
     firstSaveDeferred.resolve()
     await firstSaveDeferred.promise
@@ -554,7 +554,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     expect(saveResult).toBe(true)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'success',
         content: 'message.saveSuccessfully',
@@ -591,7 +591,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     try {
       let saveResolved = false
-      const manualSavePromise = winInfoUtil.save(winInfo).then((result) => {
+      const manualSavePromise = winInfoUtil.executeCommand(winInfo, 'document.save').then((result) => {
         saveResolved = true
         return result
       })
@@ -606,7 +606,7 @@ describe('winInfoUtil 兼容 facade', () => {
       await vi.advanceTimersByTimeAsync(10010)
       expect(saveResolved).toBe(false)
       expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
-        event: 'message',
+        event: 'window.effect.message',
         data: {
           type: 'success',
           content: 'message.saveSuccessfully',
@@ -649,7 +649,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
     sendMock.mockClear()
 
-    const saveResult = await winInfoUtil.save(winInfo)
+    const saveResult = await winInfoUtil.executeCommand(winInfo, 'document.save')
     const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
 
     expect(writeFileMock).not.toHaveBeenCalled()
@@ -662,7 +662,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
     expect(saveResult).toBe(false)
     expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'success',
         content: 'message.saveSuccessfully',
@@ -692,7 +692,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
 
     sendMock.mockClear()
-    const manualSavePromise = winInfoUtil.save(winInfo)
+    const manualSavePromise = winInfoUtil.executeCommand(winInfo, 'document.save')
 
     winInfoUtil.handleExternalChange(winInfo, {
       content: '# 外部版本',
@@ -714,7 +714,7 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(saveResult).toBe(true)
     expect(snapshot.externalPrompt).toBeNull()
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'success',
         content: 'message.saveSuccessfully',
@@ -744,7 +744,7 @@ describe('winInfoUtil 兼容 facade', () => {
     })
 
     sendMock.mockClear()
-    const manualSavePromise = winInfoUtil.save(winInfo)
+    const manualSavePromise = winInfoUtil.executeCommand(winInfo, 'document.save')
 
     await winInfoUtil.executeCommand(winInfo, 'document.edit', {
       content: '# 原始内容',
@@ -753,14 +753,14 @@ describe('winInfoUtil 兼容 facade', () => {
     saveDeferred.reject(new Error('磁盘已满'))
     await expect(manualSavePromise).resolves.toBe(false)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'error',
         content: '保存失败。 磁盘已满',
       },
     })
     expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'success',
         content: 'message.saveSuccessfully',
@@ -781,18 +781,18 @@ describe('winInfoUtil 兼容 facade', () => {
     })
     sendMock.mockClear()
 
-    const saveResult = await winInfoUtil.save(winInfo)
+    const saveResult = await winInfoUtil.executeCommand(winInfo, 'document.save')
 
     expect(saveResult).toBe(false)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'error',
         content: '保存失败。 磁盘已满',
       },
     })
     expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'warning',
         content: 'message.cancelSave',
@@ -813,14 +813,14 @@ describe('winInfoUtil 兼容 facade', () => {
     await winInfoUtil.executeCommand(winInfo, 'document.save-copy')
 
     expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'success',
         content: 'message.saveAsSuccessfully',
       },
     })
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'warning',
         content: '另存为失败，副本路径不能与当前文档相同。',
@@ -842,14 +842,14 @@ describe('winInfoUtil 兼容 facade', () => {
     await winInfoUtil.executeCommand(winInfo, 'document.save-copy')
 
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'error',
         content: '另存为失败。 设备不可用',
       },
     })
     expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'success',
         content: 'message.saveAsSuccessfully',
@@ -876,7 +876,7 @@ describe('winInfoUtil 兼容 facade', () => {
       path: 'D:/plain.txt',
     })
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'warning',
         content: 'message.onlyMarkdownFilesCanBeOpened',
@@ -1124,7 +1124,7 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(applied.snapshot.saved).toBe(true)
   })
 
-  it('legacy 外部修改兼容入口遇到 stale version 时，必须返回 false，且不能误清当前 prompt', async () => {
+  it('document.external.apply / document.external.ignore 遇到 stale version 时，必须 no-op，且不能误清当前 prompt', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -1143,7 +1143,11 @@ describe('winInfoUtil 兼容 facade', () => {
     }, {
       strategy: 'prompt',
     })
-    await winInfoUtil.ignoreExternalPendingChange(winInfo, 1)
+    await winInfoUtil.executeCommand(winInfo, 'document.external.ignore', {
+      version: 1,
+    })
+    ignorePendingChangeMock.mockClear()
+    settlePendingChangeMock.mockClear()
 
     winInfoUtil.handleExternalChange(winInfo, {
       content: '# 外部新内容 2',
@@ -1153,12 +1157,28 @@ describe('winInfoUtil 兼容 facade', () => {
       strategy: 'prompt',
     })
 
-    const staleIgnored = await winInfoUtil.ignoreExternalPendingChange(winInfo, 1)
-    const staleApplied = await winInfoUtil.applyExternalPendingChange(winInfo, 1)
+    const staleIgnored = await winInfoUtil.executeCommand(winInfo, 'document.external.ignore', {
+      version: 1,
+    })
+    const staleApplied = await winInfoUtil.executeCommand(winInfo, 'document.external.apply', {
+      version: 1,
+    })
     const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
 
-    expect(staleIgnored).toBe(false)
-    expect(staleApplied).toBe(false)
+    expect(staleIgnored.snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 2,
+      localContent: '# 本地编辑内容',
+      externalContent: '# 外部新内容 2',
+      fileName: 'demo.md',
+    })
+    expect(staleApplied.snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 2,
+      localContent: '# 本地编辑内容',
+      externalContent: '# 外部新内容 2',
+      fileName: 'demo.md',
+    })
     expect(snapshot.externalPrompt).toEqual({
       visible: true,
       version: 2,
@@ -1166,6 +1186,8 @@ describe('winInfoUtil 兼容 facade', () => {
       externalContent: '# 外部新内容 2',
       fileName: 'demo.md',
     })
+    expect(ignorePendingChangeMock).not.toHaveBeenCalled()
+    expect(settlePendingChangeMock).not.toHaveBeenCalled()
   })
 
   it('外部冲突如果已经被用户本地内容自行消解，handleExternalChange 必须把过期 externalPrompt 收敛掉', async () => {
@@ -1403,13 +1425,13 @@ describe('winInfoUtil 兼容 facade', () => {
     }))
     expect(reboundWatchOptions.bindingToken).not.toBe(initialWatchOptions.bindingToken)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'warning',
         content: 'message.fileExternalChangeReadFailed',
       },
     })
-    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'message')).toHaveLength(1)
+    expect(sendMock.mock.calls.filter(call => call[1]?.event === 'window.effect.message')).toHaveLength(1)
   })
 
   it('force-close 会走 confirm-force-close 语义，直接关闭窗口且不再启动保存', async () => {
@@ -1579,4 +1601,15 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(readFileMock).not.toHaveBeenCalled()
     expect(winInfoUtil.getAll()).toHaveLength(0)
   })
+})
+it('document.save 已收口到统一命令入口后，不应继续对外暴露 save facade', () => {
+  expect('save' in winInfoUtil).toBe(false)
+  expect(winInfoUtil.save).toBeUndefined()
+})
+
+it('document.external.apply / document.external.ignore 已收口到统一命令入口后，不应继续对外暴露旧 facade', () => {
+  expect('applyExternalPendingChange' in winInfoUtil).toBe(false)
+  expect('ignoreExternalPendingChange' in winInfoUtil).toBe(false)
+  expect(winInfoUtil.applyExternalPendingChange).toBeUndefined()
+  expect(winInfoUtil.ignoreExternalPendingChange).toBeUndefined()
 })

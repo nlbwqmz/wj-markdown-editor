@@ -181,11 +181,8 @@ vi.mock('../win/winInfoUtil.js', () => {
       executeCommand,
       executeResourceCommand,
       executeResourceCommandSync,
-      save: vi.fn(),
       getFileInfoPayload: vi.fn(),
       updateTempContent: vi.fn(),
-      applyExternalPendingChange: vi.fn(),
-      ignoreExternalPendingChange: vi.fn(),
     },
   }
 })
@@ -510,6 +507,13 @@ describe('ipcMainUtil save', () => {
 
     await import('./ipcMainUtil.js')
     const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
+    winInfoUtil.getWinInfo.mockReset()
+    winInfoUtil.getWinInfo.mockImplementation(() => ({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }))
+    winInfoUtil.getFileInfoPayload.mockReset()
 
     return {
       sender,
@@ -524,7 +528,7 @@ describe('ipcMainUtil save', () => {
     winInfoUtil.executeCommand.mockResolvedValueOnce(false)
 
     await sendToMainHandler({ sender }, {
-      event: 'save',
+      event: 'document.save',
       data: null,
     })
 
@@ -540,6 +544,21 @@ describe('ipcMainUtil save', () => {
         content: 'message.saveSuccessfully',
       },
     })
+  })
+
+  it('document.save-copy 直连入口必须直接命中新命令，避免 renderer 迁移后继续依赖 save-other', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupSaveHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'document.save-copy',
+      data: null,
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.save-copy', null)
   })
 })
 
@@ -569,6 +588,13 @@ describe('ipcMainUtil command mapping', () => {
 
     await import('./ipcMainUtil.js')
     const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
+    winInfoUtil.getWinInfo.mockReset()
+    winInfoUtil.getWinInfo.mockImplementation(() => ({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }))
+    winInfoUtil.getFileInfoPayload.mockReset()
 
     return {
       sender,
@@ -577,11 +603,11 @@ describe('ipcMainUtil command mapping', () => {
     }
   }
 
-  it('open-file 未传路径时，必须映射到 document.request-open-dialog，而不是在 IPC handler 里直接弹框', async () => {
+  it('document.request-open-dialog 直连入口必须直接走统一命令流', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
 
     await sendToMainHandler({ sender }, {
-      event: 'open-file',
+      event: 'document.request-open-dialog',
       data: null,
     })
 
@@ -593,24 +619,26 @@ describe('ipcMainUtil command mapping', () => {
     expect(dialogShowOpenDialogSync).not.toHaveBeenCalled()
   })
 
-  it('open-file 直接携带目标路径时，必须通过 dialog.open-target-selected 进入新命令模型', async () => {
+  it('document.open-path 直连入口必须直接把结构化 payload 送入新命令', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
 
     await sendToMainHandler({ sender }, {
-      event: 'open-file',
-      data: 'D:\\docs\\opened.md',
+      event: 'document.open-path',
+      data: {
+        path: 'D:\\docs\\opened.md',
+      },
     })
 
     expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
       path: 'D:\\docs\\note.md',
       exists: true,
       win: { id: 1 },
-    }, 'dialog.open-target-selected', {
+    }, 'document.open-path', {
       path: 'D:\\docs\\opened.md',
     })
   })
 
-  it('open-file 直接携带缺失路径时，旧 compat 返回值必须仍为 false，供旧 renderer 继续走移除历史记录提示', async () => {
+  it('document.open-path 命中缺失路径时，必须把结构化失败结果原样返回给新 renderer', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     winInfoUtil.executeCommand.mockResolvedValueOnce({
       ok: false,
@@ -619,21 +647,27 @@ describe('ipcMainUtil command mapping', () => {
     })
 
     const result = await sendToMainHandler({ sender }, {
-      event: 'open-file',
-      data: 'D:\\docs\\missing.md',
+      event: 'document.open-path',
+      data: {
+        path: 'D:\\docs\\missing.md',
+      },
     })
 
     expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
       path: 'D:\\docs\\note.md',
       exists: true,
       win: { id: 1 },
-    }, 'dialog.open-target-selected', {
+    }, 'document.open-path', {
       path: 'D:\\docs\\missing.md',
     })
-    expect(result).toBe(false)
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-missing',
+      path: 'D:\\docs\\missing.md',
+    })
   })
 
-  it('open-file 直接携带非 .md 路径时，不能再回退为 false，否则 recent 菜单会误判成“文件不存在”', async () => {
+  it('document.open-path 命中非 .md 路径时，也必须保留结构化失败结果供 renderer 判定', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     winInfoUtil.executeCommand.mockResolvedValueOnce({
       ok: false,
@@ -642,15 +676,17 @@ describe('ipcMainUtil command mapping', () => {
     })
 
     const result = await sendToMainHandler({ sender }, {
-      event: 'open-file',
-      data: 'D:\\docs\\plain.txt',
+      event: 'document.open-path',
+      data: {
+        path: 'D:\\docs\\plain.txt',
+      },
     })
 
     expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
       path: 'D:\\docs\\note.md',
       exists: true,
       win: { id: 1 },
-    }, 'dialog.open-target-selected', {
+    }, 'document.open-path', {
       path: 'D:\\docs\\plain.txt',
     })
     expect(result).toEqual({
@@ -680,6 +716,81 @@ describe('ipcMainUtil command mapping', () => {
       win: { id: 1 },
     }, 'document.get-session-snapshot', null)
     expect(result).toEqual(snapshot)
+  })
+
+  it('导出子窗口请求 document.get-session-snapshot 时，必须能回退到父窗口的 session 上下文', async () => {
+    const parentWin = { id: 1 }
+    const childWin = {
+      id: 2,
+      getParentWindow: () => parentWin,
+    }
+    browserWindowFromWebContents.mockReturnValue(childWin)
+
+    await import('./ipcMainUtil.js')
+    const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
+    winInfoUtil.getFileInfoPayload.mockReset()
+    winInfoUtil.executeCommand.mockReset()
+    winInfoUtil.getWinInfo.mockImplementation((targetWin) => {
+      if (targetWin?.id === 2) {
+        return null
+      }
+      if (targetWin?.id === 1) {
+        return {
+          path: 'D:\\docs\\note.md',
+          exists: true,
+          win: parentWin,
+        }
+      }
+      return null
+    })
+    const snapshot = {
+      sessionId: 'session-export-parent',
+      content: '# 导出内容',
+      saved: true,
+    }
+    winInfoUtil.executeCommand.mockResolvedValueOnce(snapshot)
+    const sendToMainHandler = ipcMainHandle.mock.calls.find(([channel]) => channel === 'sendToMain')?.[1]
+    const sender = { id: 9527 }
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.get-session-snapshot',
+      data: null,
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: parentWin,
+    }, 'document.get-session-snapshot', null)
+    expect(result).toEqual(snapshot)
+  })
+
+  it('recent.clear / recent.remove 必须只暴露新的统一 IPC 命令', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'recent.clear',
+      data: null,
+    })
+    await sendToMainHandler({ sender }, {
+      event: 'recent.remove',
+      data: {
+        path: 'D:\\docs\\note.md',
+      },
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(1, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'recent.clear', null)
+    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(2, {
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'recent.remove', {
+      path: 'D:\\docs\\note.md',
+    })
   })
 
   it('recent.get-list 必须通过统一命令入口返回最近文件列表', async () => {
@@ -832,31 +943,35 @@ describe('ipcMainUtil command mapping', () => {
     }, 'document.confirm-force-close', null)
   })
 
-  it('旧 file-external-change-apply / ignore 兼容入口也必须回流到新的统一命令', async () => {
+  it('已迁移完成的旧 session IPC 入口必须直接删除，不能继续保留死别名', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
 
-    await sendToMainHandler({ sender }, {
-      event: 'file-external-change-apply',
-      data: {
-        version: 4,
-      },
-    })
-    await sendToMainHandler({ sender }, {
-      event: 'file-external-change-ignore',
-      data: {
-        version: 5,
-      },
-    })
+    const removedLegacyResults = await Promise.all([
+      sendToMainHandler({ sender }, { event: 'save', data: null }),
+      sendToMainHandler({ sender }, { event: 'save-other', data: null }),
+      sendToMainHandler({ sender }, { event: 'open-file', data: null }),
+      sendToMainHandler({ sender }, { event: 'open-file', data: 'D:\\docs\\legacy.md' }),
+      sendToMainHandler({ sender }, { event: 'get-file-info', data: null }),
+      sendToMainHandler({ sender }, { event: 'recent-clear', data: null }),
+      sendToMainHandler({ sender }, { event: 'recent-remove', data: { path: 'D:\\docs\\legacy.md' } }),
+      sendToMainHandler({ sender }, { event: 'get-recent-list', data: null }),
+      sendToMainHandler({ sender }, { event: 'file-external-change-apply', data: { version: 4 } }),
+      sendToMainHandler({ sender }, { event: 'file-external-change-ignore', data: { version: 5 } }),
+    ])
 
-    expect(winInfoUtil.applyExternalPendingChange).toHaveBeenNthCalledWith(1, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 4)
-    expect(winInfoUtil.ignoreExternalPendingChange).toHaveBeenNthCalledWith(1, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 5)
+    expect(removedLegacyResults).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ])
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(winInfoUtil.getFileInfoPayload).not.toHaveBeenCalled()
   })
 })

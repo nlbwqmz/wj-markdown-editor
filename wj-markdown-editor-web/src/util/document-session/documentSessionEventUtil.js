@@ -41,38 +41,6 @@ export function createDocumentSessionBootstrapGuard() {
 }
 
 /**
- * 为 `window.effect.message` 与 legacy `message` 双发提供去重保护。
- *
- * 当前主进程桥为了兼容旧 renderer，会在新 effect 之外再补发一条 legacy message。
- * renderer 迁移阶段需要保留 legacy 监听，但不能把同一条提示展示两次。
- */
-export function createWindowEffectMessageDeduper({
-  now = () => Date.now(),
-  dedupeWindowMs = 120,
-} = {}) {
-  let lastSignature = null
-  let lastShownAt = 0
-
-  return {
-    shouldDisplay(effect) {
-      const signature = JSON.stringify({
-        type: effect?.type || null,
-        content: effect?.content || null,
-        key: effect?.key || null,
-        duration: effect?.duration ?? null,
-      })
-      const currentTime = now()
-      const duplicated = signature === lastSignature
-        && currentTime - lastShownAt <= dedupeWindowMs
-
-      lastSignature = signature
-      lastShownAt = currentTime
-      return duplicated === false
-    },
-  }
-}
-
-/**
  * 创建 renderer 侧的 session 事件适配器。
  *
  * 这里故意只接三类事件：
@@ -123,7 +91,6 @@ export function createDocumentSessionEventHandlers({
 
 export default {
   createDocumentSessionBootstrapGuard,
-  createWindowEffectMessageDeduper,
   DOCUMENT_SESSION_SNAPSHOT_CHANGED_EVENT,
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
   WINDOW_EFFECT_MESSAGE_EVENT,

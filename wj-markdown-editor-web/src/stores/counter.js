@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import channelUtil from '@/util/channel/channelUtil.js'
 import {
-  createDefaultClosePromptState,
   createDefaultDocumentSessionSnapshot,
   createDefaultExternalFileChangeState,
   deriveDocumentSessionStoreState,
@@ -16,9 +15,6 @@ const useCommonStore = defineStore('common', () => {
   const documentSessionSnapshot = ref(createDefaultDocumentSessionSnapshot())
   const fileName = ref(documentSessionSnapshot.value.fileName)
   const saved = ref(true)
-  const displayPath = ref(null)
-  const recentMissingPath = ref(null)
-  const exists = ref(false)
   const isMaximize = ref(false)
   const config = ref(configData)
   const searchBarVisible = ref(false)
@@ -26,7 +22,6 @@ const useCommonStore = defineStore('common', () => {
   const hasNewVersion = ref(false)
   const isAlwaysOnTop = ref(false)
   const recentList = ref(normalizeRecentList(recentListData))
-  const closePrompt = ref(createDefaultClosePromptState())
   const externalFileChange = ref(createDefaultExternalFileChangeState())
 
   function applyDocumentSessionSnapshot(snapshot) {
@@ -34,10 +29,6 @@ const useCommonStore = defineStore('common', () => {
     documentSessionSnapshot.value = nextState.documentSessionSnapshot
     fileName.value = nextState.fileName
     saved.value = nextState.saved
-    displayPath.value = nextState.displayPath
-    recentMissingPath.value = nextState.recentMissingPath
-    exists.value = nextState.exists
-    closePrompt.value = nextState.closePrompt
     externalFileChange.value = nextState.externalFileChange
     return nextState.documentSessionSnapshot
   }
@@ -59,9 +50,6 @@ const useCommonStore = defineStore('common', () => {
     documentSessionSnapshot,
     fileName,
     saved,
-    displayPath,
-    recentMissingPath,
-    exists,
     isMaximize,
     config,
     searchBarVisible,
@@ -69,7 +57,6 @@ const useCommonStore = defineStore('common', () => {
     isAlwaysOnTop,
     recentList,
     editorSearchBarVisible,
-    closePrompt,
     externalFileChange,
     applyDocumentSessionSnapshot,
     replaceRecentList,

@@ -675,12 +675,13 @@ function continueWindowClose(winInfo) {
 }
 
 function getSaveDialogTarget(winInfo) {
+  // `pendingCompatSavePath` 是当前手动保存链路里唯一仍保留的 compat 路径：
+  // 历史调用方若先把草稿目标路径塞进 `winInfo.path`，会在 `document.save`
+  // 入口处先复制到这里，再由 `open-save-dialog` effect 一次性消化。
+  // effect 层不再直接偷读 `winInfo.path`，避免“预选路径”旁路重新扩散回保存边界。
   const selectedByCompatLayer = typeof winInfo?.pendingCompatSavePath === 'string' && winInfo.pendingCompatSavePath.trim() !== ''
     ? winInfo.pendingCompatSavePath
-    : (typeof winInfo.path === 'string' && winInfo.path.trim() !== ''
-      && !getSessionByWinInfo(winInfo)?.documentSource?.path
-        ? winInfo.path
-        : null)
+    : null
   const selectedPath = selectedByCompatLayer || dialog.showSaveDialogSync({
     title: 'Save',
     filters: [
@@ -852,7 +853,7 @@ function getLegacyPendingPromptVersion(winInfo) {
   return getSessionByWinInfo(winInfo)?.externalRuntime?.pendingExternalChange?.version ?? null
 }
 
-async function handleLegacyExternalCommand(winInfo, command, payload = {}) {
+async function executeExternalResolutionCommand(winInfo, command, payload = {}) {
   const beforePendingVersion = getLegacyPendingPromptVersion(winInfo)
   const result = await dispatchCommand(winInfo, command, payload)
   const afterPendingVersion = result?.session?.externalRuntime?.pendingExternalChange?.version ?? null
@@ -879,20 +880,6 @@ async function handleLegacyExternalCommand(winInfo, command, payload = {}) {
     isApplied,
     isIgnored,
   }
-}
-
-async function applyExternalPendingChange(winInfo, version) {
-  const legacyResult = await handleLegacyExternalCommand(winInfo, 'document.external.apply', {
-    version,
-  })
-  return legacyResult.isApplied
-}
-
-async function ignoreExternalPendingChange(winInfo, version) {
-  const legacyResult = await handleLegacyExternalCommand(winInfo, 'document.external.ignore', {
-    version,
-  })
-  return legacyResult.isIgnored
 }
 
 async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
@@ -945,7 +932,7 @@ function getCopySaveFailureMessage({ reason, error }) {
   return `另存为失败。${errorDetail}`
 }
 
-async function save(winInfo) {
+async function executeDocumentSaveCommand(winInfo) {
   const session = getSessionByWinInfo(winInfo)
   const hadDocumentPath = Boolean(session?.documentSource?.path)
   if (!session?.documentSource?.path && typeof winInfo?.path === 'string' && winInfo.path.trim() !== '') {
@@ -1196,7 +1183,7 @@ async function openDocumentPath(targetPath, {
 async function executeCommand(winInfo, command, payload) {
   switch (command) {
     case 'document.save':
-      return await save(winInfo)
+      return await executeDocumentSaveCommand(winInfo)
 
     case 'document.save-copy':
     {
@@ -1236,7 +1223,9 @@ async function executeCommand(winInfo, command, payload) {
 
     case 'document.external.apply':
     case 'document.external.ignore':
-      return (await handleLegacyExternalCommand(winInfo, command, payload || {})).commandResult
+      // 外部修改处理已经完全收口到统一命令入口，
+      // 这里只保留一个私有 helper，把命令层结果与 fileWatchUtil 的 pending 结算同步在一起。
+      return (await executeExternalResolutionCommand(winInfo, command, payload || {})).commandResult
 
     case 'document.resource.open-in-folder':
     case 'document.resource.delete-local':
@@ -1481,7 +1470,4 @@ export default {
   handleFileMissing,
   startExternalWatch,
   stopExternalWatch,
-  applyExternalPendingChange,
-  ignoreExternalPendingChange,
-  save,
 }

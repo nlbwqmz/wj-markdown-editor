@@ -15,6 +15,10 @@ import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
 import {
+  requestDocumentSave,
+  requestDocumentSessionSnapshot,
+} from '@/util/document-session/rendererDocumentCommandUtil.js'
+import {
   resolveRendererSessionActivationAction,
   shouldBootstrapSessionSnapshotOnMounted,
 } from '@/util/document-session/rendererSessionActivationStrategy.js'
@@ -112,7 +116,7 @@ function updateEditorContent(nextContent, options = {}) {
 }
 
 function save() {
-  channelUtil.send({ event: 'save' })
+  requestDocumentSave().then(() => {})
 }
 
 function applyDocumentSessionSnapshot(snapshot) {
@@ -122,7 +126,7 @@ function applyDocumentSessionSnapshot(snapshot) {
 
   previewAssetSessionController.syncSnapshot(snapshot)
   // 编辑器内容现在只从 document session snapshot 同步，
-  // 避免再和旧的 file-content-reloaded / get-file-info 元信息混写。
+  // 避免再和历史遗留的零散元信息入口混写。
   updateEditorContent(snapshot.content, {
     skipContentSync: true,
   })
@@ -142,7 +146,7 @@ const documentSessionSnapshotSubscription = createRendererSessionEventSubscripti
 
 async function loadCurrentDocumentSessionSnapshot() {
   const requestContext = editorSessionSnapshotController.beginBootstrapRequest()
-  const snapshot = await channelUtil.send({ event: 'document.get-session-snapshot' })
+  const snapshot = await requestDocumentSessionSnapshot()
   editorSessionSnapshotController.applyBootstrapSnapshot(requestContext, snapshot)
 }
 
