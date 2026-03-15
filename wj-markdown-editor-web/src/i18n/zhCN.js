@@ -273,6 +273,7 @@ export default {
   },
   message: {
     theFileDoesNotExist: '文件不存在',
+    onlyMarkdownFilesCanBeOpened: '只能打开 Markdown（.md）文件。',
     invalidLocalResourceLink: '当前本地资源链接无效，无法定位到对应文件。',
     theFileIsBeingSaved: '正在保存文件',
     theFileIsSavedSuccessfully: '文件保存成功',

@@ -10,6 +10,7 @@ import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
 import { createDocumentCommandService } from '../document-session/documentCommandService.js'
 import { createDocumentEffectService } from '../document-session/documentEffectService.js'
+import { resolveDocumentOpenPath } from '../document-session/documentOpenTargetUtil.js'
 import { createDocumentResourceService } from '../document-session/documentResourceService.js'
 import {
   createBoundFileSession,
@@ -176,12 +177,13 @@ function syncSavedState(winInfo) {
   return saved
 }
 
-function publishSnapshotChanged(winInfo) {
+function publishSnapshotChanged(winInfo, snapshot) {
   if (!winInfo?.id) {
     return null
   }
   return windowSessionBridge.publishSnapshotChanged({
     windowId: winInfo.id,
+    snapshot,
   })
 }
 
@@ -193,6 +195,10 @@ function publishWindowMessage(winInfo, data) {
     windowId: winInfo.id,
     data,
   })
+}
+
+function getSnapshotSignature(snapshot) {
+  return JSON.stringify(snapshot || null)
 }
 
 function syncSessionFromWinInfo(winInfo) {
@@ -410,36 +416,6 @@ function resolveLegacyPendingExternalChange(winInfo, {
   })
 }
 
-function markLegacyRestoredInSession(winInfo, diskContent = '', meta = {}) {
-  const observedAt = Number.isFinite(meta?.observedAt) ? meta.observedAt : Date.now()
-  const restoredContent = diskContent ?? ''
-  const restoredVersionHash = createContentHash(restoredContent)
-  return updateSessionForLegacyExternalEvent(winInfo, (session) => {
-    session.documentSource.exists = true
-    session.documentSource.lastKnownStat = null
-
-    // 恢复事件自带当前磁盘内容时，这里必须直接把磁盘基线恢复回来。
-    // 否则一旦后续 file-changed 因旧去重状态被 fileWatchUtil 吞掉，
-    // 会话就会卡在 documentSource.exists=true 但 diskSnapshot.exists=false 的不一致态。
-    session.diskSnapshot.content = restoredContent
-    session.diskSnapshot.versionHash = restoredVersionHash
-    session.diskSnapshot.exists = true
-    session.diskSnapshot.stat = null
-    session.diskSnapshot.observedAt = observedAt
-    session.diskSnapshot.source = 'legacy-watch-restored'
-
-    if (session.externalRuntime) {
-      session.externalRuntime.resolutionState = 'restored'
-      session.externalRuntime.pendingExternalChange = null
-      session.externalRuntime.lastKnownDiskVersionHash = restoredVersionHash
-    }
-
-    if (session.watchRuntime) {
-      session.watchRuntime.fileExists = true
-    }
-  })
-}
-
 function createInitialSession({
   sessionId,
   filePath,
@@ -504,6 +480,67 @@ function getCurrentWatchBindingToken(winInfo) {
     : null
 }
 
+function getCurrentWatchObservedFloor(winInfo) {
+  const session = getSessionByWinInfo(winInfo)
+  return Number.isFinite(session?.watchRuntime?.eventFloorObservedAt)
+    ? session.watchRuntime.eventFloorObservedAt
+    : 0
+}
+
+function wasWatchEventAccepted(previousObservedFloor, dispatchResult, observedAt) {
+  const nextObservedFloor = Number.isFinite(dispatchResult?.session?.watchRuntime?.eventFloorObservedAt)
+    ? dispatchResult.session.watchRuntime.eventFloorObservedAt
+    : 0
+
+  if (Number.isFinite(observedAt)) {
+    return nextObservedFloor === observedAt && nextObservedFloor > previousObservedFloor
+  }
+
+  return nextObservedFloor > previousObservedFloor
+}
+
+function settleExternalWatchPendingChangeIfNeeded(winInfo, {
+  versionHash,
+  previousObservedFloor,
+  observedAt,
+  dispatchResult,
+}) {
+  if (!winInfo?.externalWatch || !versionHash) {
+    return
+  }
+
+  if (!wasWatchEventAccepted(previousObservedFloor, dispatchResult, observedAt)) {
+    return
+  }
+
+  const pendingVersionHash = dispatchResult?.session?.externalRuntime?.pendingExternalChange?.versionHash || null
+  if (pendingVersionHash === versionHash) {
+    return
+  }
+
+  if (dispatchResult?.session?.externalRuntime?.lastHandledVersionHash === versionHash) {
+    fileWatchUtil.settlePendingChange(winInfo.externalWatch, versionHash)
+  }
+}
+
+function resetExternalWatchHistoryIfMissingAccepted(winInfo, {
+  previousObservedFloor,
+  observedAt,
+  dispatchResult,
+}) {
+  if (!winInfo?.externalWatch) {
+    return
+  }
+
+  if (!wasWatchEventAccepted(previousObservedFloor, dispatchResult, observedAt)) {
+    return
+  }
+
+  if (dispatchResult?.session?.documentSource?.exists === false) {
+    resetLegacyExternalWatchHistory(winInfo.externalWatch)
+  }
+}
+
 function startExternalWatch(winInfo, options = {}) {
   const requestedPath = typeof options?.watchingPath === 'string' && options.watchingPath.trim() !== ''
     ? options.watchingPath
@@ -541,25 +578,61 @@ function startExternalWatch(winInfo, options = {}) {
     filePath: requestedPath,
     bindingToken,
     watch,
-    onExternalChange: (change, meta = {}) => {
-      handleExternalChange(winInfo, {
-        ...change,
-        bindingToken: meta.bindingToken ?? change?.bindingToken,
-        watchingPath: meta.watchingPath ?? change?.watchingPath,
-        observedAt: meta.observedAt ?? change?.observedAt,
+    onExternalChange: async (change, meta = {}) => {
+      const observedAt = meta.observedAt ?? change?.observedAt
+      const previousObservedFloor = getCurrentWatchObservedFloor(winInfo)
+      const diskContent = change?.content ?? change?.diskContent ?? ''
+      const versionHash = change?.versionHash || createContentHash(diskContent)
+      const dispatchResult = await dispatchCommand(winInfo, 'watch.file-changed', {
+        bindingToken: meta.bindingToken ?? change?.bindingToken ?? bindingToken,
+        watchingPath: meta.watchingPath ?? change?.watchingPath ?? requestedPath,
+        observedAt,
+        diskContent,
+        diskStat: meta.diskStat ?? change?.diskStat ?? change?.stat ?? null,
+      }, {
+        publishSnapshotChanged: 'if-changed',
+      })
+
+      // live watcher 仍然依赖 fileWatchUtil 的去重状态来压制重复回调，
+      // 因此当统一命令流已经把本次版本收敛成 noop / applied 时，
+      // 这里必须同步把底层 pending 标记为 settled，不能留下悬挂的假 pending。
+      settleExternalWatchPendingChangeIfNeeded(winInfo, {
+        versionHash,
+        previousObservedFloor,
+        observedAt,
+        dispatchResult,
       })
     },
-    onMissing: (_error, meta = {}) => {
-      handleFileMissing(winInfo, meta)
-    },
-    onRestored: (diskContent, meta = {}) => {
-      markLegacyRestoredInSession(winInfo, diskContent, meta)
+    onMissing: async (error, meta = {}) => {
+      const observedAt = meta.observedAt
+      const previousObservedFloor = getCurrentWatchObservedFloor(winInfo)
+      const dispatchResult = await dispatchCommand(winInfo, 'watch.file-missing', {
+        bindingToken: meta.bindingToken ?? bindingToken,
+        watchingPath: meta.watchingPath ?? requestedPath,
+        observedAt,
+        error,
+      }, {
+        publishSnapshotChanged: 'if-changed',
+      })
 
-      // “文件已恢复”本身就是一个必须立即投影给 renderer 的状态变化。
-      // 如果这里只更新 session 而不推 snapshot，后续首次读盘又因为 internal-save / handled 去重被吞掉，
-      // 界面就会继续停在旧的 missing 态，看起来像是文件从未恢复。
-      syncSavedState(winInfo)
-      publishSnapshotChanged(winInfo)
+      // 文件进入 missing 后，底层 watcher 的内部去重历史必须同时清空，
+      // 否则恢复首轮如果撞上旧的 handled / internal-save hash，就会把真实恢复内容吞掉。
+      resetExternalWatchHistoryIfMissingAccepted(winInfo, {
+        previousObservedFloor,
+        observedAt,
+        dispatchResult,
+      })
+    },
+    onRestored: async (diskContent, meta = {}) => {
+      await dispatchCommand(winInfo, 'watch.file-restored', {
+        bindingToken: meta.bindingToken ?? bindingToken,
+        watchingPath: meta.watchingPath ?? requestedPath,
+        observedAt: meta.observedAt,
+        diskContent,
+        diskStat: meta.diskStat ?? null,
+      }, {
+        publishSnapshotChanged: 'if-changed',
+      })
     },
     onError: (error, meta = {}) => {
       // watcher 读盘失败必须进入统一命令流，才能触发 warning + 新 token + 自动重绑。
@@ -580,6 +653,10 @@ function startExternalWatch(winInfo, options = {}) {
 }
 
 function finalizeWindowClose(winInfo, id) {
+  const closingSession = getSessionByWinInfo(winInfo)
+  winInfo.lastClosedManualRequestCompletions = Array.isArray(closingSession?.saveRuntime?.completedManualRequests)
+    ? [...closingSession.saveRuntime.completedManualRequests]
+    : []
   stopExternalWatch(winInfo)
   if (winInfo?.sessionId) {
     documentSessionStore.destroySession(winInfo.sessionId)
@@ -624,12 +701,16 @@ function getCopyDialogTarget() {
   return appendMarkdownExtension(selectedPath)
 }
 
-async function dispatchCommand(winInfo, command, payload) {
+async function dispatchCommand(winInfo, command, payload, options = {}) {
   if (!winInfo) {
     return null
   }
 
+  const publishSnapshotMode = options.publishSnapshotChanged || 'always'
   syncSessionFromWinInfo(winInfo)
+  const previousSnapshot = publishSnapshotMode === 'if-changed'
+    ? getSessionSnapshot(winInfo)
+    : null
   const result = documentCommandService.dispatch({
     windowId: winInfo.id,
     command,
@@ -637,7 +718,11 @@ async function dispatchCommand(winInfo, command, payload) {
   })
   syncWinInfoFromSession(winInfo, result.session)
   syncSavedState(winInfo)
-  publishSnapshotChanged(winInfo)
+  const nextSnapshot = result?.snapshot || getSessionSnapshot(winInfo)
+  if (publishSnapshotMode === 'always'
+    || getSnapshotSignature(previousSnapshot) !== getSnapshotSignature(nextSnapshot)) {
+    publishSnapshotChanged(winInfo, nextSnapshot)
+  }
   await applyEffects(winInfo, result.effects)
   return result
 }
@@ -653,6 +738,27 @@ function shouldRebindExternalWatchAfterSave(winInfo) {
 
   const session = getSessionByWinInfo(winInfo)
   return Boolean(session?.documentSource?.path)
+}
+
+function getExternalWatchContext(winInfo) {
+  const session = getSessionByWinInfo(winInfo)
+  if (!session) {
+    return {
+      bindingToken: null,
+      watchingPath: null,
+    }
+  }
+
+  return {
+    // execute-save 内嵌的 watcher 重绑必须绑定到 save.succeeded 之后
+    // 命令层已经确认过的最新 token/path，不能再让 effect 层自己猜。
+    bindingToken: Number.isFinite(session.watchRuntime?.bindingToken)
+      ? session.watchRuntime.bindingToken
+      : null,
+    watchingPath: session.watchRuntime?.watchingPath
+      || session.documentSource?.path
+      || null,
+  }
 }
 
 async function applyEffects(winInfo, effects = []) {
@@ -680,6 +786,7 @@ async function applyEffects(winInfo, effects = []) {
         }
       },
       shouldRebindExternalWatchAfterSave: () => shouldRebindExternalWatchAfterSave(winInfo),
+      getExternalWatchContext: () => getExternalWatchContext(winInfo),
       startExternalWatch: options => startExternalWatch(winInfo, options),
       markInternalSave: (content) => {
         if (winInfo.externalWatch?.watcher) {
@@ -849,13 +956,30 @@ async function save(winInfo) {
   // document.save -> open-save-dialog -> dialog.save-target-selected。
   // 兼容旧调用方预先塞到 winInfo.path 的目标路径，不再通过 payload.path 直送命令层，
   // 而是留给 open-save-dialog effect 内部的 compat fallback 一次性消化。
-  await dispatchCommand(winInfo, 'document.save')
+  const saveCommandResult = await dispatchCommand(winInfo, 'document.save')
+  const manualRequestId = saveCommandResult?.manualRequestId || null
 
-  // legacy facade 的布尔返回值必须基于 effects 全部执行后的最终会话真相，
-  // 否则只要这次保存真的走了 execute-save，前置快照一定还是 dirty。
-  const finalSession = getSessionByWinInfo(winInfo)
+  let requestCompletion = null
+  if (manualRequestId) {
+    // Ctrl+S 的返回值必须只绑定这次 manual request 自己，
+    // 不能再因为“系统里后来又起了新的 auto-save”而被拖着继续等待。
+    requestCompletion = await waitForManualSaveRequestCompletion(winInfo, manualRequestId)
+  }
+
+  let finalSession = requestCompletion?.session || getSessionByWinInfo(winInfo)
+  if (!manualRequestId && finalSession?.saveRuntime?.inFlightJobId) {
+    // 兜底逻辑只给“旧运行态里还没 manualRequestId”的异常场景使用，
+    // 正常路径必须走 request-id 精确等待。
+    finalSession = await waitForSaveRuntimeToSettle(winInfo)
+  }
+
+  const completedRequest = requestCompletion?.completion || findCompletedManualRequest(finalSession, manualRequestId)
   const finalSnapshot = finalSession ? deriveDocumentSnapshot(finalSession) : null
-  const saved = Boolean(finalSession?.documentSource?.path && finalSnapshot?.saved)
+  const saved = completedRequest
+    ? Boolean(completedRequest.saved && completedRequest.documentPath)
+    : manualRequestId
+      ? false
+      : Boolean(finalSession?.documentSource?.path && finalSnapshot?.saved)
 
   if (saved) {
     publishWindowMessage(winInfo, {
@@ -868,7 +992,7 @@ async function save(winInfo) {
   // 只有“用户主动取消首存选路径”才应该提示取消保存；
   // 如果首存写盘失败，真实错误提示已经在 save.failed 链路里发出，
   // 这里再补 cancelSave 会把磁盘错误误导成用户取消。
-  if (!hadDocumentPath && !finalSession?.documentSource?.path && !finalSession?.saveRuntime?.lastError) {
+  if (!hadDocumentPath && completedRequest?.status === 'cancelled') {
     publishWindowMessage(winInfo, {
       type: 'warning',
       content: 'message.cancelSave',
@@ -899,6 +1023,93 @@ function getSessionSnapshot(winInfo) {
     return null
   }
   return windowSessionBridge.getSessionSnapshot(winInfo.id)
+}
+
+async function waitForSaveRuntimeToSettle(winInfo, {
+  timeoutMs = 10000,
+  pollIntervalMs = 10,
+} = {}) {
+  const deadline = Date.now() + timeoutMs
+
+  while (Date.now() <= deadline) {
+    const session = getSessionByWinInfo(winInfo)
+    const saveRuntime = session?.saveRuntime || {}
+    const saveStillRunning = Boolean(saveRuntime.inFlightJobId)
+      || saveRuntime.status === 'queued'
+      || saveRuntime.status === 'running'
+
+    if (!saveStillRunning) {
+      return session
+    }
+
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+  }
+
+  return getSessionByWinInfo(winInfo)
+}
+
+function findCompletedManualRequest(session, requestId) {
+  if (!requestId) {
+    return null
+  }
+
+  const completedRequests = session?.saveRuntime?.completedManualRequests
+  if (!Array.isArray(completedRequests)) {
+    return null
+  }
+
+  return completedRequests.find(request => request?.requestId === requestId) || null
+}
+
+function consumeCopySaveRequestCompletion(session, requestId) {
+  if (!session || !requestId) {
+    return null
+  }
+
+  return saveCoordinator.consumeCopySaveCompletion(session, {
+    requestId,
+  })
+}
+
+async function waitForManualSaveRequestCompletion(winInfo, requestId, {
+  timeoutMs = null,
+  pollIntervalMs = 10,
+} = {}) {
+  const deadline = Number.isFinite(timeoutMs) ? (Date.now() + timeoutMs) : null
+
+  while (true) {
+    if (deadline != null && Date.now() > deadline) {
+      break
+    }
+
+    const session = getSessionByWinInfo(winInfo)
+    if (!session) {
+      const cachedCompletion = findCompletedManualRequest({
+        saveRuntime: {
+          completedManualRequests: winInfo?.lastClosedManualRequestCompletions || [],
+        },
+      }, requestId)
+      return {
+        session: null,
+        completion: cachedCompletion,
+      }
+    }
+
+    const completion = findCompletedManualRequest(session, requestId)
+    if (completion) {
+      return {
+        session,
+        completion,
+      }
+    }
+
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+  }
+
+  return {
+    session: getSessionByWinInfo(winInfo),
+    completion: null,
+  }
 }
 
 async function executeResourceCommand(winInfo, command, payload) {
@@ -969,6 +1180,19 @@ async function openDocumentWindow(targetPath, {
   }
 }
 
+async function openDocumentPath(targetPath, {
+  trigger = 'user',
+  baseDir = null,
+} = {}) {
+  // 启动参数 / second-instance 这类“显式路径打开”入口也必须走统一 opening policy，
+  // 不能再直接 createNew() 绕过 `存在 + .md + regular file` 校验。
+  return await executeCommand(null, 'document.open-path', {
+    path: targetPath,
+    trigger,
+    baseDir,
+  })
+}
+
 async function executeCommand(winInfo, command, payload) {
   switch (command) {
     case 'document.save':
@@ -978,27 +1202,27 @@ async function executeCommand(winInfo, command, payload) {
     {
       const result = await dispatchCommand(winInfo, 'document.save-copy')
       const finalSession = getSessionByWinInfo(winInfo)
-      const copySaveRuntime = finalSession?.copySaveRuntime || {}
+      const copySaveCompletion = consumeCopySaveRequestCompletion(finalSession, result?.copySaveRequestId)
 
-      // compat facade 需要把副本保存的终态重新映射成旧 renderer 的提示语义：
-      // 成功/取消/失败必须三分，不能再把 same-path 失败误当成功，也不能让写盘失败静默吞掉。
-      if (copySaveRuntime.lastResult === 'failed') {
+      // compat facade 必须按“当前这一次 save-copy request 自己的 completion”来裁决提示。
+      // 否则多个 save-copy 请求交错时，旧 job 的结果就会覆盖新请求，造成成功/失败串线。
+      if (copySaveCompletion?.status === 'failed') {
         publishWindowMessage(winInfo, {
-          type: copySaveRuntime.lastFailureReason === 'same-path' ? 'warning' : 'error',
+          type: copySaveCompletion.failureReason === 'same-path' ? 'warning' : 'error',
           content: getCopySaveFailureMessage({
-            reason: copySaveRuntime.lastFailureReason,
-            error: copySaveRuntime.lastError,
+            reason: copySaveCompletion.failureReason,
+            error: copySaveCompletion.error,
           }),
         })
         return result
       }
 
-      if (copySaveRuntime.lastResult === 'succeeded') {
+      if (copySaveCompletion?.status === 'succeeded') {
         publishWindowMessage(winInfo, {
           type: 'success',
           content: 'message.saveAsSuccessfully',
         })
-      } else {
+      } else if (copySaveCompletion?.status === 'cancelled') {
         publishWindowMessage(winInfo, {
           type: 'warning',
           content: 'message.cancelSaveAs',
@@ -1023,13 +1247,15 @@ async function executeCommand(winInfo, command, payload) {
       return executeResourceCommandSync(winInfo, command, payload)
 
     case 'document.request-open-dialog':
+    case 'document.open-path':
     case 'dialog.open-target-selected':
     case 'dialog.open-target-cancelled':
     case 'document.open-recent':
     case 'recent.get-list':
     case 'recent.remove':
     case 'recent.clear':
-      return await documentEffectService.executeCommand({
+    {
+      const result = await documentEffectService.executeCommand({
         command,
         payload,
         winInfo,
@@ -1042,6 +1268,15 @@ async function executeCommand(winInfo, command, payload) {
         },
         getSessionSnapshot: () => getSessionSnapshot(winInfo),
       })
+      if (result?.ok === false
+        && (result?.reason === 'open-target-invalid-extension' || result?.reason === 'open-target-not-file')) {
+        publishWindowMessage(winInfo, {
+          type: 'warning',
+          content: 'message.onlyMarkdownFilesCanBeOpened',
+        })
+      }
+      return result
+    }
 
     default:
       return await dispatchCommand(winInfo, command, payload)
@@ -1066,10 +1301,11 @@ function notifyRecentListChanged(recentList) {
 }
 
 async function createNew(filePath, isRecent = false) {
-  const exists = Boolean(filePath && await fs.pathExists(filePath))
+  const normalizedFilePath = resolveDocumentOpenPath(filePath)
+  const exists = Boolean(normalizedFilePath && await fs.pathExists(normalizedFilePath))
   if (exists) {
-    await recent.add(filePath)
-    const existedSession = documentSessionStore.findSessionByComparablePath(filePath)
+    await recent.add(normalizedFilePath)
+    const existedSession = documentSessionStore.findSessionByComparablePath(normalizedFilePath)
     if (existedSession) {
       const existedWinInfo = winInfoList.find(item => item.sessionId === existedSession.sessionId)
       if (existedWinInfo?.win) {
@@ -1098,16 +1334,16 @@ async function createNew(filePath, isRecent = false) {
     },
   })
 
-  const content = exists ? await fs.readFile(filePath, 'utf-8') : ''
+  const content = exists ? await fs.readFile(normalizedFilePath, 'utf-8') : ''
   const winInfo = {
     id,
     win,
     sessionId: null,
     content,
     tempContent: content,
-    path: exists ? filePath : null,
-    missingPath: exists ? null : (filePath || null),
-    missingPathReason: exists || !filePath ? null : MISSING_PATH_REASON.OPEN_TARGET_MISSING,
+    path: exists ? normalizedFilePath : null,
+    missingPath: exists ? null : (normalizedFilePath || null),
+    missingPathReason: exists || !normalizedFilePath ? null : MISSING_PATH_REASON.OPEN_TARGET_MISSING,
     exists,
     isRecent,
     externalWatch: createExternalWatchState(),
@@ -1115,12 +1351,13 @@ async function createNew(filePath, isRecent = false) {
     allowImmediateClose: false,
     forceClose: false,
     lastSnapshot: null,
+    lastClosedManualRequestCompletions: [],
   }
   winInfoList.push(winInfo)
 
   const session = createInitialSession({
     sessionId: commonUtil.createId(),
-    filePath,
+    filePath: normalizedFilePath,
     exists,
     content,
     isRecent,
@@ -1218,6 +1455,7 @@ async function createNew(filePath, isRecent = false) {
 export default {
   deleteEditorWin,
   createNew,
+  openDocumentPath,
   initializeSessionRuntime,
   notifyRecentListChanged,
   executeCommand,

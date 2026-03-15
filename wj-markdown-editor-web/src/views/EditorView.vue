@@ -2,19 +2,26 @@
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
-import { createVNode, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { createVNode, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarkdownEdit from '@/components/editor/MarkdownEdit.vue'
 import PreviewAssetContextMenu from '@/components/editor/PreviewAssetContextMenu.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
 import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
-import { createEditorSessionSnapshotController } from '@/util/document-session/editorSessionSnapshotController.js'
+import {
+  resolveRendererSessionActivationAction,
+  shouldBootstrapSessionSnapshotOnMounted,
+} from '@/util/document-session/rendererSessionActivationStrategy.js'
+import { createRendererSessionEventSubscription } from '@/util/document-session/rendererSessionEventSubscription.js'
+import { createRendererSessionSnapshotController } from '@/util/document-session/rendererSessionSnapshotController.js'
 import { shouldSuppressNextContentSync } from '@/util/editor/contentUpdateMetaUtil.js'
+import { createPreviewAssetDeleteConfirmController } from '@/util/editor/previewAssetDeleteConfirmController.js'
 import {
   getPreviewAssetDeleteReasonMessageKey,
   resolvePreviewAssetDeletePlan,
@@ -25,6 +32,29 @@ import {
   removeAssetFromMarkdown,
   shouldCleanupMarkdownAfterDeleteResult,
 } from '@/util/editor/previewAssetRemovalUtil.js'
+import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
+
+function createPreviewAssetMenuState() {
+  return {
+    open: false,
+    x: 0,
+    y: 0,
+    asset: null,
+    actionContext: null,
+  }
+}
+
+function createMultiReferenceDeleteModalState() {
+  return {
+    open: false,
+    asset: null,
+    actionContext: null,
+    referenceCount: 0,
+    deleteFileEnabled: false,
+    reasonMessageKey: null,
+    loading: false,
+  }
+}
 
 const content = ref('')
 // 确保content已获取再传入组件
@@ -39,35 +69,30 @@ const contentUpdateMeta = ref({
   focus: false,
   scrollIntoView: false,
 })
-const previewAssetMenu = ref({
-  open: false,
-  x: 0,
-  y: 0,
-  asset: null,
-})
-const multiReferenceDeleteModal = ref({
-  open: false,
-  asset: null,
-  referenceCount: 0,
-  deleteFileEnabled: false,
-  reasonMessageKey: null,
-  loading: false,
-})
+const previewAssetMenu = ref(createPreviewAssetMenuState())
+const multiReferenceDeleteModal = ref(createMultiReferenceDeleteModalState())
 let contentUpdateToken = 0
 let applyingSessionContent = false
-const editorSessionSnapshotController = createEditorSessionSnapshotController({
+const previewAssetDeleteConfirmController = createPreviewAssetDeleteConfirmController({
+  createModal: config => Modal.confirm(config),
+})
+const previewAssetSessionController = createPreviewAssetSessionController({
+  // 资源菜单、多引用删除弹窗都绑定在“当前正文 + 当前文档路径”上下文上。
+  // 只要 snapshot 已经换成了新的正文或新的文档身份，就必须立刻把旧 UI 失效掉，
+  // 避免后续还拿着过期 assetInfo 继续删文件或回写旧 Markdown。
+  onContextInvalidated: () => {
+    previewAssetDeleteConfirmController.destroy()
+    closePreviewAssetMenu()
+    closeMultiReferenceDeleteModal({ force: true })
+  },
+})
+const editorSessionSnapshotController = createRendererSessionSnapshotController({
   applySnapshot: (snapshot) => {
     applyDocumentSessionSnapshot(snapshot)
   },
-  promptRecentMissing: (missingPath) => {
-    commonUtil.recentFileNotExists(missingPath)
-  },
-  normalizeBootstrapSnapshot: (snapshot) => {
-    return store.applyDocumentSessionSnapshot(snapshot)
-  },
-  setDocumentTitle: (title) => {
-    window.document.title = title
-  },
+  promptRecentMissing: commonUtil.recentFileNotExists,
+  syncClosePrompt: syncClosePromptSnapshot,
+  store,
 })
 
 function updateEditorContent(nextContent, options = {}) {
@@ -95,6 +120,7 @@ function applyDocumentSessionSnapshot(snapshot) {
     return
   }
 
+  previewAssetSessionController.syncSnapshot(snapshot)
   // 编辑器内容现在只从 document session snapshot 同步，
   // 避免再和旧的 file-content-reloaded / get-file-info 元信息混写。
   updateEditorContent(snapshot.content, {
@@ -107,6 +133,13 @@ function onDocumentSessionSnapshotChanged(snapshot) {
   editorSessionSnapshotController.applyPushedSnapshot(snapshot)
 }
 
+const documentSessionSnapshotSubscription = createRendererSessionEventSubscription({
+  eventName: DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
+  listener: onDocumentSessionSnapshotChanged,
+  addListener: (eventName, listener) => eventEmit.on(eventName, listener),
+  removeListener: (eventName, listener) => eventEmit.remove(eventName, listener),
+})
+
 async function loadCurrentDocumentSessionSnapshot() {
   const requestContext = editorSessionSnapshotController.beginBootstrapRequest()
   const snapshot = await channelUtil.send({ event: 'document.get-session-snapshot' })
@@ -114,14 +147,53 @@ async function loadCurrentDocumentSessionSnapshot() {
 }
 
 onMounted(async () => {
-  eventEmit.on(DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT, onDocumentSessionSnapshotChanged)
-  // 页面初始化时主动拉一次当前 session snapshot，
-  // 确保首屏和后续主进程推送走的是同一套结构。
-  await loadCurrentDocumentSessionSnapshot()
+  editorSessionSnapshotController.activate()
+  documentSessionSnapshotSubscription.activate()
+  // KeepAlive 页面首次进入时，真正的“进入策略”统一交给 onActivated。
+  // 这样 mounted 不会再和 activated 双发 bootstrap。
+  if (shouldBootstrapSessionSnapshotOnMounted({
+    insideKeepAlive: true,
+  }) === true) {
+    await loadCurrentDocumentSessionSnapshot()
+  }
+})
+
+onActivated(() => {
+  editorSessionSnapshotController.activate()
+  documentSessionSnapshotSubscription.activate()
+  const activationAction = resolveRendererSessionActivationAction({
+    hasAppliedSnapshot: editorSessionSnapshotController.hasAppliedSnapshot?.() === true,
+    needsBootstrapOnActivate: editorSessionSnapshotController.needsBootstrapOnActivate?.() === true,
+    storeSnapshot: store.documentSessionSnapshot,
+  })
+
+  if (activationAction === 'replay-store') {
+    // 编辑页在 keep-alive 恢复时优先重放 store 里的最新真快照，
+    // 这样就算当前视图自己的首轮 bootstrap 曾经失效，只要别的活动链路已经把 store 推进到真相，
+    // 本页也能立刻恢复正文，而不用继续空白等待下一次 IPC。
+    applyDocumentSessionSnapshot(store.documentSessionSnapshot)
+    return
+  }
+
+  if (activationAction === 'request-bootstrap') {
+    loadCurrentDocumentSessionSnapshot().then(() => {})
+  }
 })
 
 onBeforeUnmount(() => {
-  eventEmit.remove(DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT, onDocumentSessionSnapshotChanged)
+  editorSessionSnapshotController.dispose()
+  documentSessionSnapshotSubscription.dispose()
+  previewAssetSessionController.invalidateActiveContext({
+    reason: 'before-unmount',
+  })
+})
+
+onDeactivated(() => {
+  editorSessionSnapshotController.deactivate()
+  documentSessionSnapshotSubscription.deactivate()
+  previewAssetSessionController.invalidateActiveContext({
+    reason: 'deactivated',
+  })
 })
 
 watch(() => content.value, (newValue, oldValue) => {
@@ -151,8 +223,7 @@ watch(() => store.config, (newValue) => {
 }, { deep: true, immediate: true })
 
 function closePreviewAssetMenu() {
-  previewAssetMenu.value.open = false
-  previewAssetMenu.value.asset = null
+  previewAssetMenu.value = createPreviewAssetMenuState()
 }
 
 function onAssetContextmenu(assetInfo) {
@@ -161,12 +232,15 @@ function onAssetContextmenu(assetInfo) {
     x: assetInfo.clientX,
     y: assetInfo.clientY,
     asset: assetInfo,
+    actionContext: previewAssetSessionController.captureActionContext(),
   }
 }
 
 function openPreviewAssetInExplorer() {
   const assetInfo = previewAssetMenu.value.asset
-  if (!assetInfo?.resourceUrl) {
+  const actionContext = previewAssetMenu.value.actionContext
+  if (!assetInfo?.resourceUrl || previewAssetSessionController.isActiveContext(actionContext) !== true) {
+    closePreviewAssetMenu()
     return
   }
   channelUtil.send({
@@ -174,12 +248,14 @@ function openPreviewAssetInExplorer() {
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
+      requestContext: previewAssetSessionController.createRequestContext(actionContext),
     },
   })
 }
 
 function onAssetOpen(assetInfo) {
-  if (!assetInfo?.resourceUrl) {
+  const actionContext = previewAssetSessionController.captureActionContext()
+  if (!assetInfo?.resourceUrl || previewAssetSessionController.isActiveContext(actionContext) !== true) {
     return
   }
   channelUtil.send({
@@ -187,6 +263,7 @@ function onAssetOpen(assetInfo) {
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
+      requestContext: previewAssetSessionController.createRequestContext(actionContext),
     },
   })
 }
@@ -203,18 +280,11 @@ function resolveComparableAssetPath(rawPath) {
   }) || rawPath
 }
 
-function closeMultiReferenceDeleteModal() {
-  if (multiReferenceDeleteModal.value.loading) {
+function closeMultiReferenceDeleteModal(options = {}) {
+  if (options.force !== true && multiReferenceDeleteModal.value.loading) {
     return
   }
-  multiReferenceDeleteModal.value = {
-    open: false,
-    asset: null,
-    referenceCount: 0,
-    deleteFileEnabled: false,
-    reasonMessageKey: null,
-    loading: false,
-  }
+  multiReferenceDeleteModal.value = createMultiReferenceDeleteModalState()
 }
 
 function getAssetReferenceCount(assetInfo) {
@@ -225,22 +295,31 @@ function getAssetReferenceCount(assetInfo) {
 
 async function applyAssetDelete(nextContent, assetInfo, options = {}) {
   const updateMarkdownContent = () => {
+    if (previewAssetSessionController.isActiveContext(options.actionContext) !== true) {
+      return false
+    }
     updateEditorContent(nextContent, options)
+    return true
   }
 
   if (options.deleteFile !== true) {
-    updateMarkdownContent()
-    return true
+    return updateMarkdownContent()
   }
 
   const deleteResult = await channelUtil.send({
     event: 'document.resource.delete-local',
     data: {
       resourceUrl: assetInfo.resourceUrl,
+      requestContext: previewAssetSessionController.createRequestContext(options.actionContext),
     },
   })
+  if (previewAssetSessionController.isActiveContext(options.actionContext) !== true) {
+    return false
+  }
   if (deleteResult?.ok === true) {
-    updateMarkdownContent()
+    if (updateMarkdownContent() !== true) {
+      return false
+    }
     const reasonMessageKey = getPreviewAssetDeleteReasonMessageKey(deleteResult.reason)
     if (deleteResult.reason !== 'deleted' && reasonMessageKey) {
       message.warning(t(reasonMessageKey))
@@ -250,7 +329,9 @@ async function applyAssetDelete(nextContent, assetInfo, options = {}) {
 
   const reasonMessageKey = getPreviewAssetDeleteReasonMessageKey(deleteResult?.reason)
   if (shouldCleanupMarkdownAfterDeleteResult(deleteResult)) {
-    updateMarkdownContent()
+    if (updateMarkdownContent() !== true) {
+      return false
+    }
     message.warning(t(reasonMessageKey || 'previewAssetMenu.deleteFileFailed'))
     return true
   }
@@ -260,6 +341,9 @@ async function applyAssetDelete(nextContent, assetInfo, options = {}) {
 }
 
 async function deleteCurrentAssetReference(assetInfo, options = {}) {
+  if (previewAssetSessionController.isActiveContext(options.actionContext) !== true) {
+    return false
+  }
   const removeResult = removeAssetFromMarkdown(content.value, assetInfo)
   if (!removeResult.removed) {
     message.warning(t('previewAssetMenu.removeMarkdownNotFound'))
@@ -274,6 +358,9 @@ async function deleteCurrentAssetReference(assetInfo, options = {}) {
 }
 
 async function deleteAllAssetReferences(assetInfo, options = {}) {
+  if (previewAssetSessionController.isActiveContext(options.actionContext) !== true) {
+    return false
+  }
   const removeResult = removeAllAssetReferencesFromMarkdown(content.value, assetInfo, {
     resolveComparablePath: resolveComparableAssetPath,
   })
@@ -283,19 +370,20 @@ async function deleteAllAssetReferences(assetInfo, options = {}) {
   }
   return await applyAssetDelete(removeResult.content, assetInfo, {
     deleteFile: options.deleteFile === true,
+    actionContext: options.actionContext,
     cursorPosition: removeResult.cursorPosition,
     focus: true,
     scrollIntoView: true,
   })
 }
 
-async function requestSingleReferenceDelete(assetInfo, deletePlan) {
+async function requestSingleReferenceDelete(assetInfo, deletePlan, actionContext) {
   const deleteFile = deletePlan?.deleteFileEnabled === true
   const reasonMessage = deletePlan?.reasonMessageKey
     ? t(deletePlan.reasonMessageKey)
     : t('previewAssetMenu.deleteFileFailed')
 
-  Modal.confirm({
+  previewAssetDeleteConfirmController.open({
     title: t('prompt'),
     icon: createVNode(ExclamationCircleOutlined),
     content: deleteFile
@@ -304,7 +392,10 @@ async function requestSingleReferenceDelete(assetInfo, deletePlan) {
     okText: t('okText'),
     cancelText: t('cancelText'),
     onOk: async () => {
-      await deleteCurrentAssetReference(assetInfo, { deleteFile })
+      await deleteCurrentAssetReference(assetInfo, {
+        deleteFile,
+        actionContext,
+      })
     },
   })
 }
@@ -316,6 +407,7 @@ async function confirmDeleteAllReferences() {
   }
   multiReferenceDeleteModal.value.loading = true
   const success = await deleteAllAssetReferences(assetInfo, {
+    actionContext: multiReferenceDeleteModal.value.actionContext,
     deleteFile: multiReferenceDeleteModal.value.deleteFileEnabled === true,
   })
   multiReferenceDeleteModal.value.loading = false
@@ -330,7 +422,10 @@ async function confirmDeleteCurrentReferenceOnly() {
     return
   }
   multiReferenceDeleteModal.value.loading = true
-  const success = await deleteCurrentAssetReference(assetInfo, { deleteFile: false })
+  const success = await deleteCurrentAssetReference(assetInfo, {
+    deleteFile: false,
+    actionContext: multiReferenceDeleteModal.value.actionContext,
+  })
   multiReferenceDeleteModal.value.loading = false
   if (success) {
     closeMultiReferenceDeleteModal()
@@ -339,7 +434,9 @@ async function confirmDeleteCurrentReferenceOnly() {
 
 async function deletePreviewAsset() {
   const assetInfo = previewAssetMenu.value.asset
-  if (!assetInfo) {
+  const actionContext = previewAssetMenu.value.actionContext
+  if (!assetInfo || previewAssetSessionController.isActiveContext(actionContext) !== true) {
+    closePreviewAssetMenu()
     return
   }
 
@@ -348,8 +445,12 @@ async function deletePreviewAsset() {
     event: 'resource.get-info',
     data: {
       resourceUrl: assetInfo.resourceUrl,
+      requestContext: previewAssetSessionController.createRequestContext(actionContext),
     },
   })
+  if (previewAssetSessionController.isActiveContext(actionContext) !== true) {
+    return
+  }
   const deletePlan = resolvePreviewAssetDeletePlan(resourceInfo, referenceCount)
   if (deletePlan.mode === 'blocked') {
     message.warning(t(deletePlan.blockMessageKey || 'previewAssetMenu.deleteFileFailed'))
@@ -357,13 +458,14 @@ async function deletePreviewAsset() {
   }
 
   if (referenceCount <= 1) {
-    await requestSingleReferenceDelete(assetInfo, deletePlan)
+    await requestSingleReferenceDelete(assetInfo, deletePlan, actionContext)
     return
   }
 
   multiReferenceDeleteModal.value = {
     open: true,
     asset: assetInfo,
+    actionContext,
     referenceCount,
     deleteFileEnabled: deletePlan.deleteFileEnabled,
     reasonMessageKey: deletePlan.reasonMessageKey,

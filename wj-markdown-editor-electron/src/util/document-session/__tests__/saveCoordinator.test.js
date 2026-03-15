@@ -114,6 +114,121 @@ describe('saveCoordinator', () => {
     })
   })
 
+  it('挂靠到进行中 auto-save 的 manual-save 请求，必须在当前 job 完成时单独结算，不能继续挂到后续补写 job', () => {
+    const coordinator = createDeterministicCoordinator()
+    const session = createBoundFileSession({
+      sessionId: 'manual-request-follow-up-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000001014,
+    })
+
+    session.editorSnapshot.content = '# 第一版内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000001015
+    session.saveRuntime.requestedRevision = 1
+
+    const autoSaveRequested = coordinator.requestSave(session, {
+      trigger: 'blur-auto-save',
+    })
+    const manualSaveRequested = coordinator.requestSave(autoSaveRequested.session, {
+      trigger: 'manual-save',
+    })
+    const manualRequestId = manualSaveRequested.manualRequestId
+
+    // 模拟第一轮保存尚未完成时，用户又继续编辑出新的版本。
+    manualSaveRequested.session.editorSnapshot.content = '# 第二版内容'
+    manualSaveRequested.session.editorSnapshot.revision = 2
+    manualSaveRequested.session.editorSnapshot.updatedAt = 1700000001016
+    manualSaveRequested.session.saveRuntime.requestedRevision = 2
+
+    const saveSucceeded = coordinator.handleSaveSucceeded(manualSaveRequested.session, {
+      jobId: 'job-1',
+      revision: 1,
+      content: '# 第一版内容',
+      path: 'C:/docs/demo.md',
+      trigger: 'blur-auto-save',
+      savedAt: 1700000001017,
+      stat: {
+        mtimeMs: 1700000001017,
+      },
+    })
+
+    expect(manualRequestId).toBe('manual-save-request-1')
+    expect(saveSucceeded.session.saveRuntime.activeManualRequestIds).toEqual([])
+    expect(saveSucceeded.session.saveRuntime.completedManualRequests).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        requestId: 'manual-save-request-1',
+        status: 'succeeded',
+        error: null,
+        saved: true,
+        documentPath: 'C:/docs/demo.md',
+      }),
+    ]))
+    expect(saveSucceeded.session.saveRuntime.inFlightJobId).toBe('job-2')
+    expect(saveSucceeded.effects).toContainEqual({
+      type: 'execute-save',
+      job: expect.objectContaining({
+        jobId: 'job-2',
+        revision: 2,
+        content: '# 第二版内容',
+        trigger: 'manual-save',
+      }),
+    })
+  })
+
+  it('同一条保存链路上挂靠超过 20 个 manual request 时，不能裁掉较早 completion 让等待方永远收不到结果', () => {
+    const coordinator = createDeterministicCoordinator()
+    const session = createBoundFileSession({
+      sessionId: 'many-manual-requests-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000001018,
+    })
+
+    session.editorSnapshot.content = '# 第一版内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000001019
+    session.saveRuntime.requestedRevision = 1
+
+    const autoSaveRequested = coordinator.requestSave(session, {
+      trigger: 'blur-auto-save',
+    })
+    let currentSession = autoSaveRequested.session
+
+    for (let index = 0; index < 25; index += 1) {
+      const manualSaveRequested = coordinator.requestSave(currentSession, {
+        trigger: 'manual-save',
+      })
+      currentSession = manualSaveRequested.session
+    }
+
+    const saveSucceeded = coordinator.handleSaveSucceeded(currentSession, {
+      jobId: 'job-1',
+      revision: 1,
+      content: '# 第一版内容',
+      path: 'C:/docs/demo.md',
+      trigger: 'blur-auto-save',
+      savedAt: 1700000001020,
+      stat: {
+        mtimeMs: 1700000001020,
+      },
+    })
+
+    expect(saveSucceeded.session.saveRuntime.activeManualRequestIds).toEqual([])
+    expect(saveSucceeded.session.saveRuntime.completedManualRequests).toHaveLength(25)
+    expect(saveSucceeded.session.saveRuntime.completedManualRequests[0]).toEqual(expect.objectContaining({
+      requestId: 'manual-save-request-1',
+      status: 'succeeded',
+    }))
+    expect(saveSucceeded.session.saveRuntime.completedManualRequests[24]).toEqual(expect.objectContaining({
+      requestId: 'manual-save-request-25',
+      status: 'succeeded',
+    }))
+  })
+
   it('watcher 已先观测到新的磁盘版本时，save.succeeded 只能更新 persistedSnapshot，不能把 diskSnapshot 回写成本地保存版本', () => {
     const coordinator = createDeterministicCoordinator()
     const session = createBoundFileSession({
@@ -215,6 +330,16 @@ describe('saveCoordinator', () => {
     expect(cancelled.session.documentSource.exists).toBe(false)
     expect(cancelled.session.saveRuntime.status).toBe('idle')
     expect(cancelled.session.saveRuntime.inFlightJobId).toBeNull()
+    expect(cancelled.session.saveRuntime.activeManualRequestIds).toEqual([])
+    expect(cancelled.session.saveRuntime.completedManualRequests).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        requestId: 'manual-save-request-1',
+        status: 'cancelled',
+        error: null,
+        saved: false,
+        documentPath: null,
+      }),
+    ]))
     expect(cancelled.session.editorSnapshot.content).toBe('# 草稿内容')
   })
 
@@ -363,19 +488,21 @@ describe('saveCoordinator', () => {
     })
 
     expect(copyRequested.effects).toEqual([
-      {
+      expect.objectContaining({
         type: 'open-copy-dialog',
-      },
+        requestId: 'copy-save-request-1',
+      }),
     ])
     expect(copySelected.effects).toEqual([
       {
         type: 'dispatch-command',
         command: {
           type: 'copy-save.failed',
-          payload: {
+          payload: expect.objectContaining({
+            requestId: 'copy-save-request-1',
             reason: 'same-path',
             path: 'c:\\docs\\demo.md',
-          },
+          }),
         },
       },
     ])
@@ -409,6 +536,112 @@ describe('saveCoordinator', () => {
     expect(copyRequested.session.saveRuntime.status).toBe('queued')
     expect(copyCancelled.session.saveRuntime.inFlightJobId).toBe('job-1')
     expect(copyCancelled.session.saveRuntime.status).toBe('queued')
+  })
+
+  it('旧 copy-save job 完成后，不能覆盖更新请求仍在等待选路径的运行态', () => {
+    const coordinator = createDeterministicCoordinator()
+    const session = createBoundFileSession({
+      sessionId: 'copy-request-race-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000001042,
+    })
+
+    session.editorSnapshot.content = '# 副本内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000001043
+
+    const firstRequested = coordinator.requestCopySave(session)
+    const firstResolved = coordinator.resolveCopyTarget(firstRequested.session, {
+      path: 'C:/docs/demo-copy-1.md',
+    })
+    const secondRequested = coordinator.requestCopySave(firstResolved.session)
+    const firstSucceeded = coordinator.handleCopySaveSucceeded(secondRequested.session, {
+      jobId: 'job-1',
+      path: 'C:/docs/demo-copy-1.md',
+    })
+
+    expect(secondRequested.session.copySaveRuntime.pendingSelection).toBe(true)
+    expect(firstSucceeded.session.copySaveRuntime.pendingSelection).toBe(true)
+    expect(firstSucceeded.session.copySaveRuntime.status).toBe('awaiting-path-selection')
+    expect(firstSucceeded.session.copySaveRuntime.lastResult).toBe('pending')
+  })
+
+  it('新 save-copy 请求命中 same-path 失败时，不能误删旧 request 仍在进行中的副本写盘 job', () => {
+    const coordinator = createDeterministicCoordinator()
+    const session = createBoundFileSession({
+      sessionId: 'copy-same-path-race-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000001044,
+    })
+
+    session.editorSnapshot.content = '# 副本内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000001045
+
+    const firstRequested = coordinator.requestCopySave(session)
+    const firstResolved = coordinator.resolveCopyTarget(firstRequested.session, {
+      path: 'C:/docs/demo-copy-1.md',
+      requestId: firstRequested.copySaveRequestId,
+    })
+    const secondRequested = coordinator.requestCopySave(firstResolved.session)
+    const samePathRejected = coordinator.resolveCopyTarget(secondRequested.session, {
+      path: 'C:/docs/demo.md',
+      requestId: secondRequested.copySaveRequestId,
+    })
+    const samePathPayload = samePathRejected.effects[0]?.command?.payload
+    const samePathFailed = coordinator.handleCopySaveFailed(samePathRejected.session, samePathPayload)
+
+    expect(samePathPayload).toEqual(expect.objectContaining({
+      requestId: 'copy-save-request-2',
+      reason: 'same-path',
+      path: 'C:/docs/demo.md',
+    }))
+    expect(samePathFailed.session.copySaveRuntime.activeJobs).toEqual({
+      'job-1': {
+        requestId: 'copy-save-request-1',
+        path: 'C:/docs/demo-copy-1.md',
+      },
+    })
+
+    const secondCompletion = coordinator.consumeCopySaveCompletion(samePathFailed.session, {
+      requestId: 'copy-save-request-2',
+    })
+
+    expect(secondCompletion).toEqual({
+      requestId: 'copy-save-request-2',
+      status: 'failed',
+      error: null,
+      failureReason: 'same-path',
+      path: 'C:/docs/demo.md',
+    })
+    expect(samePathFailed.session.copySaveRuntime.activeJobs).toEqual({
+      'job-1': {
+        requestId: 'copy-save-request-1',
+        path: 'C:/docs/demo-copy-1.md',
+      },
+    })
+
+    const firstSucceeded = coordinator.handleCopySaveSucceeded(samePathFailed.session, {
+      jobId: 'job-1',
+      requestId: 'copy-save-request-1',
+      path: 'C:/docs/demo-copy-1.md',
+    })
+    const firstCompletion = coordinator.consumeCopySaveCompletion(firstSucceeded.session, {
+      requestId: 'copy-save-request-1',
+    })
+
+    expect(firstCompletion).toEqual({
+      requestId: 'copy-save-request-1',
+      status: 'succeeded',
+      error: null,
+      failureReason: null,
+      path: 'C:/docs/demo-copy-1.md',
+    })
+    expect(firstSucceeded.session.copySaveRuntime.activeJobs).toEqual({})
   })
 
   it('waitingSaveJobId 挂靠当前 job 时，即使 revision 递增但最新内容已被当前 save 覆盖，仍必须正确关闭窗口', () => {

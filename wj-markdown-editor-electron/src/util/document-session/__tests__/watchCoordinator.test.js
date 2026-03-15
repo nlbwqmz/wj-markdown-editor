@@ -313,6 +313,46 @@ describe('watchCoordinator', () => {
       .toBe(firstChangedAfterRestored.session.diskSnapshot.versionHash)
   })
 
+  it('watch.file-restored 自带 diskContent 时，必须立刻恢复磁盘基线，避免恢复后的 change 被去重吞掉后仍停在 missing', () => {
+    const coordinator = createWatchCoordinator({
+      now: () => 1700000003011,
+    })
+    const session = createSession()
+    session.editorSnapshot.content = '# 恢复后的磁盘内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000003011
+
+    dispatchWatchCommand(coordinator, session, 'watch.file-missing', {
+      bindingToken: 1,
+      observedAt: 1700000003012,
+      error: {
+        name: 'Error',
+        message: 'ENOENT',
+        code: 'ENOENT',
+      },
+    })
+
+    const restored = dispatchWatchCommand(coordinator, session, 'watch.file-restored', {
+      bindingToken: 1,
+      observedAt: 1700000003013,
+      diskContent: '# 恢复后的磁盘内容',
+      diskStat: {
+        mtimeMs: 1700000003013,
+      },
+    })
+
+    expect(restored.effects).toEqual([])
+    expect(restored.session.documentSource.exists).toBe(true)
+    expect(restored.session.diskSnapshot.content).toBe('# 恢复后的磁盘内容')
+    expect(restored.session.diskSnapshot.exists).toBe(true)
+    expect(restored.session.diskSnapshot.observedAt).toBe(1700000003013)
+    expect(restored.session.externalRuntime.pendingExternalChange).toBeNull()
+    expect(restored.session.externalRuntime.lastKnownDiskVersionHash)
+      .toBe(restored.session.diskSnapshot.versionHash)
+    expect(restored.session.watchRuntime.fileExists).toBe(true)
+    expect(restored.session.watchRuntime.eventFloorObservedAt).toBe(1700000003013)
+  })
+
   it('watch.file-restored 后的首次有效读盘若仍有差异，必须进入新的 pending-user，而不是直接回落为 idle', () => {
     const coordinator = createWatchCoordinator({
       now: () => 1700000003012,

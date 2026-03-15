@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import path from 'node:path'
+import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 
 function createContentHash(content = '') {
   return crypto.createHash('sha256').update(content, 'utf8').digest('hex')
@@ -15,6 +16,10 @@ function ensureSaveRuntime(session) {
       requestedRevision: 0,
       trigger: null,
       lastError: null,
+      manualRequestSequence: 0,
+      activeManualRequestIds: [],
+      manualRequestTargets: {},
+      completedManualRequests: [],
     }
   }
 
@@ -33,6 +38,154 @@ function ensureSaveRuntime(session) {
     // 绝不能再拿“当前 diskSnapshot 和 lastKnownDiskVersionHash 恰好相等”这种易受竞态污染的条件兜底。
     session.saveRuntime.inFlightBaseDiskVersionHash = null
   }
+  if (!Number.isFinite(session.saveRuntime.manualRequestSequence)
+    || session.saveRuntime.manualRequestSequence < 0) {
+    session.saveRuntime.manualRequestSequence = 0
+  }
+  if (!Array.isArray(session.saveRuntime.activeManualRequestIds)) {
+    session.saveRuntime.activeManualRequestIds = []
+  }
+  if (!session.saveRuntime.manualRequestTargets || typeof session.saveRuntime.manualRequestTargets !== 'object') {
+    session.saveRuntime.manualRequestTargets = {}
+  }
+  if (!Array.isArray(session.saveRuntime.completedManualRequests)) {
+    session.saveRuntime.completedManualRequests = []
+  }
+}
+
+function createManualSaveRequest(session) {
+  ensureSaveRuntime(session)
+  session.saveRuntime.manualRequestSequence = (session.saveRuntime.manualRequestSequence || 0) + 1
+  const requestId = `manual-save-request-${session.saveRuntime.manualRequestSequence}`
+  session.saveRuntime.completedManualRequests = session.saveRuntime.completedManualRequests
+    .filter(request => request?.requestId !== requestId)
+  session.saveRuntime.activeManualRequestIds.push(requestId)
+  // 每个 manual request 都要锁定“用户发起时想保存到哪一个 revision”，
+  // 后续 save.succeeded 只能结算已经覆盖到该 revision 的请求。
+  session.saveRuntime.manualRequestTargets[requestId] = session.editorSnapshot?.revision || 0
+  return requestId
+}
+
+function isManualRequestUserVisibleSaved(session, {
+  status,
+  saved,
+  documentPath,
+}) {
+  if (status !== 'succeeded') {
+    return false
+  }
+
+  // 只要外部冲突仍未被命令层收敛，这次 manual request 就不能对 compat facade 宣称“保存成功”，
+  // 否则 renderer 还挂着 externalPrompt，主进程却返回 true，会把用户带回旧的竞态语义。
+  if (session.externalRuntime?.pendingExternalChange) {
+    return false
+  }
+
+  const targetPath = documentPath === undefined
+    ? session.documentSource?.path
+    : documentPath
+  const currentSaved = Boolean(session.documentSource?.path) && deriveDocumentSnapshot(session).saved
+
+  return Boolean(targetPath) && (typeof saved === 'boolean' ? saved : currentSaved)
+}
+
+function buildManualRequestCompletion(session, {
+  requestId,
+  status,
+  error = null,
+  saved,
+  documentPath,
+}) {
+  const needsPostReconcileRefresh = status === 'succeeded'
+    && Boolean(session.externalRuntime?.pendingExternalChange)
+
+  return {
+    requestId,
+    status,
+    error: serializeError(error),
+    // 兼容层返回值必须绑定“这次 manual request 在完成当下的真相”，
+    // 不能再回头读取未来某个时间点的 session，否则会被后续新编辑/新自动保存抢走结果。
+    saved: isManualRequestUserVisibleSaved(session, {
+      status,
+      saved,
+      documentPath,
+    }),
+    needsPostReconcileRefresh,
+    documentPath: documentPath === undefined
+      ? (session.documentSource?.path || null)
+      : (documentPath || null),
+  }
+}
+
+function completeManualSaveRequests(session, {
+  status,
+  error = null,
+  requestIds = null,
+  saved,
+  documentPath,
+}) {
+  ensureSaveRuntime(session)
+  const targetRequestIds = Array.isArray(requestIds)
+    ? requestIds.filter(Boolean)
+    : [...session.saveRuntime.activeManualRequestIds]
+
+  if (targetRequestIds.length === 0) {
+    return
+  }
+
+  const requestIdSet = new Set(targetRequestIds)
+  session.saveRuntime.activeManualRequestIds = session.saveRuntime.activeManualRequestIds
+    .filter(requestId => !requestIdSet.has(requestId))
+  session.saveRuntime.completedManualRequests = session.saveRuntime.completedManualRequests
+    .filter(request => !requestIdSet.has(request?.requestId))
+
+  for (const requestId of targetRequestIds) {
+    delete session.saveRuntime.manualRequestTargets[requestId]
+    session.saveRuntime.completedManualRequests.push(buildManualRequestCompletion(session, {
+      requestId,
+      status,
+      error,
+      saved,
+      documentPath,
+    }))
+  }
+}
+
+function refreshCompletedManualSaveRequests(session, {
+  requestIds = null,
+} = {}) {
+  ensureSaveRuntime(session)
+
+  const requestIdSet = Array.isArray(requestIds)
+    ? new Set(requestIds.filter(Boolean))
+    : null
+
+  session.saveRuntime.completedManualRequests = session.saveRuntime.completedManualRequests.map((request) => {
+    if (!request || request.status !== 'succeeded') {
+      return request
+    }
+
+    if (requestIdSet && !requestIdSet.has(request.requestId)) {
+      return request
+    }
+
+    if (request.needsPostReconcileRefresh !== true) {
+      return request
+    }
+
+    return {
+      ...request,
+      // `save.succeeded` 之后 watchCoordinator 还可能在同一轮命令分发里把
+      // pending external change 收敛成 noop。这里必须在收敛完成后再基于
+      // 当前 session 真相重算一次 compat `saved`，否则 Ctrl+S 会被较早的
+      // provisional completion 卡成 false。
+      saved: isManualRequestUserVisibleSaved(session, {
+        status: request.status,
+        documentPath: request.documentPath,
+      }),
+      needsPostReconcileRefresh: false,
+    }
+  })
 }
 
 function ensureCopySaveRuntime(session) {
@@ -44,13 +197,188 @@ function ensureCopySaveRuntime(session) {
     session.copySaveRuntime = {
       status: 'idle',
       activeJobId: null,
+      activeJobs: {},
       pendingSelection: false,
+      pendingSelectionRequestId: null,
       targetPath: null,
       lastError: null,
       lastResult: 'idle',
       lastFailureReason: null,
+      requestSequence: 0,
+      completedRequests: [],
     }
   }
+
+  if (!session.copySaveRuntime.activeJobs || typeof session.copySaveRuntime.activeJobs !== 'object') {
+    session.copySaveRuntime.activeJobs = {}
+  }
+  if (!('pendingSelectionRequestId' in session.copySaveRuntime)) {
+    session.copySaveRuntime.pendingSelectionRequestId = null
+  }
+  if (!Number.isFinite(session.copySaveRuntime.requestSequence)
+    || session.copySaveRuntime.requestSequence < 0) {
+    session.copySaveRuntime.requestSequence = 0
+  }
+  if (!Array.isArray(session.copySaveRuntime.completedRequests)) {
+    session.copySaveRuntime.completedRequests = []
+  }
+}
+
+function getCopySaveActiveJobIdList(session) {
+  ensureCopySaveRuntime(session)
+  return Object.keys(session.copySaveRuntime.activeJobs)
+}
+
+function syncCopySaveRuntimeStatus(session) {
+  ensureCopySaveRuntime(session)
+  const activeJobIdList = getCopySaveActiveJobIdList(session)
+  session.copySaveRuntime.activeJobId = activeJobIdList.length > 0
+    ? activeJobIdList[activeJobIdList.length - 1]
+    : null
+
+  if (session.copySaveRuntime.pendingSelection === true) {
+    // 只要更新请求仍在等待用户选路径，旧 job 的结果就不能覆盖掉当前“仍在进行中”的 UI 真相。
+    session.copySaveRuntime.status = 'awaiting-path-selection'
+    session.copySaveRuntime.lastResult = 'pending'
+    session.copySaveRuntime.lastError = null
+    session.copySaveRuntime.lastFailureReason = null
+    return session.copySaveRuntime
+  }
+
+  if (activeJobIdList.length > 0) {
+    // 只要还有任何副本写盘在跑，外部兼容层看到的都必须是“仍在进行中”，
+    // 不能被更早完成的旧请求提前改成 succeeded / failed。
+    session.copySaveRuntime.status = 'running'
+    session.copySaveRuntime.lastResult = 'pending'
+    session.copySaveRuntime.lastError = null
+    session.copySaveRuntime.lastFailureReason = null
+    return session.copySaveRuntime
+  }
+
+  session.copySaveRuntime.status = 'idle'
+  const latestCompletion = session.copySaveRuntime.completedRequests.length > 0
+    ? session.copySaveRuntime.completedRequests[session.copySaveRuntime.completedRequests.length - 1]
+    : null
+
+  if (!latestCompletion) {
+    session.copySaveRuntime.lastResult = 'idle'
+    session.copySaveRuntime.lastError = null
+    session.copySaveRuntime.lastFailureReason = null
+    return session.copySaveRuntime
+  }
+
+  session.copySaveRuntime.lastResult = latestCompletion.status
+  session.copySaveRuntime.lastError = latestCompletion.error
+  session.copySaveRuntime.lastFailureReason = latestCompletion.failureReason
+  return session.copySaveRuntime
+}
+
+function createCopySaveRequest(session) {
+  ensureCopySaveRuntime(session)
+  session.copySaveRuntime.requestSequence = (session.copySaveRuntime.requestSequence || 0) + 1
+  const requestId = `copy-save-request-${session.copySaveRuntime.requestSequence}`
+  session.copySaveRuntime.completedRequests = session.copySaveRuntime.completedRequests
+    .filter(request => request?.requestId !== requestId)
+  return requestId
+}
+
+function completeCopySaveRequest(session, {
+  requestId,
+  status,
+  error = null,
+  failureReason = null,
+  path = null,
+}) {
+  ensureCopySaveRuntime(session)
+  if (!requestId) {
+    return null
+  }
+
+  const completion = {
+    requestId,
+    status,
+    error: serializeError(error),
+    failureReason,
+    path: path || null,
+  }
+
+  session.copySaveRuntime.completedRequests = session.copySaveRuntime.completedRequests
+    .filter(request => request?.requestId !== requestId)
+  session.copySaveRuntime.completedRequests.push(completion)
+  return completion
+}
+
+function consumeCopySaveCompletion(session, {
+  requestId,
+} = {}) {
+  ensureCopySaveRuntime(session)
+  if (!requestId) {
+    return null
+  }
+
+  const completionIndex = session.copySaveRuntime.completedRequests
+    .findIndex(request => request?.requestId === requestId)
+  if (completionIndex < 0) {
+    return null
+  }
+
+  const [completion] = session.copySaveRuntime.completedRequests.splice(completionIndex, 1)
+  syncCopySaveRuntimeStatus(session)
+  return completion || null
+}
+
+function getCopySaveRequestId(session, requestId) {
+  ensureCopySaveRuntime(session)
+  if (requestId) {
+    return requestId
+  }
+
+  return session.copySaveRuntime.pendingSelectionRequestId || null
+}
+
+function deleteCopySaveActiveJob(session, jobId) {
+  ensureCopySaveRuntime(session)
+  if (!jobId || !session.copySaveRuntime.activeJobs[jobId]) {
+    return null
+  }
+
+  const activeJob = session.copySaveRuntime.activeJobs[jobId]
+  delete session.copySaveRuntime.activeJobs[jobId]
+  return activeJob
+}
+
+function findCopySaveActiveJobIdByRequestId(session, requestId) {
+  ensureCopySaveRuntime(session)
+  if (!requestId) {
+    return null
+  }
+
+  const matchedEntry = Object.entries(session.copySaveRuntime.activeJobs)
+    .find(([, activeJob]) => activeJob?.requestId === requestId)
+  return matchedEntry?.[0] || null
+}
+
+function consumeCopySaveActiveJobByCompletionPayload(session, payload) {
+  ensureCopySaveRuntime(session)
+
+  // copy-save 的完成回流现在既可能来自真实写盘 job，
+  // 也可能来自 same-path 这类“请求级失败、根本没有落到 execute-copy-save”的分支。
+  // 因此这里必须优先按显式 jobId 结算；只有 jobId 缺失时，才允许按 requestId
+  // 查找同 request 的活动 job。若当前 payload 只是 request 级失败且根本没有匹配 job，
+  // 就必须返回 null，绝不能再误删别的 request 仍在进行中的 active job。
+  if (payload?.jobId) {
+    return deleteCopySaveActiveJob(session, payload.jobId)
+  }
+
+  if (payload?.requestId) {
+    const matchedJobId = findCopySaveActiveJobIdByRequestId(session, payload.requestId)
+    if (!matchedJobId) {
+      return null
+    }
+    return deleteCopySaveActiveJob(session, matchedJobId)
+  }
+
+  return deleteCopySaveActiveJob(session, session.copySaveRuntime.activeJobId)
 }
 
 function ensureCloseRuntime(session) {
@@ -102,6 +430,32 @@ function normalizeComparablePath(targetPath) {
   }
 
   return path.posix.resolve(trimmedPath.replaceAll('\\', '/'))
+}
+
+function getTriggerPriority(trigger) {
+  switch (trigger) {
+    case 'close-auto-save':
+      return 3
+    case 'manual-save':
+      return 2
+    case 'blur-auto-save':
+      return 1
+    default:
+      return 0
+  }
+}
+
+function mergeSaveTrigger(currentTrigger, incomingTrigger) {
+  if (!incomingTrigger) {
+    return currentTrigger || null
+  }
+  if (!currentTrigger) {
+    return incomingTrigger
+  }
+
+  return getTriggerPriority(incomingTrigger) >= getTriggerPriority(currentTrigger)
+    ? incomingTrigger
+    : currentTrigger
 }
 
 function createSaveJob({ session, path: targetPath, trigger, createJobId }) {
@@ -200,6 +554,11 @@ function beginSave(session, { trigger, path: targetPath, createJobId }) {
     session.saveRuntime.trigger = trigger
     session.saveRuntime.lastError = null
     session.saveRuntime.inFlightBaseDiskVersionHash = null
+    if (trigger === 'manual-save') {
+      completeManualSaveRequests(session, {
+        status: 'succeeded',
+      })
+    }
     return {
       session,
       effects: [],
@@ -270,15 +629,38 @@ export function createSaveCoordinator({
       path: targetPath = null,
     }) {
       ensureSaveRuntime(session)
+      const manualRequestId = trigger === 'manual-save'
+        ? createManualSaveRequest(session)
+        : null
+
+      if (session.saveRuntime.status === 'awaiting-path-selection'
+        && session.saveRuntime.pendingSelection?.type === 'save') {
+        session.saveRuntime.trigger = mergeSaveTrigger(session.saveRuntime.trigger, trigger)
+        if (session.saveRuntime.pendingSaveContext) {
+          session.saveRuntime.pendingSaveContext.trigger = mergeSaveTrigger(
+            session.saveRuntime.pendingSaveContext.trigger,
+            trigger,
+          )
+        }
+        return {
+          session,
+          effects: [],
+          manualRequestId,
+        }
+      }
 
       // 单 session 单写盘的约束必须先于“草稿首次保存要选路径”生效。
       // 否则未命名草稿在第一次 save 已经拿到目标路径并进入 in-flight 写盘后，
       // 因为 documentSource.path 还没等到 save.succeeded 回填，就会被误判成“又要首次保存”，
       // 继而再次弹出保存对话框，破坏当前进行中的保存态。
       if (session.saveRuntime.inFlightJobId) {
+        // 新请求不能并发写盘，但必须保留更强的触发源语义。
+        // 比如 blur-auto-save 进行中按下 Ctrl+S，后续失败提示和补写都要升级成 manual-save。
+        session.saveRuntime.trigger = mergeSaveTrigger(session.saveRuntime.trigger, trigger)
         return {
           session,
           effects: [],
+          manualRequestId,
         }
       }
 
@@ -302,20 +684,36 @@ export function createSaveCoordinator({
               trigger,
             },
           ],
+          manualRequestId,
         }
       }
 
-      return beginSave(session, {
+      const saveStarted = beginSave(session, {
         trigger,
         path: targetPath,
         createJobId,
       })
+      return {
+        ...saveStarted,
+        manualRequestId,
+      }
     },
 
     requestCopySave(session) {
       ensureCopySaveRuntime(session)
+      if (session.copySaveRuntime.pendingSelection === true
+        && session.copySaveRuntime.pendingSelectionRequestId) {
+        return {
+          session,
+          effects: [],
+          copySaveRequestId: session.copySaveRuntime.pendingSelectionRequestId,
+        }
+      }
+
+      const requestId = createCopySaveRequest(session)
       session.copySaveRuntime.status = 'awaiting-path-selection'
       session.copySaveRuntime.pendingSelection = true
+      session.copySaveRuntime.pendingSelectionRequestId = requestId
       session.copySaveRuntime.targetPath = null
       session.copySaveRuntime.lastError = null
       session.copySaveRuntime.lastResult = 'pending'
@@ -326,8 +724,10 @@ export function createSaveCoordinator({
         effects: [
           {
             type: 'open-copy-dialog',
+            requestId,
           },
         ],
+        copySaveRequestId: requestId,
       }
     },
 
@@ -374,6 +774,9 @@ export function createSaveCoordinator({
       session.saveRuntime.pendingSaveContext = null
       session.saveRuntime.status = 'idle'
       session.saveRuntime.trigger = null
+      completeManualSaveRequests(session, {
+        status: 'cancelled',
+      })
 
       return {
         session,
@@ -381,16 +784,24 @@ export function createSaveCoordinator({
       }
     },
 
-    resolveCopyTarget(session, { path: targetPath }) {
+    resolveCopyTarget(session, { path: targetPath, requestId }) {
       ensureCopySaveRuntime(session)
+      const currentRequestId = getCopySaveRequestId(session, requestId)
+      if (session.copySaveRuntime.pendingSelection !== true
+        || !currentRequestId
+        || currentRequestId !== session.copySaveRuntime.pendingSelectionRequestId) {
+        return {
+          session,
+          effects: [],
+        }
+      }
+
       session.copySaveRuntime.pendingSelection = false
-      session.copySaveRuntime.status = 'idle'
+      session.copySaveRuntime.pendingSelectionRequestId = null
       session.copySaveRuntime.targetPath = targetPath
-      session.copySaveRuntime.lastError = null
-      session.copySaveRuntime.lastResult = 'pending'
-      session.copySaveRuntime.lastFailureReason = null
 
       if (normalizeComparablePath(targetPath) && normalizeComparablePath(targetPath) === normalizeComparablePath(session.documentSource?.path)) {
+        syncCopySaveRuntimeStatus(session)
         return {
           session,
           effects: [
@@ -399,6 +810,7 @@ export function createSaveCoordinator({
               command: {
                 type: 'copy-save.failed',
                 payload: {
+                  requestId: currentRequestId,
                   reason: 'same-path',
                   path: targetPath,
                 },
@@ -410,13 +822,18 @@ export function createSaveCoordinator({
 
       const copySaveJob = {
         jobId: createJobId(),
+        requestId: currentRequestId,
         sessionId: session.sessionId,
         revision: session.editorSnapshot.revision,
         content: session.editorSnapshot.content,
         path: targetPath,
         trigger: 'copy-save',
       }
-      session.copySaveRuntime.activeJobId = copySaveJob.jobId
+      session.copySaveRuntime.activeJobs[copySaveJob.jobId] = {
+        requestId: currentRequestId,
+        path: targetPath,
+      }
+      syncCopySaveRuntimeStatus(session)
 
       return {
         session,
@@ -429,14 +846,26 @@ export function createSaveCoordinator({
       }
     },
 
-    cancelCopyTarget(session) {
+    cancelCopyTarget(session, { requestId } = {}) {
       ensureCopySaveRuntime(session)
+      const currentRequestId = getCopySaveRequestId(session, requestId)
+      if (session.copySaveRuntime.pendingSelection !== true
+        || !currentRequestId
+        || currentRequestId !== session.copySaveRuntime.pendingSelectionRequestId) {
+        return {
+          session,
+          effects: [],
+        }
+      }
+
       session.copySaveRuntime.pendingSelection = false
-      session.copySaveRuntime.status = 'idle'
+      session.copySaveRuntime.pendingSelectionRequestId = null
       session.copySaveRuntime.targetPath = null
-      session.copySaveRuntime.lastError = null
-      session.copySaveRuntime.lastResult = 'cancelled'
-      session.copySaveRuntime.lastFailureReason = null
+      completeCopySaveRequest(session, {
+        requestId: currentRequestId,
+        status: 'cancelled',
+      })
+      syncCopySaveRuntimeStatus(session)
 
       return {
         session,
@@ -478,6 +907,16 @@ export function createSaveCoordinator({
       const closeWaitingCurrentJob = isActiveCloseWaitingJob(session, payload.jobId)
       const inFlightBaseDiskVersionHash = session.saveRuntime.inFlightBaseDiskVersionHash
       const latestKnownDiskVersionHash = getLatestKnownDiskVersionHash(session)
+      const savedVersionStillCurrent = !latestKnownDiskVersionHash
+        || latestKnownDiskVersionHash === inFlightBaseDiskVersionHash
+        || latestKnownDiskVersionHash === savedHash
+      const completedManualRequestIds = session.saveRuntime.activeManualRequestIds.filter((requestId) => {
+        const targetRevision = Number.isFinite(session.saveRuntime.manualRequestTargets?.[requestId])
+          ? session.saveRuntime.manualRequestTargets[requestId]
+          : 0
+        return targetRevision <= payload.revision
+      })
+      const settledManualRequestIds = []
 
       session.persistedSnapshot.content = payload.content
       session.persistedSnapshot.revision = payload.revision
@@ -499,9 +938,7 @@ export function createSaveCoordinator({
       // 一旦保存期间已经出现“不同于启动基线、也不同于 savedHash”的 watcher 版本，
       // 就说明磁盘真相已经被外部版本覆盖；此时只能更新 persistedSnapshot，
       // 绝不能再把 diskSnapshot / lastKnownDiskVersionHash 回写成本次保存版本。
-      if (!latestKnownDiskVersionHash
-        || latestKnownDiskVersionHash === inFlightBaseDiskVersionHash
-        || latestKnownDiskVersionHash === savedHash) {
+      if (savedVersionStillCurrent) {
         session.diskSnapshot.content = payload.content
         session.diskSnapshot.versionHash = savedHash
         session.diskSnapshot.exists = true
@@ -527,17 +964,36 @@ export function createSaveCoordinator({
 
       clearInFlightSaveRuntime(session)
       session.saveRuntime.lastError = null
+      completeManualSaveRequests(session, {
+        status: 'succeeded',
+        requestIds: completedManualRequestIds,
+        saved: Boolean(payload.path) && savedVersionStillCurrent,
+        documentPath: payload.path,
+      })
+      settledManualRequestIds.push(...completedManualRequestIds)
 
       if (session.editorSnapshot.revision > payload.revision) {
         const nextResult = continueQueuedSaveIfNeeded(session, {
           createJobId,
           preferredTrigger: closeWaitingCurrentJob
             ? 'close-auto-save'
-            : payload.trigger,
+            : mergeSaveTrigger(session.saveRuntime.trigger, payload.trigger),
         })
 
         if (closeWaitingCurrentJob && nextResult.session.saveRuntime.inFlightJobId) {
           session.closeRuntime.waitingSaveJobId = nextResult.session.saveRuntime.inFlightJobId
+        }
+
+        // 这里补齐“revision 虽然变过，但最终内容已经回到当前磁盘真相”的分支：
+        // 如果没有继续起新的 save job，就说明剩余 manual request 不再需要等待后续写盘，
+        // 必须立刻基于当前会话真相结算，避免 compat facade 永远挂起。
+        if (!nextResult.session.saveRuntime.inFlightJobId
+          && nextResult.session.saveRuntime.activeManualRequestIds.length > 0) {
+          const remainingManualRequestIds = [...nextResult.session.saveRuntime.activeManualRequestIds]
+          completeManualSaveRequests(session, {
+            status: 'succeeded',
+          })
+          settledManualRequestIds.push(...remainingManualRequestIds)
         }
 
         // 这里专门处理 reviewer 指出的竞态：
@@ -557,10 +1013,14 @@ export function createSaveCoordinator({
                 type: 'close-window',
               },
             ],
+            completedManualRequestIds: settledManualRequestIds,
           }
         }
 
-        return nextResult
+        return {
+          ...nextResult,
+          completedManualRequestIds: settledManualRequestIds,
+        }
       }
 
       session.saveRuntime.status = 'idle'
@@ -579,12 +1039,14 @@ export function createSaveCoordinator({
               type: 'close-window',
             },
           ],
+          completedManualRequestIds: settledManualRequestIds,
         }
       }
 
       return {
         session,
         effects: [],
+        completedManualRequestIds: settledManualRequestIds,
       }
     },
 
@@ -600,16 +1062,21 @@ export function createSaveCoordinator({
       }
 
       const closeWaitingCurrentJob = isActiveCloseWaitingJob(session, payload.jobId)
+      const effectiveTrigger = mergeSaveTrigger(session.saveRuntime.trigger, payload.trigger)
 
       session.saveRuntime.status = 'idle'
       clearInFlightSaveRuntime(session)
       session.saveRuntime.lastError = serializeError(payload.error)
       session.saveRuntime.trigger = null
+      completeManualSaveRequests(session, {
+        status: 'failed',
+        error: payload.error,
+      })
 
       const effects = [
         {
           type: 'notify-save-failed',
-          trigger: payload.trigger,
+          trigger: effectiveTrigger,
           error: serializeError(payload.error),
         },
       ]
@@ -633,13 +1100,23 @@ export function createSaveCoordinator({
       }
     },
 
-    handleCopySaveSucceeded(session) {
+    handleCopySaveSucceeded(session, payload) {
       ensureCopySaveRuntime(session)
-      session.copySaveRuntime.status = 'idle'
-      session.copySaveRuntime.activeJobId = null
-      session.copySaveRuntime.lastError = null
-      session.copySaveRuntime.lastResult = 'succeeded'
-      session.copySaveRuntime.lastFailureReason = null
+      const activeJob = consumeCopySaveActiveJobByCompletionPayload(session, payload)
+      if (!activeJob) {
+        return {
+          session,
+          effects: [],
+        }
+      }
+
+      session.copySaveRuntime.targetPath = payload?.path || activeJob.path || null
+      completeCopySaveRequest(session, {
+        requestId: activeJob.requestId,
+        status: 'succeeded',
+        path: payload?.path || activeJob.path || null,
+      })
+      syncCopySaveRuntimeStatus(session)
       return {
         session,
         effects: [],
@@ -648,11 +1125,36 @@ export function createSaveCoordinator({
 
     handleCopySaveFailed(session, payload) {
       ensureCopySaveRuntime(session)
-      session.copySaveRuntime.status = 'idle'
-      session.copySaveRuntime.activeJobId = null
-      session.copySaveRuntime.lastError = serializeError(payload?.error)
-      session.copySaveRuntime.lastResult = 'failed'
-      session.copySaveRuntime.lastFailureReason = payload?.reason || null
+      const activeJob = consumeCopySaveActiveJobByCompletionPayload(session, payload)
+      const currentRequestId = activeJob?.requestId || payload?.requestId || null
+      if (!currentRequestId) {
+        return {
+          session,
+          effects: [],
+        }
+      }
+
+      session.copySaveRuntime.targetPath = payload?.path || activeJob?.path || null
+      completeCopySaveRequest(session, {
+        requestId: currentRequestId,
+        status: 'failed',
+        error: payload?.error,
+        failureReason: payload?.reason || null,
+        path: payload?.path || activeJob?.path || null,
+      })
+      syncCopySaveRuntimeStatus(session)
+      return {
+        session,
+        effects: [],
+      }
+    },
+
+    consumeCopySaveCompletion(session, options) {
+      return consumeCopySaveCompletion(session, options)
+    },
+
+    refreshCompletedManualSaveRequests(session, options) {
+      refreshCompletedManualSaveRequests(session, options)
       return {
         session,
         effects: [],

@@ -1,4 +1,4 @@
-import path from 'node:path'
+import { toComparableDocumentPath } from './documentOpenTargetUtil.js'
 
 function assertNonEmptyString(value, fieldName) {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -16,30 +16,6 @@ function assertWindowId(windowId) {
   }
 
   throw new TypeError('windowId 必须是数字或非空字符串')
-}
-
-/**
- * 归一化可比较路径。
- *
- * 当前 store 先把“是否为同一个本地路径”的规则集中到这里，
- * 后续 same-path 保存副本、按路径查重、窗口复用都可以共享同一套比较语义。
- *
- * 这里特别为 Windows 预留了大小写不敏感逻辑：
- * - 统一折叠分隔符
- * - 统一规范化 `.` / `..`
- * - 对盘符路径和 UNC 路径转小写
- */
-function toComparablePath(targetPath) {
-  if (typeof targetPath !== 'string' || targetPath.trim() === '') {
-    return null
-  }
-
-  const normalizedText = targetPath.trim()
-  if (/^[a-z]:[\\/]/i.test(normalizedText) || normalizedText.startsWith('\\\\')) {
-    return path.win32.normalize(normalizedText.replaceAll('/', '\\')).toLowerCase()
-  }
-
-  return path.posix.normalize(normalizedText.replaceAll('\\', '/'))
 }
 
 /**
@@ -104,13 +80,13 @@ export function createDocumentSessionStore() {
       return sessionId ? getSession(sessionId) : null
     },
     findSessionByComparablePath(targetPath) {
-      const comparablePath = toComparablePath(targetPath)
+      const comparablePath = toComparableDocumentPath(targetPath)
       if (!comparablePath) {
         return null
       }
 
       for (const session of sessionMap.values()) {
-        const sessionPath = toComparablePath(session?.documentSource?.path || null)
+        const sessionPath = toComparableDocumentPath(session?.documentSource?.path || null)
         if (sessionPath && sessionPath === comparablePath) {
           return session
         }

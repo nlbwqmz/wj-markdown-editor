@@ -106,6 +106,10 @@ function createBaseSession({
       requestedRevision: 0,
       trigger: null,
       lastError: null,
+      manualRequestSequence: 0,
+      activeManualRequestIds: [],
+      manualRequestTargets: {},
+      completedManualRequests: [],
     },
     externalRuntime: {
       pendingExternalChange: null,

@@ -1,7 +1,12 @@
 import { app, Menu, protocol } from 'electron'
 import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
+import {
+  handleSecondInstanceOpenRequest,
+  handleStartupOpenRequest,
+} from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
+import { isMarkdownFilePath } from './util/document-session/documentOpenTargetUtil.js'
 import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
 import updateUtil from './util/updateUtil.js'
@@ -45,7 +50,9 @@ try {
  * 是否通过文件打开
  */
 function isOpenOnFile() {
-  return Boolean(process.argv && process.argv.length > 0 && /.*\.md$/.test(process.argv[process.argv.length - 1]))
+  return Boolean(process.argv
+    && process.argv.length > 0
+    && isMarkdownFilePath(process.argv[process.argv.length - 1]))
 }
 
 /**
@@ -55,13 +62,27 @@ function getOpenOnFilePath() {
   return isOpenOnFile() ? process.argv[process.argv.length - 1] : null
 }
 
-const lock = app.requestSingleInstanceLock({ filePath: getOpenOnFilePath() })
+const lock = app.requestSingleInstanceLock({
+  filePath: getOpenOnFilePath(),
+  // second-instance 打开相对路径时，首实例必须拿到发起实例自己的工作目录，
+  // 才能把 `docs/demo.md` 这类路径解析到正确的绝对目标上。
+  baseDir: process.cwd(),
+})
 
 if (!lock) {
   app.quit()
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
-    winInfoUtil.createNew(additionalData.filePath).then(() => {})
+    if (additionalData.filePath) {
+      handleSecondInstanceOpenRequest({
+        targetPath: additionalData.filePath,
+        baseDir: additionalData.baseDir || workingDirectory || process.cwd(),
+        openDocumentPath: (targetPath, options) => winInfoUtil.openDocumentPath(targetPath, options),
+      }).then(() => {})
+      return
+    }
+    const activeWindow = winInfoUtil.getAll()[0]
+    activeWindow?.win?.show()
   })
   logUtil.init()
   app.whenReady().then(async () => {
@@ -101,14 +122,22 @@ if (!lock) {
 
     const openOnFilePath = getOpenOnFilePath()
     if (openOnFilePath) {
-      await winInfoUtil.createNew(openOnFilePath)
+      await handleStartupOpenRequest({
+        targetPath: openOnFilePath,
+        baseDir: process.cwd(),
+        openDocumentPath: (targetPath, options) => winInfoUtil.openDocumentPath(targetPath, options),
+        createDraftWindow: () => winInfoUtil.createNew(null),
+      })
     } else if (configUtil.getConfig().openRecent) {
       const recentList = recent.get()
       if (recentList && recentList.length > 0) {
-        await winInfoUtil.executeCommand(null, 'document.open-recent', {
+        const openRecentResult = await winInfoUtil.executeCommand(null, 'document.open-recent', {
           path: recentList[0].path,
           trigger: 'startup',
         })
+        if (openRecentResult?.ok !== true) {
+          await winInfoUtil.createNew(null)
+        }
       } else {
         await winInfoUtil.createNew(null)
       }

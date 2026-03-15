@@ -37,6 +37,19 @@ function ensureSaveRuntime(session) {
     // 避免旧 session 在新保存逻辑里出现 undefined 分支。
     session.saveRuntime.inFlightBaseDiskVersionHash = null
   }
+  if (!Number.isFinite(session.saveRuntime.manualRequestSequence)
+    || session.saveRuntime.manualRequestSequence < 0) {
+    session.saveRuntime.manualRequestSequence = 0
+  }
+  if (!Array.isArray(session.saveRuntime.activeManualRequestIds)) {
+    session.saveRuntime.activeManualRequestIds = []
+  }
+  if (!session.saveRuntime.manualRequestTargets || typeof session.saveRuntime.manualRequestTargets !== 'object') {
+    session.saveRuntime.manualRequestTargets = {}
+  }
+  if (!Array.isArray(session.saveRuntime.completedManualRequests)) {
+    session.saveRuntime.completedManualRequests = []
+  }
 }
 
 function resetCloseRuntime(session) {
@@ -79,6 +92,8 @@ export function createDocumentCommandService({
     ensureCloseRuntime(session)
     watchCoordinator.prepareSession(session)
     const effects = []
+    let manualRequestId = null
+    let copySaveRequestId = null
     const config = getConfig()
 
     switch (command) {
@@ -95,13 +110,21 @@ export function createDocumentCommandService({
         break
 
       case 'document.save':
-        effects.push(...saveCoordinator.requestSave(session, {
-          trigger: 'manual-save',
-        }).effects)
+        {
+          const saveRequested = saveCoordinator.requestSave(session, {
+            trigger: 'manual-save',
+          })
+          manualRequestId = saveRequested.manualRequestId || null
+          effects.push(...saveRequested.effects)
+        }
         break
 
       case 'document.save-copy':
-        effects.push(...saveCoordinator.requestCopySave(session).effects)
+        {
+          const copySaveRequested = saveCoordinator.requestCopySave(session)
+          copySaveRequestId = copySaveRequested.copySaveRequestId || null
+          effects.push(...copySaveRequested.effects)
+        }
         break
 
       case 'window.blur':
@@ -215,11 +238,14 @@ export function createDocumentCommandService({
       case 'dialog.copy-target-selected':
         effects.push(...saveCoordinator.resolveCopyTarget(session, {
           path: payload?.path,
+          requestId: payload?.requestId,
         }).effects)
         break
 
       case 'dialog.copy-target-cancelled':
-        effects.push(...saveCoordinator.cancelCopyTarget(session).effects)
+        effects.push(...saveCoordinator.cancelCopyTarget(session, {
+          requestId: payload?.requestId,
+        }).effects)
         break
 
       case 'save.started':
@@ -227,9 +253,18 @@ export function createDocumentCommandService({
         break
 
       case 'save.succeeded':
-        effects.push(...saveCoordinator.handleSaveSucceeded(session, payload).effects)
+      {
+        const saveSucceededResult = saveCoordinator.handleSaveSucceeded(session, payload)
+        effects.push(...saveSucceededResult.effects)
         effects.push(...watchCoordinator.reconcileAfterSave(session).effects)
+        if (Array.isArray(saveSucceededResult.completedManualRequestIds)
+          && saveSucceededResult.completedManualRequestIds.length > 0) {
+          saveCoordinator.refreshCompletedManualSaveRequests(session, {
+            requestIds: saveSucceededResult.completedManualRequestIds,
+          })
+        }
         break
+      }
 
       case 'save.failed':
         effects.push(...saveCoordinator.handleSaveFailed(session, payload).effects)
@@ -269,6 +304,8 @@ export function createDocumentCommandService({
       session,
       snapshot: deriveDocumentSnapshot(session),
       effects,
+      manualRequestId,
+      copySaveRequestId,
     }
   }
 

@@ -1,5 +1,18 @@
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 
+function normalizeComparablePath(targetPath) {
+  if (typeof targetPath !== 'string' || targetPath.trim() === '') {
+    return null
+  }
+
+  const normalizedText = targetPath.trim()
+  if (/^[a-z]:[\\/]/i.test(normalizedText) || normalizedText.startsWith('\\\\')) {
+    return normalizedText.replaceAll('/', '\\').toLowerCase()
+  }
+
+  return normalizedText.replaceAll('\\', '/')
+}
+
 function getSessionByWindowIdOrThrow(store, windowId) {
   const session = store?.getSessionByWindowId?.(windowId)
   if (!session) {
@@ -13,12 +26,19 @@ function normalizeResourcePayload(payload) {
     return {
       resourceUrl: payload,
       rawPath: null,
+      requestContext: null,
     }
   }
 
   return {
     resourceUrl: typeof payload?.resourceUrl === 'string' ? payload.resourceUrl : null,
     rawPath: typeof payload?.rawPath === 'string' ? payload.rawPath : null,
+    requestContext: payload?.requestContext && typeof payload.requestContext === 'object'
+      ? {
+          sessionId: typeof payload.requestContext.sessionId === 'string' ? payload.requestContext.sessionId : null,
+          documentPath: typeof payload.requestContext.documentPath === 'string' ? payload.requestContext.documentPath : null,
+        }
+      : null,
   }
 }
 
@@ -53,33 +73,87 @@ export function createDocumentResourceService({
   resourceUtil,
   showItemInFolder = () => {},
 }) {
+  function isStaleRequestContext(session, requestContext) {
+    if (!requestContext) {
+      return false
+    }
+
+    if (requestContext.sessionId && requestContext.sessionId !== session?.sessionId) {
+      return true
+    }
+
+    const requestDocumentPath = normalizeComparablePath(requestContext.documentPath)
+    const currentDocumentPath = normalizeComparablePath(session?.documentSource?.path || null)
+    if (requestDocumentPath !== currentDocumentPath) {
+      return true
+    }
+
+    return false
+  }
+
   function getSessionResourceContext(windowId) {
     const session = getSessionByWindowIdOrThrow(store, windowId)
     return createResourceContext(session)
   }
 
   async function openInFolder({ windowId, payload }) {
-    const documentContext = getSessionResourceContext(windowId)
+    const session = getSessionByWindowIdOrThrow(store, windowId)
+    const normalizedPayload = normalizeResourcePayload(payload)
+    if (isStaleRequestContext(session, normalizedPayload.requestContext)) {
+      return {
+        ok: false,
+        opened: false,
+        reason: 'stale-document-context',
+        path: null,
+      }
+    }
+
+    const documentContext = createResourceContext(session)
     return await resourceUtil.openLocalResourceInFolder(
       documentContext,
-      normalizeResourcePayload(payload),
+      normalizedPayload,
       showItemInFolder,
     )
   }
 
   async function deleteLocal({ windowId, payload }) {
-    const documentContext = getSessionResourceContext(windowId)
+    const session = getSessionByWindowIdOrThrow(store, windowId)
+    const normalizedPayload = normalizeResourcePayload(payload)
+    if (isStaleRequestContext(session, normalizedPayload.requestContext)) {
+      return {
+        ok: false,
+        removed: false,
+        reason: 'stale-document-context',
+        path: null,
+      }
+    }
+
+    const documentContext = createResourceContext(session)
     return await resourceUtil.deleteLocalResource(
       documentContext,
-      normalizeResourcePayload(payload).resourceUrl,
+      normalizedPayload.resourceUrl,
     )
   }
 
   async function getInfo({ windowId, payload }) {
-    const documentContext = getSessionResourceContext(windowId)
+    const session = getSessionByWindowIdOrThrow(store, windowId)
+    const normalizedPayload = normalizeResourcePayload(payload)
+    if (isStaleRequestContext(session, normalizedPayload.requestContext)) {
+      return {
+        ok: false,
+        reason: 'stale-document-context',
+        decodedPath: null,
+        exists: false,
+        isDirectory: false,
+        isFile: false,
+        path: null,
+      }
+    }
+
+    const documentContext = createResourceContext(session)
     return await resourceUtil.getLocalResourceInfo(
       documentContext,
-      normalizeResourcePayload(payload).resourceUrl,
+      normalizedPayload.resourceUrl,
     )
   }
 

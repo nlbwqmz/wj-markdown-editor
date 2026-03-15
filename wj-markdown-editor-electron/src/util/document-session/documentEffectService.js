@@ -1,5 +1,9 @@
 import { dialog } from 'electron'
 import fs from 'fs-extra'
+import {
+  isMarkdownFilePath,
+  resolveDocumentOpenPath,
+} from './documentOpenTargetUtil.js'
 
 function getRecentTargetPath(payload) {
   if (typeof payload === 'string') {
@@ -8,8 +12,23 @@ function getRecentTargetPath(payload) {
   return typeof payload?.path === 'string' ? payload.path : null
 }
 
+function getOpenBaseDir(payload) {
+  return typeof payload?.baseDir === 'string' && payload.baseDir.trim() !== ''
+    ? payload.baseDir
+    : null
+}
+
 function getLanguage(getConfig) {
   return getConfig?.()?.language || 'zh-CN'
+}
+
+async function isRegularFile(fsModule, targetPath) {
+  try {
+    const stat = await fsModule.stat(targetPath)
+    return stat?.isFile?.() === true
+  } catch {
+    return false
+  }
 }
 
 function serializeError(error) {
@@ -56,6 +75,43 @@ export function createDocumentEffectService({
   },
   getConfig = () => ({}),
 }) {
+  async function validateExplicitOpenTarget(targetPath, { baseDir } = {}) {
+    const resolvedTargetPath = resolveDocumentOpenPath(targetPath, { baseDir })
+
+    if (!resolvedTargetPath) {
+      return {
+        ok: false,
+        reason: 'open-target-missing',
+        path: null,
+      }
+    }
+    if (!await fsModule.pathExists(resolvedTargetPath)) {
+      return {
+        ok: false,
+        reason: 'open-target-missing',
+        path: resolvedTargetPath,
+      }
+    }
+    if (!isMarkdownFilePath(resolvedTargetPath)) {
+      return {
+        ok: false,
+        reason: 'open-target-invalid-extension',
+        path: resolvedTargetPath,
+      }
+    }
+    if (!await isRegularFile(fsModule, resolvedTargetPath)) {
+      return {
+        ok: false,
+        reason: 'open-target-not-file',
+        path: resolvedTargetPath,
+      }
+    }
+    return {
+      ok: true,
+      path: resolvedTargetPath,
+    }
+  }
+
   function getFailedSaveMessage(trigger, error) {
     const errorDetail = typeof error?.message === 'string' && error.message
       ? ` ${error.message}`
@@ -94,23 +150,30 @@ export function createDocumentEffectService({
 
       case 'dialog.open-target-selected': {
         const targetPath = getRecentTargetPath(payload)
-        if (!targetPath) {
-          return {
-            ok: false,
-            reason: 'open-target-missing',
-            path: null,
-          }
+        const validationResult = await validateExplicitOpenTarget(targetPath, {
+          baseDir: getOpenBaseDir(payload),
+        })
+        if (validationResult.ok !== true) {
+          return validationResult
         }
-        if (!await fsModule.pathExists(targetPath)) {
-          return {
-            ok: false,
-            reason: 'open-target-missing',
-            path: targetPath,
-          }
-        }
-        return await openDocumentWindow?.(targetPath, {
+        return await openDocumentWindow?.(validationResult.path, {
           isRecent: false,
           trigger: 'user',
+        })
+      }
+
+      case 'document.open-path': {
+        const targetPath = getRecentTargetPath(payload)
+        const trigger = payload?.trigger || 'user'
+        const validationResult = await validateExplicitOpenTarget(targetPath, {
+          baseDir: getOpenBaseDir(payload),
+        })
+        if (validationResult.ok !== true) {
+          return validationResult
+        }
+        return await openDocumentWindow?.(validationResult.path, {
+          isRecent: false,
+          trigger,
         })
       }
 
@@ -124,7 +187,11 @@ export function createDocumentEffectService({
       case 'document.open-recent': {
         const targetPath = getRecentTargetPath(payload)
         const trigger = payload?.trigger || 'user'
-        if (!targetPath) {
+        const resolvedTargetPath = resolveDocumentOpenPath(targetPath, {
+          baseDir: getOpenBaseDir(payload),
+        })
+
+        if (!resolvedTargetPath) {
           return {
             ok: false,
             reason: 'recent-missing',
@@ -132,16 +199,30 @@ export function createDocumentEffectService({
           }
         }
 
-        const exists = await fsModule.pathExists(targetPath)
+        const exists = await fsModule.pathExists(resolvedTargetPath)
         if (!exists && trigger === 'user') {
           return {
             ok: false,
             reason: 'recent-missing',
-            path: targetPath,
+            path: resolvedTargetPath,
+          }
+        }
+        if (exists && !isMarkdownFilePath(resolvedTargetPath)) {
+          return {
+            ok: false,
+            reason: 'open-target-invalid-extension',
+            path: resolvedTargetPath,
+          }
+        }
+        if (exists && !await isRegularFile(fsModule, resolvedTargetPath)) {
+          return {
+            ok: false,
+            reason: 'open-target-not-file',
+            path: resolvedTargetPath,
           }
         }
 
-        return await openDocumentWindow?.(targetPath, {
+        return await openDocumentWindow?.(resolvedTargetPath, {
           isRecent: true,
           trigger,
         })
@@ -205,6 +286,7 @@ export function createDocumentEffectService({
     showSaveFailedMessage,
     showWindowMessage,
     shouldRebindExternalWatchAfterSave,
+    getExternalWatchContext,
     startExternalWatch,
     markInternalSave,
   }) {
@@ -229,24 +311,56 @@ export function createDocumentEffectService({
           return null
         }
 
-        try {
-          // recent 持久化只是附属副作用，不能反过来决定“主文档是否保存成功”。
-          // 否则一旦 recent 文件写失败，就会把已经落盘成功的文档错误打回 save.failed，
-          // 直接破坏 documentSource/path/saved 等主状态真相。
-          await recentStore.add(effect.job.path)
-        } catch {
-          // 这里故意吞掉 recent 写入异常：
-          // Task 4 只要求保存真相优先正确，recent 列表后续可由独立链路恢复。
-        }
-
         await dispatchCommand('save.succeeded', {
           ...effect.job,
           savedAt: Date.now(),
           stat: null,
         })
+
+        // recent 持久化只是附属副作用，不能反过来决定“主文档是否保存成功”，
+        // 也不能继续阻塞 save.succeeded / close-auto-save 的主链路完成。
+        // 因此这里改成“写盘成功后异步补做”，主链路只保证尽力发起，不等待其完成。
+        Promise.resolve()
+          .then(async () => {
+            try {
+              await recentStore.add(effect.job.path)
+            } catch {
+              // 这里故意吞掉 recent 写入异常：
+              // 主保存真相已经落地，recent 失败只能视为附属副作用失败。
+            }
+          })
+          .catch(() => {})
+
         if (shouldRebindExternalWatchAfterSave?.() === true) {
-          startExternalWatch?.()
-          markInternalSave?.(effect.job.content)
+          const watchContext = getExternalWatchContext?.() || {}
+          const bindingToken = Number.isFinite(watchContext.bindingToken)
+            ? watchContext.bindingToken
+            : null
+          const watchingPath = watchContext.watchingPath || effect.job.path
+
+          try {
+            const rebindResult = await startExternalWatch?.({
+              bindingToken,
+              watchingPath,
+            })
+
+            if (rebindResult === false || rebindResult?.ok === false) {
+              throw rebindResult?.error || new Error('watch rebind failed')
+            }
+
+            markInternalSave?.(effect.job.content)
+            await dispatchCommand?.('watch.bound', {
+              bindingToken,
+              watchingPath: rebindResult?.watchingPath || watchingPath,
+              watchingDirectoryPath: rebindResult?.watchingDirectoryPath || null,
+            })
+          } catch (error) {
+            await dispatchCommand?.('watch.rebind-failed', {
+              bindingToken,
+              watchingPath,
+              error: serializeError(error),
+            })
+          }
         }
         return null
 
@@ -254,10 +368,14 @@ export function createDocumentEffectService({
         try {
           await fsModule.writeFile(effect.job.path, effect.job.content)
           await dispatchCommand('copy-save.succeeded', {
+            jobId: effect.job.jobId,
+            requestId: effect.job.requestId,
             path: effect.job.path,
           })
         } catch (error) {
           await dispatchCommand('copy-save.failed', {
+            jobId: effect.job.jobId,
+            requestId: effect.job.requestId,
             reason: 'write-failed',
             path: effect.job.path,
             error,
@@ -280,9 +398,12 @@ export function createDocumentEffectService({
         if (selectedPath) {
           return await dispatchCommand('dialog.copy-target-selected', {
             path: selectedPath,
+            requestId: effect.requestId,
           })
         }
-        return await dispatchCommand('dialog.copy-target-cancelled')
+        return await dispatchCommand('dialog.copy-target-cancelled', {
+          requestId: effect.requestId,
+        })
       }
 
       case 'dispatch-command':

@@ -1,11 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
 
+function createDeferred() {
+  let resolve
+  let reject
+  const promise = new Promise((resolveInner, rejectInner) => {
+    resolve = resolveInner
+    reject = rejectInner
+  })
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
 async function createServiceContext() {
   const dialogApi = {
     showOpenDialogSync: vi.fn(),
   }
   const fsModule = {
     pathExists: vi.fn(),
+    stat: vi.fn(),
     writeFile: vi.fn(),
   }
   const recentStore = {
@@ -67,6 +82,31 @@ describe('documentEffectService', () => {
     expect(dispatchCommand).toHaveBeenCalledWith('dialog.open-target-cancelled')
   })
 
+  it('dialog.open-target-selected 命中存在但非 .md 的路径时，必须拦截并返回 invalid-extension', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentWindow = vi.fn()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+
+    const result = await service.executeCommand({
+      command: 'dialog.open-target-selected',
+      payload: {
+        path: 'C:/docs/plain.txt',
+      },
+      openDocumentWindow,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-invalid-extension',
+      path: 'C:/docs/plain.txt',
+    })
+    expect(openDocumentWindow).not.toHaveBeenCalled()
+  })
+
   it('document.open-recent(trigger=user) 命中缺失文件时，不能改动当前 active session', async () => {
     const { service, fsModule } = await createServiceContext()
     const openDocumentWindow = vi.fn()
@@ -91,6 +131,83 @@ describe('documentEffectService', () => {
     })
     expect(openDocumentWindow).not.toHaveBeenCalled()
     expect(activateRecentMissingSession).not.toHaveBeenCalled()
+  })
+
+  it('document.open-recent 命中存在但非 .md 的路径时，user/startup 两条入口都必须统一拦截', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentWindow = vi.fn()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+
+    const userResult = await service.executeCommand({
+      command: 'document.open-recent',
+      payload: {
+        path: 'C:/docs/plain.txt',
+        trigger: 'user',
+      },
+      openDocumentWindow,
+    })
+    const startupResult = await service.executeCommand({
+      command: 'document.open-recent',
+      payload: {
+        path: 'C:/docs/plain.txt',
+        trigger: 'startup',
+      },
+      openDocumentWindow,
+    })
+
+    expect(userResult).toEqual({
+      ok: false,
+      reason: 'open-target-invalid-extension',
+      path: 'C:/docs/plain.txt',
+    })
+    expect(startupResult).toEqual({
+      ok: false,
+      reason: 'open-target-invalid-extension',
+      path: 'C:/docs/plain.txt',
+    })
+    expect(openDocumentWindow).not.toHaveBeenCalled()
+  })
+
+  it('opening policy 必须要求目标是“存在的 Markdown 文件”，不能放行以 .md 结尾的目录', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentWindow = vi.fn()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => false,
+    })
+
+    const dialogResult = await service.executeCommand({
+      command: 'dialog.open-target-selected',
+      payload: {
+        path: 'C:/docs/folder.md',
+      },
+      openDocumentWindow,
+    })
+    const recentResult = await service.executeCommand({
+      command: 'document.open-recent',
+      payload: {
+        path: 'C:/docs/folder.md',
+        trigger: 'startup',
+      },
+      openDocumentWindow,
+    })
+
+    expect(dialogResult).toEqual({
+      ok: false,
+      reason: 'open-target-not-file',
+      path: 'C:/docs/folder.md',
+    })
+    expect(recentResult).toEqual({
+      ok: false,
+      reason: 'open-target-not-file',
+      path: 'C:/docs/folder.md',
+    })
+    expect(openDocumentWindow).not.toHaveBeenCalled()
   })
 
   it('document.open-recent(trigger=startup) 命中缺失文件时，会创建 recent-missing 会话', async () => {
@@ -232,6 +349,131 @@ describe('documentEffectService', () => {
       trigger: 'manual-save',
     }))
     expect(dispatchCommand.mock.calls.some(call => call[0] === 'save.failed')).toBe(false)
+  })
+
+  it('writeFile 已成功时，即使 recent.add 很慢，save.succeeded 也必须先回流，不能继续卡在 recent 副作用上', async () => {
+    const { service, fsModule, recentStore } = await createServiceContext()
+    const dispatchCommand = vi.fn().mockResolvedValue({})
+    const recentDeferred = createDeferred()
+
+    fsModule.writeFile.mockResolvedValue(undefined)
+    recentStore.add.mockReturnValue(recentDeferred.promise)
+
+    const applyEffectPromise = service.applyEffect({
+      effect: {
+        type: 'execute-save',
+        job: {
+          jobId: 'save-job-pending-recent',
+          path: 'C:/docs/demo.md',
+          content: '# demo',
+          revision: 6,
+          trigger: 'manual-save',
+        },
+      },
+      dispatchCommand,
+      shouldRebindExternalWatchAfterSave: () => false,
+    })
+
+    await vi.waitFor(() => {
+      expect(dispatchCommand).toHaveBeenNthCalledWith(2, 'save.succeeded', expect.objectContaining({
+        jobId: 'save-job-pending-recent',
+        path: 'C:/docs/demo.md',
+        revision: 6,
+      }))
+    })
+
+    recentDeferred.resolve(undefined)
+    await applyEffectPromise
+    expect(dispatchCommand.mock.calls.some(call => call[0] === 'save.failed')).toBe(false)
+  })
+
+  it('execute-save 内嵌 watcher 重绑失败时，必须回流 watch.rebind-failed，不能把已成功写盘升级成副作用异常', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const dispatchCommand = vi.fn().mockResolvedValue({})
+    const startExternalWatch = vi.fn().mockRejectedValue(new Error('watch bind failed'))
+    const getExternalWatchContext = vi.fn(() => ({
+      bindingToken: 7,
+      watchingPath: 'C:/docs/demo.md',
+    }))
+
+    fsModule.writeFile.mockResolvedValue(undefined)
+    await expect(service.applyEffect({
+      effect: {
+        type: 'execute-save',
+        job: {
+          jobId: 'save-job-2',
+          path: 'C:/docs/demo.md',
+          content: '# demo',
+          revision: 4,
+          trigger: 'manual-save',
+        },
+      },
+      dispatchCommand,
+      shouldRebindExternalWatchAfterSave: () => true,
+      startExternalWatch,
+      getExternalWatchContext,
+    })).resolves.toBeNull()
+
+    expect(dispatchCommand).toHaveBeenNthCalledWith(1, 'save.started', {
+      jobId: 'save-job-2',
+    })
+    expect(dispatchCommand).toHaveBeenNthCalledWith(2, 'save.succeeded', expect.objectContaining({
+      jobId: 'save-job-2',
+      path: 'C:/docs/demo.md',
+      revision: 4,
+    }))
+    expect(dispatchCommand).toHaveBeenCalledWith('watch.rebind-failed', {
+      bindingToken: 7,
+      watchingPath: 'C:/docs/demo.md',
+      error: expect.objectContaining({
+        name: 'Error',
+        message: 'watch bind failed',
+      }),
+    })
+    expect(dispatchCommand.mock.calls.some(call => call[0] === 'save.failed')).toBe(false)
+  })
+
+  it('execute-save 内嵌重绑成功时，也必须回流 watch.bound，避免会话残留假活跃 watcher 状态', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const dispatchCommand = vi.fn().mockResolvedValue({})
+    const startExternalWatch = vi.fn().mockResolvedValue({
+      ok: true,
+      watchingPath: 'C:/docs/demo.md',
+      watchingDirectoryPath: 'C:/docs',
+    })
+    const getExternalWatchContext = vi.fn(() => ({
+      bindingToken: 8,
+      watchingPath: 'C:/docs/demo.md',
+    }))
+    const markInternalSave = vi.fn()
+
+    fsModule.writeFile.mockResolvedValue(undefined)
+
+    await service.applyEffect({
+      effect: {
+        type: 'execute-save',
+        job: {
+          jobId: 'save-job-3',
+          path: 'C:/docs/demo.md',
+          content: '# demo',
+          revision: 5,
+          trigger: 'manual-save',
+        },
+      },
+      dispatchCommand,
+      shouldRebindExternalWatchAfterSave: () => true,
+      startExternalWatch,
+      getExternalWatchContext,
+      markInternalSave,
+    })
+
+    expect(dispatchCommand).toHaveBeenCalledWith('watch.bound', {
+      bindingToken: 8,
+      watchingPath: 'C:/docs/demo.md',
+      watchingDirectoryPath: 'C:/docs',
+    })
+    expect(markInternalSave).toHaveBeenCalledWith('# demo')
+    expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.rebind-failed')).toBe(false)
   })
 
   it('notify-watch-warning 必须回流统一消息出口，而不是被 applyEffect 静默吞掉', async () => {

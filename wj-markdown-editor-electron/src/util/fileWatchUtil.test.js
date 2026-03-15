@@ -213,6 +213,39 @@ describe('fileWatchUtil', () => {
     })
   })
 
+  it('Windows 下目录 watcher 回调文件名大小写不同也必须命中同一订阅文件', async () => {
+    const state = fileWatchUtil.createWatchState()
+    const filePath = createFilePath('docs', 'demo.md')
+    const readFile = vi.fn().mockResolvedValue('# 外部版本 1')
+    const onExternalChange = vi.fn()
+    let listener
+
+    const watch = vi.fn((_targetPath, callback) => {
+      listener = callback
+      return { close: vi.fn() }
+    })
+
+    fileWatchUtil.startWatching({
+      state,
+      filePath,
+      debounceMs: 0,
+      readFile,
+      onExternalChange,
+      watch,
+    })
+
+    const eventFileName = process.platform === 'win32'
+      ? path.basename(filePath).toUpperCase()
+      : path.basename(filePath)
+
+    await listener('change', eventFileName)
+    await sleep()
+    await sleep()
+
+    expect(readFile).toHaveBeenCalledTimes(1)
+    expect(onExternalChange).toHaveBeenCalledTimes(1)
+  })
+
   it('目录事件未提供文件名时，应对目录下所有已订阅文件触发检查', async () => {
     const stateA = fileWatchUtil.createWatchState()
     const stateB = fileWatchUtil.createWatchState()

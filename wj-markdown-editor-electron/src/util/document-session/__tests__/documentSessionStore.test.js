@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createDraftSession } from '../documentSessionFactory.js'
 import { createDocumentSessionStore } from '../documentSessionStore.js'
@@ -94,6 +95,31 @@ describe('documentSessionStore', () => {
     store.createSession(session)
 
     expect(store.findSessionByComparablePath('c:\\docs\\example.md')).toBe(session)
+  })
+
+  it('findSessionByComparablePath 必须把相对路径和绝对路径识别为同一文档，避免重复开窗', () => {
+    const store = createDocumentSessionStore()
+    const absolutePath = path.resolve('docs/demo.md')
+    const session = {
+      ...createDraftSession({
+        sessionId: 'relative-bound-session',
+        now: 1700000000055,
+      }),
+      documentSource: {
+        path: 'docs/demo.md',
+        exists: true,
+        missingPath: null,
+        missingReason: null,
+        encoding: 'utf-8',
+        lastKnownStat: null,
+      },
+      displayPath: 'docs/demo.md',
+      fileName: 'demo.md',
+    }
+
+    store.createSession(session)
+
+    expect(store.findSessionByComparablePath(absolutePath)).toBe(session)
   })
 
   it('destroySession 应同步清理 window 绑定，避免窗口继续指向已销毁会话', () => {

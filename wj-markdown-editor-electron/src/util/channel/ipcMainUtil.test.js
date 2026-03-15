@@ -633,6 +633,33 @@ describe('ipcMainUtil command mapping', () => {
     expect(result).toBe(false)
   })
 
+  it('open-file 直接携带非 .md 路径时，不能再回退为 false，否则 recent 菜单会误判成“文件不存在”', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    winInfoUtil.executeCommand.mockResolvedValueOnce({
+      ok: false,
+      reason: 'open-target-invalid-extension',
+      path: 'D:\\docs\\plain.txt',
+    })
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'open-file',
+      data: 'D:\\docs\\plain.txt',
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'dialog.open-target-selected', {
+      path: 'D:\\docs\\plain.txt',
+    })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-invalid-extension',
+      path: 'D:\\docs\\plain.txt',
+    })
+  })
+
   it('document.get-session-snapshot 必须通过统一命令入口返回会话快照', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     const snapshot = {

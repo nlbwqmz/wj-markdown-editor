@@ -1,9 +1,11 @@
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sendMock = vi.fn()
 const writeFileMock = vi.fn()
 const readFileMock = vi.fn()
 const pathExistsMock = vi.fn()
+const statMock = vi.fn()
 const showSaveDialogSyncMock = vi.fn()
 const openExternalMock = vi.fn()
 const showItemInFolderMock = vi.fn()
@@ -12,6 +14,7 @@ const createWatchStateMock = vi.fn(() => ({ pendingChange: null }))
 const startWatchingMock = vi.fn()
 const stopWatchingMock = vi.fn()
 const markInternalSaveMock = vi.fn()
+const createContentVersionMock = vi.fn((content = '') => `hash:${content}`)
 const ignorePendingChangeMock = vi.fn((state) => {
   state.pendingChange = null
   return 'ignored'
@@ -158,6 +161,7 @@ vi.mock('fs-extra', () => ({
     writeFile: writeFileMock,
     readFile: readFileMock,
     pathExists: pathExistsMock,
+    stat: statMock,
   },
 }))
 
@@ -199,6 +203,7 @@ vi.mock('../resourceFileUtil.js', async () => {
 vi.mock('../fileWatchUtil.js', () => ({
   default: {
     createWatchState: createWatchStateMock,
+    createContentVersion: createContentVersionMock,
     ignorePendingChange: ignorePendingChangeMock,
     settlePendingChange: settlePendingChangeMock,
     stopWatching: stopWatchingMock,
@@ -221,6 +226,7 @@ describe('winInfoUtil 兼容 facade', () => {
     writeFileMock.mockReset()
     readFileMock.mockReset()
     pathExistsMock.mockReset()
+    statMock.mockReset()
     showSaveDialogSyncMock.mockReset()
     openExternalMock.mockReset()
     showItemInFolderMock.mockReset()
@@ -229,11 +235,15 @@ describe('winInfoUtil 兼容 facade', () => {
     startWatchingMock.mockReset()
     stopWatchingMock.mockReset()
     markInternalSaveMock.mockReset()
+    createContentVersionMock.mockClear()
     ignorePendingChangeMock.mockReset()
     settlePendingChangeMock.mockReset()
     getConfigMock.mockReset()
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startPage: 'editor' })
     pathExistsMock.mockResolvedValue(false)
+    statMock.mockResolvedValue({
+      isFile: () => true,
+    })
     readFileMock.mockResolvedValue('')
     writeFileMock.mockResolvedValue(undefined)
     browserWindowInstances.length = 0
@@ -380,6 +390,384 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(saveResult).toBe(true)
   })
 
+  it('首次保存写盘成功后即使 watcher 绑定失败，save 也必须返回成功，并把失败标准化成告警', async () => {
+    showSaveDialogSyncMock.mockReturnValueOnce('D:/draft.md')
+    startWatchingMock.mockImplementationOnce(() => {
+      throw new Error('watch bind failed')
+    })
+
+    await winInfoUtil.createNew(null)
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 草稿内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 草稿内容')
+    })
+    sendMock.mockClear()
+
+    await expect(winInfoUtil.save(winInfo)).resolves.toBe(true)
+
+    expect(writeFileMock).toHaveBeenCalledWith('D:/draft.md', '# 草稿内容')
+    expect(winInfo.path).toBe('D:/draft.md')
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.fileExternalChangeReadFailed',
+      },
+    })
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.saveSuccessfully',
+      },
+    })
+  })
+
+  it('blur-auto-save 进行中按 Ctrl+S 时，winInfoUtil.save 必须等待当前保存链路完成并返回手动保存成功', async () => {
+    const saveDeferred = createDeferred()
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    writeFileMock.mockReturnValueOnce(saveDeferred.promise)
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# blur 自动保存内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# blur 自动保存内容')
+    })
+
+    winInfo.win.emit('blur')
+    await vi.waitFor(() => {
+      expect(writeFileMock).toHaveBeenCalledTimes(1)
+      expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# blur 自动保存内容')
+    })
+
+    sendMock.mockClear()
+    let saveResolved = false
+    const manualSavePromise = winInfoUtil.save(winInfo).then((result) => {
+      saveResolved = true
+      return result
+    })
+
+    await Promise.resolve()
+    expect(saveResolved).toBe(false)
+
+    saveDeferred.resolve()
+    await saveDeferred.promise
+
+    const saveResult = await manualSavePromise
+
+    expect(saveResult).toBe(true)
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.saveSuccessfully',
+      },
+    })
+  })
+
+  it('close-auto-save 进行中按 Ctrl+S 时，manual request 也必须绑定当前保存链路并返回成功', async () => {
+    const saveDeferred = createDeferred()
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startPage: 'editor' })
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    writeFileMock.mockReturnValueOnce(saveDeferred.promise)
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# close 自动保存内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# close 自动保存内容')
+    })
+
+    const closeEvent = winInfo.win.close()
+
+    expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => {
+      expect(writeFileMock).toHaveBeenCalledTimes(1)
+      expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# close 自动保存内容')
+    })
+
+    sendMock.mockClear()
+    const manualSavePromise = winInfoUtil.save(winInfo)
+
+    saveDeferred.resolve()
+    await saveDeferred.promise
+
+    const saveResult = await manualSavePromise
+
+    expect(saveResult).toBe(true)
+    expect(winInfoUtil.getAll()).toHaveLength(0)
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'message')).toBe(false)
+  })
+
+  it('挂靠中的 Ctrl+S 只能等待自己绑定的那条保存链路，不能被后续新的 auto-save 抢走结果', async () => {
+    const firstSaveDeferred = createDeferred()
+    const secondSaveDeferred = createDeferred()
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    writeFileMock
+      .mockReturnValueOnce(firstSaveDeferred.promise)
+      .mockReturnValueOnce(secondSaveDeferred.promise)
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 第一版内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 第一版内容')
+    })
+
+    winInfo.win.emit('blur')
+    await vi.waitFor(() => {
+      expect(writeFileMock).toHaveBeenCalledTimes(1)
+      expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 第一版内容')
+    })
+
+    sendMock.mockClear()
+    const manualSavePromise = winInfoUtil.save(winInfo)
+
+    firstSaveDeferred.resolve()
+    await firstSaveDeferred.promise
+
+    winInfoUtil.updateTempContent(winInfo, '# 第二版内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 第二版内容')
+    })
+    winInfo.win.emit('blur')
+    await vi.waitFor(() => {
+      expect(writeFileMock).toHaveBeenCalledTimes(2)
+      expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 第二版内容')
+    })
+
+    const saveResult = await Promise.race([
+      manualSavePromise,
+      new Promise(resolve => setTimeout(() => resolve('timeout'), 80)),
+    ])
+
+    expect(saveResult).toBe(true)
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.saveSuccessfully',
+      },
+    })
+
+    secondSaveDeferred.resolve()
+    await secondSaveDeferred.promise
+  })
+
+  it('manual request 超过 10 秒仍未完成时，必须继续等待自己的 request 完成，不能提前误报成功或失败', async () => {
+    const saveDeferred = createDeferred()
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    writeFileMock.mockReturnValueOnce(saveDeferred.promise)
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 尚未落盘的内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 尚未落盘的内容')
+    })
+
+    winInfo.win.emit('blur')
+    await vi.waitFor(() => {
+      expect(writeFileMock).toHaveBeenCalledTimes(1)
+      expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 尚未落盘的内容')
+    })
+
+    sendMock.mockClear()
+    vi.useFakeTimers()
+
+    try {
+      let saveResolved = false
+      const manualSavePromise = winInfoUtil.save(winInfo).then((result) => {
+        saveResolved = true
+        return result
+      })
+      await Promise.resolve()
+
+      // 在 manual request 还没真正完成时，把当前编辑区改回磁盘版本，
+      // 当前全局快照会重新变成 saved=true；这正是旧实现会误报成功的场景。
+      await winInfoUtil.executeCommand(winInfo, 'document.edit', {
+        content: '# 原始内容',
+      })
+
+      await vi.advanceTimersByTimeAsync(10010)
+      expect(saveResolved).toBe(false)
+      expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
+        event: 'message',
+        data: {
+          type: 'success',
+          content: 'message.saveSuccessfully',
+        },
+      })
+
+      saveDeferred.resolve()
+      await saveDeferred.promise
+      await vi.advanceTimersByTimeAsync(20)
+
+      const saveResult = await manualSavePromise
+      expect(saveResult).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('外部冲突仍未决时，即使 manual-save 命中 no-op，也不能提示保存成功', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+    })
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部新内容',
+      version: 'version-2',
+      versionHash: 'hash-version-2',
+    }, {
+      strategy: 'prompt',
+    })
+
+    await winInfoUtil.executeCommand(winInfo, 'document.edit', {
+      content: '# 外部新内容',
+    })
+    sendMock.mockClear()
+
+    const saveResult = await winInfoUtil.save(winInfo)
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(writeFileMock).not.toHaveBeenCalled()
+    expect(snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 1,
+      localContent: '# 外部新内容',
+      externalContent: '# 外部新内容',
+      fileName: 'demo.md',
+    })
+    expect(saveResult).toBe(false)
+    expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.saveSuccessfully',
+      },
+    })
+  })
+
+  it('pending external change 在 save.succeeded 同轮被 reconcile 成 noop 时，manual-save 仍必须返回成功', async () => {
+    const saveDeferred = createDeferred()
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    writeFileMock.mockReturnValueOnce(saveDeferred.promise)
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 本地保存版本')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 本地保存版本')
+    })
+
+    winInfo.win.emit('blur')
+    await vi.waitFor(() => {
+      expect(writeFileMock).toHaveBeenCalledTimes(1)
+      expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 本地保存版本')
+    })
+
+    sendMock.mockClear()
+    const manualSavePromise = winInfoUtil.save(winInfo)
+
+    winInfoUtil.handleExternalChange(winInfo, {
+      content: '# 外部版本',
+      version: 'version-2',
+      versionHash: 'hash-version-2',
+    }, {
+      strategy: 'prompt',
+    })
+    await winInfoUtil.executeCommand(winInfo, 'document.edit', {
+      content: '# 外部版本',
+    })
+
+    saveDeferred.resolve()
+    await saveDeferred.promise
+
+    const saveResult = await manualSavePromise
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(saveResult).toBe(true)
+    expect(snapshot.externalPrompt).toBeNull()
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.saveSuccessfully',
+      },
+    })
+  })
+
+  it('manual-save 写盘失败时，即使当前正文又回到磁盘版本，也不能误报成功', async () => {
+    const saveDeferred = createDeferred()
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    writeFileMock.mockReturnValueOnce(saveDeferred.promise)
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 待保存的新内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 待保存的新内容')
+    })
+
+    winInfo.win.emit('blur')
+    await vi.waitFor(() => {
+      expect(writeFileMock).toHaveBeenCalledTimes(1)
+      expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 待保存的新内容')
+    })
+
+    sendMock.mockClear()
+    const manualSavePromise = winInfoUtil.save(winInfo)
+
+    await winInfoUtil.executeCommand(winInfo, 'document.edit', {
+      content: '# 原始内容',
+    })
+
+    saveDeferred.reject(new Error('磁盘已满'))
+    await expect(manualSavePromise).resolves.toBe(false)
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'error',
+        content: '保存失败。 磁盘已满',
+      },
+    })
+    expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.saveSuccessfully',
+      },
+    })
+  })
+
   it('草稿首存写盘失败时，只能提示保存失败，不能再追加取消保存提示', async () => {
     writeFileMock.mockRejectedValueOnce(new Error('磁盘已满'))
     showSaveDialogSyncMock.mockReturnValueOnce('D:/draft-save-failed.md')
@@ -467,6 +855,35 @@ describe('winInfoUtil 兼容 facade', () => {
         content: 'message.saveAsSuccessfully',
       },
     })
+  })
+
+  it('dialog.open-target-selected 命中非 .md 文件时，必须拦截并给出 warning，不能继续打开', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    sendMock.mockClear()
+
+    const result = await winInfoUtil.executeCommand(winInfo, 'dialog.open-target-selected', {
+      path: 'D:/plain.txt',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-invalid-extension',
+      path: 'D:/plain.txt',
+    })
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'message',
+      data: {
+        type: 'warning',
+        content: 'message.onlyMarkdownFilesCanBeOpened',
+      },
+    })
+    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(winInfo.path).toBe('D:/demo.md')
   })
 
   it('handleFileMissing 只能通过 snapshot 推送最新 exists=false 与 saved=false，不能再发送 legacy file-missing / file-is-saved', async () => {
@@ -790,6 +1207,95 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(snapshot.externalPrompt).toBeNull()
   })
 
+  it('live watcher 的 onExternalChange 必须走统一命令流，过期 bindingToken 不能污染当前会话', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    const watchOptions = startWatchingMock.mock.calls[0][0]
+    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    await vi.waitFor(() => {
+      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+    })
+    sendMock.mockClear()
+
+    // 这里显式喂一个非当前 bindingToken 的 live 事件，
+    // 只有真正接入 watchCoordinator 后，事件才会被 token 守卫丢弃。
+    watchOptions.onExternalChange?.({
+      version: 1,
+      versionHash: 'stale-hash',
+      content: '# 旧 watcher 迟到内容',
+    }, {
+      bindingToken: (watchOptions.bindingToken || 0) + 1,
+      watchingPath: 'D:/demo.md',
+      observedAt: 1700000005001,
+    })
+
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.content).toBe('# 本地编辑内容')
+    expect(snapshot.externalPrompt).toBeNull()
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it('live watcher 的 onMissing 必须走统一命令流，迟到 observedAt 不能把当前文档误打成 missing', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    const watchOptions = startWatchingMock.mock.calls[0][0]
+
+    // 先用一条当前 token 的有效事件把 event floor 推到更高水位，
+    // 随后的 live missing 如果还是旧 observedAt，就必须被统一状态机丢弃。
+    await winInfoUtil.executeCommand(winInfo, 'watch.file-changed', {
+      bindingToken: watchOptions.bindingToken,
+      observedAt: 1700000005010,
+      diskContent: '# 原始内容',
+      diskStat: {
+        mtimeMs: 1700000005010,
+      },
+    })
+    sendMock.mockClear()
+
+    watchOptions.onMissing?.(new Error('ENOENT'), {
+      bindingToken: watchOptions.bindingToken,
+      watchingPath: 'D:/demo.md',
+      observedAt: 1700000005010,
+    })
+
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.exists).toBe(true)
+    expect(snapshot.saved).toBe(true)
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it('live watcher 的 onRestored 必须走统一命令流，过期 bindingToken 不能把 missing 会话错误恢复', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    const watchOptions = startWatchingMock.mock.calls[0][0]
+
+    winInfoUtil.handleFileMissing(winInfo)
+    sendMock.mockClear()
+
+    watchOptions.onRestored?.('# 旧 watcher 的恢复内容', {
+      bindingToken: (watchOptions.bindingToken || 0) + 1,
+      watchingPath: 'D:/demo.md',
+      observedAt: 1700000005020,
+    })
+
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.exists).toBe(false)
+    expect(snapshot.saved).toBe(false)
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
   it('恢复链路 onRestored 使用传入的 diskContent 更新当前会话的 exists/content/saved 投影', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
@@ -1004,5 +1510,73 @@ describe('winInfoUtil 兼容 facade', () => {
 
     expect(sendMock.mock.calls.filter(call => call[1]?.event === 'window.effect.recent-list-changed')).toHaveLength(2)
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'update-recent')).toBe(false)
+  })
+
+  it('显式路径打开入口命中缺失 Markdown 时，必须直接拒绝，不能创建 missing-path 草稿窗口', async () => {
+    pathExistsMock.mockResolvedValue(false)
+
+    const result = await winInfoUtil.openDocumentPath('D:/missing.md', {
+      trigger: 'startup',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-missing',
+      path: 'D:/missing.md',
+    })
+    expect(winInfoUtil.getAll()).toHaveLength(0)
+  })
+
+  it('同一文档如果先以相对路径建窗，再以绝对路径打开，也必须复用已有窗口，避免重复开窗', async () => {
+    const relativePath = 'docs/demo.md'
+    const absolutePath = path.resolve(relativePath).replaceAll('\\', '/')
+
+    // 这里故意只让“绝对化后的目标路径”存在，
+    // 锁定 createNew / openDocumentPath 必须先完成路径标准化，不能直接拿原始相对路径访问文件系统。
+    pathExistsMock.mockImplementation(async targetPath => targetPath === absolutePath)
+    readFileMock.mockImplementation(async (targetPath) => {
+      if (targetPath === absolutePath) {
+        return '# 原始内容'
+      }
+      throw new Error(`unexpected read path: ${targetPath}`)
+    })
+
+    await winInfoUtil.createNew(relativePath)
+
+    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(browserWindowInstances).toHaveLength(1)
+    const [winInfo] = winInfoUtil.getAll()
+    expect(winInfo.path).toBe(absolutePath)
+
+    const openResult = await winInfoUtil.openDocumentPath(absolutePath, {
+      trigger: 'user',
+    })
+
+    expect(openResult).toEqual(expect.objectContaining({
+      ok: true,
+      reason: 'opened',
+      path: absolutePath,
+    }))
+    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(browserWindowInstances).toHaveLength(1)
+  })
+
+  it('显式路径打开入口命中目录型 *.md 目标时，必须按 not-file 拒绝，不能继续读文件', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    statMock.mockResolvedValue({
+      isFile: () => false,
+    })
+
+    const result = await winInfoUtil.openDocumentPath('D:/folder.md', {
+      trigger: 'second-instance',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-not-file',
+      path: 'D:/folder.md',
+    })
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(winInfoUtil.getAll()).toHaveLength(0)
   })
 })

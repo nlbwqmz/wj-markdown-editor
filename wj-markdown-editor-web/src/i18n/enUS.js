@@ -273,6 +273,7 @@ export default {
   },
   message: {
     theFileDoesNotExist: 'The file does not exist.',
+    onlyMarkdownFilesCanBeOpened: 'Only Markdown (.md) files can be opened.',
     invalidLocalResourceLink: 'The local resource link is invalid and cannot be resolved to a file.',
     theFileIsBeingSaved: 'The file is being saved.',
     theFileIsSavedSuccessfully: 'The file is saved successfully.',

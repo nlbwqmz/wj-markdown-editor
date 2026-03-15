@@ -247,13 +247,29 @@ function handleFileRestored(session, payload, { now }) {
     return { session, effects: [] }
   }
 
-  // 恢复事件本身只表示“路径重新出现”，
-  // 不能假装我们已经拿到了恢复后的磁盘真相。
-  // 真正的内容收敛必须等到恢复后的首次有效读盘（即后续 watch.file-changed）再决定。
-  session.documentSource.exists = true
-  session.documentSource.lastKnownStat = null
-  session.watchRuntime.fileExists = true
-  updateObservedFloor(session, observedAt)
+  const hasDiskContent = Object.prototype.hasOwnProperty.call(payload || {}, 'diskContent')
+
+  if (hasDiskContent) {
+    // live watcher 的 restored 回调已经带着“恢复后的首次成功读盘内容”，
+    // 这里必须立刻把磁盘基线恢复回来。
+    // 否则一旦紧随其后的 change 因 handled / internal-save 去重被 fileWatchUtil 吞掉，
+    // 会话就会卡在 exists=true 但 diskSnapshot 仍是 missing 的不一致态。
+    updateDiskBaseline(session, {
+      content: payload?.diskContent ?? '',
+      exists: true,
+      stat: payload?.diskStat || null,
+      observedAt,
+      source: 'watch-restored',
+    })
+  } else {
+    // 不带 diskContent 的 restored 仍只表达“路径重新出现”，
+    // 真正的内容真相要等后续首次有效读盘（watch.file-changed）来收敛。
+    session.documentSource.exists = true
+    session.documentSource.lastKnownStat = payload?.diskStat || null
+    session.watchRuntime.fileExists = true
+    updateObservedFloor(session, observedAt)
+  }
+
   session.externalRuntime.pendingExternalChange = null
   session.externalRuntime.resolutionState = 'restored'
 

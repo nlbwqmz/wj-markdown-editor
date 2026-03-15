@@ -418,6 +418,8 @@
 - 将 `watchRuntime.eventFloorObservedAt` 推进到 `max(当前值, savedAt)`，用于拒绝同一 `bindingToken` 下早于本次保存的迟到 watcher 事件
 - 如果这次保存建立了新的文档身份，或把当前会话从 `exists = false` 恢复为 `exists = true`，则必须立即触发 watcher 重绑并生成新的 `bindingToken`
 - 以上收敛不能等待后续 watcher 事件，否则会把“已写盘成功”的会话错误地停留在 `exists = false` / `dirty = true`
+- `save.succeeded` 的主链路只以“当前文档本体已经写盘成功”为真相，不得同步等待 `recent.add`。recent 持久化失败、缓慢或挂起都只能视为附属副作用失败，不能拖延手动保存完成态、关闭自动保存判定或后续补写调度
+- 如果 `save.succeeded` 后需要重绑 watcher，则重绑失败必须标准化回流 `watch.rebind-failed`，并把 watcher 置入 `degraded` / `rebinding` 链路；它属于监听副作用失败，不得把本次主保存回滚成失败，也不得把 IPC 结果升级成“保存失败”
 
 ### 7.3 后续编辑与补写规则
 
@@ -485,6 +487,17 @@
 - `copy-save.failed`
   - `reason: 'same-path' | 'write-failed'`
   - `path: string | null`
+
+为防止多个“保存副本”请求交错时出现状态串线，这里再固定运行态隔离规则：
+
+- `document.save-copy` 必须同时区分 `requestId` 与 `jobId`
+  - `requestId` 标识一次用户发起的“另存为/保存副本”交互
+  - `jobId` 只标识某次真正开始写盘的副本任务
+- 一个旧 `jobId` 的写盘结果，与一个新的“待选路径” `requestId` 允许并存；后者不能因为前者完成而被错误清空
+- `dialog.copy-target-selected` / `dialog.copy-target-cancelled` / `same-path` 这类“尚未真正写盘”的结果，只允许按 `requestId` 结算，不能伪造或消费其他活动 `jobId`
+- 来自真实写盘的 `copy-save.succeeded` / `copy-save.failed` 必须优先按匹配的 `jobId` 结算
+- 如果真实写盘结果缺少 `jobId`，只允许在 `requestId` 仍能命中“同一请求自己的活动 job”时回退结算；它不得跨 request 清理其他 active job，也不得覆盖更新中请求的完成态
+- renderer 与兼容提示层必须按“当前这一次 `requestId` 自己的 completion”消费结果，不能只读一份全局 `lastResult` 来决定成功/失败提示
 
 ### 7.7 关闭与首次保存决策矩阵
 
@@ -742,7 +755,6 @@
 - 如果 `bindingToken` 与当前 `watchRuntime.bindingToken` 不匹配，则整个事件直接丢弃，不做任何状态更新
 - 更新 `watchRuntime.lastError`
 - 将 `watchRuntime.status` 置为 `rebinding`
-- 记录日志
 - 通过 `window.effect.message` 向当前窗口发送一次性警告提示
 - 立即为本次重绑尝试生成新的 `bindingToken`
 - 调度一次针对同一路径的自动重绑尝试
@@ -898,6 +910,21 @@ IPC 会统一整理为三类：
 - 现有编辑器和预览页的刷新体验不下降
 - 消息提示语义不被削弱
 
+### 9.5 Keep-Alive 页面恢复契约
+
+当前编辑页与预览页都运行在 `KeepAlive` 容器内，因此页面恢复策略必须统一，而不能由各页面自行拼接：
+
+- `mounted` 在 `KeepAlive` 场景下不再主动发起 `document.get-session-snapshot`
+- 真正的“页面进入”语义统一由 `onActivated` 决定，且动作只能是以下三种之一：
+  - `replay-store`：如果当前生命周期已经应用过真快照，或全局 store 中已经存在可直接渲染的真快照，则立即重放 store
+  - `request-bootstrap`：如果当前生命周期尚未应用真快照，且 store 中也没有可渲染真快照，则补拉一次 `document.get-session-snapshot`
+  - `noop`：其余情况保持静默
+- 默认占位快照不是“可渲染真快照”，不得因为 store 有默认空对象就把页面提前从未就绪态打开
+- 如果其他活动链路已经把 store 推进到真实快照，恢复中的页面必须优先直接重放 store，而不是继续空白等待新的 IPC
+- 页面失活后必须暂停 `document.snapshot.changed` 订阅；隐藏页不能继续消费正文、标题、recent-missing 提示或关闭确认态更新
+- bootstrap 响应在真正落地前，必须同时通过“请求先后 guard + 生命周期 active/disposed 裁决”两层校验；迟到响应不得在页面已经失活或卸载后继续执行正文替换、标题更新、关闭提示同步或 recent-missing 提示
+- `closePrompt`、`recent-missing` 提示、正文内容刷新都必须挂在“统一接受 snapshot”入口上，不能让 push 路径与 bootstrap 路径各自维护一份不同的提示判定
+
 ## 10. 会话生命周期与资源集成要求
 
 ### 10.1 会话生命周期入口
@@ -1022,13 +1049,17 @@ IPC 会统一整理为三类：
     - `path: string`
   - `recent.get-list` 返回完整 recent 列表数组，返回 schema 与 `window.effect.recent-list-changed` 完全一致
   - `recent.add`：打开现有文件成功后执行；未命名草稿首次保存成功后执行
+    - 其中“保存成功”链路上的 `recent.add` 只允许作为附属副作用异步触发
+    - 它不得反向决定 `save.succeeded` 是否成立，也不得阻塞保存完成态、关闭自动保存判定或手动保存成功提示
+    - “打开现有文件成功”链路当前仍允许由打开流程直接调用 recent service；这条路径不改变保存真相，也不属于本次“保存完成态去阻塞”约束的主体
   - `recent.remove`：用户显式移除最近文件时执行，payload 固定为 `{ path: string }`
   - `recent.clear`：用户显式清空最近文件时执行，无 payload
   - `recent.remove` 与 `recent.clear` 都必须是幂等命令：
     - 目标路径不存在于 recent 列表时，`recent.remove` 也必须安全返回
     - recent 已为空时，`recent.clear` 也必须安全返回
   - recent 文件不存在时，只有用户显式触发 `recent.remove` 或 `recent.clear` 才允许修改列表；`document.open-recent` 失败不能隐式清理 recent
-  - `documentEffectService` 负责调用 recent service 完成 add / remove / clear
+  - `documentEffectService` 当前负责调用 recent service 完成 `recent.remove` / `recent.clear`，以及“保存成功”链路上的 `recent.add`
+  - “打开现有文件成功”链路上的 `recent.add` 当前仍允许由打开流程直接调用 recent service，这一点不与上条冲突
   - `windowSessionBridge` 只负责通过 `window.effect.recent-list-changed` 统一广播展示层更新；只有 recent 列表内容实际变化时才广播
   - `window.effect.recent-list-changed` 的 payload 为完整 recent 列表数组，renderer 不需要再次查询
 
@@ -1120,6 +1151,8 @@ IPC 会统一整理为三类：
 - 本地资源删除后的 Markdown 清理
 - 本地资源路径解析与错误提示
 - `save-other` 保存副本
+- 打开文件对话框对非 `.md` 文件的拦截
+- 同一物理文档在相对路径 / 绝对路径 / Windows 大小写变体下的复用与聚焦
 
 ### 13.3 测试层次
 
@@ -1134,6 +1167,24 @@ IPC 会统一整理为三类：
   - 窗口关闭链路
   - IPC 命令到主进程会话再到渲染层投影的关键路径
   - 资源相关业务回归
+  - KeepAlive 路由切换、页面失活/恢复、bootstrap 与推送快照的协同路径
+
+### 13.4 必须锁死的竞态与兼容回归场景
+
+以下场景不是“可选补充测试”，而是本次重构必须持续守住的硬验收项：
+
+- `save.succeeded` 不得把 watcher 已经观测到的更新磁盘版本回写成本次保存版本；存在外部冲突时，禁止把会话误标成 `saved=true / dirty=false`
+- 显式手动保存如果发生在自动保存进行中，手动保存意图必须被记录并在当前轮或后续补写完成后按“手动保存”语义结算，不能被自动保存吞掉
+- 关闭脏未命名草稿时，如果首次保存选路径被取消，必须直接清空关闭运行态并保持窗口打开，不能退化回未保存确认框
+- `watch.error` 必须进入“警告提示 + 新 token + 自动重绑”链路；不论是独立重绑 effect，还是保存成功后的内嵌重绑失败，都只能标准化为 watcher 异常，不能把已写盘成功误报成保存失败
+- `closePrompt` 在弹窗已存在、或 bootstrap 首屏恢复为关闭确认态时，都必须继续和最新 snapshot 保持同步，不能出现 store 已进入关闭确认态但界面没有弹窗的静默挂起
+- startup recent-missing 提示必须在编辑页与预览页都成立，且不能因为 bootstrap guard、首屏推送先到、或页面失活而静默丢失
+- KeepAlive 页面失活后不得继续监听和消费 `document.snapshot.changed`；恢复激活时不得重放默认空快照，也不得因为 `mounted + activated` 双通路造成双 bootstrap
+- 本地资源删除必须绑定到发起时的会话快照与资源上下文；如果请求等待期间正文、路径或页面活跃态发生变化，旧请求结果不得回写覆盖当前正文，也不得误删当前上下文之外的本地文件
+- 本地资源“在资源管理器中打开”、删除、删除后的 Markdown 清理、错误提示等既有能力都不得回退
+- Windows 下目录级 watcher 的事件路由必须按大小写不敏感匹配同一文件，不能因为回调里的文件名大小写变化而静默丢失外部修改 / 缺失 / 恢复事件
+- 同一物理文档在相对路径与绝对路径之间切换打开时，必须识别为同一会话；Windows 下路径大小写差异也必须命中同一文档身份
+- `document.save-copy` 在多个请求交错时必须按 `requestId` / `jobId` 隔离，旧请求结果不得覆盖新请求的提示、运行态或最终 completion
 
 ## 14. 实施流程要求
 

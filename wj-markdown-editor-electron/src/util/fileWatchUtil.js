@@ -17,6 +17,17 @@ function createContentVersion(content = '') {
 // 真正的内部保存抑制、版本去重、pending 管理仍然保留在窗口级 state 中。
 const directoryWatchRegistry = new Map()
 
+function toRegistryPathKey(targetPath) {
+  if (typeof targetPath !== 'string' || targetPath.trim() === '') {
+    return null
+  }
+
+  const resolvedPath = path.resolve(targetPath)
+  return process.platform === 'win32'
+    ? resolvedPath.toLowerCase()
+    : resolvedPath
+}
+
 /**
  * 文件监听状态。
  *
@@ -93,21 +104,23 @@ function isSubscriptionCurrent(subscription) {
 }
 
 function getDirectoryEntry(directoryPath) {
-  return directoryWatchRegistry.get(directoryPath) || null
+  return directoryWatchRegistry.get(toRegistryPathKey(directoryPath)) || null
 }
 
 function createDirectoryEntry(directoryPath, watch) {
+  const registryKey = toRegistryPathKey(directoryPath)
   const watcher = watch(directoryPath, (_eventType, filename) => {
     routeDirectoryEvent(directoryPath, filename).catch(() => {})
   })
 
   const entry = {
     directoryPath,
+    registryKey,
     watcher,
     files: new Map(),
   }
 
-  directoryWatchRegistry.set(directoryPath, entry)
+  directoryWatchRegistry.set(registryKey, entry)
   return entry
 }
 
@@ -122,6 +135,7 @@ function getOrCreateDirectoryEntry(directoryPath, watch) {
 function createFileEntry(filePath) {
   return {
     filePath,
+    fileRegistryKey: toRegistryPathKey(filePath),
     baseName: path.basename(filePath),
     subscriptions: new Set(),
     debounceTimer: null,
@@ -130,13 +144,14 @@ function createFileEntry(filePath) {
 }
 
 function getOrCreateFileEntry(directoryEntry, filePath) {
-  const currentEntry = directoryEntry.files.get(filePath)
+  const fileRegistryKey = toRegistryPathKey(filePath)
+  const currentEntry = directoryEntry.files.get(fileRegistryKey)
   if (currentEntry) {
     return currentEntry
   }
 
   const nextEntry = createFileEntry(filePath)
-  directoryEntry.files.set(filePath, nextEntry)
+  directoryEntry.files.set(fileRegistryKey, nextEntry)
   return nextEntry
 }
 
@@ -150,7 +165,7 @@ function removeFileEntryIfEmpty(directoryEntry, fileEntry) {
     fileEntry.debounceTimer = null
   }
 
-  directoryEntry.files.delete(fileEntry.filePath)
+  directoryEntry.files.delete(fileEntry.fileRegistryKey)
 }
 
 function removeDirectoryEntryIfEmpty(directoryEntry) {
@@ -162,7 +177,7 @@ function removeDirectoryEntryIfEmpty(directoryEntry) {
     directoryEntry.watcher.close()
   }
 
-  directoryWatchRegistry.delete(directoryEntry.directoryPath)
+  directoryWatchRegistry.delete(directoryEntry.registryKey)
 }
 
 function pruneInactiveSubscriptions(fileEntry) {
@@ -521,7 +536,7 @@ function routeDirectoryEvent(directoryPath, filename) {
 
   const fileNameText = Buffer.isBuffer(filename) ? filename.toString('utf8') : String(filename)
   const targetFilePath = path.resolve(directoryPath, fileNameText)
-  const targetFileEntry = directoryEntry.files.get(targetFilePath)
+  const targetFileEntry = directoryEntry.files.get(toRegistryPathKey(targetFilePath))
 
   if (!targetFileEntry) {
     return Promise.resolve()
@@ -541,7 +556,7 @@ function detachSubscription(subscription) {
     return
   }
 
-  const fileEntry = directoryEntry.files.get(subscription.filePath)
+  const fileEntry = directoryEntry.files.get(subscription.fileRegistryKey)
   if (!fileEntry) {
     return
   }
@@ -590,6 +605,7 @@ function startWatching({
     token: state.subscriptionToken,
     state,
     filePath,
+    fileRegistryKey: fileEntry.fileRegistryKey,
     directoryPath,
     bindingToken: Number.isFinite(bindingToken) ? bindingToken : null,
     debounceMs,

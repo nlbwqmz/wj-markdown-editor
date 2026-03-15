@@ -90,6 +90,117 @@ describe('documentCommandService', () => {
     expect(blurSaveSucceeded.effects.find(effect => effect.type === 'show-message')).toBeUndefined()
   })
 
+  it('blur-auto-save 进行中收到 document.save 时，当前 save 失败通知必须升级为 manual-save', () => {
+    const { store, service } = createTestContext(['blur'])
+    const session = createBoundFileSession({
+      sessionId: 'manual-save-should-upgrade-current-auto-save-failure-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002003,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# blur 自动保存内容',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'window.blur',
+    })
+
+    const manualSaveRequested = service.dispatch({
+      windowId,
+      command: 'document.save',
+    })
+
+    expect(manualSaveRequested.effects).toEqual([])
+    expect(manualSaveRequested.session.saveRuntime.trigger).toBe('manual-save')
+
+    const saveFailed = service.dispatch({
+      windowId,
+      command: 'save.failed',
+      payload: {
+        jobId: 'job-1',
+        trigger: 'blur-auto-save',
+        error: new Error('磁盘写入失败'),
+      },
+    })
+
+    expect(saveFailed.effects).toContainEqual({
+      type: 'notify-save-failed',
+      trigger: 'manual-save',
+      error: {
+        name: 'Error',
+        message: '磁盘写入失败',
+      },
+    })
+  })
+
+  it('blur-auto-save 进行中收到 document.save 后，如果保存期间又有新编辑，后续补写必须沿用 manual-save', () => {
+    const { store, service } = createTestContext(['blur'])
+    const session = createBoundFileSession({
+      sessionId: 'manual-save-should-upgrade-follow-up-save-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002004,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 第一版内容',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'window.blur',
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.save',
+    })
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 第二版内容',
+      },
+    })
+
+    const saveSucceeded = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-1',
+        revision: 1,
+        content: '# 第一版内容',
+        path: 'C:/docs/demo.md',
+        trigger: 'blur-auto-save',
+        savedAt: 1700000002005,
+        stat: null,
+      },
+    })
+
+    expect(saveSucceeded.effects).toContainEqual({
+      type: 'execute-save',
+      job: expect.objectContaining({
+        jobId: 'job-2',
+        trigger: 'manual-save',
+        revision: 2,
+        content: '# 第二版内容',
+      }),
+    })
+  })
+
   it('copy-save.succeeded / copy-save.failed 必须作为标准结果命令回流命令层，而不是旁路返回给 renderer', () => {
     const { store, service } = createTestContext([])
     const session = createBoundFileSession({
@@ -137,9 +248,10 @@ describe('documentCommandService', () => {
     })
 
     expect(copyRequested.effects).toEqual([
-      {
+      expect.objectContaining({
         type: 'open-copy-dialog',
-      },
+        requestId: 'copy-save-request-1',
+      }),
     ])
     expect(copySelected.effects).toEqual([
       {

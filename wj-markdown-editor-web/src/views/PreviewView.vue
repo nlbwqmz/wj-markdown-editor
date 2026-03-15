@@ -7,11 +7,19 @@ import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.js'
 import eventEmit from '@/util/channel/eventEmit.js'
+import commonUtil from '@/util/commonUtil.js'
 import {
-  createDocumentSessionBootstrapGuard,
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
+import {
+  resolveRendererSessionActivationAction,
+  shouldBootstrapSessionSnapshotOnMounted,
+} from '@/util/document-session/rendererSessionActivationStrategy.js'
+import { createRendererSessionEventSubscription } from '@/util/document-session/rendererSessionEventSubscription.js'
+import { createRendererSessionSnapshotController } from '@/util/document-session/rendererSessionSnapshotController.js'
+import { createResourceRequestContext } from '@/util/editor/resourceRequestContextUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
@@ -31,9 +39,15 @@ const previewContainer = ref()
 const config = ref({})
 const ready = ref(false)
 let previewSearchTargetActive = false
-const documentSessionBootstrapGuard = createDocumentSessionBootstrapGuard()
-
 const watermark = ref()
+const previewSessionSnapshotController = createRendererSessionSnapshotController({
+  applySnapshot: (snapshot) => {
+    applyDocumentSessionSnapshot(snapshot)
+  },
+  promptRecentMissing: commonUtil.recentFileNotExists,
+  syncClosePrompt: syncClosePromptSnapshot,
+  store,
+})
 
 function getPreviewSearchTargetElements() {
   return collectSearchTargetElements(previewContainer.value)
@@ -79,19 +93,20 @@ function applyDocumentSessionSnapshot(snapshot) {
 }
 
 function onDocumentSessionSnapshotChanged(snapshot) {
-  documentSessionBootstrapGuard.markSnapshotApplied()
-  applyDocumentSessionSnapshot(snapshot)
+  previewSessionSnapshotController.applyPushedSnapshot(snapshot)
 }
 
+const documentSessionSnapshotSubscription = createRendererSessionEventSubscription({
+  eventName: DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
+  listener: onDocumentSessionSnapshotChanged,
+  addListener: (eventName, listener) => eventEmit.on(eventName, listener),
+  removeListener: (eventName, listener) => eventEmit.remove(eventName, listener),
+})
+
 async function loadCurrentDocumentSessionSnapshot() {
-  const requestContext = documentSessionBootstrapGuard.beginRequest()
+  const requestContext = previewSessionSnapshotController.beginBootstrapRequest()
   const snapshot = await channelUtil.send({ event: 'document.get-session-snapshot' })
-  if (documentSessionBootstrapGuard.shouldApplyRequestResult(requestContext) !== true) {
-    return
-  }
-  const normalizedSnapshot = store.applyDocumentSessionSnapshot(snapshot)
-  window.document.title = normalizedSnapshot.windowTitle
-  applyDocumentSessionSnapshot(normalizedSnapshot)
+  previewSessionSnapshotController.applyBootstrapSnapshot(requestContext, snapshot)
 }
 
 watch(() => store.config, (newValue) => {
@@ -109,14 +124,20 @@ watch(() => store.config, (newValue) => {
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
   activatePreviewSearchTarget()
-  eventEmit.on(DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT, onDocumentSessionSnapshotChanged)
-  loadCurrentDocumentSessionSnapshot().then(() => {})
+  previewSessionSnapshotController.activate()
+  documentSessionSnapshotSubscription.activate()
+  if (shouldBootstrapSessionSnapshotOnMounted({
+    insideKeepAlive: true,
+  }) === true) {
+    loadCurrentDocumentSessionSnapshot().then(() => {})
+  }
 })
 
 onBeforeUnmount(() => {
+  previewSessionSnapshotController.dispose()
+  documentSessionSnapshotSubscription.dispose()
   closePreviewSearchBar()
   deactivatePreviewSearchTarget()
-  eventEmit.remove(DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT, onDocumentSessionSnapshotChanged)
 })
 
 watch(() => menuVisible.value, (newValue) => {
@@ -141,14 +162,31 @@ watch(() => menuVisible.value, (newValue) => {
 })
 
 onActivated(async () => {
+  previewSessionSnapshotController.activate()
+  documentSessionSnapshotSubscription.activate()
   activatePreviewSearchTarget()
   closePreviewSearchBar()
-  // 预览页被 keep-alive 恢复时，直接从全局 snapshot 真相重放一次内容，
-  // 避免停用期间错过推送后仍显示旧正文。
-  applyDocumentSessionSnapshot(store.documentSessionSnapshot)
+  const activationAction = resolveRendererSessionActivationAction({
+    hasAppliedSnapshot: previewSessionSnapshotController.hasAppliedSnapshot?.() === true,
+    needsBootstrapOnActivate: previewSessionSnapshotController.needsBootstrapOnActivate?.() === true,
+    storeSnapshot: store.documentSessionSnapshot,
+  })
+
+  if (activationAction === 'replay-store') {
+    // 预览页恢复时同样先吃全局 store 里的最新真快照，
+    // 避免在别的视图已经把 store 推进到最新正文后，这里还继续空白等待补拉。
+    applyDocumentSessionSnapshot(store.documentSessionSnapshot)
+    return
+  }
+
+  if (activationAction === 'request-bootstrap') {
+    loadCurrentDocumentSessionSnapshot().then(() => {})
+  }
 })
 
 onDeactivated(() => {
+  previewSessionSnapshotController.deactivate()
+  documentSessionSnapshotSubscription.deactivate()
   closePreviewSearchBar()
   deactivatePreviewSearchTarget()
 })
@@ -168,11 +206,15 @@ function onPreviewRefreshComplete() {
 }
 
 function onAssetContextmenu(assetInfo) {
+  if (!assetInfo?.resourceUrl) {
+    return
+  }
   channelUtil.send({
     event: 'document.resource.open-in-folder',
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
+      requestContext: createResourceRequestContext(store.documentSessionSnapshot),
     },
   })
 }
@@ -186,6 +228,7 @@ function onAssetOpen(assetInfo) {
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
+      requestContext: createResourceRequestContext(store.documentSessionSnapshot),
     },
   })
 }

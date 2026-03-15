@@ -114,6 +114,39 @@ describe('documentResourceService', () => {
     expect(showItemInFolder).not.toHaveBeenCalled()
   })
 
+  it('document.resource.open-in-folder 在请求上下文已过期时，必须拒绝执行，避免把旧文档资源打开到当前 active session 上', async () => {
+    const { service, showItemInFolder, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'open-stale-context-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004008,
+    })
+    const windowId = bindSession(store, session)
+
+    const result = await service.openInFolder({
+      windowId,
+      payload: {
+        resourceUrl: convertResourceUrl('./assets/demo.png'),
+        requestContext: {
+          sessionId: 'stale-session',
+          documentPath: 'D:\\docs\\other.md',
+        },
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      opened: false,
+      reason: 'stale-document-context',
+      path: null,
+    })
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+    expect(showItemInFolder).not.toHaveBeenCalled()
+  })
+
   it('resource.get-info 应该从 active session 解析相对资源并返回文件信息', async () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
@@ -213,6 +246,39 @@ describe('documentResourceService', () => {
       reason: 'delete-failed',
       path: 'D:\\docs\\assets\\demo.png',
     })
+  })
+
+  it('document.resource.delete-local 在请求上下文已过期时，必须拒绝执行，避免把旧文档资源删到当前 active session 上', async () => {
+    const { service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'delete-stale-context-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004007,
+    })
+    const windowId = bindSession(store, session)
+
+    const result = await service.deleteLocal({
+      windowId,
+      payload: {
+        resourceUrl: convertResourceUrl('./assets/demo.png'),
+        requestContext: {
+          sessionId: 'stale-session',
+          documentPath: 'D:\\docs\\other.md',
+        },
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      removed: false,
+      reason: 'stale-document-context',
+      path: null,
+    })
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+    expect(remove).not.toHaveBeenCalled()
   })
 
   it('resource.get-comparable-key 对不存在但可解析的本地路径，仍应返回稳定 key', async () => {
