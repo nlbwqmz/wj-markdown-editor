@@ -11,9 +11,9 @@ import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
 import {
-  createDocumentSessionBootstrapGuard,
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
+import { createEditorSessionSnapshotController } from '@/util/document-session/editorSessionSnapshotController.js'
 import { shouldSuppressNextContentSync } from '@/util/editor/contentUpdateMetaUtil.js'
 import {
   getPreviewAssetDeleteReasonMessageKey,
@@ -55,8 +55,20 @@ const multiReferenceDeleteModal = ref({
 })
 let contentUpdateToken = 0
 let applyingSessionContent = false
-let recentMissingPrompted = false
-const documentSessionBootstrapGuard = createDocumentSessionBootstrapGuard()
+const editorSessionSnapshotController = createEditorSessionSnapshotController({
+  applySnapshot: (snapshot) => {
+    applyDocumentSessionSnapshot(snapshot)
+  },
+  promptRecentMissing: (missingPath) => {
+    commonUtil.recentFileNotExists(missingPath)
+  },
+  normalizeBootstrapSnapshot: (snapshot) => {
+    return store.applyDocumentSessionSnapshot(snapshot)
+  },
+  setDocumentTitle: (title) => {
+    window.document.title = title
+  },
+})
 
 function updateEditorContent(nextContent, options = {}) {
   contentUpdateToken += 1
@@ -78,16 +90,9 @@ function save() {
   channelUtil.send({ event: 'save' })
 }
 
-function applyDocumentSessionSnapshot(snapshot, options = {}) {
+function applyDocumentSessionSnapshot(snapshot) {
   if (!snapshot) {
     return
-  }
-
-  if (options.promptRecentMissing === true && snapshot.isRecentMissing === true && snapshot.recentMissingPath && recentMissingPrompted === false) {
-    recentMissingPrompted = true
-    commonUtil.recentFileNotExists(snapshot.recentMissingPath)
-  } else if (snapshot.isRecentMissing !== true) {
-    recentMissingPrompted = false
   }
 
   // 编辑器内容现在只从 document session snapshot 同步，
@@ -99,21 +104,13 @@ function applyDocumentSessionSnapshot(snapshot, options = {}) {
 }
 
 function onDocumentSessionSnapshotChanged(snapshot) {
-  documentSessionBootstrapGuard.markSnapshotApplied()
-  applyDocumentSessionSnapshot(snapshot)
+  editorSessionSnapshotController.applyPushedSnapshot(snapshot)
 }
 
 async function loadCurrentDocumentSessionSnapshot() {
-  const requestContext = documentSessionBootstrapGuard.beginRequest()
+  const requestContext = editorSessionSnapshotController.beginBootstrapRequest()
   const snapshot = await channelUtil.send({ event: 'document.get-session-snapshot' })
-  if (documentSessionBootstrapGuard.shouldApplyRequestResult(requestContext) !== true) {
-    return
-  }
-  const normalizedSnapshot = store.applyDocumentSessionSnapshot(snapshot)
-  window.document.title = normalizedSnapshot.windowTitle
-  applyDocumentSessionSnapshot(normalizedSnapshot, {
-    promptRecentMissing: true,
-  })
+  editorSessionSnapshotController.applyBootstrapSnapshot(requestContext, snapshot)
 }
 
 onMounted(async () => {
