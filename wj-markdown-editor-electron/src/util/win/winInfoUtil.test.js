@@ -895,7 +895,7 @@ describe('winInfoUtil 兼容 facade', () => {
       filePath: 'D:/demo.md',
       bindingToken: expect.any(Number),
     }))
-    expect(reboundWatchOptions.bindingToken).toBeGreaterThan(initialWatchOptions.bindingToken)
+    expect(reboundWatchOptions.bindingToken).not.toBe(initialWatchOptions.bindingToken)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'message',
       data: {

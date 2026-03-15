@@ -286,6 +286,7 @@ describe('documentEffectService', () => {
       watchingPath: 'C:/docs/demo.md',
       watchingDirectoryPath: 'C:/docs',
     })
+    expect(dispatchCommand.mock.calls.filter(call => call[0] === 'watch.bound')).toHaveLength(1)
     expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.rebind-failed')).toBe(false)
   })
 
@@ -312,6 +313,7 @@ describe('documentEffectService', () => {
         message: 'watch crashed',
       }),
     })
+    expect(dispatchCommand.mock.calls.filter(call => call[0] === 'watch.rebind-failed')).toHaveLength(1)
     expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.bound')).toBe(false)
   })
 
@@ -341,6 +343,7 @@ describe('documentEffectService', () => {
         message: 'watch path missing',
       }),
     })
+    expect(dispatchCommand.mock.calls.filter(call => call[0] === 'watch.rebind-failed')).toHaveLength(1)
     expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.bound')).toBe(false)
   })
 })
