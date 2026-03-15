@@ -19,6 +19,7 @@ function ensureSaveRuntime(session) {
       status: 'idle',
       inFlightJobId: null,
       inFlightRevision: null,
+      inFlightBaseDiskVersionHash: null,
       requestedRevision: 0,
       trigger: null,
       lastError: null,
@@ -29,6 +30,12 @@ function ensureSaveRuntime(session) {
   }
   if (!('pendingSaveContext' in session.saveRuntime)) {
     session.saveRuntime.pendingSaveContext = null
+  }
+  if (!('inFlightBaseDiskVersionHash' in session.saveRuntime)) {
+    // 命令层也要补齐这条字段，原因是 store 里可能还存在旧会话结构。
+    // 这里不参与保存裁决，只负责保证任何命令进入前运行态字段完整，
+    // 避免旧 session 在新保存逻辑里出现 undefined 分支。
+    session.saveRuntime.inFlightBaseDiskVersionHash = null
   }
 }
 

@@ -11,6 +11,7 @@ function ensureSaveRuntime(session) {
       status: 'idle',
       inFlightJobId: null,
       inFlightRevision: null,
+      inFlightBaseDiskVersionHash: null,
       requestedRevision: 0,
       trigger: null,
       lastError: null,
@@ -25,6 +26,12 @@ function ensureSaveRuntime(session) {
   }
   if (!('pendingSaveContext' in session.saveRuntime)) {
     session.saveRuntime.pendingSaveContext = null
+  }
+  if (!('inFlightBaseDiskVersionHash' in session.saveRuntime)) {
+    // 这条字段只记录“当前 in-flight save 启动时，看到的磁盘版本基线”。
+    // save.succeeded 只能拿它来判断 watcher 是否在保存期间已经推进到了更新版本，
+    // 绝不能再拿“当前 diskSnapshot 和 lastKnownDiskVersionHash 恰好相等”这种易受竞态污染的条件兜底。
+    session.saveRuntime.inFlightBaseDiskVersionHash = null
   }
 }
 
@@ -108,6 +115,51 @@ function createSaveJob({ session, path: targetPath, trigger, createJobId }) {
   }
 }
 
+function getLatestKnownDiskVersionHash(session) {
+  if (typeof session.externalRuntime?.lastKnownDiskVersionHash === 'string'
+    && session.externalRuntime.lastKnownDiskVersionHash) {
+    return session.externalRuntime.lastKnownDiskVersionHash
+  }
+
+  if (typeof session.diskSnapshot?.versionHash === 'string' && session.diskSnapshot.versionHash) {
+    return session.diskSnapshot.versionHash
+  }
+
+  return null
+}
+
+function clearInFlightSaveRuntime(session) {
+  session.saveRuntime.inFlightJobId = null
+  session.saveRuntime.inFlightRevision = null
+  session.saveRuntime.inFlightBaseDiskVersionHash = null
+}
+
+function isSessionSaved(session) {
+  return session.editorSnapshot.content === session.diskSnapshot.content
+    && Boolean(session.documentSource?.exists) === Boolean(session.diskSnapshot?.exists)
+}
+
+function buildUnsavedPromptResult(session) {
+  ensureCloseRuntime(session)
+
+  // 关闭链路等待的 save job 返回“成功”并不等于当前文档已经可安全关闭。
+  // 只要保存完成后派生态仍然是 dirty，例如 watcher 已先推进到外部版本，
+  // 就必须回到未保存确认态，而不是直接关窗。
+  session.closeRuntime.intent = 'close'
+  session.closeRuntime.promptReason = 'unsaved-changes'
+  session.closeRuntime.waitingSaveJobId = null
+  session.closeRuntime.awaitingPathSelection = false
+
+  return {
+    session,
+    effects: [
+      {
+        type: 'show-unsaved-prompt',
+      },
+    ],
+  }
+}
+
 function shouldStartSave(session, targetPath) {
   const requestedPath = targetPath || session.documentSource?.path || null
   if (!requestedPath) {
@@ -147,6 +199,7 @@ function beginSave(session, { trigger, path: targetPath, createJobId }) {
     session.saveRuntime.status = 'idle'
     session.saveRuntime.trigger = trigger
     session.saveRuntime.lastError = null
+    session.saveRuntime.inFlightBaseDiskVersionHash = null
     return {
       session,
       effects: [],
@@ -163,6 +216,7 @@ function beginSave(session, { trigger, path: targetPath, createJobId }) {
   session.saveRuntime.status = 'queued'
   session.saveRuntime.inFlightJobId = saveJob.jobId
   session.saveRuntime.inFlightRevision = saveJob.revision
+  session.saveRuntime.inFlightBaseDiskVersionHash = getLatestKnownDiskVersionHash(session)
   session.saveRuntime.trigger = trigger
   session.saveRuntime.lastError = null
 
@@ -184,8 +238,7 @@ function continueQueuedSaveIfNeeded(session, {
   ensureSaveRuntime(session)
   if ((session.editorSnapshot.revision || 0) <= (session.persistedSnapshot.revision || 0)) {
     session.saveRuntime.status = 'idle'
-    session.saveRuntime.inFlightJobId = null
-    session.saveRuntime.inFlightRevision = null
+    clearInFlightSaveRuntime(session)
     session.saveRuntime.trigger = null
     return {
       session,
@@ -423,6 +476,8 @@ export function createSaveCoordinator({
       const previousExists = session.documentSource.exists
       const savedHash = createContentHash(payload.content)
       const closeWaitingCurrentJob = isActiveCloseWaitingJob(session, payload.jobId)
+      const inFlightBaseDiskVersionHash = session.saveRuntime.inFlightBaseDiskVersionHash
+      const latestKnownDiskVersionHash = getLatestKnownDiskVersionHash(session)
 
       session.persistedSnapshot.content = payload.content
       session.persistedSnapshot.revision = payload.revision
@@ -437,8 +492,16 @@ export function createSaveCoordinator({
       session.documentSource.missingReason = null
       session.documentSource.lastKnownStat = payload.stat || null
 
-      // 只有用“本次冻结快照”更新磁盘基线，才能避免把写盘期间新增的编辑误算为已保存。
-      if (!session.externalRuntime?.lastKnownDiskVersionHash || session.externalRuntime.lastKnownDiskVersionHash === session.diskSnapshot.versionHash || session.externalRuntime.lastKnownDiskVersionHash === savedHash) {
+      // `save.succeeded` 只能在两种场景下回写 diskSnapshot：
+      // 1. watcher 自保存启动后从未把磁盘版本推进到新的 hash，仍停留在本次 save 开始时冻结的基线
+      // 2. watcher 已经明确观测到的最新磁盘版本就是本次保存写出的版本
+      //
+      // 一旦保存期间已经出现“不同于启动基线、也不同于 savedHash”的 watcher 版本，
+      // 就说明磁盘真相已经被外部版本覆盖；此时只能更新 persistedSnapshot，
+      // 绝不能再把 diskSnapshot / lastKnownDiskVersionHash 回写成本次保存版本。
+      if (!latestKnownDiskVersionHash
+        || latestKnownDiskVersionHash === inFlightBaseDiskVersionHash
+        || latestKnownDiskVersionHash === savedHash) {
         session.diskSnapshot.content = payload.content
         session.diskSnapshot.versionHash = savedHash
         session.diskSnapshot.exists = true
@@ -462,8 +525,7 @@ export function createSaveCoordinator({
       }
       session.watchRuntime.fileExists = true
 
-      session.saveRuntime.inFlightJobId = null
-      session.saveRuntime.inFlightRevision = null
+      clearInFlightSaveRuntime(session)
       session.saveRuntime.lastError = null
 
       if (session.editorSnapshot.revision > payload.revision) {
@@ -483,6 +545,10 @@ export function createSaveCoordinator({
         // `continueQueuedSaveIfNeeded()` 会判定“不需要补写”并返回空 effects。
         // 对关闭链路来说，这一分支不能直接返回空结果，否则窗口会永远卡在 waitingSaveJobId。
         if (closeWaitingCurrentJob && !nextResult.session.saveRuntime.inFlightJobId) {
+          if (!isSessionSaved(session)) {
+            return buildUnsavedPromptResult(session)
+          }
+
           resetCloseRuntime(session)
           return {
             session,
@@ -501,6 +567,10 @@ export function createSaveCoordinator({
       session.saveRuntime.trigger = null
 
       if (closeWaitingCurrentJob) {
+        if (!isSessionSaved(session)) {
+          return buildUnsavedPromptResult(session)
+        }
+
         resetCloseRuntime(session)
         return {
           session,
@@ -532,8 +602,7 @@ export function createSaveCoordinator({
       const closeWaitingCurrentJob = isActiveCloseWaitingJob(session, payload.jobId)
 
       session.saveRuntime.status = 'idle'
-      session.saveRuntime.inFlightJobId = null
-      session.saveRuntime.inFlightRevision = null
+      clearInFlightSaveRuntime(session)
       session.saveRuntime.lastError = serializeError(payload.error)
       session.saveRuntime.trigger = null
 

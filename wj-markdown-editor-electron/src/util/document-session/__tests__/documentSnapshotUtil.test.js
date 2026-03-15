@@ -62,6 +62,7 @@ describe('documentSnapshotUtil', () => {
         status: 'idle',
         inFlightJobId: null,
         inFlightRevision: null,
+        inFlightBaseDiskVersionHash: null,
         requestedRevision: 0,
         trigger: null,
         lastError: null,

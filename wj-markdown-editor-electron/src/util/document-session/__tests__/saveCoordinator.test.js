@@ -114,6 +114,76 @@ describe('saveCoordinator', () => {
     })
   })
 
+  it('watcher 已先观测到新的磁盘版本时，save.succeeded 只能更新 persistedSnapshot，不能把 diskSnapshot 回写成本地保存版本', () => {
+    const coordinator = createDeterministicCoordinator()
+    const session = createBoundFileSession({
+      sessionId: 'watcher-precedence-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000001014,
+    })
+
+    session.editorSnapshot.content = '# 本地保存内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000001015
+    session.saveRuntime.requestedRevision = 1
+
+    const saveRequested = coordinator.requestSave(session, {
+      trigger: 'manual-save',
+    })
+
+    // 模拟保存完成前，watcher 已经先把磁盘真相推进到更晚的外部版本。
+    // 这是设计文档明确规定“save.succeeded 不得回写覆盖”的场景。
+    saveRequested.session.diskSnapshot.content = '# 外部版本'
+    saveRequested.session.diskSnapshot.versionHash = 'external-hash'
+    saveRequested.session.diskSnapshot.exists = true
+    saveRequested.session.diskSnapshot.stat = {
+      mtimeMs: 1700000001016,
+    }
+    saveRequested.session.diskSnapshot.observedAt = 1700000001016
+    saveRequested.session.diskSnapshot.source = 'watch-change'
+    saveRequested.session.externalRuntime.lastKnownDiskVersionHash = 'external-hash'
+    saveRequested.session.externalRuntime.pendingExternalChange = {
+      version: 1,
+      versionHash: 'external-hash',
+      diskContent: '# 外部版本',
+      diskStat: {
+        mtimeMs: 1700000001016,
+      },
+      detectedAt: 1700000001016,
+      watchBindingToken: 1,
+      watchingPath: 'C:/docs/demo.md',
+      comparablePath: 'c:\\docs\\demo.md',
+    }
+    saveRequested.session.externalRuntime.resolutionState = 'pending-user'
+
+    const saveSucceeded = coordinator.handleSaveSucceeded(saveRequested.session, {
+      jobId: 'job-1',
+      revision: 1,
+      content: '# 本地保存内容',
+      path: 'C:/docs/demo.md',
+      trigger: 'manual-save',
+      savedAt: 1700000001017,
+      stat: {
+        mtimeMs: 1700000001017,
+      },
+    })
+
+    expect(saveSucceeded.session.persistedSnapshot).toEqual({
+      content: '# 本地保存内容',
+      revision: 1,
+      savedAt: 1700000001017,
+      path: 'C:/docs/demo.md',
+      jobId: 'job-1',
+    })
+    expect(saveSucceeded.session.diskSnapshot.content).toBe('# 外部版本')
+    expect(saveSucceeded.session.diskSnapshot.versionHash).toBe('external-hash')
+    expect(saveSucceeded.session.externalRuntime.lastKnownDiskVersionHash).toBe('external-hash')
+    expect(deriveDocumentSnapshot(saveSucceeded.session).saved).toBe(false)
+    expect(deriveDocumentSnapshot(saveSucceeded.session).dirty).toBe(true)
+  })
+
   it('未命名草稿首次保存必须先等待 dialog.save-target-selected，取消后会话保持草稿态', () => {
     const coordinator = createDeterministicCoordinator()
     const session = createDraftSession({
