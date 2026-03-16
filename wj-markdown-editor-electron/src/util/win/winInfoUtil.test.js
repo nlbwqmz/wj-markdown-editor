@@ -272,9 +272,11 @@ describe('winInfoUtil 兼容 facade', () => {
     saveDeferred.resolve()
     await saveDeferred.promise
     await vi.waitFor(() => {
-      expect(winInfo.content).toBe('# blur 自动保存内容')
       expect(winInfo.tempContent).toBe('# blur 自动保存内容')
     })
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.content).toBe('# blur 自动保存内容')
+    expect(snapshot.saved).toBe(true)
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'message'
       && call[1]?.data?.type === 'success')).toBe(false)
   })
@@ -368,8 +370,10 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(writeFileMock).toHaveBeenCalledTimes(1)
     expect(writeFileMock).toHaveBeenCalledWith('D:/compat-draft.md', '# 草稿内容')
     expect(winInfo.path).toBe('D:/compat-draft.md')
-    expect(winInfo.content).toBe('# 草稿内容')
     expect(winInfo.tempContent).toBe('# 草稿内容')
+    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.content).toBe('# 草稿内容')
+    expect(snapshot.saved).toBe(true)
   })
 
   it('document.save 在真实写盘成功后必须返回 true，而不是 effects 执行前的旧快照结果', async () => {
@@ -1333,16 +1337,15 @@ describe('winInfoUtil 兼容 facade', () => {
     })
 
     winInfoUtil.handleFileMissing(winInfo)
-    const missingPayload = winInfoUtil.getFileInfoPayload(winInfo)
-    expect(missingPayload.exists).toBe(false)
+    const missingSnapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+    expect(missingSnapshot.exists).toBe(false)
 
     watchOptions.onRestored('# 恢复后的磁盘内容')
 
-    const restoredPayload = winInfoUtil.getFileInfoPayload(winInfo)
-    expect(restoredPayload.exists).toBe(true)
-    expect(restoredPayload.content).toBe('# 恢复后的磁盘内容')
-    expect(restoredPayload.saved).toBe(true)
-    expect(winInfo.content).toBe('# 恢复后的磁盘内容')
+    const restoredSnapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+    expect(restoredSnapshot.exists).toBe(true)
+    expect(restoredSnapshot.content).toBe('# 恢复后的磁盘内容')
+    expect(restoredSnapshot.saved).toBe(true)
   })
 
   it('缺失后恢复时，即使恢复内容与之前 internal-save / handled 版本 hash 相同，也不能停在 exists=true 但磁盘基线仍缺失的不一致态', async () => {
@@ -1366,10 +1369,10 @@ describe('winInfoUtil 兼容 facade', () => {
     winInfoUtil.handleFileMissing(winInfo)
     watchOptions.onRestored('# 原始内容')
 
-    const restoredPayload = winInfoUtil.getFileInfoPayload(winInfo)
-    expect(restoredPayload.exists).toBe(true)
-    expect(restoredPayload.content).toBe('# 原始内容')
-    expect(restoredPayload.saved).toBe(true)
+    const restoredSnapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
+    expect(restoredSnapshot.exists).toBe(true)
+    expect(restoredSnapshot.content).toBe('# 原始内容')
+    expect(restoredSnapshot.saved).toBe(true)
   })
 
   it('缺失后恢复时，即使后续 change 被 internal-save / handled 去重吞掉，也必须立刻推送最新 snapshot 清掉缺失态', async () => {
@@ -1452,29 +1455,6 @@ describe('winInfoUtil 兼容 facade', () => {
     await vi.waitFor(() => {
       expect(winInfoUtil.getAll()).toHaveLength(0)
     })
-  })
-
-  it('getFileInfoPayload 的 saved 必须以 session 快照为准，不能继续读 winInfo.content/tempContent 作为保存真相', async () => {
-    pathExistsMock.mockResolvedValue(true)
-    readFileMock.mockResolvedValue('# 原始内容')
-
-    await winInfoUtil.createNew('D:/demo.md')
-
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 已修改内容')
-
-    await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 已修改内容')
-    })
-
-    // 故意篡改 winInfo 镜像字段，验证 facade 不再把它们当作保存态真相。
-    winInfo.content = '# 已修改内容'
-    winInfo.tempContent = '# 已修改内容'
-
-    const payload = winInfoUtil.getFileInfoPayload(winInfo)
-
-    expect(payload.saved).toBe(false)
-    expect(payload.content).toBe('# 已修改内容')
   })
 
   it('窗口内本地资源链接打开失败时，必须给出明确提示，不能静默结束', async () => {

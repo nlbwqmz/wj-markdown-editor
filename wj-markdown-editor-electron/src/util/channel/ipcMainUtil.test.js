@@ -181,7 +181,6 @@ vi.mock('../win/winInfoUtil.js', () => {
       executeCommand,
       executeResourceCommand,
       executeResourceCommandSync,
-      getFileInfoPayload: vi.fn(),
       updateTempContent: vi.fn(),
     },
   }
@@ -513,7 +512,6 @@ describe('ipcMainUtil save', () => {
       exists: true,
       win: { id: 1 },
     }))
-    winInfoUtil.getFileInfoPayload.mockReset()
 
     return {
       sender,
@@ -594,7 +592,6 @@ describe('ipcMainUtil command mapping', () => {
       exists: true,
       win: { id: 1 },
     }))
-    winInfoUtil.getFileInfoPayload.mockReset()
 
     return {
       sender,
@@ -728,7 +725,6 @@ describe('ipcMainUtil command mapping', () => {
 
     await import('./ipcMainUtil.js')
     const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
-    winInfoUtil.getFileInfoPayload.mockReset()
     winInfoUtil.executeCommand.mockReset()
     winInfoUtil.getWinInfo.mockImplementation((targetWin) => {
       if (targetWin?.id === 2) {
@@ -972,6 +968,5 @@ describe('ipcMainUtil command mapping', () => {
       false,
     ])
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
-    expect(winInfoUtil.getFileInfoPayload).not.toHaveBeenCalled()
   })
 })

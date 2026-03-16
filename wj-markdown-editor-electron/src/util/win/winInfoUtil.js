@@ -83,14 +83,6 @@ function findByWin(win) {
   return winInfoList.find(item => item.win === win)
 }
 
-function isSaved(winInfo) {
-  const session = getSessionByWinInfo(winInfo)
-  if (!session) {
-    return false
-  }
-  return deriveDocumentSnapshot(session).saved
-}
-
 function isWindowAlive(win) {
   return Boolean(win) && (typeof win.isDestroyed !== 'function' || win.isDestroyed() === false)
 }
@@ -110,38 +102,6 @@ function normalizeComparablePath(targetPath) {
   }
 
   return path.posix.resolve(normalizedPath.replaceAll('\\', '/'))
-}
-
-function canUseMissingPathForDisplay(winInfo) {
-  return Boolean(winInfo?.missingPath)
-    && winInfo?.missingPathReason === MISSING_PATH_REASON.OPEN_TARGET_MISSING
-}
-
-function getDisplayPath(winInfo) {
-  if (winInfo?.path) {
-    return winInfo.path
-  }
-  return canUseMissingPathForDisplay(winInfo) ? winInfo.missingPath : null
-}
-
-function getDisplayFileName(winInfo) {
-  return winInfo?.path ? path.basename(winInfo.path) : 'Unnamed'
-}
-
-function getFileInfoPayload(winInfo) {
-  const session = getSessionByWinInfo(winInfo)
-  const snapshot = session ? deriveDocumentSnapshot(session) : null
-  return {
-    // 这里明确以 session 快照为真相来源。
-    // `winInfo.path/content/tempContent` 只是兼容镜像，不能再参与 saved/dirty 判断，
-    // 否则很容易被旧调用方的直接赋值覆盖掉真正的保存态。
-    fileName: snapshot?.fileName || getDisplayFileName(winInfo),
-    content: snapshot?.content ?? winInfo.tempContent,
-    saved: snapshot?.saved ?? isSaved(winInfo),
-    path: snapshot?.displayPath ?? getDisplayPath(winInfo),
-    exists: snapshot?.exists ?? winInfo.exists,
-    isRecent: winInfo.isRecent,
-  }
 }
 
 function createExternalWatchState() {
@@ -165,16 +125,6 @@ function getSessionByWinInfo(winInfo) {
   }
   return documentSessionStore.getSession(winInfo.sessionId)
     || documentSessionStore.getSessionByWindowId(winInfo.id)
-}
-
-function syncSavedState(winInfo) {
-  const saved = isSaved(winInfo)
-  winInfo.lastNotifiedSavedState = saved
-
-  // `winInfo.lastNotifiedSavedState` 仍然保留，方便旧 facade 在调试或兼容逻辑里拿到最近一次
-  // 已投影的保存态镜像；真正发给 renderer 的文档状态只能走 `document.snapshot.changed`。
-  // 否则这里一旦再次直接推事件，就会把已经收敛到 bridge 的单一真相重新拆成两套出口。
-  return saved
 }
 
 function publishSnapshotChanged(winInfo, snapshot) {
@@ -217,15 +167,10 @@ function syncWinInfoFromSession(winInfo, session) {
     return
   }
 
-  const snapshot = deriveDocumentSnapshot(session)
   winInfo.path = session.documentSource.path
   winInfo.exists = session.documentSource.exists
-  winInfo.missingPath = session.documentSource.missingPath
-  winInfo.missingPathReason = session.documentSource.missingReason
   winInfo.tempContent = session.editorSnapshot.content
-  winInfo.content = session.diskSnapshot.content
   winInfo.forceClose = session.closeRuntime.forceClose
-  winInfo.lastSnapshot = snapshot
 }
 
 function updateSessionForLegacyExternalEvent(winInfo, updater) {
@@ -718,7 +663,6 @@ async function dispatchCommand(winInfo, command, payload, options = {}) {
     payload,
   })
   syncWinInfoFromSession(winInfo, result.session)
-  syncSavedState(winInfo)
   const nextSnapshot = result?.snapshot || getSessionSnapshot(winInfo)
   if (publishSnapshotMode === 'always'
     || getSnapshotSignature(previousSnapshot) !== getSnapshotSignature(nextSnapshot)) {
@@ -806,7 +750,6 @@ function handleFileMissing(winInfo) {
   winInfo.exists = false
   resetLegacyExternalWatchHistory(winInfo.externalWatch)
   applyLegacyMissingToSession(winInfo)
-  syncSavedState(winInfo)
   publishSnapshotChanged(winInfo)
   return 'missing'
 }
@@ -822,7 +765,6 @@ function handleExternalChange(winInfo, change, options = {}) {
       versionHash: change?.versionHash || createContentHash(change?.content ?? ''),
       resolutionResult: 'noop',
     })
-    syncSavedState(winInfo)
     publishSnapshotChanged(winInfo)
     if (winInfo.externalWatch) {
       fileWatchUtil.settlePendingChange(winInfo.externalWatch, change.versionHash)
@@ -838,13 +780,11 @@ function handleExternalChange(winInfo, change, options = {}) {
     if (winInfo.externalWatch) {
       fileWatchUtil.settlePendingChange(winInfo.externalWatch, change.versionHash)
     }
-    syncSavedState(winInfo)
     publishSnapshotChanged(winInfo)
     return 'applied'
   }
 
   applyLegacyPendingExternalChangeToSession(winInfo, change)
-  syncSavedState(winInfo)
   publishSnapshotChanged(winInfo)
   return 'prompted'
 }
@@ -1328,18 +1268,12 @@ async function createNew(filePath, isRecent = false) {
     id,
     win,
     sessionId: null,
-    content,
     tempContent: content,
     path: exists ? normalizedFilePath : null,
-    missingPath: exists ? null : (normalizedFilePath || null),
-    missingPathReason: exists || !normalizedFilePath ? null : MISSING_PATH_REASON.OPEN_TARGET_MISSING,
     exists,
-    isRecent,
     externalWatch: createExternalWatchState(),
-    lastNotifiedSavedState: true,
     allowImmediateClose: false,
     forceClose: false,
-    lastSnapshot: null,
     lastClosedManualRequestCompletions: [],
   }
   winInfoList.push(winInfo)
@@ -1403,7 +1337,6 @@ async function createNew(filePath, isRecent = false) {
       command,
     })
     syncWinInfoFromSession(currentWinInfo, result.session)
-    syncSavedState(currentWinInfo)
     publishSnapshotChanged(currentWinInfo)
 
     const shouldHoldClose = result.effects.some(effect => effect.type === 'hold-window-close'
@@ -1463,7 +1396,6 @@ export default {
     return winInfoList.find(item => item.win.webContents.id === webContentsId)
   },
   getSessionSnapshot,
-  getFileInfoPayload,
   handleLocalResourceLinkOpen,
   updateTempContent,
   handleExternalChange,
