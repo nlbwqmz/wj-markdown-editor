@@ -181,6 +181,11 @@ vi.mock('../win/winInfoUtil.js', () => {
       executeCommand,
       executeResourceCommand,
       executeResourceCommandSync,
+      getDocumentContext: vi.fn(winInfo => ({
+        path: winInfo?.path || null,
+        exists: winInfo?.exists === true,
+        content: typeof winInfo?.tempContent === 'string' ? winInfo.tempContent : '',
+      })),
       updateTempContent: vi.fn(),
     },
   }

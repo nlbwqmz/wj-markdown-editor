@@ -167,10 +167,27 @@ function syncWinInfoFromSession(winInfo, session) {
     return
   }
 
-  winInfo.path = session.documentSource.path
-  winInfo.exists = session.documentSource.exists
-  winInfo.tempContent = session.editorSnapshot.content
   winInfo.forceClose = session.closeRuntime.forceClose
+}
+
+function defineCompatPathAccessor(winInfo, initialPath = null) {
+  let compatPathOverride = typeof initialPath === 'string' && initialPath.trim() !== ''
+    ? initialPath
+    : null
+
+  Object.defineProperty(winInfo, 'path', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      const session = getSessionByWinInfo(winInfo)
+      return session?.documentSource?.path || compatPathOverride
+    },
+    set(value) {
+      compatPathOverride = typeof value === 'string' && value.trim() !== ''
+        ? value
+        : null
+    },
+  })
 }
 
 function updateSessionForLegacyExternalEvent(winInfo, updater) {
@@ -747,7 +764,6 @@ function handleFileMissing(winInfo) {
     return 'ignored'
   }
 
-  winInfo.exists = false
   resetLegacyExternalWatchHistory(winInfo.externalWatch)
   applyLegacyMissingToSession(winInfo)
   publishSnapshotChanged(winInfo)
@@ -930,8 +946,8 @@ async function executeDocumentSaveCommand(winInfo) {
 }
 
 function updateTempContent(winInfo, content) {
-  // 兼容层不再先改本地镜像再回写 session，
-  // 而是直接把编辑命令送进命令层，随后统一由 session 快照反投影到 winInfo。
+  // 编辑更新直接进入统一命令流，
+  // Electron 侧其他模块如需读取最新正文，必须回到 session getter，而不是继续依赖旧镜像字段。
   dispatchCommand(winInfo, 'document.edit', {
     content,
   }).then(() => {})
@@ -950,6 +966,28 @@ function getSessionSnapshot(winInfo) {
     return null
   }
   return windowSessionBridge.getSessionSnapshot(winInfo.id)
+}
+
+function getDocumentContext(winInfo) {
+  const session = getSessionByWinInfo(winInfo)
+  const snapshot = session ? deriveDocumentSnapshot(session) : null
+  const fallbackPath = typeof winInfo?.path === 'string' && winInfo.path.trim() !== ''
+    ? winInfo.path
+    : null
+  const fallbackExists = winInfo?.exists === true
+  const fallbackContent = typeof winInfo?.tempContent === 'string'
+    ? winInfo.tempContent
+    : ''
+
+  return {
+    // 统一把“当前窗口文档真相”收口成只读上下文，供仍在 Electron 侧运行的外围模块读取。
+    // 优先级固定为 session/snapshot，其次才是少量兼容回退，避免外围模块继续各自偷读镜像字段。
+    path: session?.documentSource?.path || fallbackPath,
+    exists: snapshot?.exists ?? fallbackExists,
+    content: snapshot?.content ?? session?.editorSnapshot?.content ?? fallbackContent,
+    saved: snapshot?.saved === true,
+    fileName: snapshot?.fileName || 'Unnamed',
+  }
 }
 
 async function waitForSaveRuntimeToSettle(winInfo, {
@@ -1268,14 +1306,14 @@ async function createNew(filePath, isRecent = false) {
     id,
     win,
     sessionId: null,
-    tempContent: content,
-    path: exists ? normalizedFilePath : null,
-    exists,
     externalWatch: createExternalWatchState(),
     allowImmediateClose: false,
     forceClose: false,
     lastClosedManualRequestCompletions: [],
   }
+  // `path` 仍对外保留，但已经降级为 compat 访问器：
+  // 读时优先返回 session 真相，写时只记录旧调用方临时塞入的首存目标路径。
+  defineCompatPathAccessor(winInfo, exists ? normalizedFilePath : null)
   winInfoList.push(winInfo)
 
   const session = createInitialSession({
@@ -1395,6 +1433,7 @@ export default {
   getByWebContentsId: (webContentsId) => {
     return winInfoList.find(item => item.win.webContents.id === webContentsId)
   },
+  getDocumentContext,
   getSessionSnapshot,
   handleLocalResourceLinkOpen,
   updateTempContent,

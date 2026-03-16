@@ -88,11 +88,12 @@ const handlerList = {
     if (typeof data === 'string' || (data && typeof data === 'object' && typeof data.resourceUrl === 'string')) {
       return await handleResourceOpen(winInfo, data)
     }
-    if (!winInfo.path || !winInfo.exists) {
+    const documentContext = winInfoUtil.getDocumentContext(winInfo)
+    if (!documentContext.path || !documentContext.exists) {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theCurrentFileIsNotSaved' } })
       return
     }
-    shell.showItemInFolder(winInfo.path)
+    shell.showItemInFolder(documentContext.path)
   },
   'document.resource.open-in-folder': async (winInfo, data) => await handleResourceOpen(winInfo, data),
   // renderer 已经切到新的 session 命令名，这里只保留直连入口。
@@ -103,7 +104,7 @@ const handlerList = {
   },
   'file-content-update': (winInfo, content) => {
     // 渲染端所有编辑动作最终都收口到这里，
-    // Electron 只认这一个入口来更新 tempContent。
+    // Electron 侧正文真相只允许经由 session 命令流更新。
     winInfoUtil.updateTempContent(winInfo, content)
   },
   'document.cancel-close': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.cancel-close', null),
@@ -205,8 +206,9 @@ const handlerListSync = {
     if (path.isAbsolute(filePath)) {
       return filePath
     }
-    if (winInfo.path) {
-      return path.resolve(path.dirname(winInfo.path), filePath)
+    const documentContext = winInfoUtil.getDocumentContext(winInfo)
+    if (documentContext.path) {
+      return path.resolve(path.dirname(documentContext.path), filePath)
     }
     return null
   },

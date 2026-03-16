@@ -220,6 +220,10 @@ vi.mock('../updateUtil.js', () => ({
 
 const { default: winInfoUtil } = await import('./winInfoUtil.js')
 
+function expectDocumentContent(winInfo, content) {
+  expect(winInfoUtil.getDocumentContext(winInfo).content).toBe(content)
+}
+
 describe('winInfoUtil 兼容 facade', () => {
   beforeEach(() => {
     sendMock.mockReset()
@@ -272,7 +276,7 @@ describe('winInfoUtil 兼容 facade', () => {
     saveDeferred.resolve()
     await saveDeferred.promise
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# blur 自动保存内容')
+      expectDocumentContent(winInfo, '# blur 自动保存内容')
     })
     const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
     expect(snapshot.content).toBe('# blur 自动保存内容')
@@ -370,7 +374,7 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(writeFileMock).toHaveBeenCalledTimes(1)
     expect(writeFileMock).toHaveBeenCalledWith('D:/compat-draft.md', '# 草稿内容')
     expect(winInfo.path).toBe('D:/compat-draft.md')
-    expect(winInfo.tempContent).toBe('# 草稿内容')
+    expectDocumentContent(winInfo, '# 草稿内容')
     const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
     expect(snapshot.content).toBe('# 草稿内容')
     expect(snapshot.saved).toBe(true)
@@ -385,7 +389,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 已保存的新内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 已保存的新内容')
+      expectDocumentContent(winInfo, '# 已保存的新内容')
     })
 
     const saveResult = await winInfoUtil.executeCommand(winInfo, 'document.save')
@@ -405,7 +409,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 草稿内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 草稿内容')
+      expectDocumentContent(winInfo, '# 草稿内容')
     })
     sendMock.mockClear()
 
@@ -441,7 +445,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# blur 自动保存内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# blur 自动保存内容')
+      expectDocumentContent(winInfo, '# blur 自动保存内容')
     })
 
     winInfo.win.emit('blur')
@@ -487,7 +491,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# close 自动保存内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# close 自动保存内容')
+      expectDocumentContent(winInfo, '# close 自动保存内容')
     })
 
     const closeEvent = winInfo.win.close()
@@ -526,7 +530,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 第一版内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 第一版内容')
+      expectDocumentContent(winInfo, '# 第一版内容')
     })
 
     winInfo.win.emit('blur')
@@ -543,7 +547,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     winInfoUtil.updateTempContent(winInfo, '# 第二版内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 第二版内容')
+      expectDocumentContent(winInfo, '# 第二版内容')
     })
     winInfo.win.emit('blur')
     await vi.waitFor(() => {
@@ -581,7 +585,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 尚未落盘的内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 尚未落盘的内容')
+      expectDocumentContent(winInfo, '# 尚未落盘的内容')
     })
 
     winInfo.win.emit('blur')
@@ -637,7 +641,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+      expectDocumentContent(winInfo, '# 本地编辑内容')
     })
 
     winInfoUtil.handleExternalChange(winInfo, {
@@ -686,7 +690,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 本地保存版本')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地保存版本')
+      expectDocumentContent(winInfo, '# 本地保存版本')
     })
 
     winInfo.win.emit('blur')
@@ -738,7 +742,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 待保存的新内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 待保存的新内容')
+      expectDocumentContent(winInfo, '# 待保存的新内容')
     })
 
     winInfo.win.emit('blur')
@@ -781,7 +785,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 待保存内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 待保存内容')
+      expectDocumentContent(winInfo, '# 待保存内容')
     })
     sendMock.mockClear()
 
@@ -951,7 +955,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+      expectDocumentContent(winInfo, '# 本地编辑内容')
     })
     sendMock.mockClear()
 
@@ -985,7 +989,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+      expectDocumentContent(winInfo, '# 本地编辑内容')
     })
     sendMock.mockClear()
 
@@ -1021,7 +1025,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+      expectDocumentContent(winInfo, '# 本地编辑内容')
     })
 
     winInfoUtil.handleExternalChange(winInfo, {
@@ -1052,7 +1056,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+      expectDocumentContent(winInfo, '# 本地编辑内容')
     })
 
     winInfoUtil.handleExternalChange(winInfo, {
@@ -1093,7 +1097,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+      expectDocumentContent(winInfo, '# 本地编辑内容')
     })
 
     winInfoUtil.handleExternalChange(winInfo, {
@@ -1137,7 +1141,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+      expectDocumentContent(winInfo, '# 本地编辑内容')
     })
 
     winInfoUtil.handleExternalChange(winInfo, {
@@ -1203,7 +1207,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const [winInfo] = winInfoUtil.getAll()
     winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+      expectDocumentContent(winInfo, '# 本地编辑内容')
     })
 
     winInfoUtil.handleExternalChange(winInfo, {
@@ -1216,7 +1220,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     winInfoUtil.updateTempContent(winInfo, '# 外部新内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 外部新内容')
+      expectDocumentContent(winInfo, '# 外部新内容')
     })
 
     const result = winInfoUtil.handleExternalChange(winInfo, {
@@ -1243,7 +1247,7 @@ describe('winInfoUtil 兼容 facade', () => {
     const watchOptions = startWatchingMock.mock.calls[0][0]
     winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 本地编辑内容')
+      expectDocumentContent(winInfo, '# 本地编辑内容')
     })
     sendMock.mockClear()
 
@@ -1333,7 +1337,7 @@ describe('winInfoUtil 兼容 facade', () => {
 
     winInfoUtil.updateTempContent(winInfo, '# 恢复后的磁盘内容')
     await vi.waitFor(() => {
-      expect(winInfo.tempContent).toBe('# 恢复后的磁盘内容')
+      expectDocumentContent(winInfo, '# 恢复后的磁盘内容')
     })
 
     winInfoUtil.handleFileMissing(winInfo)

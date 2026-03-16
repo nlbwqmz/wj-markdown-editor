@@ -5,6 +5,7 @@ import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
+import winInfoUtil from './winInfoUtil.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -12,17 +13,18 @@ const __dirname = path.dirname(__filename)
 let exportWin
 let loadingKey
 function createExportWin(winInfo, type) {
+  const documentContext = winInfoUtil.getDocumentContext(winInfo)
   if (exportWin) {
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.exportingPleaseWait' } })
     return
   }
-  if (!winInfo.tempContent) {
+  if (!documentContext.content) {
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.contentIsEmpty' } })
     return
   }
   const filePath = dialog.showSaveDialogSync({
     title: `Export as ${type.toLowerCase()}`,
-    defaultPath: winInfo.path ? path.basename(winInfo.path, path.extname(winInfo.path)) : '',
+    defaultPath: documentContext.path ? path.basename(documentContext.path, path.extname(documentContext.path)) : '',
     filters: [
       { name: `${type.toLowerCase()} file`, extensions: [type.toLowerCase()] },
     ],

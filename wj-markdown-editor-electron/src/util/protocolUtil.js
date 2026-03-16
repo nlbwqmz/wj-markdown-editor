@@ -11,7 +11,7 @@ let headerHookInitialized = false
  * 检查文件类型是否允许通过协议访问。
  *
  * @param {string} filePath 文件路径
- * @returns {boolean}
+ * @returns {boolean} 是否允许通过协议访问该文件
  */
 function isAllowedFileType(filePath) {
   const ext = path.extname(filePath).toLowerCase()
@@ -47,7 +47,7 @@ function isAllowedFileType(filePath) {
  * 根据扩展名获取 MIME 类型。
  *
  * @param {string} filePath 文件路径
- * @returns {string}
+ * @returns {string} 对应的 MIME 类型
  */
 function getMimeType(filePath) {
   const ext = path.extname(filePath).toLowerCase()
@@ -84,7 +84,7 @@ function getMimeType(filePath) {
  *
  * @param {string} filePath 文件绝对路径
  * @param {string} rangeHeader Range 请求头
- * @returns {Promise<Response>}
+ * @returns {Promise<Response>} 供协议层直接返回的范围响应
  */
 async function handleRangeRequest(filePath, rangeHeader) {
   try {
@@ -196,18 +196,19 @@ export default {
           } else {
             const windowId = request.headers.get('X-Window-ID')
             const winInfo = winInfoUtil.getWinInfo(windowId)
+            const documentContext = winInfo ? winInfoUtil.getDocumentContext(winInfo) : null
 
-            if (!winInfo || !winInfo.path) {
+            if (!documentContext?.path) {
               console.warn('[Protocol] Cannot resolve relative path without window context:', {
                 decodedPath: decodedUrl,
                 windowId,
                 hasWinInfo: !!winInfo,
-                hasPath: winInfo ? !!winInfo.path : false,
+                hasPath: Boolean(documentContext?.path),
               })
               return new Response('Not Found: No document context for relative path', { status: 404 })
             }
 
-            const basePath = path.dirname(winInfo.path)
+            const basePath = path.dirname(documentContext.path)
             resolvedPath = path.resolve(basePath, decodedUrl)
           }
 

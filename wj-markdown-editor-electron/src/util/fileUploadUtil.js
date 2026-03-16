@@ -2,26 +2,33 @@ import path from 'node:path'
 import fs from 'fs-extra'
 import sendUtil from './channel/sendUtil.js'
 import commonUtil from './commonUtil.js'
+import winInfoUtil from './win/winInfoUtil.js'
+
+function getDocumentPath(winInfo) {
+  return winInfoUtil.getDocumentContext(winInfo).path
+}
 
 function createLocalSavePath(winInfo, filePath, config) {
+  const documentPath = getDocumentPath(winInfo)
   const uniqueFileName = commonUtil.createUniqueFileName(filePath)
   if (config.fileMode === '2') { // 绝对路径
     return path.resolve(config.fileAbsolutePath, uniqueFileName)
   }
   if (config.fileMode === '3') {
-    return path.resolve(path.dirname(winInfo.path), path.basename(winInfo.path, path.extname(winInfo.path)), uniqueFileName)
+    return path.resolve(path.dirname(documentPath), path.basename(documentPath, path.extname(documentPath)), uniqueFileName)
   }
   if (config.fileMode === '4') {
     if (!config.fileRelativePath) {
-      return path.resolve(path.dirname(winInfo.path), uniqueFileName)
+      return path.resolve(path.dirname(documentPath), uniqueFileName)
     } else {
-      return path.resolve(path.dirname(winInfo.path), commonUtil.removePathSplit(config.fileRelativePath), uniqueFileName)
+      return path.resolve(path.dirname(documentPath), commonUtil.removePathSplit(config.fileRelativePath), uniqueFileName)
     }
   }
   throw new Error('文件存储模式未知')
 }
 
 function check(winInfo, config) {
+  const documentPath = getDocumentPath(winInfo)
   if (config.fileMode === '2' && !config.fileAbsolutePath) {
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theAbsolutePathToSaveIsNotSet' } })
     return false
@@ -30,7 +37,7 @@ function check(winInfo, config) {
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theRelativePathToSaveIsNotSet' } })
     return false
   }
-  if ((config.fileMode === '3' || config.fileMode === '4') && !winInfo.path) {
+  if ((config.fileMode === '3' || config.fileMode === '4') && !documentPath) {
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cannotBeSavedToARelativePath' } })
     return false
   }
@@ -46,6 +53,7 @@ export default {
       }
       const loadingKey = commonUtil.createId()
       try {
+        const documentPath = getDocumentPath(winInfo)
         const savePath = createLocalSavePath(winInfo, filePath, config)
         await commonUtil.ensureDirSafe(path.dirname(savePath))
         // 消息Key
@@ -59,7 +67,7 @@ export default {
 
         // 保存到文件名路径
         if (config.fileMode === '3') {
-          return { name: path.basename(filePath), path: `${path.basename(winInfo.path, path.extname(winInfo.path))}/${path.basename(savePath)}` }
+          return { name: path.basename(filePath), path: `${path.basename(documentPath, path.extname(documentPath))}/${path.basename(savePath)}` }
         }
 
         // 保存到相对路径

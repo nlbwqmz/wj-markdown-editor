@@ -5,6 +5,11 @@ import fs from 'fs-extra'
 import sendUtil from './channel/sendUtil.js'
 import commonUtil from './commonUtil.js'
 import imageBedUtil from './imageBedUtil.js'
+import winInfoUtil from './win/winInfoUtil.js'
+
+function getDocumentPath(winInfo) {
+  return winInfoUtil.getDocumentContext(winInfo).path
+}
 
 /**
  * 判断网络URL是否为图片
@@ -51,15 +56,16 @@ async function saveImgNetworkToLocal(imgUrl, imgPath) {
 }
 
 async function getRelativePath(winInfo, config, type) {
+  const documentPath = getDocumentPath(winInfo)
   let relativePath
   if (type === '3') {
-    relativePath = path.resolve(path.dirname(winInfo.path), path.basename(winInfo.path, path.extname(winInfo.path)))
+    relativePath = path.resolve(path.dirname(documentPath), path.basename(documentPath, path.extname(documentPath)))
   } else if (type === '4') {
     const normalizedRelativePath = commonUtil.removePathSplit((config.imgRelativePath || '').trim())
     if (!normalizedRelativePath || normalizedRelativePath === '.') {
-      relativePath = path.dirname(winInfo.path)
+      relativePath = path.dirname(documentPath)
     } else {
-      relativePath = path.resolve(path.dirname(winInfo.path), normalizedRelativePath)
+      relativePath = path.resolve(path.dirname(documentPath), normalizedRelativePath)
     }
   }
   await commonUtil.ensureDirSafe(relativePath)
@@ -93,6 +99,7 @@ export default {
    * 检查图片保存配置是否正确
    */
   check: (winInfo, data, config) => {
+    const documentPath = getDocumentPath(winInfo)
     const type = data.mode === 'local' ? config.imgLocal : config.imgNetwork
     if (type === '2' && !config.imgAbsolutePath) {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theAbsolutePathToSaveIsNotSet' } })
@@ -102,7 +109,7 @@ export default {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theRelativePathToSaveIsNotSet' } })
       return false
     }
-    if ((type === '3' || type === '4') && !winInfo.path) {
+    if ((type === '3' || type === '4') && !documentPath) {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cannotBeSavedToARelativePath' } })
       return false
     }
@@ -112,6 +119,7 @@ export default {
    * 保存图片
    */
   save: async (winInfo, data, config) => {
+    const documentPath = getDocumentPath(winInfo)
     const type = data.mode === 'local' ? config.imgLocal : config.imgNetwork
     // 无操作 只支持网络图片
     if (type === '1') {
@@ -148,7 +156,7 @@ export default {
 
     // 保存到文件名路径
     if (type === '3') {
-      return { name: data.name, path: `${path.basename(winInfo.path, path.extname(winInfo.path))}/${path.basename(imgSavePath)}` }
+      return { name: data.name, path: `${path.basename(documentPath, path.extname(documentPath))}/${path.basename(imgSavePath)}` }
     }
 
     // 保存到相对路径
