@@ -171,6 +171,9 @@ function createBaseSession({
       // 当前尚未处理完的外部变更描述。
       // 当 watcher 发现磁盘被外部修改时，相关信息会先挂在这里，等待用户或状态机处理。
       pendingExternalChange: null,
+      // 当前会话已经分配过的外部冲突版本号上界。
+      // 新 prompt 必须在本会话内单调递增，避免旧弹窗携带的 version 误打到新冲突。
+      pendingChangeSequence: 0,
       // 外部变更收敛流程当前状态。
       // 用于描述当前是否正在等待处理、应用结果还是已经回到空闲。
       resolutionState: 'idle',

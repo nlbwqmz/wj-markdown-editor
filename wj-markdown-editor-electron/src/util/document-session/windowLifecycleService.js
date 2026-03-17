@@ -1,4 +1,3 @@
-import crypto from 'node:crypto'
 import { watch } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -119,23 +118,6 @@ function isWindowAlive(win) {
   return Boolean(win) && (typeof win.isDestroyed !== 'function' || win.isDestroyed() === false)
 }
 
-function createContentHash(content = '') {
-  return crypto.createHash('sha256').update(content, 'utf8').digest('hex')
-}
-
-function normalizeComparablePath(targetPath) {
-  if (typeof targetPath !== 'string' || targetPath.trim() === '') {
-    return null
-  }
-
-  const normalizedPath = targetPath.trim()
-  if (/^[a-z]:[\\/]/i.test(normalizedPath) || normalizedPath.startsWith('\\\\')) {
-    return path.win32.resolve(normalizedPath.replaceAll('/', '\\')).toLowerCase()
-  }
-
-  return path.posix.resolve(normalizedPath.replaceAll('\\', '/'))
-}
-
 function createExternalWatchState() {
   return fileWatchUtil.createWatchState()
 }
@@ -219,201 +201,6 @@ function syncWinInfoFromSession(winInfo, session) {
   winInfo.forceClose = session.closeRuntime.forceClose
 }
 
-function defineCompatPathAccessor(winInfo, initialPath = null) {
-  let compatPathOverride = typeof initialPath === 'string' && initialPath.trim() !== ''
-    ? initialPath
-    : null
-
-  Object.defineProperty(winInfo, 'path', {
-    enumerable: true,
-    configurable: true,
-    get() {
-      const session = getSessionByWinInfo(winInfo)
-      return session?.documentSource?.path || compatPathOverride
-    },
-    set(value) {
-      compatPathOverride = typeof value === 'string' && value.trim() !== ''
-        ? value
-        : null
-    },
-  })
-}
-
-function updateSessionForLegacyExternalEvent(winInfo, updater) {
-  const session = getSessionByWinInfo(winInfo)
-  if (!session || typeof updater !== 'function') {
-    return null
-  }
-
-  updater(session)
-  const { store } = ensureSessionRuntimeInitialized()
-  store.replaceSession(session)
-  syncWinInfoFromSession(winInfo, session)
-  return session
-}
-
-function ensureLegacyExternalWatchPending(winInfo, {
-  version,
-  versionHash,
-  content,
-}) {
-  if (!winInfo?.externalWatch) {
-    return null
-  }
-
-  const normalizedVersion = Number.isFinite(version)
-    ? version
-    : ((winInfo.externalWatch.currentVersion || 0) + 1)
-  winInfo.externalWatch.currentVersion = Math.max(
-    winInfo.externalWatch.currentVersion || 0,
-    normalizedVersion,
-  )
-  winInfo.externalWatch.pendingChange = {
-    version: normalizedVersion,
-    versionHash,
-    content,
-  }
-  return winInfo.externalWatch.pendingChange
-}
-
-function getLegacyPendingVersion(winInfo, previousPendingChange, nextVersionHash) {
-  const legacyPendingChange = winInfo?.externalWatch?.pendingChange
-  if (Number.isFinite(legacyPendingChange?.version)
-    && legacyPendingChange?.versionHash === nextVersionHash) {
-    return legacyPendingChange.version
-  }
-
-  if (Number.isFinite(previousPendingChange?.version)) {
-    return previousPendingChange.version + 1
-  }
-
-  if (Number.isFinite(winInfo?.externalWatch?.currentVersion)) {
-    return (winInfo.externalWatch.currentVersion || 0) + 1
-  }
-
-  return 1
-}
-
-function applyLegacyMissingToSession(winInfo) {
-  const now = Date.now()
-  return updateSessionForLegacyExternalEvent(winInfo, (session) => {
-    session.documentSource.exists = false
-    session.documentSource.lastKnownStat = null
-
-    // 缺失事件要把磁盘基线重置为空文件，
-    // 但不能覆盖用户当前编辑内容。
-    session.diskSnapshot.content = ''
-    session.diskSnapshot.versionHash = createContentHash('')
-    session.diskSnapshot.exists = false
-    session.diskSnapshot.stat = null
-    session.diskSnapshot.observedAt = now
-    session.diskSnapshot.source = 'legacy-watch-missing'
-
-    if (session.externalRuntime) {
-      session.externalRuntime.pendingExternalChange = null
-      session.externalRuntime.resolutionState = 'missing'
-      session.externalRuntime.lastResolutionResult = 'missing'
-      session.externalRuntime.lastKnownDiskVersionHash = session.diskSnapshot.versionHash
-    }
-
-    if (session.watchRuntime) {
-      session.watchRuntime.fileExists = false
-    }
-  })
-}
-
-function applyLegacyExternalDiskToSession(winInfo, change, { applyToEditor = false } = {}) {
-  const observedAt = Number.isFinite(change?.observedAt) ? change.observedAt : Date.now()
-  const nextContent = change?.content ?? ''
-  const nextVersionHash = change?.versionHash || createContentHash(nextContent)
-  return updateSessionForLegacyExternalEvent(winInfo, (session) => {
-    session.documentSource.exists = true
-    session.documentSource.lastKnownStat = change?.stat || null
-
-    session.diskSnapshot.content = nextContent
-    session.diskSnapshot.versionHash = nextVersionHash
-    session.diskSnapshot.exists = true
-    session.diskSnapshot.stat = change?.stat || null
-    session.diskSnapshot.observedAt = observedAt
-    session.diskSnapshot.source = 'legacy-watch-change'
-
-    if (applyToEditor) {
-      session.editorSnapshot.content = nextContent
-      session.editorSnapshot.revision = (session.editorSnapshot.revision || 0) + 1
-      session.editorSnapshot.updatedAt = observedAt
-    }
-
-    if (session.externalRuntime) {
-      session.externalRuntime.lastKnownDiskVersionHash = nextVersionHash
-      if (applyToEditor) {
-        session.externalRuntime.pendingExternalChange = null
-        session.externalRuntime.resolutionState = 'resolved'
-        session.externalRuntime.lastResolutionResult = 'applied'
-      }
-    }
-
-    if (session.watchRuntime) {
-      session.watchRuntime.fileExists = true
-    }
-  })
-}
-
-function applyLegacyPendingExternalChangeToSession(winInfo, change) {
-  const observedAt = Number.isFinite(change?.observedAt) ? change.observedAt : Date.now()
-  const nextContent = change?.content ?? ''
-  const nextVersionHash = change?.versionHash || createContentHash(nextContent)
-  const watchingPath = change?.watchingPath || winInfo?.path || null
-
-  return updateSessionForLegacyExternalEvent(winInfo, (session) => {
-    const previousPendingChange = session.externalRuntime?.pendingExternalChange || null
-    const pendingVersion = getLegacyPendingVersion(winInfo, previousPendingChange, nextVersionHash)
-
-    // legacy watcher 提醒链路虽然还没有完全切到 watchCoordinator，
-    // 但 renderer 已经改成只看 session snapshot。
-    // 因此这里必须先把“待处理外部版本”写进 session 真相，不能再依赖额外的 legacy 事件补洞。
-    session.externalRuntime.pendingExternalChange = {
-      version: pendingVersion,
-      versionHash: nextVersionHash,
-      diskContent: nextContent,
-      diskStat: change?.stat || null,
-      detectedAt: observedAt,
-      watchBindingToken: Number.isFinite(change?.bindingToken) ? change.bindingToken : null,
-      watchingPath,
-      comparablePath: normalizeComparablePath(watchingPath),
-    }
-    session.externalRuntime.resolutionState = 'pending-user'
-
-    if (previousPendingChange && previousPendingChange.versionHash !== nextVersionHash) {
-      session.externalRuntime.lastResolutionResult = 'superseded'
-    }
-
-    ensureLegacyExternalWatchPending(winInfo, {
-      version: pendingVersion,
-      versionHash: nextVersionHash,
-      content: nextContent,
-    })
-  })
-}
-
-function resolveLegacyPendingExternalChange(winInfo, {
-  versionHash,
-  resolutionResult = 'noop',
-}) {
-  return updateSessionForLegacyExternalEvent(winInfo, (session) => {
-    if (!session.externalRuntime?.pendingExternalChange) {
-      return
-    }
-
-    // legacy 路径也必须遵守和 watchCoordinator 一致的收敛语义：
-    // 一旦当前编辑内容已经和磁盘真相重新一致，就不能再保留旧 pending，
-    // 否则 renderer 会在 saved=true 时仍看到过期 externalPrompt。
-    session.externalRuntime.pendingExternalChange = null
-    session.externalRuntime.resolutionState = 'resolved'
-    session.externalRuntime.lastResolutionResult = resolutionResult
-    session.externalRuntime.lastHandledVersionHash = versionHash || null
-  })
-}
-
 function createInitialSession({
   sessionId,
   filePath,
@@ -486,9 +273,10 @@ function getCurrentWatchObservedFloor(winInfo) {
 }
 
 function startExternalWatch(winInfo, options = {}) {
+  const session = getSessionByWinInfo(winInfo)
   const requestedPath = typeof options?.watchingPath === 'string' && options.watchingPath.trim() !== ''
     ? options.watchingPath
-    : winInfo?.path
+    : session?.watchRuntime?.watchingPath || session?.documentSource?.path || null
   return getExternalWatchBridge(winInfo)?.start?.({
     ...options,
     watchingPath: requestedPath,
@@ -523,21 +311,13 @@ function continueWindowClose(winInfo) {
   return true
 }
 
-function getSaveDialogTarget(winInfo) {
-  // `pendingCompatSavePath` 是当前手动保存链路里唯一仍保留的 compat 路径：
-  // 历史调用方若先把草稿目标路径塞进 `winInfo.path`，会在 `document.save`
-  // 入口处先复制到这里，再由 `open-save-dialog` effect 一次性消化。
-  // effect 层不再直接偷读 `winInfo.path`，避免“预选路径”旁路重新扩散回保存边界。
-  const selectedByCompatLayer = typeof winInfo?.pendingCompatSavePath === 'string' && winInfo.pendingCompatSavePath.trim() !== ''
-    ? winInfo.pendingCompatSavePath
-    : null
-  const selectedPath = selectedByCompatLayer || dialog.showSaveDialogSync({
+function getSaveDialogTarget() {
+  const selectedPath = dialog.showSaveDialogSync({
     title: 'Save',
     filters: [
       { name: 'Markdown File', extensions: ['md'] },
     ],
   })
-  winInfo.pendingCompatSavePath = null
   return appendMarkdownExtension(selectedPath)
 }
 
@@ -614,14 +394,12 @@ function buildEffectContextForWindow(winInfo, { dispatchCommand }) {
   return {
     winInfo,
     dispatchCommand,
-    getSaveDialogTarget: () => getSaveDialogTarget(winInfo),
+    getSaveDialogTarget,
     getCopyDialogTarget,
     continueWindowClose: () => continueWindowClose(winInfo),
-    showUnsavedPrompt: () => {
-      if (isWindowAlive(winInfo?.win)) {
-        sendUtil.send(winInfo.win, { event: 'unsaved' })
-      }
-    },
+    // 关闭确认态已经通过 snapshot.closePrompt 推送给 renderer，
+    // 不再补发无消费者的 legacy `unsaved` 事件。
+    showUnsavedPrompt: () => {},
     showSaveFailedMessage: (data) => {
       if (isWindowAlive(winInfo?.win)) {
         publishWindowMessage(winInfo, data)
@@ -652,54 +430,12 @@ async function applyEffects(winInfo, effects = []) {
   }
 }
 
-function handleFileMissing(winInfo) {
-  if (!winInfo) {
-    return 'ignored'
-  }
-
-  getExternalWatchBridge(winInfo)?.resetHistory?.()
-  applyLegacyMissingToSession(winInfo)
-  publishSnapshotChanged(winInfo)
-  return 'missing'
-}
-
-function handleExternalChange(winInfo, change, options = {}) {
-  if (!winInfo || !change) {
-    return 'ignored'
-  }
-
-  const diskUpdatedSession = applyLegacyExternalDiskToSession(winInfo, change)
-  if (diskUpdatedSession && deriveDocumentSnapshot(diskUpdatedSession).saved) {
-    resolveLegacyPendingExternalChange(winInfo, {
-      versionHash: change?.versionHash || createContentHash(change?.content ?? ''),
-      resolutionResult: 'noop',
-    })
-    publishSnapshotChanged(winInfo)
-    getExternalWatchBridge(winInfo)?.settlePendingChange?.(change.versionHash)
-    return 'resolved'
-  }
-
-  const strategy = options.strategy || configUtil.getConfig().externalFileChangeStrategy || 'prompt'
-  if (strategy === 'apply') {
-    applyLegacyExternalDiskToSession(winInfo, change, {
-      applyToEditor: true,
-    })
-    getExternalWatchBridge(winInfo)?.settlePendingChange?.(change.versionHash)
-    publishSnapshotChanged(winInfo)
-    return 'applied'
-  }
-
-  applyLegacyPendingExternalChangeToSession(winInfo, change)
-  publishSnapshotChanged(winInfo)
-  return 'prompted'
-}
-
-function getLegacyPendingPromptVersion(winInfo) {
+function getPendingPromptVersion(winInfo) {
   return getSessionByWinInfo(winInfo)?.externalRuntime?.pendingExternalChange?.version ?? null
 }
 
 async function executeExternalResolutionCommandWithDispatcher(winInfo, command, payload = {}, dispatch) {
-  const beforePendingVersion = getLegacyPendingPromptVersion(winInfo)
+  const beforePendingVersion = getPendingPromptVersion(winInfo)
   const result = await dispatch(command, payload)
   const afterPendingVersion = result?.session?.externalRuntime?.pendingExternalChange?.version ?? null
   const expectedVersion = payload?.version ?? beforePendingVersion
@@ -740,13 +476,10 @@ async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
   const openResult = await executeResourceCommand(winInfo, 'document.resource.open-in-folder', resourceUrl)
   if (openResult.ok !== true) {
     const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
-    if (messageKey) {
-      sendUtil.send(win, {
-        event: 'message',
-        data: {
-          type: 'warning',
-          content: messageKey,
-        },
+    if (messageKey && winInfo?.win) {
+      publishWindowMessage(winInfo, {
+        type: 'warning',
+        content: messageKey,
       })
     }
     return openResult
@@ -754,13 +487,10 @@ async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
 
   if (openResult.opened !== true) {
     const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
-    if (messageKey) {
-      sendUtil.send(win, {
-        event: 'message',
-        data: {
-          type: 'warning',
-          content: messageKey,
-        },
+    if (messageKey && winInfo?.win) {
+      publishWindowMessage(winInfo, {
+        type: 'warning',
+        content: messageKey,
       })
     }
   }
@@ -789,14 +519,9 @@ function getCopySaveFailureMessage({ reason, error }) {
 async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
   const session = getSessionByWinInfo(winInfo)
   const hadDocumentPath = Boolean(session?.documentSource?.path)
-  if (!session?.documentSource?.path && typeof winInfo?.path === 'string' && winInfo.path.trim() !== '') {
-    winInfo.pendingCompatSavePath = winInfo.path
-  }
 
   // 手动首存必须先回到标准命令流：
   // document.save -> open-save-dialog -> dialog.save-target-selected。
-  // 兼容旧调用方预先塞到 winInfo.path 的目标路径，不再通过 payload.path 直送命令层，
-  // 而是留给 open-save-dialog effect 内部的 compat fallback 一次性消化。
   const saveCommandResult = await dispatch('document.save')
   const manualRequestId = saveCommandResult?.manualRequestId || null
 
@@ -909,20 +634,13 @@ function getSessionSnapshot(winInfo) {
 function getDocumentContext(winInfo) {
   const session = getSessionByWinInfo(winInfo)
   const snapshot = session ? deriveDocumentSnapshot(session) : null
-  const fallbackPath = typeof winInfo?.path === 'string' && winInfo.path.trim() !== ''
-    ? winInfo.path
-    : null
-  const fallbackExists = winInfo?.exists === true
-  const fallbackContent = typeof winInfo?.tempContent === 'string'
-    ? winInfo.tempContent
-    : ''
 
   return {
     // 统一把“当前窗口文档真相”收口成只读上下文，供仍在 Electron 侧运行的外围模块读取。
-    // 优先级固定为 session/snapshot，其次才是少量兼容回退，避免外围模块继续各自偷读镜像字段。
-    path: session?.documentSource?.path || fallbackPath,
-    exists: snapshot?.exists ?? fallbackExists,
-    content: snapshot?.content ?? session?.editorSnapshot?.content ?? fallbackContent,
+    // 这里不再保留 winInfo 镜像回退，避免外围模块继续依赖多套状态来源。
+    path: session?.documentSource?.path || null,
+    exists: snapshot?.exists ?? Boolean(session?.documentSource?.exists),
+    content: snapshot?.content ?? session?.editorSnapshot?.content ?? '',
     saved: snapshot?.saved === true,
     fileName: snapshot?.fileName || 'Unnamed',
   }
@@ -1300,9 +1018,6 @@ async function createNew(filePath, isRecent = false) {
     forceClose: false,
     lastClosedManualRequestCompletions: [],
   }
-  // `path` 仍对外保留，但已经降级为 compat 访问器：
-  // 读时优先返回 session 真相，写时只记录旧调用方临时塞入的首存目标路径。
-  defineCompatPathAccessor(winInfo, exists ? normalizedFilePath : null)
   winInfoList.push(winInfo)
 
   const session = createInitialSession({
@@ -1418,12 +1133,11 @@ export default {
   getByWebContentsId: (webContentsId) => {
     return winInfoList.find(item => item.win.webContents.id === webContentsId)
   },
+  publishWindowMessage,
   getDocumentContext,
   getSessionSnapshot,
   handleLocalResourceLinkOpen,
   updateTempContent,
-  handleExternalChange,
-  handleFileMissing,
   startExternalWatch,
   stopExternalWatch,
 }

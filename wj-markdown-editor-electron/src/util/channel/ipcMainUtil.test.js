@@ -8,12 +8,14 @@ const {
   executeResourceCommand,
   executeResourceCommandSync,
   getDocumentSessionRuntime,
+  getWinInfoMock,
   getLocalResourceComparableKey,
   ipcMainHandle,
   ipcMainOn,
   openLocalResourceInFolder,
   runtimeExecuteUiCommand,
   send,
+  showItemInFolder,
 } = vi.hoisted(() => {
   return {
     appGetVersion: vi.fn(() => '2.15.0'),
@@ -23,12 +25,14 @@ const {
     executeResourceCommand: vi.fn(),
     executeResourceCommandSync: vi.fn(),
     getDocumentSessionRuntime: vi.fn(),
+    getWinInfoMock: vi.fn(),
     getLocalResourceComparableKey: vi.fn(),
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
     openLocalResourceInFolder: vi.fn(),
     runtimeExecuteUiCommand: vi.fn(),
     send: vi.fn(),
+    showItemInFolder: vi.fn(),
   }
 })
 
@@ -49,7 +53,7 @@ vi.mock('electron', () => {
       on: ipcMainOn,
     },
     shell: {
-      showItemInFolder: vi.fn(),
+      showItemInFolder,
     },
   }
 })
@@ -173,16 +177,18 @@ vi.mock('../win/settingUtil.js', () => {
 vi.mock('../document-session/windowLifecycleService.js', () => {
   return {
     default: {
-      getWinInfo: vi.fn(() => ({
-        path: 'D:\\docs\\note.md',
-        exists: true,
-        win: { id: 1 },
-      })),
+      getWinInfo: getWinInfoMock,
       getAll: vi.fn(() => []),
       createNew: vi.fn(),
       executeCommand: vi.fn(),
       executeResourceCommand,
       executeResourceCommandSync,
+      publishWindowMessage: vi.fn((winInfo, data) => {
+        send(winInfo.win, {
+          event: 'window.effect.message',
+          data,
+        })
+      }),
       getDocumentContext: vi.fn(winInfo => ({
         path: winInfo?.path || null,
         exists: winInfo?.exists === true,
@@ -207,13 +213,14 @@ vi.mock('./sendUtil.js', () => {
   }
 })
 
-describe('ipcMainUtil open-folder', () => {
+describe('ipcMainUtil 文档与资源打开契约', () => {
   beforeEach(() => {
     vi.resetModules()
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
     executeResourceCommand.mockReset()
     executeResourceCommandSync.mockReset()
+    getWinInfoMock.mockReset()
     getLocalResourceComparableKey.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
@@ -222,6 +229,12 @@ describe('ipcMainUtil open-folder', () => {
     getDocumentSessionRuntime.mockReset()
     runtimeExecuteUiCommand.mockReset()
     send.mockReset()
+    showItemInFolder.mockReset()
+    getWinInfoMock.mockImplementation(() => ({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }))
     getDocumentSessionRuntime.mockReturnValue({
       executeUiCommand: runtimeExecuteUiCommand,
     })
@@ -248,7 +261,7 @@ describe('ipcMainUtil open-folder', () => {
     }
   }
 
-  it('资源不存在时，应该向渲染进程发送文件不存在提示', async () => {
+  it('资源不存在时，应该通过 window.effect.message 向渲染进程发送文件不存在提示', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
     executeResourceCommand.mockResolvedValue({
       ok: true,
@@ -258,7 +271,7 @@ describe('ipcMainUtil open-folder', () => {
     })
 
     await sendToMainHandler({ sender }, {
-      event: 'open-folder',
+      event: 'document.resource.open-in-folder',
       data: 'wj://2e2f6173736574732f6d697373696e672e6d64',
     })
 
@@ -268,7 +281,7 @@ describe('ipcMainUtil open-folder', () => {
       win: { id: 1 },
     }, 'document.resource.open-in-folder', 'wj://2e2f6173736574732f6d697373696e672e6d64')
     expect(send).toHaveBeenCalledWith(win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'warning',
         content: 'message.theFileDoesNotExist',
@@ -276,7 +289,7 @@ describe('ipcMainUtil open-folder', () => {
     })
   })
 
-  it('资源 payload 非法时，应该向渲染进程发送无效资源提示', async () => {
+  it('资源 payload 非法时，应该通过 window.effect.message 向渲染进程发送无效资源提示', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
     executeResourceCommand.mockResolvedValue({
       ok: false,
@@ -286,12 +299,12 @@ describe('ipcMainUtil open-folder', () => {
     })
 
     await sendToMainHandler({ sender }, {
-      event: 'open-folder',
+      event: 'document.resource.open-in-folder',
       data: 'wj://zz',
     })
 
     expect(send).toHaveBeenCalledWith(win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'warning',
         content: 'message.invalidLocalResourceLink',
@@ -299,7 +312,7 @@ describe('ipcMainUtil open-folder', () => {
     })
   })
 
-  it('未保存文档中的相对资源打开失败时，应该向渲染进程发送明确提示', async () => {
+  it('未保存文档中的相对资源打开失败时，应该通过 window.effect.message 向渲染进程发送明确提示', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
     executeResourceCommand.mockResolvedValue({
       ok: false,
@@ -309,12 +322,12 @@ describe('ipcMainUtil open-folder', () => {
     })
 
     await sendToMainHandler({ sender }, {
-      event: 'open-folder',
+      event: 'document.resource.open-in-folder',
       data: 'wj://2e2f6173736574732f64656d6f2e706e67',
     })
 
     expect(send).toHaveBeenCalledWith(win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'warning',
         content: 'message.relativeResourceRequiresSavedFile',
@@ -332,7 +345,7 @@ describe('ipcMainUtil open-folder', () => {
     })
 
     await sendToMainHandler({ sender }, {
-      event: 'open-folder',
+      event: 'document.resource.open-in-folder',
       data: {
         resourceUrl: 'wj://2e2f646f63732f696e6465782e68746d6c236775696465',
         rawPath: './docs/index.html#guide',
@@ -346,6 +359,45 @@ describe('ipcMainUtil open-folder', () => {
     }, 'document.resource.open-in-folder', {
       resourceUrl: 'wj://2e2f646f63732f696e6465782e68746d6c236775696465',
       rawPath: './docs/index.html#guide',
+    })
+  })
+
+  it('document.open-in-folder 在当前文档已保存时，必须直接打开所在目录并返回结构化结果', async () => {
+    const { sender, sendToMainHandler } = await setupOpenFolderHandler()
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.open-in-folder',
+    })
+
+    expect(showItemInFolder).toHaveBeenCalledWith('D:\\docs\\note.md')
+    expect(result).toEqual({
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: 'D:\\docs\\note.md',
+    })
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('document.open-in-folder 在当前文档未保存时，必须返回结构化失败结果，由 renderer 自行提示', async () => {
+    const { sender, sendToMainHandler } = await setupOpenFolderHandler()
+    getWinInfoMock.mockReturnValueOnce({
+      path: null,
+      exists: false,
+      win: { id: 2 },
+    })
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.open-in-folder',
+    })
+
+    expect(showItemInFolder).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: false,
+      opened: false,
+      reason: 'document-not-saved',
+      path: null,
     })
   })
 
@@ -374,7 +426,7 @@ describe('ipcMainUtil open-folder', () => {
     })
   })
 
-  it('资源管理器打开失败时，应该向渲染进程发送明确失败提示，而不是静默吞掉', async () => {
+  it('资源管理器打开失败时，应该通过 window.effect.message 向渲染进程发送明确失败提示，而不是静默吞掉', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
     executeResourceCommand.mockResolvedValue({
       ok: false,
@@ -384,17 +436,27 @@ describe('ipcMainUtil open-folder', () => {
     })
 
     await sendToMainHandler({ sender }, {
-      event: 'open-folder',
+      event: 'document.resource.open-in-folder',
       data: 'wj://2e2f6173736574732f64656d6f2e706e67',
     })
 
     expect(send).toHaveBeenCalledWith(win, {
-      event: 'message',
+      event: 'window.effect.message',
       data: {
         type: 'warning',
         content: 'message.openResourceLocationFailed',
       },
     })
+  })
+
+  it('open-folder 旧兼容入口必须已经删除，避免 renderer 继续依赖旧命令名', async () => {
+    const { sender, sendToMainHandler } = await setupOpenFolderHandler()
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'open-folder',
+    })
+
+    expect(result).toBe(false)
   })
 })
 

@@ -26,7 +26,7 @@ vi.mock('fs-extra', () => {
 describe('resourceFileUtil.resolveLocalResourcePath', () => {
   it('应该支持解析绝对路径资源 URL', () => {
     const result = resourceFileUtil.resolveLocalResourcePath({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://443a2f696d616765732f64656d6f2e706e67')
 
     expect(result).toBe('D:/images/demo.png')
@@ -34,7 +34,7 @@ describe('resourceFileUtil.resolveLocalResourcePath', () => {
 
   it('应该将相对路径资源解析到当前 markdown 文件目录', () => {
     const result = resourceFileUtil.resolveLocalResourcePath({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toBe('D:\\docs\\assets\\demo.png')
@@ -42,7 +42,7 @@ describe('resourceFileUtil.resolveLocalResourcePath', () => {
 
   it('当前文件未保存时，应该拒绝解析相对路径资源', () => {
     const result = resourceFileUtil.resolveLocalResourcePath({
-      path: '',
+      documentPath: '',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toBeNull()
@@ -50,8 +50,16 @@ describe('resourceFileUtil.resolveLocalResourcePath', () => {
 
   it('非法 payload 时，应该安全返回 null 而不是抛错', () => {
     const result = resourceFileUtil.resolveLocalResourcePath({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://zz')
+
+    expect(result).toBeNull()
+  })
+
+  it('legacy path 字段不应再作为当前文档路径回退来源', () => {
+    const result = resourceFileUtil.resolveLocalResourcePath({
+      path: 'D:\\docs\\note.md',
+    }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toBeNull()
   })
@@ -72,7 +80,7 @@ describe('resourceFileUtil.deleteLocalResource', () => {
     })
 
     const result = await resourceFileUtil.deleteLocalResource({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toEqual({
@@ -90,7 +98,7 @@ describe('resourceFileUtil.deleteLocalResource', () => {
     pathExists.mockResolvedValue(false)
 
     const result = await resourceFileUtil.deleteLocalResource({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toEqual({
@@ -112,7 +120,7 @@ describe('resourceFileUtil.deleteLocalResource', () => {
     })
 
     const result = await resourceFileUtil.deleteLocalResource({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f617373657473')
 
     expect(result).toEqual({
@@ -126,7 +134,7 @@ describe('resourceFileUtil.deleteLocalResource', () => {
 
   it('资源地址无法解析时，应该返回失败', async () => {
     const result = await resourceFileUtil.deleteLocalResource({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'https://example.com/demo.png')
 
     expect(result).toEqual({
@@ -142,7 +150,7 @@ describe('resourceFileUtil.deleteLocalResource', () => {
 
   it('资源 payload 非法时，应该返回 invalid-resource-payload 且不抛错', async () => {
     const result = await resourceFileUtil.deleteLocalResource({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://zz')
 
     expect(result).toEqual({
@@ -162,7 +170,7 @@ describe('resourceFileUtil.deleteLocalResource', () => {
     })
 
     const result = await resourceFileUtil.deleteLocalResource({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, convertResourceUrl('./assets/demo%23guide.md'))
 
     expect(result).toEqual({
@@ -186,7 +194,7 @@ describe('resourceFileUtil.deleteLocalResource', () => {
     remove.mockRejectedValue(new Error('permission denied'))
 
     const result = await resourceFileUtil.deleteLocalResource({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toEqual({
@@ -209,7 +217,7 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
     const showItemInFolder = vi.fn()
 
     const result = await resourceFileUtil.openLocalResourceInFolder({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67', showItemInFolder)
 
     expect(result).toEqual({
@@ -225,7 +233,7 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
     const showItemInFolder = vi.fn()
 
     const result = await resourceFileUtil.openLocalResourceInFolder({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://zz', showItemInFolder)
 
     expect(result).toEqual({
@@ -248,7 +256,7 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
     const showItemInFolder = vi.fn()
 
     const result = await resourceFileUtil.openLocalResourceInFolder({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, {
       resourceUrl: convertResourceUrl('./docs/index.html?tab=a'),
       rawPath: './docs/index.html?tab=a',
@@ -276,7 +284,7 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
     const showItemInFolder = vi.fn()
 
     const result = await resourceFileUtil.openLocalResourceInFolder({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, {
       resourceUrl: convertResourceUrl('./docs/index.html#guide'),
       rawPath: './docs/index.html#guide',
@@ -304,7 +312,7 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
     const showItemInFolder = vi.fn()
 
     const result = await resourceFileUtil.openLocalResourceInFolder({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, {
       resourceUrl: convertResourceUrl('./assets/a#b.md'),
       rawPath: './assets/a#b.md',
@@ -328,7 +336,7 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
     const showItemInFolder = vi.fn()
 
     const result = await resourceFileUtil.openLocalResourceInFolder({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, {
       resourceUrl: convertResourceUrl('./assets/demo%3Fguide.md'),
       rawPath: './assets/demo%3Fguide.md',
@@ -356,7 +364,7 @@ describe('resourceFileUtil.openLocalResourceInFolder', () => {
     })
 
     const result = await resourceFileUtil.openLocalResourceInFolder({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67', showItemInFolder)
 
     expect(result).toEqual({
@@ -382,7 +390,7 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
     })
 
     const result = await resourceFileUtil.getLocalResourceInfo({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toEqual({
@@ -404,7 +412,7 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
     })
 
     const result = await resourceFileUtil.getLocalResourceInfo({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f617373657473')
 
     expect(result).toEqual({
@@ -422,7 +430,7 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
     pathExists.mockResolvedValue(false)
 
     const result = await resourceFileUtil.getLocalResourceInfo({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toEqual({
@@ -439,7 +447,7 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
 
   it('资源 payload 非法时，应该返回 invalid-resource-payload 且不抛错', async () => {
     const result = await resourceFileUtil.getLocalResourceInfo({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://zz')
 
     expect(result).toEqual({
@@ -457,7 +465,7 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
 
   it('当前文件未保存且资源为相对路径时，应该返回 relative-resource-without-document', async () => {
     const result = await resourceFileUtil.getLocalResourceInfo({
-      path: '',
+      documentPath: '',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toEqual({
@@ -478,7 +486,7 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
     stat.mockRejectedValue(new Error('stat failed'))
 
     const result = await resourceFileUtil.getLocalResourceInfo({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toEqual({
@@ -502,7 +510,7 @@ describe('resourceFileUtil.getLocalResourceComparableKey', () => {
     pathExistsSync.mockImplementation(targetPath => targetPath === 'D:\\docs\\assets\\a#b.md')
 
     const result = resourceFileUtil.getLocalResourceComparableKey({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, './assets/a#b.md')
 
     expect(result).toBe('wj-local-file:d:/docs/assets/a#b.md')
@@ -514,7 +522,7 @@ describe('resourceFileUtil.getLocalResourceComparableKey', () => {
     })
 
     const result = resourceFileUtil.getLocalResourceComparableKey({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, './docs/index.html#guide')
 
     expect(result).toBe('wj-local-file:d:/docs/docs/index.html')
@@ -524,7 +532,7 @@ describe('resourceFileUtil.getLocalResourceComparableKey', () => {
     pathExistsSync.mockReturnValue(false)
 
     const result = resourceFileUtil.getLocalResourceComparableKey({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, './assets/demo.png')
 
     expect(result).toBe('wj-local-file:d:/docs/assets/demo.png')
@@ -534,7 +542,7 @@ describe('resourceFileUtil.getLocalResourceComparableKey', () => {
     pathExistsSync.mockReturnValue(false)
 
     const result = resourceFileUtil.getLocalResourceComparableKey({
-      path: 'D:\\docs\\note.md',
+      documentPath: 'D:\\docs\\note.md',
     }, 'D:/docs/../assets/demo.png')
 
     expect(result).toBe('wj-local-file:d:/assets/demo.png')
@@ -544,7 +552,7 @@ describe('resourceFileUtil.getLocalResourceComparableKey', () => {
     pathExistsSync.mockReturnValue(false)
 
     const result = resourceFileUtil.getLocalResourceComparableKey({
-      path: '',
+      documentPath: '',
     }, './docs/index.html#guide')
 
     expect(result).toBeNull()

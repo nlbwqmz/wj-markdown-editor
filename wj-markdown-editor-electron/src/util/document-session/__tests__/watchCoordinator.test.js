@@ -517,6 +517,7 @@ describe('watchCoordinator', () => {
         mtimeMs: 1700000003018,
       },
     })
+    expect(promptChangedAgain.session.externalRuntime.pendingExternalChange?.version).toBe(2)
     const applied = dispatchWatchCommand(coordinator, promptChangedAgain.session, 'document.external.apply')
 
     expect(applied.session.editorSnapshot.content).toBe('# 外部版本 2')
@@ -612,6 +613,53 @@ describe('watchCoordinator', () => {
     })
     expect(staleIgnored.session.externalRuntime.lastResolutionResult).toBe(beforeStaleActionResolutionResult)
     expect(staleIgnored.session.externalRuntime.lastHandledVersionHash).toBe(beforeStaleActionHandledVersionHash)
+  })
+
+  it('旧结构 session 缺少 pendingChangeSequence 时，必须从当前 pending.version 补齐版本号，避免 stale 操作命中新 prompt', () => {
+    const coordinator = createWatchCoordinator({
+      now: () => 1700000003025,
+    })
+    const session = createSession()
+    session.editorSnapshot.content = '# 本地编辑内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000003025
+    session.externalRuntime.pendingExternalChange = {
+      version: 1,
+      versionHash: 'hash:# 外部版本 1',
+      diskContent: '# 外部版本 1',
+      diskStat: {
+        mtimeMs: 1700000003024,
+      },
+      detectedAt: 1700000003024,
+      watchBindingToken: 1,
+      watchingPath: 'C:/docs/demo.md',
+      comparablePath: 'c:\\docs\\demo.md',
+    }
+    session.externalRuntime.resolutionState = 'pending-user'
+    delete session.externalRuntime.pendingChangeSequence
+
+    const nextPending = dispatchWatchCommand(coordinator, session, 'watch.file-changed', {
+      bindingToken: 1,
+      observedAt: 1700000003026,
+      diskContent: '# 外部版本 2',
+      diskStat: {
+        mtimeMs: 1700000003026,
+      },
+    })
+    expect(nextPending.session.externalRuntime.pendingExternalChange).toMatchObject({
+      version: 2,
+      diskContent: '# 外部版本 2',
+    })
+
+    const staleApplied = dispatchWatchCommand(coordinator, nextPending.session, 'document.external.apply', {
+      version: 1,
+    })
+    expect(staleApplied.effects).toEqual([])
+    expect(staleApplied.session.editorSnapshot.content).toBe('# 本地编辑内容')
+    expect(staleApplied.session.externalRuntime.pendingExternalChange).toMatchObject({
+      version: 2,
+      diskContent: '# 外部版本 2',
+    })
   })
 
   it('reconcileAfterSave 只有真正收敛到 pending 版本时才允许 noop，保存出本地版本时必须保留 pending', () => {

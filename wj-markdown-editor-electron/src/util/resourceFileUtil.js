@@ -85,21 +85,10 @@ function normalizeResourceOpenInput(resourceData) {
   }
 }
 
-/**
- * 统一从新旧上下文里提取当前文档路径。
- *
- * Task 6 期间主进程已经开始把资源能力迁到 session context，
- * 但旧调用方仍可能传入带 `path` 字段的 `winInfo` 镜像。
- * 这里集中做一次兼容读取，可以避免底层解析函数再分支判断两套调用协议。
- */
 function getDocumentPathFromContext(documentContext) {
-  const sessionDocumentPath = typeof documentContext?.documentPath === 'string' && documentContext.documentPath.trim() !== ''
+  return typeof documentContext?.documentPath === 'string' && documentContext.documentPath.trim() !== ''
     ? documentContext.documentPath
     : null
-  const legacyWinInfoPath = typeof documentContext?.path === 'string' && documentContext.path.trim() !== ''
-    ? documentContext.path
-    : null
-  return sessionDocumentPath || legacyWinInfoPath
 }
 
 /**

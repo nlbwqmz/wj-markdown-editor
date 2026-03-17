@@ -13,7 +13,6 @@ import exportUtil from '../win/exportUtil.js'
 import guideUtil from '../win/guideUtil.js'
 import screenshotsUtil from '../win/screenshotsUtil.js'
 import settingUtil from '../win/settingUtil.js'
-import sendUtil from './sendUtil.js'
 
 function executeRuntimeUiCommand(winInfo, command, payload) {
   return getDocumentSessionRuntime().executeUiCommand(winInfo?.id || winInfo?.win?.id || null, command, payload)
@@ -32,11 +31,10 @@ async function uploadImage(winInfo, data) {
 }
 
 /**
- * 旧 `open-folder` 兼容入口和新资源命令都复用同一条提示裁决。
+ * 资源打开失败后，统一经由 session bridge 下发一次性提示。
  *
- * 这里故意只保留“把结构化 reason 翻译成旧消息事件”的兼容职责，
- * 真正的路径解析、query/hash 回退和未保存文档判定都必须交给 documentResourceService，
- * 避免 IPC 层再次长出第二套资源语义。
+ * 路径解析、query/hash 回退和未保存文档判定都必须交给 documentResourceService，
+ * IPC 层只负责把结构化结果翻译成当前 renderer 已收口的 `window.effect.message` 契约。
  */
 async function handleResourceOpen(winInfo, data) {
   const openResult = await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.open-in-folder', data)
@@ -47,13 +45,19 @@ async function handleResourceOpen(winInfo, data) {
   if (openResult.ok !== true) {
     const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
     if (messageKey) {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: messageKey } })
+      windowLifecycleService.publishWindowMessage(winInfo, {
+        type: 'warning',
+        content: messageKey,
+      })
     }
     return openResult
   }
 
   if (openResult.opened !== true && openResult.reason === 'not-found') {
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theFileDoesNotExist' } })
+    windowLifecycleService.publishWindowMessage(winInfo, {
+      type: 'warning',
+      content: 'message.theFileDoesNotExist',
+    })
   }
   return openResult
 }
@@ -89,16 +93,23 @@ const handlerList = {
     winInfo.forceClose = true
     winInfo.win.close()
   },
-  'open-folder': async (winInfo, data) => {
-    if (typeof data === 'string' || (data && typeof data === 'object' && typeof data.resourceUrl === 'string')) {
-      return await handleResourceOpen(winInfo, data)
-    }
+  'document.open-in-folder': async (winInfo) => {
     const documentContext = windowLifecycleService.getDocumentContext(winInfo)
     if (!documentContext.path || !documentContext.exists) {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theCurrentFileIsNotSaved' } })
-      return
+      return {
+        ok: false,
+        opened: false,
+        reason: 'document-not-saved',
+        path: null,
+      }
     }
     shell.showItemInFolder(documentContext.path)
+    return {
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: documentContext.path,
+    }
   },
   'document.resource.open-in-folder': async (winInfo, data) => await handleResourceOpen(winInfo, data),
   // renderer 已经切到新的 session 命令名，这里只保留直连入口。

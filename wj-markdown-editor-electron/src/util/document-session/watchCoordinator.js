@@ -32,11 +32,21 @@ function ensureExternalRuntime(session) {
   if (!session.externalRuntime) {
     session.externalRuntime = {
       pendingExternalChange: null,
+      pendingChangeSequence: 0,
       resolutionState: 'idle',
       lastResolutionResult: 'none',
       lastHandledVersionHash: null,
       lastKnownDiskVersionHash: fileWatchUtil.createContentVersion(session.diskSnapshot?.content || ''),
     }
+  }
+
+  if (!Number.isFinite(session.externalRuntime.pendingChangeSequence)) {
+    // 旧结构 session 可能已经带着一个 pending prompt 进入新协调器，
+    // 这里必须把版本序号至少补到当前 pending.version，
+    // 避免后续新外部版本重新从 1 开始，导致旧弹窗误消费最新 prompt。
+    session.externalRuntime.pendingChangeSequence = Number.isFinite(session.externalRuntime.pendingExternalChange?.version)
+      ? session.externalRuntime.pendingExternalChange.version
+      : 0
   }
 }
 
@@ -136,8 +146,9 @@ function createPendingExternalChange(session, {
   watchingPath,
 }) {
   const previousPending = session.externalRuntime.pendingExternalChange
-  const nextVersion = previousPending ? previousPending.version + 1 : 1
+  const nextVersion = (session.externalRuntime.pendingChangeSequence || 0) + 1
   const comparablePath = normalizeComparablePath(watchingPath)
+  session.externalRuntime.pendingChangeSequence = nextVersion
 
   session.externalRuntime.pendingExternalChange = {
     version: nextVersion,
