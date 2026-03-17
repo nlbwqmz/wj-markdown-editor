@@ -4,11 +4,11 @@ import { app } from 'electron'
 import fs from 'fs-extra'
 import sendUtil from './channel/sendUtil.js'
 import commonUtil from './commonUtil.js'
+import windowLifecycleService from './document-session/windowLifecycleService.js'
 import imageBedUtil from './imageBedUtil.js'
-import winInfoUtil from './win/winInfoUtil.js'
 
 function getDocumentPath(winInfo) {
-  return winInfoUtil.getDocumentContext(winInfo).path
+  return windowLifecycleService.getDocumentContext(winInfo).path
 }
 
 /**

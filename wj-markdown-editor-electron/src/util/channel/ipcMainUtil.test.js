@@ -170,7 +170,7 @@ vi.mock('../win/settingUtil.js', () => {
   }
 })
 
-vi.mock('../win/winInfoUtil.js', () => {
+vi.mock('../document-session/windowLifecycleService.js', () => {
   return {
     default: {
       getWinInfo: vi.fn(() => ({
@@ -530,7 +530,7 @@ describe('ipcMainUtil save', () => {
     browserWindowFromWebContents.mockReturnValue(win)
 
     await import('./ipcMainUtil.js')
-    const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
+    const { default: winInfoUtil } = await import('../document-session/windowLifecycleService.js')
     winInfoUtil.getWinInfo.mockReset()
     winInfoUtil.executeCommand.mockReset()
     winInfoUtil.updateTempContent.mockReset()
@@ -610,7 +610,7 @@ describe('ipcMainUtil command mapping', () => {
     browserWindowFromWebContents.mockReturnValue(win)
 
     await import('./ipcMainUtil.js')
-    const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
+    const { default: winInfoUtil } = await import('../document-session/windowLifecycleService.js')
     winInfoUtil.getWinInfo.mockReset()
     winInfoUtil.executeCommand.mockReset()
     winInfoUtil.updateTempContent.mockReset()
@@ -756,7 +756,7 @@ describe('ipcMainUtil command mapping', () => {
     browserWindowFromWebContents.mockReturnValue(childWin)
 
     await import('./ipcMainUtil.js')
-    const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
+    const { default: winInfoUtil } = await import('../document-session/windowLifecycleService.js')
     winInfoUtil.getWinInfo.mockImplementation((targetWin) => {
       if (targetWin?.id === 2) {
         return null

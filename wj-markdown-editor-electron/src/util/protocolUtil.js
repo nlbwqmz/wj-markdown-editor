@@ -3,7 +3,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { net, protocol, session } from 'electron'
 import commonUtil from './commonUtil.js'
-import winInfoUtil from './win/winInfoUtil.js'
+import windowLifecycleService from './document-session/windowLifecycleService.js'
 
 let headerHookInitialized = false
 
@@ -152,7 +152,7 @@ function initHeaderHook() {
       try {
         const requestHeaders = details.requestHeaders || {}
         if (details.url.startsWith('wj:')) {
-          const winInfo = winInfoUtil.getByWebContentsId(details.webContentsId)
+          const winInfo = windowLifecycleService.getByWebContentsId(details.webContentsId)
           if (winInfo) {
             requestHeaders['X-Window-ID'] = winInfo.id
           }
@@ -195,8 +195,8 @@ export default {
             resolvedPath = decodedUrl
           } else {
             const windowId = request.headers.get('X-Window-ID')
-            const winInfo = winInfoUtil.getWinInfo(windowId)
-            const documentContext = winInfo ? winInfoUtil.getDocumentContext(winInfo) : null
+            const winInfo = windowLifecycleService.getWinInfo(windowId)
+            const documentContext = winInfo ? windowLifecycleService.getDocumentContext(winInfo) : null
 
             if (!documentContext?.path) {
               console.warn('[Protocol] Cannot resolve relative path without window context:', {

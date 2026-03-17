@@ -165,33 +165,33 @@ vi.mock('fs-extra', () => ({
   },
 }))
 
-vi.mock('../../data/configUtil.js', () => ({
+vi.mock('../../../data/configUtil.js', () => ({
   default: {
     getConfig: getConfigMock,
   },
 }))
 
-vi.mock('../../data/recent.js', () => ({
+vi.mock('../../../data/recent.js', () => ({
   default: {
     add: vi.fn(),
   },
 }))
 
-vi.mock('../channel/sendUtil.js', () => ({
+vi.mock('../../channel/sendUtil.js', () => ({
   default: {
     send: sendMock,
   },
 }))
 
-vi.mock('../commonUtil.js', () => ({
+vi.mock('../../commonUtil.js', () => ({
   default: {
     createId: vi.fn(() => `test-id-${createIdIndex++}`),
     decodeWjUrl: vi.fn(),
   },
 }))
 
-vi.mock('../resourceFileUtil.js', async () => {
-  const actual = await vi.importActual('../resourceFileUtil.js')
+vi.mock('../../resourceFileUtil.js', async () => {
+  const actual = await vi.importActual('../../resourceFileUtil.js')
   return {
     default: {
       ...actual.default,
@@ -200,7 +200,7 @@ vi.mock('../resourceFileUtil.js', async () => {
   }
 })
 
-vi.mock('../fileWatchUtil.js', () => ({
+vi.mock('../../fileWatchUtil.js', () => ({
   default: {
     createWatchState: createWatchStateMock,
     createContentVersion: createContentVersionMock,
@@ -212,19 +212,19 @@ vi.mock('../fileWatchUtil.js', () => ({
   },
 }))
 
-vi.mock('../updateUtil.js', () => ({
+vi.mock('../../updateUtil.js', () => ({
   default: {
     checkUpdate: vi.fn(),
   },
 }))
 
-const { default: winInfoUtil } = await import('./winInfoUtil.js')
+const { default: winInfoUtil } = await import('../windowLifecycleService.js')
 
 function expectDocumentContent(winInfo, content) {
   expect(winInfoUtil.getDocumentContext(winInfo).content).toBe(content)
 }
 
-describe('winInfoUtil 兼容 facade', () => {
+describe('windowLifecycleService 生命周期 facade', () => {
   beforeEach(() => {
     sendMock.mockReset()
     writeFileMock.mockReset()

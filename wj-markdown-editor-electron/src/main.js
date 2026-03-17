@@ -10,6 +10,7 @@ import { isMarkdownFilePath } from './util/document-session/documentOpenTargetUt
 import {
   initializeDocumentSessionRuntime,
 } from './util/document-session/documentSessionRuntime.js'
+import windowLifecycleService from './util/document-session/windowLifecycleService.js'
 import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
 import updateUtil from './util/updateUtil.js'
@@ -18,7 +19,6 @@ import exportUtil from './util/win/exportUtil.js'
 import guideUtil from './util/win/guideUtil.js'
 import screenshotsUtil from './util/win/screenshotsUtil.js'
 import settingUtil from './util/win/settingUtil.js'
-import winInfoUtil from './util/win/winInfoUtil.js'
 import './util/channel/ipcMainUtil.js'
 
 app.commandLine.appendSwitch('--disable-http-cache')
@@ -73,9 +73,9 @@ function initializeAppDocumentSessionRuntime() {
   }
 
   documentSessionRuntime = initializeDocumentSessionRuntime({
-    ...winInfoUtil.initializeSessionRuntime(),
+    ...windowLifecycleService.initializeSessionRuntime(),
     openDocumentWindow: async (targetPath, options = {}) => {
-      return await winInfoUtil.createNew(targetPath, options.isRecent === true)
+      return await windowLifecycleService.createNew(targetPath, options.isRecent === true)
     },
   })
 
@@ -104,7 +104,7 @@ if (!lock) {
       }).then(() => {})
       return
     }
-    const activeWindow = winInfoUtil.getAll()[0]
+    const activeWindow = windowLifecycleService.getAll()[0]
     activeWindow?.win?.show()
   })
   logUtil.init()
@@ -112,7 +112,7 @@ if (!lock) {
     const runtime = initializeAppDocumentSessionRuntime()
     Menu.setApplicationMenu(null)
     await configUtil.initConfig((config) => {
-      winInfoUtil.getAll().forEach((item) => {
+      windowLifecycleService.getAll().forEach((item) => {
         sendUtil.send(item.win, { event: 'update-config', data: config })
       })
       if (aboutUtil.get()) {
@@ -149,7 +149,7 @@ if (!lock) {
         targetPath: openOnFilePath,
         baseDir: process.cwd(),
         openDocumentPath: (targetPath, options) => runtime.openDocumentPath(targetPath, options),
-        createDraftWindow: () => winInfoUtil.createNew(null),
+        createDraftWindow: () => windowLifecycleService.createNew(null),
       })
     } else if (configUtil.getConfig().openRecent) {
       const recentList = recent.get()
@@ -158,15 +158,15 @@ if (!lock) {
           trigger: 'startup',
         })
         if (openRecentResult?.ok !== true) {
-          await winInfoUtil.createNew(null)
+          await windowLifecycleService.createNew(null)
         }
       } else {
-        await winInfoUtil.createNew(null)
+        await windowLifecycleService.createNew(null)
       }
     } else {
-      await winInfoUtil.createNew(null)
+      await windowLifecycleService.createNew(null)
     }
     screenshotsUtil.init()
-    updateUtil.initUpdater(() => winInfoUtil.getAll())
+    updateUtil.initUpdater(() => windowLifecycleService.getAll())
   })
 }

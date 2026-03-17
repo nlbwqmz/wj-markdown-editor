@@ -5,7 +5,7 @@ import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
-import winInfoUtil from './winInfoUtil.js'
+import windowLifecycleService from '../document-session/windowLifecycleService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename)
 let exportWin
 let loadingKey
 function createExportWin(winInfo, type) {
-  const documentContext = winInfoUtil.getDocumentContext(winInfo)
+  const documentContext = windowLifecycleService.getDocumentContext(winInfo)
   if (exportWin) {
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.exportingPleaseWait' } })
     return

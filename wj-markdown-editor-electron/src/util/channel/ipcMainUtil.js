@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
 import { getDocumentSessionRuntime } from '../document-session/documentSessionRuntime.js'
+import windowLifecycleService from '../document-session/windowLifecycleService.js'
 import fileUploadUtil from '../fileUploadUtil.js'
 import imgUtil from '../imgUtil.js'
 import resourceFileUtil from '../resourceFileUtil.js'
@@ -12,7 +13,6 @@ import exportUtil from '../win/exportUtil.js'
 import guideUtil from '../win/guideUtil.js'
 import screenshotsUtil from '../win/screenshotsUtil.js'
 import settingUtil from '../win/settingUtil.js'
-import winInfoUtil from '../win/winInfoUtil.js'
 import sendUtil from './sendUtil.js'
 
 function executeRuntimeUiCommand(winInfo, command, payload) {
@@ -39,7 +39,7 @@ async function uploadImage(winInfo, data) {
  * 避免 IPC 层再次长出第二套资源语义。
  */
 async function handleResourceOpen(winInfo, data) {
-  const openResult = await winInfoUtil.executeResourceCommand(winInfo, 'document.resource.open-in-folder', data)
+  const openResult = await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.open-in-folder', data)
   if (!openResult) {
     return openResult
   }
@@ -93,7 +93,7 @@ const handlerList = {
     if (typeof data === 'string' || (data && typeof data === 'object' && typeof data.resourceUrl === 'string')) {
       return await handleResourceOpen(winInfo, data)
     }
-    const documentContext = winInfoUtil.getDocumentContext(winInfo)
+    const documentContext = windowLifecycleService.getDocumentContext(winInfo)
     if (!documentContext.path || !documentContext.exists) {
       sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theCurrentFileIsNotSaved' } })
       return
@@ -119,7 +119,7 @@ const handlerList = {
   'document.external.apply': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.external.apply', data),
   'document.external.ignore': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.external.ignore', data),
   'create-new': () => {
-    winInfoUtil.createNew().then(() => {})
+    windowLifecycleService.createNew().then(() => {})
   },
   'document.request-open-dialog': async (winInfo) => {
     return await executeRuntimeUiCommand(winInfo, 'document.request-open-dialog', null)
@@ -133,10 +133,10 @@ const handlerList = {
   'upload-image': async (winInfo, data) => {
     return await uploadImage(winInfo, data)
   },
-  'delete-local-resource': async (winInfo, data) => await winInfoUtil.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
-  'document.resource.delete-local': async (winInfo, data) => await winInfoUtil.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
-  'get-local-resource-info': async (winInfo, data) => await winInfoUtil.executeResourceCommand(winInfo, 'resource.get-info', data),
-  'resource.get-info': async (winInfo, data) => await winInfoUtil.executeResourceCommand(winInfo, 'resource.get-info', data),
+  'delete-local-resource': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
+  'document.resource.delete-local': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
+  'get-local-resource-info': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'resource.get-info', data),
+  'resource.get-info': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'resource.get-info', data),
   'screenshot': (winInfo, data) => {
     return new Promise((resolve) => {
       const startCapture = () => {
@@ -186,7 +186,7 @@ const handlerList = {
     return { name: 'wj-markdown-editor', version: app.getVersion() }
   },
   'check-update': async () => {
-    return await updateUtil.checkUpdate(winInfoUtil.getAll())
+    return await updateUtil.checkUpdate(windowLifecycleService.getAll())
   },
   'download-update': () => {
     updateUtil.downloadUpdate(aboutUtil.get())
@@ -213,28 +213,28 @@ const handlerListSync = {
     if (path.isAbsolute(filePath)) {
       return filePath
     }
-    const documentContext = winInfoUtil.getDocumentContext(winInfo)
+    const documentContext = windowLifecycleService.getDocumentContext(winInfo)
     if (documentContext.path) {
       return path.resolve(path.dirname(documentContext.path), filePath)
     }
     return null
   },
   'get-local-resource-comparable-key': (winInfo, rawPath) => {
-    return winInfoUtil.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
+    return windowLifecycleService.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
   },
   // 新旧契约在 Task 4 期间并存：
   // 旧 renderer 仍然通过 `get-local-resource-comparable-key` 走同步查询，
   // 新契约 `resource.get-comparable-key` 也必须继续保持同步语义，
   // 否则后续 renderer 迁移时会把当前依赖同步比较 key 的资源逻辑整体拖成异步。
   'resource.get-comparable-key': (winInfo, rawPath) => {
-    return winInfoUtil.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
+    return windowLifecycleService.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
   },
 }
 
 ipcMain.handle('sendToMain', async (event, json) => {
   if (handlerList[json.event]) {
     const win = BrowserWindow.fromWebContents(event.sender)
-    return await handlerList[json.event](winInfoUtil.getWinInfo(win) || winInfoUtil.getWinInfo(win.getParentWindow()), json.data)
+    return await handlerList[json.event](windowLifecycleService.getWinInfo(win) || windowLifecycleService.getWinInfo(win.getParentWindow()), json.data)
   }
   return false
 })
@@ -242,7 +242,7 @@ ipcMain.handle('sendToMain', async (event, json) => {
 ipcMain.on('sendToMainSync', (event, json) => {
   if (handlerListSync[json.event]) {
     const win = BrowserWindow.fromWebContents(event.sender)
-    event.returnValue = handlerListSync[json.event](winInfoUtil.getWinInfo(win) || winInfoUtil.getWinInfo(win.getParentWindow()), json.data)
+    event.returnValue = handlerListSync[json.event](windowLifecycleService.getWinInfo(win) || windowLifecycleService.getWinInfo(win.getParentWindow()), json.data)
     return
   }
   event.returnValue = null

@@ -8,27 +8,27 @@ import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
-import { createDocumentCommandService } from '../document-session/documentCommandService.js'
-import { createDocumentEffectService } from '../document-session/documentEffectService.js'
-import { resolveDocumentOpenPath } from '../document-session/documentOpenTargetUtil.js'
-import { createDocumentResourceService } from '../document-session/documentResourceService.js'
+import fileWatchUtil from '../fileWatchUtil.js'
+import resourceFileUtil from '../resourceFileUtil.js'
+import updateUtil from '../updateUtil.js'
+import { createDocumentCommandService } from './documentCommandService.js'
+import { createDocumentEffectService } from './documentEffectService.js'
+import { resolveDocumentOpenPath } from './documentOpenTargetUtil.js'
+import { createDocumentResourceService } from './documentResourceService.js'
 import {
   createBoundFileSession,
   createDraftSession,
   createRecentMissingSession,
-} from '../document-session/documentSessionFactory.js'
+} from './documentSessionFactory.js'
 import {
   normalizeOpenCommandResult,
   openDocumentWindowWithRuntimePolicy,
-} from '../document-session/documentSessionRuntime.js'
-import { createDocumentSessionStore } from '../document-session/documentSessionStore.js'
-import { deriveDocumentSnapshot } from '../document-session/documentSnapshotUtil.js'
-import { createExternalWatchBridge } from '../document-session/externalWatchBridge.js'
-import { createSaveCoordinator } from '../document-session/saveCoordinator.js'
-import { createWindowSessionBridge } from '../document-session/windowSessionBridge.js'
-import fileWatchUtil from '../fileWatchUtil.js'
-import resourceFileUtil from '../resourceFileUtil.js'
-import updateUtil from '../updateUtil.js'
+} from './documentSessionRuntime.js'
+import { createDocumentSessionStore } from './documentSessionStore.js'
+import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
+import { createExternalWatchBridge } from './externalWatchBridge.js'
+import { createSaveCoordinator } from './saveCoordinator.js'
+import { createWindowSessionBridge } from './windowSessionBridge.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)

@@ -93,7 +93,7 @@ vi.mock('fs-extra', () => {
   }
 })
 
-vi.mock('../../data/configUtil.js', () => {
+vi.mock('../../../data/configUtil.js', () => {
   return {
     default: {
       getConfig: vi.fn(() => ({ autoSave: [], startPage: 'editor', theme: { global: 'light' } })),
@@ -105,7 +105,7 @@ vi.mock('../../data/configUtil.js', () => {
   }
 })
 
-vi.mock('../../data/recent.js', () => {
+vi.mock('../../../data/recent.js', () => {
   return {
     default: {
       add: vi.fn(),
@@ -117,7 +117,7 @@ vi.mock('../../data/recent.js', () => {
   }
 })
 
-vi.mock('../channel/sendUtil.js', () => {
+vi.mock('../../channel/sendUtil.js', () => {
   return {
     default: {
       send: vi.fn(),
@@ -125,7 +125,7 @@ vi.mock('../channel/sendUtil.js', () => {
   }
 })
 
-vi.mock('../commonUtil.js', () => {
+vi.mock('../../commonUtil.js', () => {
   return {
     default: {
       createId: vi.fn(() => 'test-id-1'),
@@ -134,43 +134,43 @@ vi.mock('../commonUtil.js', () => {
   }
 })
 
-vi.mock('../document-session/documentCommandService.js', () => {
+vi.mock('../documentCommandService.js', () => {
   return {
     createDocumentCommandService,
   }
 })
 
-vi.mock('../document-session/documentEffectService.js', () => {
+vi.mock('../documentEffectService.js', () => {
   return {
     createDocumentEffectService,
   }
 })
 
-vi.mock('../document-session/documentResourceService.js', () => {
+vi.mock('../documentResourceService.js', () => {
   return {
     createDocumentResourceService,
   }
 })
 
-vi.mock('../document-session/documentSessionStore.js', () => {
+vi.mock('../documentSessionStore.js', () => {
   return {
     createDocumentSessionStore,
   }
 })
 
-vi.mock('../document-session/saveCoordinator.js', () => {
+vi.mock('../saveCoordinator.js', () => {
   return {
     createSaveCoordinator,
   }
 })
 
-vi.mock('../document-session/windowSessionBridge.js', () => {
+vi.mock('../windowSessionBridge.js', () => {
   return {
     createWindowSessionBridge,
   }
 })
 
-vi.mock('../fileUploadUtil.js', () => {
+vi.mock('../../fileUploadUtil.js', () => {
   return {
     default: {
       save: vi.fn(),
@@ -178,7 +178,7 @@ vi.mock('../fileUploadUtil.js', () => {
   }
 })
 
-vi.mock('../fileWatchUtil.js', () => {
+vi.mock('../../fileWatchUtil.js', () => {
   return {
     default: {
       createWatchState: vi.fn(() => ({ pendingChange: null })),
@@ -191,7 +191,7 @@ vi.mock('../fileWatchUtil.js', () => {
   }
 })
 
-vi.mock('../imgUtil.js', () => {
+vi.mock('../../imgUtil.js', () => {
   return {
     default: {
       check: vi.fn(() => true),
@@ -200,7 +200,7 @@ vi.mock('../imgUtil.js', () => {
   }
 })
 
-vi.mock('../resourceFileUtil.js', () => {
+vi.mock('../../resourceFileUtil.js', () => {
   return {
     default: {
       getLocalResourceFailureMessageKey: vi.fn(() => null),
@@ -208,7 +208,7 @@ vi.mock('../resourceFileUtil.js', () => {
   }
 })
 
-vi.mock('../updateUtil.js', () => {
+vi.mock('../../updateUtil.js', () => {
   return {
     default: {
       checkUpdate: vi.fn(),
@@ -219,7 +219,7 @@ vi.mock('../updateUtil.js', () => {
   }
 })
 
-vi.mock('../win/aboutUtil.js', () => {
+vi.mock('../../win/aboutUtil.js', () => {
   return {
     default: {
       channel: {},
@@ -228,7 +228,7 @@ vi.mock('../win/aboutUtil.js', () => {
   }
 })
 
-vi.mock('../win/exportUtil.js', () => {
+vi.mock('../../win/exportUtil.js', () => {
   return {
     default: {
       channel: {},
@@ -236,7 +236,7 @@ vi.mock('../win/exportUtil.js', () => {
   }
 })
 
-vi.mock('../win/guideUtil.js', () => {
+vi.mock('../../win/guideUtil.js', () => {
   return {
     default: {
       channel: {},
@@ -244,7 +244,7 @@ vi.mock('../win/guideUtil.js', () => {
   }
 })
 
-vi.mock('../win/screenshotsUtil.js', () => {
+vi.mock('../../win/screenshotsUtil.js', () => {
   return {
     default: {
       startCapture: vi.fn(),
@@ -252,7 +252,7 @@ vi.mock('../win/screenshotsUtil.js', () => {
   }
 })
 
-vi.mock('../win/settingUtil.js', () => {
+vi.mock('../../win/settingUtil.js', () => {
   return {
     default: {
       channel: {},
@@ -260,7 +260,7 @@ vi.mock('../win/settingUtil.js', () => {
   }
 })
 
-describe('winInfoUtil runtime 初始化时机', () => {
+describe('windowLifecycleService runtime 初始化时机', () => {
   beforeEach(() => {
     vi.resetModules()
     browserWindowFromWebContents.mockReset()
@@ -274,8 +274,8 @@ describe('winInfoUtil runtime 初始化时机', () => {
     ipcMainOn.mockReset()
   })
 
-  it('真实导入 ipcMainUtil 时，不得因为 winInfoUtil 被连带导入而提前创建 runtime 单例', async () => {
-    await import('../channel/ipcMainUtil.js')
+  it('真实导入 ipcMainUtil 时，不得因为 windowLifecycleService 被连带导入而提前创建 runtime 单例', async () => {
+    await import('../../channel/ipcMainUtil.js')
 
     expect(createDocumentSessionStore).not.toHaveBeenCalled()
     expect(createSaveCoordinator).not.toHaveBeenCalled()
@@ -285,8 +285,8 @@ describe('winInfoUtil runtime 初始化时机', () => {
     expect(createDocumentResourceService).not.toHaveBeenCalled()
   })
 
-  it('winInfoUtil 必须等显式调用 initializeSessionRuntime 后才创建 runtime 单例，且重复初始化保持幂等', async () => {
-    const { default: winInfoUtil } = await import('./winInfoUtil.js')
+  it('windowLifecycleService 必须等显式调用 initializeSessionRuntime 后才创建 runtime 单例，且重复初始化保持幂等', async () => {
+    const { default: winInfoUtil } = await import('../windowLifecycleService.js')
 
     expect(createDocumentSessionStore).not.toHaveBeenCalled()
     expect(createSaveCoordinator).not.toHaveBeenCalled()
