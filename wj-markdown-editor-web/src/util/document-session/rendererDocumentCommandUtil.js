@@ -34,6 +34,21 @@ export function requestDocumentSaveCopy() {
 }
 
 /**
+ * 发送“正文编辑已变化”命令。
+ *
+ * renderer 不再继续透传历史兼容编辑事件名，
+ * 而是统一发送结构化 `document.edit` 命令。
+ */
+export function requestDocumentEdit(content) {
+  return channelUtil.send({
+    event: 'document.edit',
+    data: {
+      content,
+    },
+  })
+}
+
+/**
  * 请求主进程弹出“打开 Markdown 文件”对话框。
  *
  * 这里明确只负责“请求打开对话框”这一层语义，
@@ -121,6 +136,7 @@ export function isDocumentOpenMissingResult(result) {
 export default {
   requestDocumentSave,
   requestDocumentSaveCopy,
+  requestDocumentEdit,
   requestDocumentOpenDialog,
   requestDocumentOpenPath,
   requestDocumentSessionSnapshot,

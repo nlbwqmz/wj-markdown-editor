@@ -107,13 +107,7 @@ const handlerList = {
   'document.get-session-snapshot': async (winInfo) => {
     return await executeRuntimeUiCommand(winInfo, 'document.get-session-snapshot', null)
   },
-  'file-content-update': (winInfo, content) => {
-    // 渲染端所有编辑动作最终都收口到这里，
-    // Electron 侧正文真相只允许经由 session 命令流更新。
-    void executeRuntimeUiCommand(winInfo, 'document.edit', {
-      content,
-    })
-  },
+  'document.edit': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.edit', data),
   'document.cancel-close': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.cancel-close', null),
   'document.confirm-force-close': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.confirm-force-close', null),
   'document.external.apply': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.external.apply', data),
@@ -133,9 +127,7 @@ const handlerList = {
   'upload-image': async (winInfo, data) => {
     return await uploadImage(winInfo, data)
   },
-  'delete-local-resource': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
   'document.resource.delete-local': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
-  'get-local-resource-info': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'resource.get-info', data),
   'resource.get-info': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'resource.get-info', data),
   'screenshot': (winInfo, data) => {
     return new Promise((resolve) => {
@@ -219,13 +211,6 @@ const handlerListSync = {
     }
     return null
   },
-  'get-local-resource-comparable-key': (winInfo, rawPath) => {
-    return windowLifecycleService.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
-  },
-  // 新旧契约在 Task 4 期间并存：
-  // 旧 renderer 仍然通过 `get-local-resource-comparable-key` 走同步查询，
-  // 新契约 `resource.get-comparable-key` 也必须继续保持同步语义，
-  // 否则后续 renderer 迁移时会把当前依赖同步比较 key 的资源逻辑整体拖成异步。
   'resource.get-comparable-key': (winInfo, rawPath) => {
     return windowLifecycleService.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
   },

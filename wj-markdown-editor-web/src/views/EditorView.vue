@@ -15,6 +15,7 @@ import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
 import {
+  requestDocumentEdit,
   requestDocumentSave,
   requestDocumentSessionSnapshot,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
@@ -239,9 +240,9 @@ watch(() => content.value, (newValue, oldValue) => {
       applyingSessionContent = false
       return
     }
-    // 编辑器里每次真实内容变化，都会同步给 Electron 更新 tempContent。
-    // 保存状态、外部变更收敛等逻辑都在 Electron 侧统一判断。
-    channelUtil.send({ event: 'file-content-update', data: newValue })
+    // 编辑器里每次真实内容变化，都经由统一命令工具发送 `document.edit`。
+    // Electron 侧会再把它收口到 session 命令流，统一裁决保存态和外部变更。
+    requestDocumentEdit(newValue).then(() => {})
   }
 })
 

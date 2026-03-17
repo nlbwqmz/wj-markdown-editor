@@ -22,6 +22,7 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
   assert.ok(rendererDocumentCommandUtilModule, '缺少 renderer 文档命令工具')
 
   const {
+    requestDocumentEdit,
     requestDocumentOpenDialog,
     requestDocumentOpenPath,
     requestDocumentSave,
@@ -39,6 +40,7 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
 
   await requestDocumentSave()
   await requestDocumentSaveCopy()
+  await requestDocumentEdit('# 新内容')
   await requestDocumentOpenDialog()
   await requestDocumentOpenPath('C:/docs/note.md')
   await requestRecentClear()
@@ -48,6 +50,12 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
   assert.deepEqual(sentPayloadList, [
     { event: 'document.save' },
     { event: 'document.save-copy' },
+    {
+      event: 'document.edit',
+      data: {
+        content: '# 新内容',
+      },
+    },
     { event: 'document.request-open-dialog' },
     {
       event: 'document.open-path',

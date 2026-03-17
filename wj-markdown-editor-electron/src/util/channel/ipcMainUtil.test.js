@@ -416,7 +416,7 @@ describe('ipcMainUtil sync comparable key', () => {
     })
   })
 
-  it('应该通过 sendToMainSync 暴露本地资源比较 key 解析能力', async () => {
+  it('get-local-resource-comparable-key 旧别名必须已经删除，避免 renderer 继续依赖兼容通道', async () => {
     let sendToMainSyncHandler
     ipcMainOn.mockImplementation((channel, handler) => {
       if (channel === 'sendToMainSync') {
@@ -427,7 +427,6 @@ describe('ipcMainUtil sync comparable key', () => {
     const sender = { id: 9527 }
     const win = { id: 1 }
     browserWindowFromWebContents.mockReturnValue(win)
-    executeResourceCommandSync.mockReturnValue('wj-local-file:d:/docs/index.html')
 
     await import('./ipcMainUtil.js')
 
@@ -437,12 +436,8 @@ describe('ipcMainUtil sync comparable key', () => {
       data: './docs/index.html#guide',
     })
 
-    expect(executeResourceCommandSync).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'resource.get-comparable-key', './docs/index.html#guide')
-    expect(event.returnValue).toBe('wj-local-file:d:/docs/index.html')
+    expect(event.returnValue).toBeNull()
+    expect(executeResourceCommandSync).not.toHaveBeenCalled()
   })
 
   it('新的 resource.get-comparable-key 契约也必须保持同步查询语义', async () => {
@@ -829,7 +824,7 @@ describe('ipcMainUtil command mapping', () => {
     expect(result).toEqual(recentList)
   })
 
-  it('get-local-resource-info / resource.get-info 必须统一委托给 documentResourceService 边界', async () => {
+  it('resource.get-info 必须统一委托给 documentResourceService 边界', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     winInfoUtil.executeResourceCommand.mockResolvedValue({
       ok: true,
@@ -842,22 +837,13 @@ describe('ipcMainUtil command mapping', () => {
     })
 
     await sendToMainHandler({ sender }, {
-      event: 'get-local-resource-info',
-      data: 'wj://2e2f6173736574732f64656d6f2e706e67',
-    })
-    await sendToMainHandler({ sender }, {
       event: 'resource.get-info',
       data: {
         resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
       },
     })
 
-    expect(winInfoUtil.executeResourceCommand).toHaveBeenNthCalledWith(1, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'resource.get-info', 'wj://2e2f6173736574732f64656d6f2e706e67')
-    expect(winInfoUtil.executeResourceCommand).toHaveBeenNthCalledWith(2, {
+    expect(winInfoUtil.executeResourceCommand).toHaveBeenCalledWith({
       path: 'D:\\docs\\note.md',
       exists: true,
       win: { id: 1 },
@@ -866,7 +852,7 @@ describe('ipcMainUtil command mapping', () => {
     })
   })
 
-  it('delete-local-resource / document.resource.delete-local 必须统一委托给 documentResourceService 边界', async () => {
+  it('document.resource.delete-local 必须统一委托给 documentResourceService 边界', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     winInfoUtil.executeResourceCommand.mockResolvedValue({
       ok: true,
@@ -876,22 +862,13 @@ describe('ipcMainUtil command mapping', () => {
     })
 
     await sendToMainHandler({ sender }, {
-      event: 'delete-local-resource',
-      data: 'wj://2e2f6173736574732f64656d6f2e706e67',
-    })
-    await sendToMainHandler({ sender }, {
       event: 'document.resource.delete-local',
       data: {
         resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
       },
     })
 
-    expect(winInfoUtil.executeResourceCommand).toHaveBeenNthCalledWith(1, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.resource.delete-local', 'wj://2e2f6173736574732f64656d6f2e706e67')
-    expect(winInfoUtil.executeResourceCommand).toHaveBeenNthCalledWith(2, {
+    expect(winInfoUtil.executeResourceCommand).toHaveBeenCalledWith({
       path: 'D:\\docs\\note.md',
       exists: true,
       win: { id: 1 },
@@ -942,12 +919,14 @@ describe('ipcMainUtil command mapping', () => {
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
-  it('file-content-update 虽然还是旧 IPC 名称，但正文编辑必须收口到 runtime 的 document.edit 命令', async () => {
+  it('document.edit 必须把结构化正文 payload 送入 runtime 命令流', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
 
     await sendToMainHandler({ sender }, {
-      event: 'file-content-update',
-      data: '# 新正文',
+      event: 'document.edit',
+      data: {
+        content: '# 新正文',
+      },
     })
 
     expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.edit', {
@@ -970,6 +949,9 @@ describe('ipcMainUtil command mapping', () => {
       sendToMainHandler({ sender }, { event: 'get-recent-list', data: null }),
       sendToMainHandler({ sender }, { event: 'file-external-change-apply', data: { version: 4 } }),
       sendToMainHandler({ sender }, { event: 'file-external-change-ignore', data: { version: 5 } }),
+      sendToMainHandler({ sender }, { event: 'file-content-update', data: '# 旧正文' }),
+      sendToMainHandler({ sender }, { event: 'delete-local-resource', data: 'wj://2e2f6173736574732f64656d6f2e706e67' }),
+      sendToMainHandler({ sender }, { event: 'get-local-resource-info', data: 'wj://2e2f6173736574732f64656d6f2e706e67' }),
     ])
 
     expect(removedLegacyResults).toEqual([
@@ -983,7 +965,12 @@ describe('ipcMainUtil command mapping', () => {
       false,
       false,
       false,
+      false,
+      false,
+      false,
     ])
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(winInfoUtil.executeResourceCommand).not.toHaveBeenCalled()
+    expect(winInfoUtil.updateTempContent).not.toHaveBeenCalled()
   })
 })
