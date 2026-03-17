@@ -423,7 +423,9 @@ describe('documentEffectService', () => {
   it('execute-save 内嵌 watcher 重绑失败时，必须回流 watch.rebind-failed，不能把已成功写盘升级成副作用异常', async () => {
     const { service, fsModule } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({})
-    const startExternalWatch = vi.fn().mockRejectedValue(new Error('watch bind failed'))
+    const externalWatchBridge = {
+      start: vi.fn().mockRejectedValue(new Error('watch bind failed')),
+    }
     const getExternalWatchContext = vi.fn(() => ({
       bindingToken: 7,
       watchingPath: 'C:/docs/demo.md',
@@ -443,7 +445,7 @@ describe('documentEffectService', () => {
       },
       dispatchCommand,
       shouldRebindExternalWatchAfterSave: () => true,
-      startExternalWatch,
+      externalWatchBridge,
       getExternalWatchContext,
     })).resolves.toBeNull()
 
@@ -469,16 +471,18 @@ describe('documentEffectService', () => {
   it('execute-save 内嵌重绑成功时，也必须回流 watch.bound，避免会话残留假活跃 watcher 状态', async () => {
     const { service, fsModule } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({})
-    const startExternalWatch = vi.fn().mockResolvedValue({
-      ok: true,
-      watchingPath: 'C:/docs/demo.md',
-      watchingDirectoryPath: 'C:/docs',
-    })
+    const externalWatchBridge = {
+      start: vi.fn().mockResolvedValue({
+        ok: true,
+        watchingPath: 'C:/docs/demo.md',
+        watchingDirectoryPath: 'C:/docs',
+      }),
+      markInternalSave: vi.fn(),
+    }
     const getExternalWatchContext = vi.fn(() => ({
       bindingToken: 8,
       watchingPath: 'C:/docs/demo.md',
     }))
-    const markInternalSave = vi.fn()
 
     fsModule.writeFile.mockResolvedValue(undefined)
 
@@ -495,9 +499,8 @@ describe('documentEffectService', () => {
       },
       dispatchCommand,
       shouldRebindExternalWatchAfterSave: () => true,
-      startExternalWatch,
+      externalWatchBridge,
       getExternalWatchContext,
-      markInternalSave,
     })
 
     expect(dispatchCommand).toHaveBeenCalledWith('watch.bound', {
@@ -505,7 +508,7 @@ describe('documentEffectService', () => {
       watchingPath: 'C:/docs/demo.md',
       watchingDirectoryPath: 'C:/docs',
     })
-    expect(markInternalSave).toHaveBeenCalledWith('# demo')
+    expect(externalWatchBridge.markInternalSave).toHaveBeenCalledWith('# demo')
     expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.rebind-failed')).toBe(false)
   })
 
@@ -536,11 +539,13 @@ describe('documentEffectService', () => {
   it('rebind-watch 必须启动新的 watcher 绑定，并在成功后回流 watch.bound', async () => {
     const { service } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
-    const startExternalWatch = vi.fn().mockResolvedValue({
-      ok: true,
-      watchingPath: 'C:/docs/demo.md',
-      watchingDirectoryPath: 'C:/docs',
-    })
+    const externalWatchBridge = {
+      start: vi.fn().mockResolvedValue({
+        ok: true,
+        watchingPath: 'C:/docs/demo.md',
+        watchingDirectoryPath: 'C:/docs',
+      }),
+    }
 
     await service.applyEffect({
       effect: {
@@ -549,10 +554,10 @@ describe('documentEffectService', () => {
         watchingPath: 'C:/docs/demo.md',
       },
       dispatchCommand,
-      startExternalWatch,
+      externalWatchBridge,
     })
 
-    expect(startExternalWatch).toHaveBeenCalledWith({
+    expect(externalWatchBridge.start).toHaveBeenCalledWith({
       bindingToken: 2,
       watchingPath: 'C:/docs/demo.md',
     })
@@ -568,7 +573,9 @@ describe('documentEffectService', () => {
   it('rebind-watch 如果重新绑定失败，必须回流 watch.rebind-failed', async () => {
     const { service } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
-    const startExternalWatch = vi.fn().mockRejectedValue(new Error('watch crashed'))
+    const externalWatchBridge = {
+      start: vi.fn().mockRejectedValue(new Error('watch crashed')),
+    }
 
     await service.applyEffect({
       effect: {
@@ -577,7 +584,7 @@ describe('documentEffectService', () => {
         watchingPath: 'C:/docs/demo.md',
       },
       dispatchCommand,
-      startExternalWatch,
+      externalWatchBridge,
     })
 
     expect(dispatchCommand).toHaveBeenCalledWith('watch.rebind-failed', {
@@ -595,10 +602,12 @@ describe('documentEffectService', () => {
   it('rebind-watch 在 startExternalWatch 显式返回 ok=false 时，也必须回流 watch.rebind-failed', async () => {
     const { service } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
-    const startExternalWatch = vi.fn().mockResolvedValue({
-      ok: false,
-      error: new Error('watch path missing'),
-    })
+    const externalWatchBridge = {
+      start: vi.fn().mockResolvedValue({
+        ok: false,
+        error: new Error('watch path missing'),
+      }),
+    }
 
     await service.applyEffect({
       effect: {
@@ -607,7 +616,7 @@ describe('documentEffectService', () => {
         watchingPath: 'C:/docs/demo.md',
       },
       dispatchCommand,
-      startExternalWatch,
+      externalWatchBridge,
     })
 
     expect(dispatchCommand).toHaveBeenCalledWith('watch.rebind-failed', {

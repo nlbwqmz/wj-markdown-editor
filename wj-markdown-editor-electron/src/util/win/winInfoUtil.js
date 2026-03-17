@@ -23,6 +23,7 @@ import {
 } from '../document-session/documentSessionRuntime.js'
 import { createDocumentSessionStore } from '../document-session/documentSessionStore.js'
 import { deriveDocumentSnapshot } from '../document-session/documentSnapshotUtil.js'
+import { createExternalWatchBridge } from '../document-session/externalWatchBridge.js'
 import { createSaveCoordinator } from '../document-session/saveCoordinator.js'
 import { createWindowSessionBridge } from '../document-session/windowSessionBridge.js'
 import fileWatchUtil from '../fileWatchUtil.js'
@@ -137,6 +138,31 @@ function normalizeComparablePath(targetPath) {
 
 function createExternalWatchState() {
   return fileWatchUtil.createWatchState()
+}
+
+function getExternalWatchBridge(winInfo) {
+  if (!winInfo) {
+    return null
+  }
+
+  if (winInfo.externalWatchBridge) {
+    return winInfo.externalWatchBridge
+  }
+
+  if (!winInfo.externalWatch) {
+    winInfo.externalWatch = createExternalWatchState()
+  }
+
+  winInfo.externalWatchBridge = createExternalWatchBridge({
+    watch,
+    watchState: winInfo.externalWatch,
+    dispatchCommand: (command, payload, options = {}) => {
+      return dispatchCommand(winInfo, command, payload, options)
+    },
+    getCurrentBindingToken: () => getCurrentWatchBindingToken(winInfo),
+    getCurrentObservedFloor: () => getCurrentWatchObservedFloor(winInfo),
+  })
+  return winInfo.externalWatchBridge
 }
 
 function appendMarkdownExtension(targetPath) {
@@ -266,20 +292,6 @@ function getLegacyPendingVersion(winInfo, previousPendingChange, nextVersionHash
   }
 
   return 1
-}
-
-function resetLegacyExternalWatchHistory(externalWatch) {
-  if (!externalWatch) {
-    return
-  }
-
-  externalWatch.currentVersion = 0
-  externalWatch.lastInternalSaveAt = 0
-  externalWatch.lastInternalSavedVersion = null
-  externalWatch.recentInternalSaves = []
-  externalWatch.lastHandledVersionHash = null
-  externalWatch.pendingChange = null
-  externalWatch.fileExists = false
 }
 
 function applyLegacyMissingToSession(winInfo) {
@@ -453,11 +465,10 @@ function registerSessionForWindow(winInfo, session) {
 }
 
 function stopExternalWatch(winInfo) {
-  if (!winInfo?.externalWatch) {
+  if (!winInfo) {
     return true
   }
-  fileWatchUtil.stopWatching(winInfo.externalWatch)
-  return winInfo.externalWatch.watcher === null && winInfo.externalWatch.subscription === null
+  return getExternalWatchBridge(winInfo)?.stop?.() ?? true
 }
 
 function getCurrentWatchBindingToken(winInfo) {
@@ -474,168 +485,18 @@ function getCurrentWatchObservedFloor(winInfo) {
     : 0
 }
 
-function wasWatchEventAccepted(previousObservedFloor, dispatchResult, observedAt) {
-  const nextObservedFloor = Number.isFinite(dispatchResult?.session?.watchRuntime?.eventFloorObservedAt)
-    ? dispatchResult.session.watchRuntime.eventFloorObservedAt
-    : 0
-
-  if (Number.isFinite(observedAt)) {
-    return nextObservedFloor === observedAt && nextObservedFloor > previousObservedFloor
-  }
-
-  return nextObservedFloor > previousObservedFloor
-}
-
-function settleExternalWatchPendingChangeIfNeeded(winInfo, {
-  versionHash,
-  previousObservedFloor,
-  observedAt,
-  dispatchResult,
-}) {
-  if (!winInfo?.externalWatch || !versionHash) {
-    return
-  }
-
-  if (!wasWatchEventAccepted(previousObservedFloor, dispatchResult, observedAt)) {
-    return
-  }
-
-  const pendingVersionHash = dispatchResult?.session?.externalRuntime?.pendingExternalChange?.versionHash || null
-  if (pendingVersionHash === versionHash) {
-    return
-  }
-
-  if (dispatchResult?.session?.externalRuntime?.lastHandledVersionHash === versionHash) {
-    fileWatchUtil.settlePendingChange(winInfo.externalWatch, versionHash)
-  }
-}
-
-function resetExternalWatchHistoryIfMissingAccepted(winInfo, {
-  previousObservedFloor,
-  observedAt,
-  dispatchResult,
-}) {
-  if (!winInfo?.externalWatch) {
-    return
-  }
-
-  if (!wasWatchEventAccepted(previousObservedFloor, dispatchResult, observedAt)) {
-    return
-  }
-
-  if (dispatchResult?.session?.documentSource?.exists === false) {
-    resetLegacyExternalWatchHistory(winInfo.externalWatch)
-  }
-}
-
 function startExternalWatch(winInfo, options = {}) {
   const requestedPath = typeof options?.watchingPath === 'string' && options.watchingPath.trim() !== ''
     ? options.watchingPath
     : winInfo?.path
-  if (!requestedPath) {
-    return {
-      ok: false,
-      watchingPath: null,
-      watchingDirectoryPath: null,
-      error: new Error('watch path missing'),
-    }
-  }
-  if (!winInfo.externalWatch) {
-    winInfo.externalWatch = createExternalWatchState()
-  }
-  const bindingToken = Number.isFinite(options?.bindingToken)
-    ? options.bindingToken
-    : getCurrentWatchBindingToken(winInfo)
-  const currentSubscriptionBindingToken = Number.isFinite(winInfo.externalWatch?.subscription?.bindingToken)
-    ? winInfo.externalWatch.subscription.bindingToken
-    : null
-  if (winInfo.externalWatch.watchingPath === requestedPath
-    && winInfo.externalWatch.watcher
-    && currentSubscriptionBindingToken === bindingToken) {
-    return {
-      ok: true,
-      watchingPath: requestedPath,
-      watchingDirectoryPath: winInfo.externalWatch.watchingDirectoryPath || path.dirname(requestedPath),
-    }
-  }
-
-  stopExternalWatch(winInfo)
-  fileWatchUtil.startWatching({
-    state: winInfo.externalWatch,
-    filePath: requestedPath,
-    bindingToken,
-    watch,
-    onExternalChange: async (change, meta = {}) => {
-      const observedAt = meta.observedAt ?? change?.observedAt
-      const previousObservedFloor = getCurrentWatchObservedFloor(winInfo)
-      const diskContent = change?.content ?? change?.diskContent ?? ''
-      const versionHash = change?.versionHash || createContentHash(diskContent)
-      const dispatchResult = await dispatchCommand(winInfo, 'watch.file-changed', {
-        bindingToken: meta.bindingToken ?? change?.bindingToken ?? bindingToken,
-        watchingPath: meta.watchingPath ?? change?.watchingPath ?? requestedPath,
-        observedAt,
-        diskContent,
-        diskStat: meta.diskStat ?? change?.diskStat ?? change?.stat ?? null,
-      }, {
-        publishSnapshotChanged: 'if-changed',
-      })
-
-      // live watcher 仍然依赖 fileWatchUtil 的去重状态来压制重复回调，
-      // 因此当统一命令流已经把本次版本收敛成 noop / applied 时，
-      // 这里必须同步把底层 pending 标记为 settled，不能留下悬挂的假 pending。
-      settleExternalWatchPendingChangeIfNeeded(winInfo, {
-        versionHash,
-        previousObservedFloor,
-        observedAt,
-        dispatchResult,
-      })
-    },
-    onMissing: async (error, meta = {}) => {
-      const observedAt = meta.observedAt
-      const previousObservedFloor = getCurrentWatchObservedFloor(winInfo)
-      const dispatchResult = await dispatchCommand(winInfo, 'watch.file-missing', {
-        bindingToken: meta.bindingToken ?? bindingToken,
-        watchingPath: meta.watchingPath ?? requestedPath,
-        observedAt,
-        error,
-      }, {
-        publishSnapshotChanged: 'if-changed',
-      })
-
-      // 文件进入 missing 后，底层 watcher 的内部去重历史必须同时清空，
-      // 否则恢复首轮如果撞上旧的 handled / internal-save hash，就会把真实恢复内容吞掉。
-      resetExternalWatchHistoryIfMissingAccepted(winInfo, {
-        previousObservedFloor,
-        observedAt,
-        dispatchResult,
-      })
-    },
-    onRestored: async (diskContent, meta = {}) => {
-      await dispatchCommand(winInfo, 'watch.file-restored', {
-        bindingToken: meta.bindingToken ?? bindingToken,
-        watchingPath: meta.watchingPath ?? requestedPath,
-        observedAt: meta.observedAt,
-        diskContent,
-        diskStat: meta.diskStat ?? null,
-      }, {
-        publishSnapshotChanged: 'if-changed',
-      })
-    },
-    onError: (error, meta = {}) => {
-      // watcher 读盘失败必须进入统一命令流，才能触发 warning + 新 token + 自动重绑。
-      // 这里只负责把底层 watcher 回调标准化后回流到 commandService，
-      // 不能再直接旁路发 legacy message，否则重绑 effect 永远不会被执行。
-      void dispatchCommand(winInfo, 'watch.error', {
-        bindingToken: meta.bindingToken ?? bindingToken,
-        watchingPath: meta.watchingPath ?? requestedPath,
-        error,
-      })
-    },
-  })
-  return {
-    ok: true,
+  return getExternalWatchBridge(winInfo)?.start?.({
+    ...options,
     watchingPath: requestedPath,
-    watchingDirectoryPath: winInfo.externalWatch.watchingDirectoryPath || path.dirname(requestedPath),
+  }) || {
+    ok: false,
+    watchingPath: null,
+    watchingDirectoryPath: null,
+    error: new Error('watch bridge missing'),
   }
 }
 
@@ -773,12 +634,7 @@ function buildEffectContextForWindow(winInfo, { dispatchCommand }) {
     },
     shouldRebindExternalWatchAfterSave: () => shouldRebindExternalWatchAfterSave(winInfo),
     getExternalWatchContext: () => getExternalWatchContext(winInfo),
-    startExternalWatch: options => startExternalWatch(winInfo, options),
-    markInternalSave: (content) => {
-      if (winInfo.externalWatch?.watcher) {
-        fileWatchUtil.markInternalSave(winInfo.externalWatch, content)
-      }
-    },
+    externalWatchBridge: getExternalWatchBridge(winInfo),
   }
 }
 
@@ -801,7 +657,7 @@ function handleFileMissing(winInfo) {
     return 'ignored'
   }
 
-  resetLegacyExternalWatchHistory(winInfo.externalWatch)
+  getExternalWatchBridge(winInfo)?.resetHistory?.()
   applyLegacyMissingToSession(winInfo)
   publishSnapshotChanged(winInfo)
   return 'missing'
@@ -819,9 +675,7 @@ function handleExternalChange(winInfo, change, options = {}) {
       resolutionResult: 'noop',
     })
     publishSnapshotChanged(winInfo)
-    if (winInfo.externalWatch) {
-      fileWatchUtil.settlePendingChange(winInfo.externalWatch, change.versionHash)
-    }
+    getExternalWatchBridge(winInfo)?.settlePendingChange?.(change.versionHash)
     return 'resolved'
   }
 
@@ -830,9 +684,7 @@ function handleExternalChange(winInfo, change, options = {}) {
     applyLegacyExternalDiskToSession(winInfo, change, {
       applyToEditor: true,
     })
-    if (winInfo.externalWatch) {
-      fileWatchUtil.settlePendingChange(winInfo.externalWatch, change.versionHash)
-    }
+    getExternalWatchBridge(winInfo)?.settlePendingChange?.(change.versionHash)
     publishSnapshotChanged(winInfo)
     return 'applied'
   }
@@ -862,9 +714,9 @@ async function executeExternalResolutionCommandWithDispatcher(winInfo, command, 
     const settledVersionHash = result?.session?.diskSnapshot?.versionHash
       || winInfo.externalWatch.pendingChange?.versionHash
       || null
-    fileWatchUtil.settlePendingChange(winInfo.externalWatch, settledVersionHash)
+    getExternalWatchBridge(winInfo)?.settlePendingChange?.(settledVersionHash)
   } else if (isIgnored && winInfo?.externalWatch) {
-    fileWatchUtil.ignorePendingChange(winInfo.externalWatch)
+    getExternalWatchBridge(winInfo)?.ignorePendingChange?.()
   }
 
   return {

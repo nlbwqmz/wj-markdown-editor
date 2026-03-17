@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { dialog } from 'electron'
 import fs from 'fs-extra'
 import {
@@ -61,6 +62,19 @@ function getWatchWarningMessage(effect) {
     // 当前 renderer 侧已有这条 i18n key，先统一复用，避免为了补重绑链路再扩散新的文案契约。
     content: 'message.fileExternalChangeReadFailed',
   }
+}
+
+function getWatchingDirectoryPath(rebindResult, fallbackPath = null) {
+  if (typeof rebindResult?.watchingDirectoryPath === 'string' && rebindResult.watchingDirectoryPath.trim() !== '') {
+    return rebindResult.watchingDirectoryPath
+  }
+
+  const watchingPath = rebindResult?.watchingPath || fallbackPath
+  if (typeof watchingPath !== 'string' || watchingPath.trim() === '') {
+    return null
+  }
+
+  return path.dirname(resolveDocumentOpenPath(watchingPath) || watchingPath)
 }
 
 /**
@@ -347,8 +361,7 @@ export function createDocumentEffectService({
     showWindowMessage,
     shouldRebindExternalWatchAfterSave,
     getExternalWatchContext,
-    startExternalWatch,
-    markInternalSave,
+    externalWatchBridge,
   }) {
     if (!effect) {
       // 空 effect 直接忽略，保持调用方可以安全地按序执行返回列表。
@@ -410,7 +423,11 @@ export function createDocumentEffectService({
           const watchingPath = watchContext.watchingPath || effect.job.path
 
           try {
-            const rebindResult = await startExternalWatch?.({
+            if (typeof externalWatchBridge?.start !== 'function') {
+              throw new TypeError('external watch bridge not configured')
+            }
+
+            const rebindResult = await externalWatchBridge.start({
               bindingToken,
               watchingPath,
             })
@@ -421,11 +438,11 @@ export function createDocumentEffectService({
 
             // 成功重绑后，把这次写盘内容标记为内部写入，
             // 避免 watcher 立刻把刚刚自己的保存又识别成外部变更。
-            markInternalSave?.(effect.job.content)
+            externalWatchBridge.markInternalSave?.(effect.job.content)
             await dispatchCommand?.('watch.bound', {
               bindingToken,
               watchingPath: rebindResult?.watchingPath || watchingPath,
-              watchingDirectoryPath: rebindResult?.watchingDirectoryPath || null,
+              watchingDirectoryPath: getWatchingDirectoryPath(rebindResult, watchingPath),
             })
           } catch (error) {
             await dispatchCommand?.('watch.rebind-failed', {
@@ -525,7 +542,11 @@ export function createDocumentEffectService({
           // 成功回流 watch.bound，失败回流 watch.rebind-failed。
           const watchingPath = effect.watchingPath || null
           try {
-            const rebindResult = await startExternalWatch?.({
+            if (typeof externalWatchBridge?.start !== 'function') {
+              throw new TypeError('external watch bridge not configured')
+            }
+
+            const rebindResult = await externalWatchBridge.start({
               bindingToken: effect.bindingToken,
               watchingPath,
             })
@@ -537,7 +558,7 @@ export function createDocumentEffectService({
             await dispatchCommand?.('watch.bound', {
               bindingToken: effect.bindingToken,
               watchingPath: rebindResult?.watchingPath || watchingPath,
-              watchingDirectoryPath: rebindResult?.watchingDirectoryPath || null,
+              watchingDirectoryPath: getWatchingDirectoryPath(rebindResult, watchingPath),
             })
           } catch (error) {
             await dispatchCommand?.('watch.rebind-failed', {
