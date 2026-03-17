@@ -640,6 +640,29 @@ describe('ipcMainUtil command mapping', () => {
     })
   })
 
+  it('document.open-path 如果显式提供 baseDir，也必须原样透传给统一命令流，不能在 IPC 层丢失', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'document.open-path',
+      data: {
+        path: 'docs\\opened.md',
+        baseDir: 'D:\\workspace',
+        trigger: 'second-instance',
+      },
+    })
+
+    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      win: { id: 1 },
+    }, 'document.open-path', {
+      path: 'docs\\opened.md',
+      baseDir: 'D:\\workspace',
+      trigger: 'second-instance',
+    })
+  })
+
   it('document.open-path 命中缺失路径时，必须把结构化失败结果原样返回给新 renderer', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     winInfoUtil.executeCommand.mockResolvedValueOnce({

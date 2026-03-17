@@ -107,6 +107,39 @@ describe('documentEffectService', () => {
     expect(openDocumentWindow).not.toHaveBeenCalled()
   })
 
+  it('document.open-path 命中相对路径时，必须先按 baseDir 解析成稳定绝对路径，再进入统一 opening policy', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentWindow = vi.fn().mockResolvedValue({
+      ok: true,
+      reason: 'opened',
+    })
+    const resolvedPath = 'D:/workspace-root/docs/demo.md'
+
+    fsModule.pathExists.mockImplementation(async targetPath => targetPath === resolvedPath)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+
+    const result = await service.executeCommand({
+      command: 'document.open-path',
+      payload: {
+        path: 'docs/demo.md',
+        baseDir: 'D:/workspace-root',
+        trigger: 'second-instance',
+      },
+      openDocumentWindow,
+    })
+
+    expect(openDocumentWindow).toHaveBeenCalledWith(resolvedPath, {
+      isRecent: false,
+      trigger: 'second-instance',
+    })
+    expect(result).toEqual({
+      ok: true,
+      reason: 'opened',
+    })
+  })
+
   it('document.open-recent(trigger=user) 命中缺失文件时，不能改动当前 active session', async () => {
     const { service, fsModule } = await createServiceContext()
     const openDocumentWindow = vi.fn()

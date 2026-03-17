@@ -11,6 +11,16 @@ const {
 } = documentSessionEventUtil
 
 const { test } = await import('node:test')
+const exportedTargets = [
+  documentSessionEventUtil,
+  documentSessionEventUtil.default ?? {},
+]
+
+function assertExportTargetsDoNotContain(exportName) {
+  for (const exportTarget of exportedTargets) {
+    assert.equal(exportName in exportTarget, false)
+  }
+}
 
 function createStoreMock() {
   const calls = {
@@ -104,6 +114,13 @@ test('内部快照广播事件名与外部修改命令名必须固定为新契�
   assert.equal(DOCUMENT_EXTERNAL_IGNORE_COMMAND, 'document.external.ignore')
 })
 
+test('renderer session 事件适配层不应继续导出 legacy 文档事件常量', () => {
+  assertExportTargetsDoNotContain('FILE_IS_SAVED_EVENT')
+  assertExportTargetsDoNotContain('FILE_MISSING_EVENT')
+  assertExportTargetsDoNotContain('FILE_EXTERNAL_CHANGED_EVENT')
+  assertExportTargetsDoNotContain('MESSAGE_EVENT')
+})
+
 test('更晚到达的 snapshot 推送出现后，首屏拉取返回的旧结果不应再覆盖当前状态', () => {
   const guard = createDocumentSessionBootstrapGuard()
   const firstRequest = guard.beginRequest()
@@ -117,5 +134,5 @@ test('更晚到达的 snapshot 推送出现后，首屏拉取返回的旧结果�
 })
 
 test('renderer session 事件适配层不应继续导出只服务 legacy message 双发的 deduper', () => {
-  assert.equal('createWindowEffectMessageDeduper' in documentSessionEventUtil, false)
+  assertExportTargetsDoNotContain('createWindowEffectMessageDeduper')
 })

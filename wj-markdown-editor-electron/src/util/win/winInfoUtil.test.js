@@ -1533,6 +1533,37 @@ describe('winInfoUtil 兼容 facade', () => {
     expect(winInfoUtil.getAll()).toHaveLength(0)
   })
 
+  it('显式路径打开入口如果收到相对路径和 baseDir，必须先解析为稳定绝对路径再打开文档', async () => {
+    const relativePath = 'docs/demo.md'
+    const baseDir = 'D:/workspace-root'
+    const absolutePath = 'D:/workspace-root/docs/demo.md'
+
+    pathExistsMock.mockImplementation(async targetPath => targetPath === absolutePath)
+    statMock.mockResolvedValue({
+      isFile: () => true,
+    })
+    readFileMock.mockImplementation(async (targetPath) => {
+      if (targetPath === absolutePath) {
+        return '# 基于 baseDir 打开的内容'
+      }
+      throw new Error(`unexpected read path: ${targetPath}`)
+    })
+
+    const result = await winInfoUtil.openDocumentPath(relativePath, {
+      trigger: 'second-instance',
+      baseDir,
+    })
+
+    expect(result).toEqual(expect.objectContaining({
+      ok: true,
+      reason: 'opened',
+      path: absolutePath,
+    }))
+    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(browserWindowInstances).toHaveLength(1)
+    expect(winInfoUtil.getAll()[0].path).toBe(absolutePath)
+  })
+
   it('同一文档如果先以相对路径建窗，再以绝对路径打开，也必须复用已有窗口，避免重复开窗', async () => {
     const relativePath = 'docs/demo.md'
     const absolutePath = path.resolve(relativePath).replaceAll('\\', '/')
