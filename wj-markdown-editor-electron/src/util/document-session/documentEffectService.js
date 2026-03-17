@@ -240,7 +240,7 @@ export function createDocumentEffectService({
         if (!resolvedTargetPath) {
           return {
             ok: false,
-            reason: 'recent-missing',
+            reason: 'open-recent-target-missing',
             path: null,
           }
         }
@@ -249,7 +249,7 @@ export function createDocumentEffectService({
         if (!exists && trigger === 'user') {
           return {
             ok: false,
-            reason: 'recent-missing',
+            reason: 'open-recent-target-missing',
             path: resolvedTargetPath,
           }
         }

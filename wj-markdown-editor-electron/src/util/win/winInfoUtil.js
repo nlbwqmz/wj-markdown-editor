@@ -17,6 +17,10 @@ import {
   createDraftSession,
   createRecentMissingSession,
 } from '../document-session/documentSessionFactory.js'
+import {
+  normalizeOpenCommandResult,
+  openDocumentWindowWithRuntimePolicy,
+} from '../document-session/documentSessionRuntime.js'
 import { createDocumentSessionStore } from '../document-session/documentSessionStore.js'
 import { deriveDocumentSnapshot } from '../document-session/documentSnapshotUtil.js'
 import { createSaveCoordinator } from '../document-session/saveCoordinator.js'
@@ -33,36 +37,56 @@ const MISSING_PATH_REASON = {
 }
 
 const winInfoList = []
-const documentSessionStore = createDocumentSessionStore()
-const saveCoordinator = createSaveCoordinator({
-  createJobId: () => commonUtil.createId(),
-  now: () => Date.now(),
-})
-const documentCommandService = createDocumentCommandService({
-  store: documentSessionStore,
-  saveCoordinator,
-  getConfig: () => configUtil.getConfig(),
-  now: () => Date.now(),
-})
-const documentEffectService = createDocumentEffectService({
-  recentStore: recent,
-  getConfig: () => configUtil.getConfig(),
-})
-const windowSessionBridge = createWindowSessionBridge({
-  store: documentSessionStore,
-  sendToRenderer: (win, payload) => {
-    sendUtil.send(win, payload)
-  },
-  resolveWindowById: (windowId) => {
-    return winInfoList.find(item => item.id === windowId)?.win || null
-  },
-  getAllWindows: () => winInfoList.map(item => item.win),
-})
-const documentResourceService = createDocumentResourceService({
-  store: documentSessionStore,
-  resourceUtil: resourceFileUtil,
-  showItemInFolder: shell.showItemInFolder,
-})
+let sessionRuntimeServices = null
+
+function ensureSessionRuntimeInitialized() {
+  if (sessionRuntimeServices) {
+    return sessionRuntimeServices
+  }
+
+  const store = createDocumentSessionStore()
+  const saveCoordinator = createSaveCoordinator({
+    createJobId: () => commonUtil.createId(),
+    now: () => Date.now(),
+  })
+  const commandService = createDocumentCommandService({
+    store,
+    saveCoordinator,
+    getConfig: () => configUtil.getConfig(),
+    now: () => Date.now(),
+  })
+  const effectService = createDocumentEffectService({
+    recentStore: recent,
+    getConfig: () => configUtil.getConfig(),
+  })
+  const windowBridge = createWindowSessionBridge({
+    store,
+    sendToRenderer: (win, payload) => {
+      sendUtil.send(win, payload)
+    },
+    resolveWindowById: (windowId) => {
+      return winInfoList.find(item => item.id === windowId)?.win || null
+    },
+    getAllWindows: () => winInfoList.map(item => item.win),
+  })
+  const resourceService = createDocumentResourceService({
+    store,
+    resourceUtil: resourceFileUtil,
+    showItemInFolder: shell.showItemInFolder,
+  })
+
+  // Task 3 要求 runtime 相关单例只能在显式初始化或首次真实使用时创建，
+  // 不能在模块导入阶段提前组装。
+  sessionRuntimeServices = {
+    store,
+    saveCoordinator,
+    commandService,
+    effectService,
+    windowBridge,
+    resourceService,
+  }
+  return sessionRuntimeServices
+}
 
 function deleteEditorWin(id) {
   const index = winInfoList.findIndex(win => win.id === id)
@@ -81,6 +105,13 @@ function checkWinList() {
 
 function findByWin(win) {
   return winInfoList.find(item => item.win === win)
+}
+
+function getWinInfo(target) {
+  if (typeof target === 'string') {
+    return winInfoList.find(item => item.id === target)
+  }
+  return winInfoList.find(item => item.win === target || item.id === target)
 }
 
 function isWindowAlive(win) {
@@ -123,15 +154,17 @@ function getSessionByWinInfo(winInfo) {
   if (!winInfo) {
     return null
   }
-  return documentSessionStore.getSession(winInfo.sessionId)
-    || documentSessionStore.getSessionByWindowId(winInfo.id)
+  const { store } = ensureSessionRuntimeInitialized()
+  return store.getSession(winInfo.sessionId)
+    || store.getSessionByWindowId(winInfo.id)
 }
 
 function publishSnapshotChanged(winInfo, snapshot) {
   if (!winInfo?.id) {
     return null
   }
-  return windowSessionBridge.publishSnapshotChanged({
+  const { windowBridge } = ensureSessionRuntimeInitialized()
+  return windowBridge.publishSnapshotChanged({
     windowId: winInfo.id,
     snapshot,
   })
@@ -141,7 +174,8 @@ function publishWindowMessage(winInfo, data) {
   if (!winInfo?.id || !data) {
     return null
   }
-  return windowSessionBridge.publishMessage({
+  const { windowBridge } = ensureSessionRuntimeInitialized()
+  return windowBridge.publishMessage({
     windowId: winInfo.id,
     data,
   })
@@ -186,7 +220,8 @@ function updateSessionForLegacyExternalEvent(winInfo, updater) {
   }
 
   updater(session)
-  documentSessionStore.replaceSession(session)
+  const { store } = ensureSessionRuntimeInitialized()
+  store.replaceSession(session)
   syncWinInfoFromSession(winInfo, session)
   return session
 }
@@ -406,8 +441,9 @@ function createInitialSession({
 }
 
 function registerSessionForWindow(winInfo, session) {
-  documentSessionStore.createSession(session)
-  documentSessionStore.bindWindowToSession({
+  const { store } = ensureSessionRuntimeInitialized()
+  store.createSession(session)
+  store.bindWindowToSession({
     windowId: winInfo.id,
     sessionId: session.sessionId,
   })
@@ -610,7 +646,8 @@ function finalizeWindowClose(winInfo, id) {
     : []
   stopExternalWatch(winInfo)
   if (winInfo?.sessionId) {
-    documentSessionStore.destroySession(winInfo.sessionId)
+    const { store } = ensureSessionRuntimeInitialized()
+    store.destroySession(winInfo.sessionId)
   }
   deleteEditorWin(id)
   checkWinList()
@@ -658,11 +695,12 @@ async function dispatchCommand(winInfo, command, payload, options = {}) {
     return null
   }
 
+  const { commandService } = ensureSessionRuntimeInitialized()
   const publishSnapshotMode = options.publishSnapshotChanged || 'always'
   const previousSnapshot = publishSnapshotMode === 'if-changed'
     ? getSessionSnapshot(winInfo)
     : null
-  const result = documentCommandService.dispatch({
+  const result = commandService.dispatch({
     windowId: winInfo.id,
     command,
     payload,
@@ -711,38 +749,49 @@ function getExternalWatchContext(winInfo) {
   }
 }
 
+function buildEffectContextForWindow(winInfo, { dispatchCommand }) {
+  return {
+    winInfo,
+    dispatchCommand,
+    getSaveDialogTarget: () => getSaveDialogTarget(winInfo),
+    getCopyDialogTarget,
+    continueWindowClose: () => continueWindowClose(winInfo),
+    showUnsavedPrompt: () => {
+      if (isWindowAlive(winInfo?.win)) {
+        sendUtil.send(winInfo.win, { event: 'unsaved' })
+      }
+    },
+    showSaveFailedMessage: (data) => {
+      if (isWindowAlive(winInfo?.win)) {
+        publishWindowMessage(winInfo, data)
+      }
+    },
+    showWindowMessage: (data) => {
+      if (isWindowAlive(winInfo?.win)) {
+        publishWindowMessage(winInfo, data)
+      }
+    },
+    shouldRebindExternalWatchAfterSave: () => shouldRebindExternalWatchAfterSave(winInfo),
+    getExternalWatchContext: () => getExternalWatchContext(winInfo),
+    startExternalWatch: options => startExternalWatch(winInfo, options),
+    markInternalSave: (content) => {
+      if (winInfo.externalWatch?.watcher) {
+        fileWatchUtil.markInternalSave(winInfo.externalWatch, content)
+      }
+    },
+  }
+}
+
 async function applyEffects(winInfo, effects = []) {
+  const { effectService } = ensureSessionRuntimeInitialized()
+  const effectContext = buildEffectContextForWindow(winInfo, {
+    dispatchCommand: (command, payload) => dispatchCommand(winInfo, command, payload),
+  })
+
   for (const effect of effects) {
-    await documentEffectService.applyEffect({
+    await effectService.applyEffect({
       effect,
-      winInfo,
-      dispatchCommand: (command, payload) => dispatchCommand(winInfo, command, payload),
-      getSaveDialogTarget: () => getSaveDialogTarget(winInfo),
-      getCopyDialogTarget,
-      continueWindowClose: () => continueWindowClose(winInfo),
-      showUnsavedPrompt: () => {
-        if (isWindowAlive(winInfo?.win)) {
-          sendUtil.send(winInfo.win, { event: 'unsaved' })
-        }
-      },
-      showSaveFailedMessage: (data) => {
-        if (isWindowAlive(winInfo?.win)) {
-          publishWindowMessage(winInfo, data)
-        }
-      },
-      showWindowMessage: (data) => {
-        if (isWindowAlive(winInfo?.win)) {
-          publishWindowMessage(winInfo, data)
-        }
-      },
-      shouldRebindExternalWatchAfterSave: () => shouldRebindExternalWatchAfterSave(winInfo),
-      getExternalWatchContext: () => getExternalWatchContext(winInfo),
-      startExternalWatch: options => startExternalWatch(winInfo, options),
-      markInternalSave: (content) => {
-        if (winInfo.externalWatch?.watcher) {
-          fileWatchUtil.markInternalSave(winInfo.externalWatch, content)
-        }
-      },
+      ...effectContext,
     })
   }
 }
@@ -797,9 +846,9 @@ function getLegacyPendingPromptVersion(winInfo) {
   return getSessionByWinInfo(winInfo)?.externalRuntime?.pendingExternalChange?.version ?? null
 }
 
-async function executeExternalResolutionCommand(winInfo, command, payload = {}) {
+async function executeExternalResolutionCommandWithDispatcher(winInfo, command, payload = {}, dispatch) {
   const beforePendingVersion = getLegacyPendingPromptVersion(winInfo)
-  const result = await dispatchCommand(winInfo, command, payload)
+  const result = await dispatch(command, payload)
   const afterPendingVersion = result?.session?.externalRuntime?.pendingExternalChange?.version ?? null
   const expectedVersion = payload?.version ?? beforePendingVersion
   const resolutionResult = result?.session?.externalRuntime?.lastResolutionResult
@@ -824,6 +873,15 @@ async function executeExternalResolutionCommand(winInfo, command, payload = {}) 
     isApplied,
     isIgnored,
   }
+}
+
+async function executeExternalResolutionCommand(winInfo, command, payload = {}) {
+  return await executeExternalResolutionCommandWithDispatcher(
+    winInfo,
+    command,
+    payload,
+    (nextCommand, nextPayload) => dispatchCommand(winInfo, nextCommand, nextPayload),
+  )
 }
 
 async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
@@ -876,7 +934,7 @@ function getCopySaveFailureMessage({ reason, error }) {
   return `另存为失败。${errorDetail}`
 }
 
-async function executeDocumentSaveCommand(winInfo) {
+async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
   const session = getSessionByWinInfo(winInfo)
   const hadDocumentPath = Boolean(session?.documentSource?.path)
   if (!session?.documentSource?.path && typeof winInfo?.path === 'string' && winInfo.path.trim() !== '') {
@@ -887,7 +945,7 @@ async function executeDocumentSaveCommand(winInfo) {
   // document.save -> open-save-dialog -> dialog.save-target-selected。
   // 兼容旧调用方预先塞到 winInfo.path 的目标路径，不再通过 payload.path 直送命令层，
   // 而是留给 open-save-dialog effect 内部的 compat fallback 一次性消化。
-  const saveCommandResult = await dispatchCommand(winInfo, 'document.save')
+  const saveCommandResult = await dispatch('document.save')
   const manualRequestId = saveCommandResult?.manualRequestId || null
 
   let requestCompletion = null
@@ -933,27 +991,67 @@ async function executeDocumentSaveCommand(winInfo) {
   return false
 }
 
-function updateTempContent(winInfo, content) {
+async function executeDocumentSaveCommand(winInfo) {
+  return await executeDocumentSaveCommandWithDispatcher(
+    winInfo,
+    (command, payload, options = {}) => dispatchCommand(winInfo, command, payload, options),
+  )
+}
+
+async function executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch) {
+  const result = await dispatch('document.save-copy')
+  const finalSession = getSessionByWinInfo(winInfo)
+  const copySaveCompletion = consumeCopySaveRequestCompletion(finalSession, result?.copySaveRequestId)
+
+  // compat facade 必须按“当前这一次 save-copy request 自己的 completion”来裁决提示。
+  // 否则多个 save-copy 请求交错时，旧 job 的结果就会覆盖新请求，造成成功/失败串线。
+  if (copySaveCompletion?.status === 'failed') {
+    publishWindowMessage(winInfo, {
+      type: copySaveCompletion.failureReason === 'same-path' ? 'warning' : 'error',
+      content: getCopySaveFailureMessage({
+        reason: copySaveCompletion.failureReason,
+        error: copySaveCompletion.error,
+      }),
+    })
+    return result
+  }
+
+  if (copySaveCompletion?.status === 'succeeded') {
+    publishWindowMessage(winInfo, {
+      type: 'success',
+      content: 'message.saveAsSuccessfully',
+    })
+  } else if (copySaveCompletion?.status === 'cancelled') {
+    publishWindowMessage(winInfo, {
+      type: 'warning',
+      content: 'message.cancelSaveAs',
+    })
+  }
+  return result
+}
+
+function updateTempContentWithDispatcher(winInfo, content, dispatch) {
   // 编辑更新直接进入统一命令流，
   // Electron 侧其他模块如需读取最新正文，必须回到 session getter，而不是继续依赖旧镜像字段。
-  dispatchCommand(winInfo, 'document.edit', {
+  dispatch('document.edit', {
     content,
   }).then(() => {})
 }
 
-function isPristineDraftWindow(winInfo) {
-  const session = getSessionByWinInfo(winInfo)
-  const snapshot = session ? deriveDocumentSnapshot(session) : null
-  return Boolean(winInfo?.win)
-    && session?.documentSource?.path === null
-    && snapshot?.saved === true
+function updateTempContent(winInfo, content) {
+  updateTempContentWithDispatcher(
+    winInfo,
+    content,
+    (command, payload, options = {}) => dispatchCommand(winInfo, command, payload, options),
+  )
 }
 
 function getSessionSnapshot(winInfo) {
   if (!winInfo?.id) {
     return null
   }
-  return windowSessionBridge.getSessionSnapshot(winInfo.id)
+  const { windowBridge } = ensureSessionRuntimeInitialized()
+  return windowBridge.getSessionSnapshot(winInfo.id)
 }
 
 function getDocumentContext(winInfo) {
@@ -976,6 +1074,12 @@ function getDocumentContext(winInfo) {
     saved: snapshot?.saved === true,
     fileName: snapshot?.fileName || 'Unnamed',
   }
+}
+
+function createRuntimeDispatchAdapter(windowId, runtime) {
+  return (command, payload, options = {}) => runtime.dispatch(windowId, command, payload, {
+    publishSnapshotChanged: options.publishSnapshotChanged || 'always',
+  })
 }
 
 async function waitForSaveRuntimeToSettle(winInfo, {
@@ -1019,6 +1123,7 @@ function consumeCopySaveRequestCompletion(session, requestId) {
     return null
   }
 
+  const { saveCoordinator } = ensureSessionRuntimeInitialized()
   return saveCoordinator.consumeCopySaveCompletion(session, {
     requestId,
   })
@@ -1070,24 +1175,25 @@ async function executeResourceCommand(winInfo, command, payload) {
     return null
   }
 
+  const { resourceService } = ensureSessionRuntimeInitialized()
   // 资源命令单独分流到 documentResourceService，
   // 是为了把“当前 active session 上下文裁决”和“底层文件系统操作”固定收口到一条边界。
   // 这样旧 IPC 名称、新 IPC 名称、窗口内链接点击三条入口就不会再各自偷读 winInfo 状态。
   switch (command) {
     case 'document.resource.open-in-folder':
-      return await documentResourceService.openInFolder({
+      return await resourceService.openInFolder({
         windowId: winInfo.id,
         payload,
       })
 
     case 'document.resource.delete-local':
-      return await documentResourceService.deleteLocal({
+      return await resourceService.deleteLocal({
         windowId: winInfo.id,
         payload,
       })
 
     case 'resource.get-info':
-      return await documentResourceService.getInfo({
+      return await resourceService.getInfo({
         windowId: winInfo.id,
         payload,
       })
@@ -1102,11 +1208,12 @@ function executeResourceCommandSync(winInfo, command, payload) {
     return null
   }
 
+  const { resourceService } = ensureSessionRuntimeInitialized()
   if (command === 'resource.get-comparable-key') {
     // 比较 key 仍然保留同步语义，
     // 因为编辑区统计引用数和批量删除裁决都在同一次交互里立即完成，
     // 如果这里改成异步，旧逻辑会在“统计前先删文案/打开弹窗”之间产生新的竞态窗口。
-    return documentResourceService.getComparableKey({
+    return resourceService.getComparableKey({
       windowId: winInfo.id,
       payload,
     })
@@ -1120,17 +1227,18 @@ async function openDocumentWindow(targetPath, {
   trigger = 'user',
   sourceWinInfo = null,
 } = {}) {
-  const openedWinInfo = await createNew(targetPath, isRecent)
-  if (sourceWinInfo && openedWinInfo && openedWinInfo !== sourceWinInfo && isPristineDraftWindow(sourceWinInfo)) {
-    sourceWinInfo.win.close()
-  }
-  return {
-    ok: true,
-    reason: isRecent && sourceWinInfo === null && !openedWinInfo?.path ? 'recent-missing' : 'opened',
-    path: targetPath,
+  return await openDocumentWindowWithRuntimePolicy({
+    targetPath,
     trigger,
-    snapshot: openedWinInfo ? getSessionSnapshot(openedWinInfo) : null,
-  }
+    isRecent,
+    sourceWindowId: sourceWinInfo?.id || null,
+    openWindow: async (nextTargetPath, options = {}) => {
+      return await createNew(nextTargetPath, options.isRecent === true)
+    },
+    getWindowContext: windowId => getWinInfo(windowId),
+    getDocumentContext: windowId => getDocumentContext(getWinInfo(windowId)),
+    getSessionSnapshot: windowId => getSessionSnapshot(getWinInfo(windowId)),
+  })
 }
 
 async function openDocumentPath(targetPath, {
@@ -1152,37 +1260,10 @@ async function executeCommand(winInfo, command, payload) {
       return await executeDocumentSaveCommand(winInfo)
 
     case 'document.save-copy':
-    {
-      const result = await dispatchCommand(winInfo, 'document.save-copy')
-      const finalSession = getSessionByWinInfo(winInfo)
-      const copySaveCompletion = consumeCopySaveRequestCompletion(finalSession, result?.copySaveRequestId)
-
-      // compat facade 必须按“当前这一次 save-copy request 自己的 completion”来裁决提示。
-      // 否则多个 save-copy 请求交错时，旧 job 的结果就会覆盖新请求，造成成功/失败串线。
-      if (copySaveCompletion?.status === 'failed') {
-        publishWindowMessage(winInfo, {
-          type: copySaveCompletion.failureReason === 'same-path' ? 'warning' : 'error',
-          content: getCopySaveFailureMessage({
-            reason: copySaveCompletion.failureReason,
-            error: copySaveCompletion.error,
-          }),
-        })
-        return result
-      }
-
-      if (copySaveCompletion?.status === 'succeeded') {
-        publishWindowMessage(winInfo, {
-          type: 'success',
-          content: 'message.saveAsSuccessfully',
-        })
-      } else if (copySaveCompletion?.status === 'cancelled') {
-        publishWindowMessage(winInfo, {
-          type: 'warning',
-          content: 'message.cancelSaveAs',
-        })
-      }
-      return result
-    }
+      return await executeDocumentCopySaveCommandWithDispatcher(
+        winInfo,
+        (command, payload, options = {}) => dispatchCommand(winInfo, command, payload, options),
+      )
 
     case 'document.get-session-snapshot':
       return getSessionSnapshot(winInfo)
@@ -1210,7 +1291,8 @@ async function executeCommand(winInfo, command, payload) {
     case 'recent.remove':
     case 'recent.clear':
     {
-      const result = await documentEffectService.executeCommand({
+      const { effectService } = ensureSessionRuntimeInitialized()
+      const result = await effectService.executeCommand({
         command,
         payload,
         winInfo,
@@ -1230,7 +1312,11 @@ async function executeCommand(winInfo, command, payload) {
           content: 'message.onlyMarkdownFilesCanBeOpened',
         })
       }
-      return result
+      return normalizeOpenCommandResult({
+        command,
+        result,
+        targetPath: typeof payload?.path === 'string' ? payload.path : null,
+      })
     }
 
     default:
@@ -1239,28 +1325,91 @@ async function executeCommand(winInfo, command, payload) {
 }
 
 function initializeSessionRuntime() {
-  // 当前 runtime 仍以 winInfoUtil 内部单例存在。
-  // main.js 显式调用这个入口的目的，是把“谁负责初始化这些单例”收敛到应用启动阶段，
-  // 避免后续继续让 IPC 首次命中时隐式构建服务。
+  const {
+    store,
+    saveCoordinator,
+    commandService,
+    effectService,
+    windowBridge,
+    resourceService,
+  } = ensureSessionRuntimeInitialized()
+
+  // main.js 现在通过这个入口触发真正初始化，
+  // 从而把导入期副作用改成应用启动阶段的显式动作。
   return {
-    store: documentSessionStore,
-    commandService: documentCommandService,
-    effectService: documentEffectService,
-    windowBridge: windowSessionBridge,
-    resourceService: documentResourceService,
+    store,
+    saveCoordinator,
+    commandService,
+    effectService,
+    windowBridge,
+    resourceService,
+    getWindowContext: windowId => getWinInfo(windowId),
+    getDocumentContext: windowId => getDocumentContext(getWinInfo(windowId)),
+    buildRunnerEffectContext: ({ windowId, dispatchCommand }) => {
+      const winInfo = getWinInfo(windowId)
+      if (!winInfo) {
+        return {}
+      }
+      return buildEffectContextForWindow(winInfo, {
+        dispatchCommand,
+      })
+    },
+    executeDocumentCommand: async ({
+      windowId,
+      command,
+      payload,
+      runtime,
+    }) => {
+      const winInfo = getWinInfo(windowId)
+      if (!winInfo) {
+        return null
+      }
+
+      const dispatch = createRuntimeDispatchAdapter(windowId, runtime)
+
+      switch (command) {
+        case 'document.save':
+          return await executeDocumentSaveCommandWithDispatcher(winInfo, dispatch)
+
+        case 'document.save-copy':
+          return await executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch)
+
+        case 'document.external.apply':
+        case 'document.external.ignore':
+          return (await executeExternalResolutionCommandWithDispatcher(
+            winInfo,
+            command,
+            payload || {},
+            dispatch,
+          )).commandResult
+
+        case 'document.edit':
+          updateTempContentWithDispatcher(winInfo, payload?.content, dispatch)
+          return null
+
+        case 'document.cancel-close':
+        case 'document.confirm-force-close':
+          return await dispatch(command, payload)
+
+        default:
+          return await dispatch(command, payload)
+      }
+    },
   }
 }
 
 function notifyRecentListChanged(recentList) {
-  return windowSessionBridge.publishRecentListChanged(recentList)
+  const { windowBridge } = ensureSessionRuntimeInitialized()
+  return windowBridge.publishRecentListChanged(recentList)
 }
 
 async function createNew(filePath, isRecent = false) {
+  const { store } = ensureSessionRuntimeInitialized()
   const normalizedFilePath = resolveDocumentOpenPath(filePath)
   const exists = Boolean(normalizedFilePath && await fs.pathExists(normalizedFilePath))
   if (exists) {
     await recent.add(normalizedFilePath)
-    const existedSession = documentSessionStore.findSessionByComparablePath(normalizedFilePath)
+    const existedSession = store.findSessionByComparablePath(normalizedFilePath)
     if (existedSession) {
       const existedWinInfo = winInfoList.find(item => item.sessionId === existedSession.sessionId)
       if (existedWinInfo?.win) {
@@ -1358,7 +1507,8 @@ async function createNew(filePath, isRecent = false) {
     const command = currentWinInfo.forceClose === true
       ? 'document.confirm-force-close'
       : 'document.request-close'
-    const result = documentCommandService.dispatch({
+    const { commandService } = ensureSessionRuntimeInitialized()
+    const result = commandService.dispatch({
       windowId: currentWinInfo.id,
       command,
     })
@@ -1409,12 +1559,7 @@ export default {
   executeCommand,
   executeResourceCommand,
   executeResourceCommandSync,
-  getWinInfo: (win) => {
-    if (typeof win === 'string') {
-      return winInfoList.find(item => item.id === win)
-    }
-    return winInfoList.find(item => item.win === win)
-  },
+  getWinInfo,
   getAll: () => {
     return winInfoList
   },

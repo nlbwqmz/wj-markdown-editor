@@ -2,6 +2,7 @@ import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
+import { getDocumentSessionRuntime } from '../document-session/documentSessionRuntime.js'
 import fileUploadUtil from '../fileUploadUtil.js'
 import imgUtil from '../imgUtil.js'
 import resourceFileUtil from '../resourceFileUtil.js'
@@ -13,6 +14,10 @@ import screenshotsUtil from '../win/screenshotsUtil.js'
 import settingUtil from '../win/settingUtil.js'
 import winInfoUtil from '../win/winInfoUtil.js'
 import sendUtil from './sendUtil.js'
+
+function executeRuntimeUiCommand(winInfo, command, payload) {
+  return getDocumentSessionRuntime().executeUiCommand(winInfo?.id || winInfo?.win?.id || null, command, payload)
+}
 
 async function uploadImage(winInfo, data) {
   const config = configUtil.getConfig()
@@ -97,28 +102,30 @@ const handlerList = {
   },
   'document.resource.open-in-folder': async (winInfo, data) => await handleResourceOpen(winInfo, data),
   // renderer 已经切到新的 session 命令名，这里只保留直连入口。
-  'document.save-copy': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save-copy', null),
-  'document.save': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.save', null),
+  'document.save-copy': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.save-copy', null),
+  'document.save': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.save', null),
   'document.get-session-snapshot': async (winInfo) => {
-    return await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot', null)
+    return await executeRuntimeUiCommand(winInfo, 'document.get-session-snapshot', null)
   },
   'file-content-update': (winInfo, content) => {
     // 渲染端所有编辑动作最终都收口到这里，
     // Electron 侧正文真相只允许经由 session 命令流更新。
-    winInfoUtil.updateTempContent(winInfo, content)
+    void executeRuntimeUiCommand(winInfo, 'document.edit', {
+      content,
+    })
   },
-  'document.cancel-close': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.cancel-close', null),
-  'document.confirm-force-close': async winInfo => await winInfoUtil.executeCommand(winInfo, 'document.confirm-force-close', null),
-  'document.external.apply': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'document.external.apply', data),
-  'document.external.ignore': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'document.external.ignore', data),
+  'document.cancel-close': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.cancel-close', null),
+  'document.confirm-force-close': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.confirm-force-close', null),
+  'document.external.apply': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.external.apply', data),
+  'document.external.ignore': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.external.ignore', data),
   'create-new': () => {
     winInfoUtil.createNew().then(() => {})
   },
   'document.request-open-dialog': async (winInfo) => {
-    return await winInfoUtil.executeCommand(winInfo, 'document.request-open-dialog', null)
+    return await executeRuntimeUiCommand(winInfo, 'document.request-open-dialog', null)
   },
   'document.open-path': async (winInfo, data) => {
-    return await winInfoUtil.executeCommand(winInfo, 'document.open-path', data)
+    return await executeRuntimeUiCommand(winInfo, 'document.open-path', data)
   },
   'get-config': () => {
     return configUtil.getConfig()
@@ -190,9 +197,9 @@ const handlerList = {
   'execute-update': () => {
     updateUtil.executeUpdate()
   },
-  'recent.clear': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.clear', null),
-  'recent.remove': async (winInfo, data) => await winInfoUtil.executeCommand(winInfo, 'recent.remove', data),
-  'recent.get-list': async winInfo => await winInfoUtil.executeCommand(winInfo, 'recent.get-list', null),
+  'recent.clear': async winInfo => await executeRuntimeUiCommand(winInfo, 'recent.clear', null),
+  'recent.remove': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'recent.remove', data),
+  'recent.get-list': async winInfo => await executeRuntimeUiCommand(winInfo, 'recent.get-list', null),
   'file-upload': (winInfo, filePath) => {
     return fileUploadUtil.save(winInfo, filePath, configUtil.getConfig())
   },

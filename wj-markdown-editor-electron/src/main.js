@@ -7,6 +7,9 @@ import {
 } from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
 import { isMarkdownFilePath } from './util/document-session/documentOpenTargetUtil.js'
+import {
+  initializeDocumentSessionRuntime,
+} from './util/document-session/documentSessionRuntime.js'
 import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
 import updateUtil from './util/updateUtil.js'
@@ -62,6 +65,23 @@ function getOpenOnFilePath() {
   return isOpenOnFile() ? process.argv[process.argv.length - 1] : null
 }
 
+let documentSessionRuntime = null
+
+function initializeAppDocumentSessionRuntime() {
+  if (documentSessionRuntime) {
+    return documentSessionRuntime
+  }
+
+  documentSessionRuntime = initializeDocumentSessionRuntime({
+    ...winInfoUtil.initializeSessionRuntime(),
+    openDocumentWindow: async (targetPath, options = {}) => {
+      return await winInfoUtil.createNew(targetPath, options.isRecent === true)
+    },
+  })
+
+  return documentSessionRuntime
+}
+
 const lock = app.requestSingleInstanceLock({
   filePath: getOpenOnFilePath(),
   // second-instance 打开相对路径时，首实例必须拿到发起实例自己的工作目录，
@@ -74,10 +94,13 @@ if (!lock) {
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
     if (additionalData.filePath) {
-      handleSecondInstanceOpenRequest({
-        targetPath: additionalData.filePath,
-        baseDir: additionalData.baseDir || workingDirectory || process.cwd(),
-        openDocumentPath: (targetPath, options) => winInfoUtil.openDocumentPath(targetPath, options),
+      app.whenReady().then(async () => {
+        const runtime = initializeAppDocumentSessionRuntime()
+        await handleSecondInstanceOpenRequest({
+          targetPath: additionalData.filePath,
+          baseDir: additionalData.baseDir || workingDirectory || process.cwd(),
+          openDocumentPath: (targetPath, options) => runtime.openDocumentPath(targetPath, options),
+        })
       }).then(() => {})
       return
     }
@@ -86,8 +109,8 @@ if (!lock) {
   })
   logUtil.init()
   app.whenReady().then(async () => {
+    const runtime = initializeAppDocumentSessionRuntime()
     Menu.setApplicationMenu(null)
-    winInfoUtil.initializeSessionRuntime()
     await configUtil.initConfig((config) => {
       winInfoUtil.getAll().forEach((item) => {
         sendUtil.send(item.win, { event: 'update-config', data: config })
@@ -106,7 +129,7 @@ if (!lock) {
       }
     })
     await recent.initRecent(configUtil.getConfig().recentMax, (recentList) => {
-      winInfoUtil.notifyRecentListChanged(recentList)
+      runtime.publishRecentListChanged(recentList)
     })
 
     // 初始化协议处理器，捕获可能的错误
@@ -125,14 +148,13 @@ if (!lock) {
       await handleStartupOpenRequest({
         targetPath: openOnFilePath,
         baseDir: process.cwd(),
-        openDocumentPath: (targetPath, options) => winInfoUtil.openDocumentPath(targetPath, options),
+        openDocumentPath: (targetPath, options) => runtime.openDocumentPath(targetPath, options),
         createDraftWindow: () => winInfoUtil.createNew(null),
       })
     } else if (configUtil.getConfig().openRecent) {
       const recentList = recent.get()
       if (recentList && recentList.length > 0) {
-        const openRecentResult = await winInfoUtil.executeCommand(null, 'document.open-recent', {
-          path: recentList[0].path,
+        const openRecentResult = await runtime.openRecent(recentList[0].path, {
           trigger: 'startup',
         })
         if (openRecentResult?.ok !== true) {

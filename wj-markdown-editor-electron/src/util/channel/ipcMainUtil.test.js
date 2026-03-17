@@ -5,13 +5,14 @@ const {
   browserWindowFromWebContents,
   dialogShowOpenDialogSync,
   dialogShowSaveDialogSync,
-  executeCommand,
   executeResourceCommand,
   executeResourceCommandSync,
+  getDocumentSessionRuntime,
   getLocalResourceComparableKey,
   ipcMainHandle,
   ipcMainOn,
   openLocalResourceInFolder,
+  runtimeExecuteUiCommand,
   send,
 } = vi.hoisted(() => {
   return {
@@ -19,13 +20,14 @@ const {
     browserWindowFromWebContents: vi.fn(),
     dialogShowOpenDialogSync: vi.fn(),
     dialogShowSaveDialogSync: vi.fn(),
-    executeCommand: vi.fn(),
     executeResourceCommand: vi.fn(),
     executeResourceCommandSync: vi.fn(),
+    getDocumentSessionRuntime: vi.fn(),
     getLocalResourceComparableKey: vi.fn(),
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
     openLocalResourceInFolder: vi.fn(),
+    runtimeExecuteUiCommand: vi.fn(),
     send: vi.fn(),
   }
 })
@@ -178,7 +180,7 @@ vi.mock('../win/winInfoUtil.js', () => {
       })),
       getAll: vi.fn(() => []),
       createNew: vi.fn(),
-      executeCommand,
+      executeCommand: vi.fn(),
       executeResourceCommand,
       executeResourceCommandSync,
       getDocumentContext: vi.fn(winInfo => ({
@@ -188,6 +190,12 @@ vi.mock('../win/winInfoUtil.js', () => {
       })),
       updateTempContent: vi.fn(),
     },
+  }
+})
+
+vi.mock('../document-session/documentSessionRuntime.js', () => {
+  return {
+    getDocumentSessionRuntime,
   }
 })
 
@@ -204,7 +212,6 @@ describe('ipcMainUtil open-folder', () => {
     vi.resetModules()
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
-    executeCommand.mockReset()
     executeResourceCommand.mockReset()
     executeResourceCommandSync.mockReset()
     getLocalResourceComparableKey.mockReset()
@@ -212,7 +219,12 @@ describe('ipcMainUtil open-folder', () => {
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
     openLocalResourceInFolder.mockReset()
+    getDocumentSessionRuntime.mockReset()
+    runtimeExecuteUiCommand.mockReset()
     send.mockReset()
+    getDocumentSessionRuntime.mockReturnValue({
+      executeUiCommand: runtimeExecuteUiCommand,
+    })
   })
 
   async function setupOpenFolderHandler() {
@@ -391,13 +403,17 @@ describe('ipcMainUtil sync comparable key', () => {
     vi.resetModules()
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
-    executeCommand.mockReset()
     executeResourceCommand.mockReset()
     executeResourceCommandSync.mockReset()
     getLocalResourceComparableKey.mockReset()
+    getDocumentSessionRuntime.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
+    runtimeExecuteUiCommand.mockReset()
     browserWindowFromWebContents.mockReset()
+    getDocumentSessionRuntime.mockReturnValue({
+      executeUiCommand: runtimeExecuteUiCommand,
+    })
   })
 
   it('应该通过 sendToMainSync 暴露本地资源比较 key 解析能力', async () => {
@@ -488,13 +504,17 @@ describe('ipcMainUtil save', () => {
     vi.resetModules()
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
-    executeCommand.mockReset()
     executeResourceCommand.mockReset()
     executeResourceCommandSync.mockReset()
+    getDocumentSessionRuntime.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
+    runtimeExecuteUiCommand.mockReset()
     send.mockReset()
+    getDocumentSessionRuntime.mockReturnValue({
+      executeUiCommand: runtimeExecuteUiCommand,
+    })
   })
 
   async function setupSaveHandler() {
@@ -512,6 +532,8 @@ describe('ipcMainUtil save', () => {
     await import('./ipcMainUtil.js')
     const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
     winInfoUtil.getWinInfo.mockReset()
+    winInfoUtil.executeCommand.mockReset()
+    winInfoUtil.updateTempContent.mockReset()
     winInfoUtil.getWinInfo.mockImplementation(() => ({
       path: 'D:\\docs\\note.md',
       exists: true,
@@ -528,18 +550,15 @@ describe('ipcMainUtil save', () => {
 
   it('保存被中止时，不应继续发送保存成功提示', async () => {
     const { sender, win, sendToMainHandler, winInfoUtil } = await setupSaveHandler()
-    winInfoUtil.executeCommand.mockResolvedValueOnce(false)
+    runtimeExecuteUiCommand.mockResolvedValueOnce(false)
 
     await sendToMainHandler({ sender }, {
       event: 'document.save',
       data: null,
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.save', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.save', null)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalledWith(win, {
       event: 'message',
       data: {
@@ -557,11 +576,8 @@ describe('ipcMainUtil save', () => {
       data: null,
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.save-copy', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.save-copy', null)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 })
 
@@ -569,12 +585,16 @@ describe('ipcMainUtil command mapping', () => {
   beforeEach(() => {
     vi.resetModules()
     dialogShowOpenDialogSync.mockReset()
-    executeCommand.mockReset()
     executeResourceCommand.mockReset()
     executeResourceCommandSync.mockReset()
+    getDocumentSessionRuntime.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
+    runtimeExecuteUiCommand.mockReset()
+    getDocumentSessionRuntime.mockReturnValue({
+      executeUiCommand: runtimeExecuteUiCommand,
+    })
   })
 
   async function setupCommandHandler() {
@@ -592,6 +612,8 @@ describe('ipcMainUtil command mapping', () => {
     await import('./ipcMainUtil.js')
     const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
     winInfoUtil.getWinInfo.mockReset()
+    winInfoUtil.executeCommand.mockReset()
+    winInfoUtil.updateTempContent.mockReset()
     winInfoUtil.getWinInfo.mockImplementation(() => ({
       path: 'D:\\docs\\note.md',
       exists: true,
@@ -613,11 +635,8 @@ describe('ipcMainUtil command mapping', () => {
       data: null,
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.request-open-dialog', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.request-open-dialog', null)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(dialogShowOpenDialogSync).not.toHaveBeenCalled()
   })
 
@@ -631,13 +650,10 @@ describe('ipcMainUtil command mapping', () => {
       },
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.open-path', {
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.open-path', {
       path: 'D:\\docs\\opened.md',
     })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
   it('document.open-path 如果显式提供 baseDir，也必须原样透传给统一命令流，不能在 IPC 层丢失', async () => {
@@ -652,20 +668,17 @@ describe('ipcMainUtil command mapping', () => {
       },
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.open-path', {
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.open-path', {
       path: 'docs\\opened.md',
       baseDir: 'D:\\workspace',
       trigger: 'second-instance',
     })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
   it('document.open-path 命中缺失路径时，必须把结构化失败结果原样返回给新 renderer', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
-    winInfoUtil.executeCommand.mockResolvedValueOnce({
+    runtimeExecuteUiCommand.mockResolvedValueOnce({
       ok: false,
       reason: 'open-target-missing',
       path: 'D:\\docs\\missing.md',
@@ -678,13 +691,10 @@ describe('ipcMainUtil command mapping', () => {
       },
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.open-path', {
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.open-path', {
       path: 'D:\\docs\\missing.md',
     })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(result).toEqual({
       ok: false,
       reason: 'open-target-missing',
@@ -694,7 +704,7 @@ describe('ipcMainUtil command mapping', () => {
 
   it('document.open-path 命中非 .md 路径时，也必须保留结构化失败结果供 renderer 判定', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
-    winInfoUtil.executeCommand.mockResolvedValueOnce({
+    runtimeExecuteUiCommand.mockResolvedValueOnce({
       ok: false,
       reason: 'open-target-invalid-extension',
       path: 'D:\\docs\\plain.txt',
@@ -707,13 +717,10 @@ describe('ipcMainUtil command mapping', () => {
       },
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.open-path', {
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.open-path', {
       path: 'D:\\docs\\plain.txt',
     })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(result).toEqual({
       ok: false,
       reason: 'open-target-invalid-extension',
@@ -728,18 +735,15 @@ describe('ipcMainUtil command mapping', () => {
       content: '# 内容',
       saved: false,
     }
-    winInfoUtil.executeCommand.mockResolvedValueOnce(snapshot)
+    runtimeExecuteUiCommand.mockResolvedValueOnce(snapshot)
 
     const result = await sendToMainHandler({ sender }, {
       event: 'document.get-session-snapshot',
       data: null,
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.get-session-snapshot', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.get-session-snapshot', null)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(result).toEqual(snapshot)
   })
 
@@ -753,7 +757,6 @@ describe('ipcMainUtil command mapping', () => {
 
     await import('./ipcMainUtil.js')
     const { default: winInfoUtil } = await import('../win/winInfoUtil.js')
-    winInfoUtil.executeCommand.mockReset()
     winInfoUtil.getWinInfo.mockImplementation((targetWin) => {
       if (targetWin?.id === 2) {
         return null
@@ -772,7 +775,7 @@ describe('ipcMainUtil command mapping', () => {
       content: '# 导出内容',
       saved: true,
     }
-    winInfoUtil.executeCommand.mockResolvedValueOnce(snapshot)
+    runtimeExecuteUiCommand.mockResolvedValueOnce(snapshot)
     const sendToMainHandler = ipcMainHandle.mock.calls.find(([channel]) => channel === 'sendToMain')?.[1]
     const sender = { id: 9527 }
 
@@ -781,11 +784,7 @@ describe('ipcMainUtil command mapping', () => {
       data: null,
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: parentWin,
-    }, 'document.get-session-snapshot', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.get-session-snapshot', null)
     expect(result).toEqual(snapshot)
   })
 
@@ -803,18 +802,11 @@ describe('ipcMainUtil command mapping', () => {
       },
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(1, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'recent.clear', null)
-    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(2, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'recent.remove', {
+    expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(1, 1, 'recent.clear', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(2, 1, 'recent.remove', {
       path: 'D:\\docs\\note.md',
     })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
   it('recent.get-list 必须通过统一命令入口返回最近文件列表', async () => {
@@ -825,18 +817,15 @@ describe('ipcMainUtil command mapping', () => {
         name: 'note.md',
       },
     ]
-    winInfoUtil.executeCommand.mockResolvedValueOnce(recentList)
+    runtimeExecuteUiCommand.mockResolvedValueOnce(recentList)
 
     const result = await sendToMainHandler({ sender }, {
       event: 'recent.get-list',
       data: null,
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'recent.get-list', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'recent.get-list', null)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(result).toEqual(recentList)
   })
 
@@ -927,20 +916,13 @@ describe('ipcMainUtil command mapping', () => {
       },
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(1, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.external.apply', {
+    expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(1, 1, 'document.external.apply', {
       version: 2,
     })
-    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(2, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.external.ignore', {
+    expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(2, 1, 'document.external.ignore', {
       version: 3,
     })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
   it('document.cancel-close / document.confirm-force-close 必须暴露为新的关闭确认命令', async () => {
@@ -955,16 +937,23 @@ describe('ipcMainUtil command mapping', () => {
       data: null,
     })
 
-    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(1, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.cancel-close', null)
-    expect(winInfoUtil.executeCommand).toHaveBeenNthCalledWith(2, {
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.confirm-force-close', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(1, 1, 'document.cancel-close', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(2, 1, 'document.confirm-force-close', null)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+  })
+
+  it('file-content-update 虽然还是旧 IPC 名称，但正文编辑必须收口到 runtime 的 document.edit 命令', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'file-content-update',
+      data: '# 新正文',
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.edit', {
+      content: '# 新正文',
+    })
+    expect(winInfoUtil.updateTempContent).not.toHaveBeenCalled()
   })
 
   it('已迁移完成的旧 session IPC 入口必须直接删除，不能继续保留死别名', async () => {

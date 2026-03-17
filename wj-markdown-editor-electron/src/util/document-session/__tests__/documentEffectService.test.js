@@ -159,7 +159,7 @@ describe('documentEffectService', () => {
 
     expect(result).toEqual({
       ok: false,
-      reason: 'recent-missing',
+      reason: 'open-recent-target-missing',
       path: 'C:/docs/missing.md',
     })
     expect(openDocumentWindow).not.toHaveBeenCalled()
