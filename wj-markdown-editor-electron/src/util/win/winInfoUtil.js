@@ -151,17 +151,6 @@ function getSnapshotSignature(snapshot) {
   return JSON.stringify(snapshot || null)
 }
 
-function syncSessionFromWinInfo(winInfo) {
-  const session = getSessionByWinInfo(winInfo)
-  if (!session || !winInfo) {
-    return session
-  }
-
-  // Task 2 起，winInfo 不再反向覆盖 documentSource / diskSnapshot / saved 真相。
-  // 这里只保留“把 session 当前真相同步回兼容镜像”的职责。
-  return session
-}
-
 function syncWinInfoFromSession(winInfo, session) {
   if (!winInfo || !session) {
     return
@@ -670,7 +659,6 @@ async function dispatchCommand(winInfo, command, payload, options = {}) {
   }
 
   const publishSnapshotMode = options.publishSnapshotChanged || 'always'
-  syncSessionFromWinInfo(winInfo)
   const previousSnapshot = publishSnapshotMode === 'if-changed'
     ? getSessionSnapshot(winInfo)
     : null
