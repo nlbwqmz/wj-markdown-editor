@@ -33,8 +33,16 @@ function createEditorView({ lineBlocks }) {
          */
         line(lineNumber) {
           const lineBlock = lineBlockMap.get(lineNumber)
+          if (!lineBlock) {
+            /**
+             * 贴近真实 CodeMirror 行为：
+             * 当调用方请求越界行号时，doc.line 会直接抛出 RangeError，
+             * 而不是返回 undefined。
+             */
+            throw new RangeError(`Invalid line number ${lineNumber}`)
+          }
           return {
-            from: lineBlock?.from,
+            from: lineBlock.from,
           }
         },
       },
@@ -135,6 +143,28 @@ test('resolveEditorLineAnchorScrollTop 能按行号与行内偏移比例还原 s
   })
 
   assert.equal(targetScrollTop, 151.2)
+})
+
+test('resolveEditorLineAnchorScrollTop 在锚点行号越界时应回退 fallbackScrollTop 且不抛异常', () => {
+  const view = createEditorView({
+    lineBlocks: [
+      { lineNumber: 5, from: 50, top: 90, height: 60 },
+      { lineNumber: 6, from: 60, top: 150, height: 60 },
+      { lineNumber: 7, from: 70, top: 210, height: 60 },
+    ],
+  })
+
+  assert.doesNotThrow(() => {
+    assert.equal(resolveEditorLineAnchorScrollTop({
+      view,
+      anchor: {
+        type: 'editor-line',
+        lineNumber: 99,
+        lineOffsetRatio: 0.3,
+      },
+      fallbackScrollTop: 44,
+    }), 44)
+  })
 })
 
 test('capturePreviewLineAnchor 能记录行范围与元素内偏移比例', () => {

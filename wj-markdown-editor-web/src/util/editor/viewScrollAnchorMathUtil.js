@@ -116,7 +116,16 @@ export function resolveEditorLineAnchorScrollTop({ view, anchor, fallbackScrollT
     return safeFallbackScrollTop
   }
 
-  const line = view.state.doc.line(anchor.lineNumber)
+  let line
+  try {
+    /**
+     * 真实 CodeMirror 在行号越界时会直接抛出 RangeError。
+     * 本工具的契约是任何无法解析的锚点都优先回退，而不是把异常继续抛给调用方。
+     */
+    line = view.state.doc.line(anchor.lineNumber)
+  } catch {
+    return safeFallbackScrollTop
+  }
   if (!line || !Number.isFinite(line.from)) {
     return safeFallbackScrollTop
   }
