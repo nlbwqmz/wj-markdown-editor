@@ -134,6 +134,20 @@ function createHarness(options = {}) {
   }
 }
 
+/**
+ * 连续冲刷若干轮微任务队列。
+ * 该辅助函数用于把 `await nextTick()` 这类 Promise 链推进到可观察状态，
+ * 但不会替代 requestAnimationFrame，因此很适合拿来验证默认等待路径的阶段边界。
+ *
+ * @param {number} [times]
+ * @returns {Promise<void>} 返回在指定轮数微任务全部冲刷完成后才 resolve 的 Promise。
+ */
+async function flushMicrotasks(times = 1) {
+  for (let index = 0; index < times; index++) {
+    await Promise.resolve()
+  }
+}
+
 test('scheduleRestoreForCurrentSnapshot 会先等待布局稳定再执行恢复', async () => {
   const store = createViewScrollAnchorSessionStore()
   const callOrder = []
@@ -307,4 +321,58 @@ test('hasRestorableAnchor 会随当前 snapshot 变化而变化', () => {
   state.revision = 8
 
   assert.equal(api.hasRestorableAnchor(), false)
+})
+
+test('未注入 waitLayoutStable 时默认会执行 nextTick 与两次 requestAnimationFrame', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const restoreCalls = []
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+  const rafCallbacks = []
+  let rafCallCount = 0
+
+  seedAnchorRecord(store)
+
+  globalThis.requestAnimationFrame = (callback) => {
+    rafCallCount++
+    rafCallbacks.push(callback)
+    return rafCallCount
+  }
+  globalThis.cancelAnimationFrame = () => {}
+
+  try {
+    const { api } = createHarness({
+      store,
+      waitLayoutStable: undefined,
+      restoreAnchor: (payload) => {
+        restoreCalls.push(payload)
+        return true
+      },
+    })
+
+    const restorePromise = api.scheduleRestoreForCurrentSnapshot()
+
+    await flushMicrotasks(3)
+
+    assert.equal(rafCallCount, 1)
+    assert.equal(rafCallbacks.length, 1)
+    assert.equal(restoreCalls.length, 0)
+
+    rafCallbacks.shift()?.(16)
+    await flushMicrotasks(2)
+
+    assert.equal(rafCallCount, 2)
+    assert.equal(rafCallbacks.length, 1)
+    assert.equal(restoreCalls.length, 0)
+
+    rafCallbacks.shift()?.(32)
+    await restorePromise
+
+    assert.equal(rafCallCount, 2)
+    assert.equal(restoreCalls.length, 1)
+    assert.equal(restoreCalls[0].revision, 7)
+  } finally {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame
+  }
 })

@@ -1,3 +1,5 @@
+import { nextTick } from 'vue'
+
 import {
   getAnchorRecord,
   saveAnchorRecord,
@@ -5,13 +7,41 @@ import {
 } from '../../../util/editor/viewScrollAnchorSessionUtil.js'
 
 /**
- * 默认的布局稳定等待函数。
- * 当前 composable 的职责只是“在恢复前留出布局完成的异步窗口”，
- * 因此默认实现保持为空 Promise，避免在调用方未注入时引入额外副作用。
+ * 等待下一帧动画时机。
+ * 默认布局等待语义要求使用 requestAnimationFrame；但在测试或极少数非浏览器环境中，
+ * 该 API 可能暂时不存在，因此这里保留一个安全的 setTimeout 兜底，避免直接抛异常。
  *
- * @returns {Promise<void>} 返回一个立即完成的 Promise，表示默认情况下无需额外等待。
+ * @returns {Promise<void>} 返回在下一次动画帧回调后才 resolve 的 Promise。
+ */
+function waitNextAnimationFrame() {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        resolve()
+      })
+      return
+    }
+
+    setTimeout(() => {
+      resolve()
+    }, 16)
+  })
+}
+
+/**
+ * 默认的布局稳定等待函数。
+ * 这里明确执行 `nextTick + 2 * requestAnimationFrame`：
+ * 1. `nextTick` 等待 Vue 把当前响应式更新和 DOM patch 刷完
+ * 2. 第一帧等待浏览器接收并应用布局结果
+ * 3. 第二帧再给依赖尺寸与滚动容器的读取逻辑一个稳定窗口
+ * 该顺序与设计约束保持一致，避免恢复时过早读取到未稳定的布局。
+ *
+ * @returns {Promise<void>} 返回在默认布局稳定等待链执行完成后才 resolve 的 Promise。
  */
 async function defaultWaitLayoutStable() {
+  await nextTick()
+  await waitNextAnimationFrame()
+  await waitNextAnimationFrame()
 }
 
 /**
