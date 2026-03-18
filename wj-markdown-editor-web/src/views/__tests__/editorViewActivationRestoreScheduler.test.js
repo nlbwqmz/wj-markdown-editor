@@ -53,6 +53,27 @@ function createDeferredScheduler() {
   }
 }
 
+/**
+ * 创建一个可由测试手动控制完成时机的 Promise。
+ *
+ * @returns {{
+ *   promise: Promise<void>,
+ *   resolve: () => void,
+ * }} 返回延迟对象。
+ */
+function createDeferred() {
+  let resolve
+
+  const promise = new Promise((nextResolve) => {
+    resolve = nextResolve
+  })
+
+  return {
+    promise,
+    resolve,
+  }
+}
+
 test('激活恢复应绑定激活窗口内最后一份仍有效的 snapshot identity，而不是较早闭包值', () => {
   const createEditorViewActivationRestoreScheduler = requireCreateEditorViewActivationRestoreScheduler()
   const deferredScheduler = createDeferredScheduler()
@@ -84,4 +105,66 @@ test('激活恢复应绑定激活窗口内最后一份仍有效的 snapshot iden
     sessionId: 'session-1',
     revision: 8,
   }])
+})
+
+test('restore 已启动但未完成时，后到 snapshot 应取消旧 restore，并在旧 promise 结束后按最新 identity 重排', async () => {
+  const createEditorViewActivationRestoreScheduler = requireCreateEditorViewActivationRestoreScheduler()
+  const deferredScheduler = createDeferredScheduler()
+  const restoreCalls = []
+  const cancelCalls = []
+  const firstRestoreDeferred = createDeferred()
+
+  const scheduler = createEditorViewActivationRestoreScheduler({
+    schedule: deferredScheduler.schedule,
+    cancelActiveRestore: () => {
+      cancelCalls.push('cancelled')
+    },
+    restoreSnapshot: (snapshotIdentity) => {
+      restoreCalls.push(snapshotIdentity)
+
+      if (snapshotIdentity.revision === 7) {
+        return firstRestoreDeferred.promise
+      }
+    },
+  })
+
+  scheduler.markPendingRestore()
+  scheduler.applySnapshot({
+    sessionId: 'session-1',
+    revision: 7,
+  })
+
+  deferredScheduler.flush()
+
+  assert.deepEqual(restoreCalls, [{
+    sessionId: 'session-1',
+    revision: 7,
+  }])
+  assert.deepEqual(cancelCalls, [])
+
+  scheduler.applySnapshot({
+    sessionId: 'session-1',
+    revision: 8,
+  })
+
+  assert.deepEqual(cancelCalls, ['cancelled'])
+  assert.equal(deferredScheduler.queueSize(), 0)
+
+  firstRestoreDeferred.resolve()
+  await firstRestoreDeferred.promise
+
+  assert.equal(deferredScheduler.queueSize(), 1)
+
+  deferredScheduler.flush()
+
+  assert.deepEqual(restoreCalls, [
+    {
+      sessionId: 'session-1',
+      revision: 7,
+    },
+    {
+      sessionId: 'session-1',
+      revision: 8,
+    },
+  ])
 })

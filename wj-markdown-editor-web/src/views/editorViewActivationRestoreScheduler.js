@@ -14,7 +14,8 @@ import { getDocumentSessionSnapshotIdentity } from '../util/document-session/doc
  *
  * @param {{
  *   schedule?: (callback: () => void) => void,
- *   restoreSnapshot?: (snapshotIdentity: { sessionId: string | null, revision: number }) => void,
+ *   cancelActiveRestore?: () => void,
+ *   restoreSnapshot?: (snapshotIdentity: { sessionId: string | null, revision: number }) => void | Promise<void>,
  * }} options
  */
 export function createEditorViewActivationRestoreScheduler(options = {}) {
@@ -24,11 +25,14 @@ export function createEditorViewActivationRestoreScheduler(options = {}) {
         callback()
       })
     },
+    cancelActiveRestore,
     restoreSnapshot,
   } = options
 
   let pendingRestore = false
   let scheduled = false
+  let restoreInFlight = false
+  let rescheduleAfterInFlight = false
   let requestToken = 0
   let latestSnapshotIdentity = null
 
@@ -47,12 +51,34 @@ export function createEditorViewActivationRestoreScheduler(options = {}) {
     schedule(() => {
       scheduled = false
 
-      if (scheduledToken !== requestToken || pendingRestore !== true || latestSnapshotIdentity == null) {
+      if (
+        scheduledToken !== requestToken
+        || pendingRestore !== true
+        || latestSnapshotIdentity == null
+        || restoreInFlight === true
+      ) {
         return
       }
 
+      restoreInFlight = true
       pendingRestore = false
-      restoreSnapshot?.(latestSnapshotIdentity)
+
+      Promise.resolve(restoreSnapshot?.(latestSnapshotIdentity))
+        .finally(() => {
+          restoreInFlight = false
+
+          if (scheduledToken !== requestToken) {
+            return
+          }
+
+          if (rescheduleAfterInFlight === true && pendingRestore === true && latestSnapshotIdentity != null) {
+            rescheduleAfterInFlight = false
+            ensureScheduled()
+            return
+          }
+
+          rescheduleAfterInFlight = false
+        })
     })
   }
 
@@ -63,6 +89,7 @@ export function createEditorViewActivationRestoreScheduler(options = {}) {
     markPendingRestore() {
       pendingRestore = true
       latestSnapshotIdentity = null
+      rescheduleAfterInFlight = false
       requestToken++
       scheduled = false
     },
@@ -73,8 +100,10 @@ export function createEditorViewActivationRestoreScheduler(options = {}) {
     cancelPendingRestore() {
       pendingRestore = false
       latestSnapshotIdentity = null
+      rescheduleAfterInFlight = false
       requestToken++
       scheduled = false
+      cancelActiveRestore?.()
     },
 
     /**
@@ -83,11 +112,23 @@ export function createEditorViewActivationRestoreScheduler(options = {}) {
      * @param {object | null | undefined} snapshot
      */
     applySnapshot(snapshot) {
-      if (pendingRestore !== true || !snapshot) {
+      if (!snapshot) {
+        return
+      }
+
+      if (pendingRestore !== true && restoreInFlight !== true) {
         return
       }
 
       latestSnapshotIdentity = getDocumentSessionSnapshotIdentity(snapshot)
+
+      if (restoreInFlight === true) {
+        pendingRestore = true
+        rescheduleAfterInFlight = true
+        cancelActiveRestore?.()
+        return
+      }
+
       ensureScheduled()
     },
   }

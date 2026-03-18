@@ -123,6 +123,9 @@ const editorSessionSnapshotController = createRendererSessionSnapshotController(
 })
 // 激活恢复调度器负责把“激活窗口内最新 snapshot identity”延迟到 nextTick 后再下发给子组件。
 const activationRestoreScheduler = createEditorViewActivationRestoreScheduler({
+  cancelActiveRestore: () => {
+    markdownEditRef.value?.cancelPendingViewScrollRestore?.()
+  },
   restoreSnapshot: (snapshotIdentity) => {
     markdownEditRef.value?.scheduleRestoreForCurrentSnapshot(snapshotIdentity)?.then(() => {})
   },
