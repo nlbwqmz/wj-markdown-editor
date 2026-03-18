@@ -2,8 +2,9 @@
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
-import { createVNode, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { createVNode, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { onBeforeRouteLeave } from 'vue-router'
 import MarkdownEdit from '@/components/editor/MarkdownEdit.vue'
 import PreviewAssetContextMenu from '@/components/editor/PreviewAssetContextMenu.vue'
 import { useCommonStore } from '@/stores/counter.js'
@@ -14,6 +15,9 @@ import commonUtil from '@/util/commonUtil.js'
 import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
+import {
+  getDocumentSessionSnapshotIdentity,
+} from '@/util/document-session/documentSessionSnapshotUtil.js'
 import {
   requestDocumentEdit,
   requestDocumentSave,
@@ -68,6 +72,8 @@ function createMultiReferenceDeleteModalState() {
 const content = ref('')
 // 仅在拿到首份文档快照后再渲染编辑器，避免子组件接收到空内容后再闪动更新。
 const ready = ref(false)
+// 通过子组件暴露的方法统一处理编辑器正文 flush 与滚动锚点恢复。
+const markdownEditRef = ref()
 const { t } = useI18n()
 const store = useCommonStore()
 // 预览区水印配置，由 store.config 派生得到。
@@ -90,6 +96,8 @@ let contentUpdateToken = 0
 // 标记当前这次 content 变更是否来自 session snapshot，
 // 用于阻止 watch(content) 再次把同一份内容回写给主进程。
 let applyingSessionContent = false
+// keep-alive 激活后只先标记“本轮允许恢复”，真正恢复在 snapshot 应用收尾阶段统一触发。
+let pendingRestoreOnActivation = false
 // 单资源删除确认弹窗控制器，统一托管 confirm 实例的打开和销毁。
 const previewAssetDeleteConfirmController = createPreviewAssetDeleteConfirmController({
   createModal: config => Modal.confirm(config),
@@ -155,6 +163,16 @@ function applyDocumentSessionSnapshot(snapshot) {
     skipContentSync: true,
   })
   ready.value = true
+
+  if (pendingRestoreOnActivation !== true) {
+    return
+  }
+
+  pendingRestoreOnActivation = false
+  const snapshotIdentity = getDocumentSessionSnapshotIdentity(snapshot)
+  nextTick(() => {
+    markdownEditRef.value?.scheduleRestoreForCurrentSnapshot(snapshotIdentity)?.then(() => {})
+  })
 }
 
 // 响应主进程或其他链路推送过来的 session snapshot 更新。
@@ -193,6 +211,7 @@ onMounted(async () => {
 
 onActivated(() => {
   // keep-alive 恢复后重新接管快照流。
+  pendingRestoreOnActivation = true
   editorSessionSnapshotController.activate()
   documentSessionSnapshotSubscription.activate()
   const activationAction = resolveRendererSessionActivationAction({
@@ -225,11 +244,25 @@ onBeforeUnmount(() => {
 
 onDeactivated(() => {
   // keep-alive 暂时失活时停止接收事件，并让资源相关 UI 全部失效。
+  pendingRestoreOnActivation = false
   editorSessionSnapshotController.deactivate()
   documentSessionSnapshotSubscription.deactivate()
   previewAssetSessionController.invalidateActiveContext({
     reason: 'deactivated',
   })
+})
+
+onBeforeRouteLeave(async () => {
+  // 切页前必须先把 CodeMirror 里尚未上浮的正文冲刷出来，
+  // 否则后续请求到的 snapshot revision 可能仍停留在旧版本。
+  markdownEditRef.value?.flushPendingModelSync?.()
+
+  if (content.value !== store.documentSessionSnapshot.content) {
+    await requestDocumentEdit(content.value)
+  }
+
+  const latestSnapshot = await requestDocumentSessionSnapshot()
+  markdownEditRef.value?.captureViewScrollAnchors?.(getDocumentSessionSnapshotIdentity(latestSnapshot))
 })
 
 watch(() => content.value, (newValue, oldValue) => {
@@ -540,7 +573,7 @@ async function deletePreviewAsset() {
 
 <template>
   <!-- 主编辑器：正文、主题、水印和资源事件都在这里汇总。 -->
-  <MarkdownEdit v-if="ready" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
+  <MarkdownEdit v-if="ready" ref="markdownEditRef" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
   <!-- 预览资源右键菜单，仅负责展示与转发操作，不直接处理业务。 -->
   <PreviewAssetContextMenu
     :open="previewAssetMenu.open"

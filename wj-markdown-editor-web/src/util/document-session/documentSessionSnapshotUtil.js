@@ -50,6 +50,21 @@ function normalizeRevision(value) {
   return Number.isInteger(value) && value >= 0 ? value : 0
 }
 
+/**
+ * 提取文档快照身份信息。
+ * 视图层只允许用 `sessionId + revision` 作为滚动恢复资格判断依据，
+ * 因此这里统一收敛读取口径，避免各处自行兜底导致判断不一致。
+ *
+ * @param {object | null | undefined} snapshot
+ * @returns {{ sessionId: string | null, revision: number }} 返回归一化后的快照身份。
+ */
+export function getDocumentSessionSnapshotIdentity(snapshot) {
+  return {
+    sessionId: typeof snapshot?.sessionId === 'string' ? snapshot.sessionId : null,
+    revision: normalizeRevision(snapshot?.revision),
+  }
+}
+
 function normalizeClosePrompt(closePrompt) {
   if (!closePrompt || closePrompt.visible !== true) {
     return null
@@ -201,6 +216,7 @@ export function deriveDocumentSessionStoreState(snapshot, currentExternalFileCha
 export default {
   createDefaultDocumentSessionSnapshot,
   createDefaultExternalFileChangeState,
+  getDocumentSessionSnapshotIdentity,
   normalizeDocumentSessionSnapshot,
   normalizeRecentList,
   deriveExternalFileChangeState,

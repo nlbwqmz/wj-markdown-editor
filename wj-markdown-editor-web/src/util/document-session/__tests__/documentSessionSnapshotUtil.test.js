@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   createDefaultExternalFileChangeState,
   deriveDocumentSessionStoreState,
+  getDocumentSessionSnapshotIdentity,
   normalizeDocumentSessionSnapshot,
 } from '../documentSessionSnapshotUtil.js'
 
@@ -155,5 +156,28 @@ test('缺省快照也应被归一化为稳定结构，避免 renderer 再自行�
       saved: true,
       exists: false,
     },
+  })
+})
+
+test('getDocumentSessionSnapshotIdentity 会统一提取 sessionId 与 revision，非法 revision 回退为 0', () => {
+  assert.deepEqual(getDocumentSessionSnapshotIdentity({
+    sessionId: 'session-8',
+    revision: 12,
+  }), {
+    sessionId: 'session-8',
+    revision: 12,
+  })
+
+  assert.deepEqual(getDocumentSessionSnapshotIdentity({
+    sessionId: null,
+    revision: 'nope',
+  }), {
+    sessionId: null,
+    revision: 0,
+  })
+
+  assert.deepEqual(getDocumentSessionSnapshotIdentity(undefined), {
+    sessionId: null,
+    revision: 0,
   })
 })
