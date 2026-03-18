@@ -113,4 +113,15 @@ describe('documentSnapshotUtil', () => {
 
     expect(snapshot.revision).toBe(0)
   })
+
+  it('deriveDocumentSnapshot 会为负数 revision 回退到 0', () => {
+    const session = createDraftSession({
+      sessionId: 'revision-negative-session',
+    })
+    session.editorSnapshot.revision = -1
+
+    const snapshot = deriveDocumentSnapshot(session)
+
+    expect(snapshot.revision).toBe(0)
+  })
 })
