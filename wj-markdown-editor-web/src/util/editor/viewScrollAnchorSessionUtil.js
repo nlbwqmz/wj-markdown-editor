@@ -5,7 +5,8 @@
  * @returns {Record<string, Record<string, any>>} 返回按会话分组的滚动锚点缓存对象。
  */
 export function createViewScrollAnchorSessionStore() {
-  return {}
+  // 使用无原型字典承载动态 key，避免 "__proto__" 等特殊键污染原型链。
+  return Object.create(null)
 }
 
 /**
@@ -28,6 +29,18 @@ function cloneAnchorRecord(record) {
 }
 
 /**
+ * 判断传入值是否为可安全读写的对象字典。
+ * 这里不强制要求必须是无原型对象，只要求它是非 null 的对象，
+ * 以便在工具层面对异常入参保持稳定降级。
+ *
+ * @param {unknown} value
+ * @returns {boolean} 返回该值是否可作为对象字典处理。
+ */
+function isObjectDictionary(value) {
+  return value != null && typeof value === 'object'
+}
+
+/**
  * 按 sessionId 与 scrollAreaKey 保存一条滚动锚点记录。
  * 同一会话下相同滚动区域的记录会被最新值覆盖，不同区域之间互不影响。
  *
@@ -36,6 +49,10 @@ function cloneAnchorRecord(record) {
  * @returns {object | null} 返回成功写入的记录；缺少必要键时返回 null。
  */
 export function saveAnchorRecord(store, record) {
+  if (!isObjectDictionary(store)) {
+    return null
+  }
+
   const sessionId = typeof record?.sessionId === 'string' ? record.sessionId : ''
   const scrollAreaKey = typeof record?.scrollAreaKey === 'string' ? record.scrollAreaKey : ''
 
@@ -44,7 +61,12 @@ export function saveAnchorRecord(store, record) {
   }
 
   if (store[sessionId] == null) {
-    store[sessionId] = {}
+    // 会话 bucket 同样使用无原型字典，保证第二层动态键也不会命中原型属性。
+    store[sessionId] = Object.create(null)
+  }
+
+  if (!isObjectDictionary(store[sessionId])) {
+    return null
   }
 
   const nextRecord = cloneAnchorRecord(record)
@@ -61,7 +83,13 @@ export function saveAnchorRecord(store, record) {
  * @param {{ sessionId: string, scrollAreaKey: string }} options
  * @returns {object | null} 返回命中的滚动锚点记录；未命中时返回 null。
  */
-export function getAnchorRecord(store, { sessionId, scrollAreaKey }) {
+export function getAnchorRecord(store, options) {
+  if (!isObjectDictionary(store) || !isObjectDictionary(options)) {
+    return null
+  }
+
+  const { sessionId, scrollAreaKey } = options
+
   if (typeof sessionId !== 'string' || typeof scrollAreaKey !== 'string') {
     return null
   }
@@ -76,6 +104,10 @@ export function getAnchorRecord(store, { sessionId, scrollAreaKey }) {
  * @param {string} sessionId
  */
 export function clearSessionAnchorRecords(store, sessionId) {
+  if (!isObjectDictionary(store)) {
+    return
+  }
+
   if (typeof sessionId !== 'string' || sessionId === '') {
     return
   }
@@ -90,6 +122,10 @@ export function clearSessionAnchorRecords(store, sessionId) {
  * @param {string | null} activeSessionId
  */
 export function pruneAnchorRecords(store, activeSessionId) {
+  if (!isObjectDictionary(store)) {
+    return
+  }
+
   for (const sessionId of Object.keys(store)) {
     if (sessionId !== activeSessionId) {
       delete store[sessionId]
@@ -104,7 +140,13 @@ export function pruneAnchorRecords(store, activeSessionId) {
  * @param {{ record: any, sessionId: string, revision: number }} options
  * @returns {boolean} 返回该记录是否允许按当前会话与版本恢复。
  */
-export function shouldRestoreAnchorRecord({ record, sessionId, revision }) {
+export function shouldRestoreAnchorRecord(options) {
+  if (!isObjectDictionary(options)) {
+    return false
+  }
+
+  const { record, sessionId, revision } = options
+
   if (record == null) {
     return false
   }

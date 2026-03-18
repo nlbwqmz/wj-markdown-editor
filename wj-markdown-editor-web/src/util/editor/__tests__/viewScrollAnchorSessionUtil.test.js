@@ -36,6 +36,37 @@ test('sessionId 与 scrollAreaKey 应共同定位唯一滚动锚点记录', () =
   })
 })
 
+test('createViewScrollAnchorSessionStore 与 session bucket 应使用无原型字典，避免特殊键污染原型链', () => {
+  const store = createViewScrollAnchorSessionStore()
+
+  assert.equal(Object.getPrototypeOf(store), null)
+
+  saveAnchorRecord(store, {
+    sessionId: '__proto__',
+    scrollAreaKey: 'constructor',
+    revision: 3,
+    anchor: { type: 'editor-line', lineNumber: 12, lineOffsetRatio: 0.5 },
+    fallbackScrollTop: 120,
+    savedAt: 1,
+  })
+
+  const specialSessionBucket = Object.getOwnPropertyDescriptor(store, '__proto__')?.value
+
+  assert.equal(Object.getPrototypeOf(store), null)
+  assert.equal(Object.getPrototypeOf(specialSessionBucket), null)
+  assert.deepEqual(getAnchorRecord(store, {
+    sessionId: '__proto__',
+    scrollAreaKey: 'constructor',
+  }), {
+    sessionId: '__proto__',
+    scrollAreaKey: 'constructor',
+    revision: 3,
+    anchor: { type: 'editor-line', lineNumber: 12, lineOffsetRatio: 0.5 },
+    fallbackScrollTop: 120,
+    savedAt: 1,
+  })
+})
+
 test('saveAnchorRecord 写入缓存时应复制 record 与 anchor，避免外部后续修改污染缓存', () => {
   const store = createViewScrollAnchorSessionStore()
   const record = {
@@ -180,6 +211,25 @@ test('shouldRestoreAnchorRecord 在 sessionId 或 revision 不匹配时应拒绝
     sessionId: 'session-1',
     revision: 3,
   }), true)
+})
+
+test('导出 API 遇到异常入参时应保持安全返回或 no-op', () => {
+  assert.equal(saveAnchorRecord(null, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+    revision: 1,
+    anchor: { type: 'editor-line', lineNumber: 1, lineOffsetRatio: 0 },
+    fallbackScrollTop: 0,
+    savedAt: 1,
+  }), null)
+  assert.equal(getAnchorRecord(null, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+  }), null)
+  assert.equal(getAnchorRecord({}, undefined), null)
+  assert.doesNotThrow(() => clearSessionAnchorRecords(null, 'session-1'))
+  assert.doesNotThrow(() => pruneAnchorRecords(null, 'session-1'))
+  assert.equal(shouldRestoreAnchorRecord(undefined), false)
 })
 
 test('clearSessionAnchorRecords 应只移除指定 sessionId 的记录', () => {
