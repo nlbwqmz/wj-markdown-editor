@@ -9,6 +9,25 @@ export function createViewScrollAnchorSessionStore() {
 }
 
 /**
+ * 复制一条滚动锚点记录，避免对外暴露缓存内部引用。
+ *
+ * @param {object | null | undefined} record
+ * @returns {object | null} 返回复制后的记录；缺少记录时返回 null。
+ */
+function cloneAnchorRecord(record) {
+  if (record == null || typeof record !== 'object') {
+    return null
+  }
+
+  return {
+    ...record,
+    anchor: record.anchor != null && typeof record.anchor === 'object'
+      ? { ...record.anchor }
+      : record.anchor ?? null,
+  }
+}
+
+/**
  * 按 sessionId 与 scrollAreaKey 保存一条滚动锚点记录。
  * 同一会话下相同滚动区域的记录会被最新值覆盖，不同区域之间互不影响。
  *
@@ -28,17 +47,11 @@ export function saveAnchorRecord(store, record) {
     store[sessionId] = {}
   }
 
-  const nextRecord = {
-    ...record,
-    // 这里额外复制一层 anchor，避免调用方后续继续改原对象时联动污染缓存。
-    anchor: record?.anchor != null && typeof record.anchor === 'object'
-      ? { ...record.anchor }
-      : record?.anchor ?? null,
-  }
+  const nextRecord = cloneAnchorRecord(record)
 
   store[sessionId][scrollAreaKey] = nextRecord
 
-  return nextRecord
+  return cloneAnchorRecord(nextRecord)
 }
 
 /**
@@ -53,7 +66,7 @@ export function getAnchorRecord(store, { sessionId, scrollAreaKey }) {
     return null
   }
 
-  return store[sessionId]?.[scrollAreaKey] ?? null
+  return cloneAnchorRecord(store[sessionId]?.[scrollAreaKey] ?? null)
 }
 
 /**

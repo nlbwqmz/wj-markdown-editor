@@ -65,6 +65,66 @@ test('saveAnchorRecord 写入缓存时应复制 record 与 anchor，避免外部
   })
 })
 
+test('修改 saveAnchorRecord 返回值时不应反向污染缓存', () => {
+  const store = createViewScrollAnchorSessionStore()
+  const savedRecord = saveAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+    revision: 3,
+    anchor: { type: 'editor-line', lineNumber: 12, lineOffsetRatio: 0.5 },
+    fallbackScrollTop: 120,
+    savedAt: 1,
+  })
+
+  savedRecord.revision = 9
+  savedRecord.anchor.lineNumber = 99
+
+  assert.deepEqual(getAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+  }), {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+    revision: 3,
+    anchor: { type: 'editor-line', lineNumber: 12, lineOffsetRatio: 0.5 },
+    fallbackScrollTop: 120,
+    savedAt: 1,
+  })
+})
+
+test('修改 getAnchorRecord 读取结果时不应反向污染缓存', () => {
+  const store = createViewScrollAnchorSessionStore()
+
+  saveAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+    revision: 3,
+    anchor: { type: 'editor-line', lineNumber: 12, lineOffsetRatio: 0.5 },
+    fallbackScrollTop: 120,
+    savedAt: 1,
+  })
+
+  const loadedRecord = getAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+  })
+
+  loadedRecord.revision = 9
+  loadedRecord.anchor.lineNumber = 99
+
+  assert.deepEqual(getAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+  }), {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+    revision: 3,
+    anchor: { type: 'editor-line', lineNumber: 12, lineOffsetRatio: 0.5 },
+    fallbackScrollTop: 120,
+    savedAt: 1,
+  })
+})
+
 test('不同 scrollAreaKey 的记录应互不覆盖', () => {
   const store = createViewScrollAnchorSessionStore()
 
