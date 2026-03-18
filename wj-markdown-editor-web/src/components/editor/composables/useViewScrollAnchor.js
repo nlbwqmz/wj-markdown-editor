@@ -144,7 +144,12 @@ export function useViewScrollAnchor(options = {}) {
 
   /**
    * 记录当前快照对应的滚动锚点。
-   * 即使 captureAnchor 返回 null，也仍会把 fallbackScrollTop 一并保存，
+   * 只有在当前确实拿得到滚动容器时才允许写入缓存：
+   * 1. 对 keep-alive 视图而言，区域被 v-if 隐藏时通常拿不到真实 DOM
+   * 2. 此时若仍强行写入，会把上一轮可恢复的真实锚点覆盖成空记录
+   * 3. 因此“容器不存在”必须视为本轮无法采集，直接保留旧记录
+   *
+   * 在容器存在的前提下，即使 captureAnchor 返回 null，也仍会把 fallbackScrollTop 一并保存，
    * 以便调用方在缺少精确锚点时仍可基于回退滚动值做兜底恢复。
    *
    * @returns {object | null} 返回写入缓存后的记录副本；写入失败时返回 null。
@@ -152,6 +157,11 @@ export function useViewScrollAnchor(options = {}) {
   function captureCurrentAnchor() {
     const { sessionId, revision } = getCurrentSnapshot(sessionIdGetter, revisionGetter)
     const scrollElement = typeof getScrollElement === 'function' ? getScrollElement() : null
+
+    if (!scrollElement) {
+      return null
+    }
+
     const anchor = typeof captureAnchor === 'function'
       ? captureAnchor({
           sessionId,
@@ -279,10 +289,20 @@ export function useViewScrollAnchor(options = {}) {
           record: latestSnapshotRecord.record,
         }
 
+        /**
+         * 等待布局完成后，仍然必须重新确认滚动容器是否真实存在。
+         * 这能覆盖“区域当前被隐藏”或“DOM 尚未挂载完成”的场景，
+         * 并确保在容器缺失时不会把旧记录错误地交给 restoreAnchor 处理。
+         */
+        const scrollElement = typeof getScrollElement === 'function' ? getScrollElement() : null
+        if (!scrollElement) {
+          continue
+        }
+
         const restoreResult = await restoreAnchor({
           ...latestRestoreContext,
           attempt,
-          scrollElement: typeof getScrollElement === 'function' ? getScrollElement() : null,
+          scrollElement,
         })
 
         if (!isActiveRestoreToken(token)) {

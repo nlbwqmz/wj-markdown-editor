@@ -108,7 +108,13 @@ function createHarness(options = {}) {
     revision: options.revision ?? 7,
   }
   const store = options.store ?? createViewScrollAnchorSessionStore()
-  const scrollElement = options.scrollElement ?? createScrollElement({ scrollTop: 120 })
+  /**
+   * 这里显式区分“调用方完全没传 scrollElement”和“调用方有意传入 null”两种场景。
+   * 后者用于模拟预览区域当前不可见时，控制器拿不到真实滚动容器的情况。
+   */
+  const scrollElement = Object.hasOwn(options, 'scrollElement')
+    ? options.scrollElement
+    : createScrollElement({ scrollTop: 120 })
 
   return {
     state,
@@ -363,6 +369,57 @@ test('captureCurrentAnchor 会将当前 session 与 revision 的锚点写入 sto
   } finally {
     Date.now = originalDateNow
   }
+})
+
+test('缺少滚动容器时，captureCurrentAnchor 不应覆盖旧记录，scheduleRestoreForCurrentSnapshot 也不应触发恢复', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const previousPreviewRecord = seedAnchorRecord(store, {
+    scrollAreaKey: 'editor-preview',
+    revision: 7,
+    fallbackScrollTop: 245,
+    anchor: {
+      type: 'preview-line',
+      lineStart: 15,
+      lineEnd: 18,
+      elementOffsetRatio: 0.245,
+    },
+  })
+  const restoredPreviewCalls = []
+  let captureCalls = 0
+
+  const { api } = createHarness({
+    store,
+    scrollAreaKey: 'editor-preview',
+    scrollElement: null,
+    captureAnchor: () => {
+      captureCalls++
+      return {
+        type: 'preview-line',
+        lineStart: 20,
+        lineEnd: 21,
+        elementOffsetRatio: 0.5,
+      }
+    },
+    restoreAnchor: (payload) => {
+      restoredPreviewCalls.push(payload)
+      return true
+    },
+    waitLayoutStable: async () => {},
+  })
+
+  const captureResult = api.captureCurrentAnchor()
+  const restoreResult = await api.scheduleRestoreForCurrentSnapshot()
+  const savedPreviewRecord = getAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-preview',
+  })
+
+  assert.equal(captureCalls, 0)
+  assert.equal(captureResult, null)
+  assert.equal(restoreResult, false)
+  assert.deepEqual(savedPreviewRecord.anchor, previousPreviewRecord.anchor)
+  assert.equal(savedPreviewRecord.fallbackScrollTop, previousPreviewRecord.fallbackScrollTop)
+  assert.equal(restoredPreviewCalls.length, 0)
 })
 
 test('hasRestorableAnchor 会随当前 snapshot 变化而变化', () => {

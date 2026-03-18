@@ -8,18 +8,28 @@ import { useAssociationHighlight } from '@/components/editor/composables/useAsso
 import { useEditorCore } from '@/components/editor/composables/useEditorCore.js'
 import { usePreviewSync } from '@/components/editor/composables/usePreviewSync.js'
 import { useToolbarBuilder } from '@/components/editor/composables/useToolbarBuilder.js'
+import { useViewScrollAnchor } from '@/components/editor/composables/useViewScrollAnchor.js'
 import EditorSearchBar from '@/components/editor/EditorSearchBar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import ImageNetworkModal from '@/components/editor/ImageNetworkModal.vue'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
-import commonUtil from '@/util/commonUtil.js'
 import {
   resolvePendingContentUpdateMeta,
   shouldDeferStaleContentSync,
 } from '@/util/editor/contentUpdateMetaUtil.js'
+import { createFlushableDebounce } from '@/util/editor/flushableDebounceUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
+import {
+  captureEditorLineAnchor,
+  capturePreviewLineAnchor,
+  resolveEditorLineAnchorScrollTop,
+  resolvePreviewLineAnchorScrollTop,
+} from '@/util/editor/viewScrollAnchorMathUtil.js'
+import {
+  createViewScrollAnchorSessionStore,
+} from '@/util/editor/viewScrollAnchorSessionUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
@@ -91,12 +101,28 @@ const previewVisible = ref(true)
 const previewController = ref(true)
 const gridAnimation = ref(false)
 const handledContentUpdateToken = ref(0)
+// 当前滚动锚点只跟随最近一次对外确认过的 session snapshot。
+// 这样 capture / restore 都会严格绑定到外层给定的 sessionId + revision。
+const currentScrollSnapshot = ref({
+  sessionId: '',
+  revision: 0,
+})
+// 恢复期间需要临时冻结左右联动滚动，避免恢复过程被同步逻辑反向覆盖。
+const restoreState = ref({
+  active: false,
+  editorCode: false,
+  editorPreview: false,
+})
 // 记录编辑器最近一次已经向上游暴露的正文，用于识别滞后的 snapshot echo。
 const lastExposedContent = ref(props.modelValue)
+// 仅在当前 keep-alive 编辑页实例内存活的滚动锚点缓存。
+// 不做全局单例，避免不同编辑页实例之间互相污染。
+const viewScrollAnchorStore = createViewScrollAnchorSessionStore()
 
 const BOTTOM_GAP = '40vh'
 const EDITOR_EMIT_DEBOUNCE_MS = 160
 let previewSearchTargetActive = false
+let viewRestoreRequestToken = 0
 
 function getPreviewSearchTargetElements() {
   return collectSearchTargetElements(editorContainer.value)
@@ -140,6 +166,277 @@ const {
   reconfigureKeymap,
 } = useEditorCore({ editorRef })
 
+/**
+ * 将外层传入的 snapshot 规范化后写入本地引用。
+ * sessionId / revision 会同时驱动两份滚动锚点控制器的读取与恢复资格判断。
+ *
+ * @param {{ sessionId?: string, revision?: number } | undefined} snapshot
+ */
+function updateCurrentScrollSnapshot(snapshot) {
+  currentScrollSnapshot.value = {
+    sessionId: typeof snapshot?.sessionId === 'string' ? snapshot.sessionId : '',
+    revision: Number.isInteger(snapshot?.revision) ? snapshot.revision : 0,
+  }
+}
+
+/**
+ * 统一收拢恢复状态，避免多个出口重复手写同一组字段。
+ */
+function resetRestoreState() {
+  restoreState.value.active = false
+  restoreState.value.editorCode = false
+  restoreState.value.editorPreview = false
+}
+
+/**
+ * 统一设置滚动容器位置。
+ * 优先使用 scrollTo，兼容真实 DOM；测试或极简桩对象则退回直接赋值 scrollTop。
+ *
+ * @param {{ scrollTop?: number, scrollTo?: Function } | null | undefined} scrollElement
+ * @param {number} targetScrollTop
+ */
+function setScrollElementScrollTop(scrollElement, targetScrollTop) {
+  if (!scrollElement || Number.isFinite(targetScrollTop) !== true) {
+    return
+  }
+
+  if (typeof scrollElement.scrollTo === 'function') {
+    scrollElement.scrollTo({ top: targetScrollTop })
+    return
+  }
+
+  scrollElement.scrollTop = targetScrollTop
+}
+
+/**
+ * 解析预览元素携带的行号字段。
+ * Markdown 预览里的 data-line-* 来自 DOM dataset，因此这里统一转成正整数。
+ *
+ * @param {unknown} value
+ * @returns {number | null} 返回合法行号；非法值返回 null。
+ */
+function parsePreviewLineNumber(value) {
+  const lineNumber = Number(value)
+
+  if (!Number.isInteger(lineNumber) || lineNumber <= 0) {
+    return null
+  }
+
+  return lineNumber
+}
+
+/**
+ * 获取预览元素对应的 Markdown 行范围。
+ * lineEnd 缺失时退化为单行块，和现有预览渲染约定保持一致。
+ *
+ * @param {{ dataset?: Record<string, string> } | null | undefined} element
+ * @returns {{ lineStart: number, lineEnd: number } | null} 返回元素行范围；缺少有效映射时返回 null。
+ */
+function getPreviewElementLineRange(element) {
+  const lineStart = parsePreviewLineNumber(element?.dataset?.lineStart)
+  if (lineStart === null) {
+    return null
+  }
+
+  const parsedLineEnd = parsePreviewLineNumber(element?.dataset?.lineEnd)
+  const lineEnd = parsedLineEnd ?? lineStart
+
+  return {
+    lineStart,
+    lineEnd: Math.max(lineStart, lineEnd),
+  }
+}
+
+/**
+ * 计算预览元素相对滚动容器内容顶部的真实位置。
+ * 这里和 usePreviewSync 保持同一套坐标语义，避免捕获与恢复采用两套不同坐标系。
+ *
+ * @param {HTMLElement | null | undefined} container
+ * @param {HTMLElement | null | undefined} element
+ * @returns {number | null} 返回元素真实顶部位置；无法计算时返回 null。
+ */
+function getPreviewElementToTopDistance(container, element) {
+  if (!container || !element) {
+    return null
+  }
+
+  const containerRect = container.getBoundingClientRect?.()
+  const elementRect = element.getBoundingClientRect?.()
+  if (!Number.isFinite(containerRect?.top) || !Number.isFinite(elementRect?.top)) {
+    return null
+  }
+
+  return elementRect.top - containerRect.top - container.clientTop + container.scrollTop
+}
+
+/**
+ * 统计元素相对预览滚动容器的嵌套深度。
+ * 当多个节点共享同一行范围时，优先选择更内层的真实内容节点。
+ *
+ * @param {HTMLElement | null | undefined} element
+ * @returns {number} 返回元素相对预览容器的嵌套深度。
+ */
+function getPreviewElementDepth(element) {
+  let depth = 0
+  let current = element
+
+  while (current && current !== previewRef.value) {
+    depth++
+    current = current.parentElement
+  }
+
+  return depth
+}
+
+/**
+ * 获取当前预览区域中所有带行号映射的节点。
+ *
+ * @returns {HTMLElement[]} 返回当前预览容器内可用于锚点计算的节点列表。
+ */
+function getPreviewAnchorElements() {
+  if (!previewRef.value) {
+    return []
+  }
+
+  return Array.from(previewRef.value.querySelectorAll('[data-line-start]'))
+}
+
+/**
+ * 根据当前 scrollTop 找到预览区最接近顶部的映射元素。
+ * 该查找策略与 usePreviewSync 内部逻辑保持一致，确保“当前看到的元素”和“同步映射元素”一致。
+ *
+ * @param {HTMLElement} container
+ * @param {number} scrollTop
+ * @returns {HTMLElement | null} 返回当前位置对应的预览元素；找不到时返回 null。
+ */
+function findPreviewElementAtScrollTop(container, scrollTop) {
+  const elements = getPreviewAnchorElements()
+  let target = elements[0] ?? null
+
+  for (const element of elements) {
+    const elementTop = getPreviewElementToTopDistance(container, element)
+    if (Number.isFinite(elementTop) && elementTop <= scrollTop) {
+      target = element
+    } else {
+      break
+    }
+  }
+
+  return target
+}
+
+/**
+ * 根据锚点里的行范围反查预览元素。
+ * 若存在多个候选节点，则优先选择范围最精确、嵌套更深的那个节点。
+ *
+ * @param {HTMLElement} container
+ * @param {{ lineStart?: number, lineEnd?: number } | null | undefined} anchor
+ * @returns {HTMLElement | null} 返回锚点匹配到的预览元素；找不到时返回 null。
+ */
+function findPreviewElementByAnchor(container, anchor) {
+  const lineStart = parsePreviewLineNumber(anchor?.lineStart)
+  const lineEnd = parsePreviewLineNumber(anchor?.lineEnd) ?? lineStart
+
+  if (!container || lineStart === null || lineEnd === null) {
+    return null
+  }
+
+  const waiting = []
+  for (const element of getPreviewAnchorElements()) {
+    const lineRange = getPreviewElementLineRange(element)
+    if (!lineRange) {
+      continue
+    }
+    if (lineRange.lineStart === lineStart && lineRange.lineEnd === lineEnd) {
+      waiting.push({
+        element,
+        depth: getPreviewElementDepth(element),
+        span: lineRange.lineEnd - lineRange.lineStart,
+      })
+    }
+  }
+
+  waiting.sort((a, b) => {
+    const spanCompare = a.span - b.span
+    if (spanCompare !== 0) {
+      return spanCompare
+    }
+    return b.depth - a.depth
+  })
+
+  return waiting[0]?.element ?? null
+}
+
+const editorCodeScrollAnchor = useViewScrollAnchor({
+  store: viewScrollAnchorStore,
+  sessionIdGetter: () => currentScrollSnapshot.value.sessionId,
+  revisionGetter: () => currentScrollSnapshot.value.revision,
+  scrollAreaKey: 'editor-code',
+  getScrollElement: () => editorView.value?.scrollDOM ?? null,
+  captureAnchor: ({ scrollElement }) => {
+    const view = editorView.value
+    if (!view || !scrollElement) {
+      return null
+    }
+    return captureEditorLineAnchor({
+      view,
+      scrollTop: scrollElement.scrollTop,
+    })
+  },
+  restoreAnchor: ({ record, scrollElement }) => {
+    const view = editorView.value
+    if (!view || !scrollElement) {
+      return false
+    }
+    const targetScrollTop = resolveEditorLineAnchorScrollTop({
+      view,
+      anchor: record?.anchor,
+      fallbackScrollTop: record?.fallbackScrollTop,
+    })
+    setScrollElementScrollTop(scrollElement, targetScrollTop)
+    return true
+  },
+})
+
+const editorPreviewScrollAnchor = useViewScrollAnchor({
+  store: viewScrollAnchorStore,
+  sessionIdGetter: () => currentScrollSnapshot.value.sessionId,
+  revisionGetter: () => currentScrollSnapshot.value.revision,
+  scrollAreaKey: 'editor-preview',
+  getScrollElement: () => (previewController.value === true ? previewRef.value : null),
+  captureAnchor: ({ scrollElement }) => {
+    if (!scrollElement) {
+      return null
+    }
+    const targetElement = findPreviewElementAtScrollTop(scrollElement, scrollElement.scrollTop)
+    if (!targetElement) {
+      return null
+    }
+    return capturePreviewLineAnchor({
+      container: scrollElement,
+      element: targetElement,
+      scrollTop: scrollElement.scrollTop,
+    })
+  },
+  restoreAnchor: ({ record, scrollElement }) => {
+    if (!scrollElement) {
+      return false
+    }
+    const targetElement = findPreviewElementByAnchor(scrollElement, record?.anchor)
+    if (!targetElement) {
+      return false
+    }
+    const targetScrollTop = resolvePreviewLineAnchorScrollTop({
+      container: scrollElement,
+      element: targetElement,
+      anchor: record?.anchor,
+      fallbackScrollTop: record?.fallbackScrollTop,
+    })
+    setScrollElementScrollTop(scrollElement, targetScrollTop)
+    return true
+  },
+})
+
 const {
   imageNetworkModel,
   imageNetworkData,
@@ -163,6 +460,7 @@ const {
   previewRef,
   scrolling,
   editorScrollTop,
+  restoreStateRef: restoreState,
 })
 
 const {
@@ -226,7 +524,7 @@ const editorContainerClass = computed(() => {
   }
 })
 
-const refresh = commonUtil.debounce(() => {
+const modelSyncScheduler = createFlushableDebounce(() => {
   const view = editorView.value
   if (!view) {
     return
@@ -234,6 +532,31 @@ const refresh = commonUtil.debounce(() => {
   lastExposedContent.value = view.state.doc.toString()
   emits('update:modelValue', lastExposedContent.value)
 }, EDITOR_EMIT_DEBOUNCE_MS)
+
+/**
+ * 调度正文向父层上浮。
+ * 这里保留原有 160ms 防抖语义，只把实现替换成可 flush 的调度器。
+ */
+function scheduleModelSync() {
+  modelSyncScheduler.schedule()
+}
+
+/**
+ * 立即冲刷挂起的正文上浮任务。
+ * 供页面切换前把最后一次输入同步到外层 session snapshot。
+ */
+function flushPendingModelSync() {
+  return modelSyncScheduler.flush()
+}
+
+/**
+ * 判断当前是否仍有待执行的正文上浮任务。
+ *
+ * @returns {boolean} 返回是否仍存在尚未执行的正文同步任务。
+ */
+function hasPendingModelSync() {
+  return modelSyncScheduler.hasPending()
+}
 
 function refreshToolbarList() {
   toolbarList.value = buildToolbarList()
@@ -255,6 +578,91 @@ function refreshKeymap() {
   const keymapList = keymapUtil.createKeymap(shortcutKeyList.value, { 'editor-focus-line': jumpToTargetLine })
   keymapList.push(searchKeymap)
   return keymapList
+}
+
+/**
+ * 记录当前编辑页可见区域的滚动锚点。
+ * 左侧编辑区始终记录；右侧预览区仅在当前真实可见时才更新，
+ * 这样预览隐藏时不会把上一轮有效锚点覆盖为空记录。
+ *
+ * @param {{ sessionId?: string, revision?: number } | undefined} snapshot
+ * @returns {{ editorCode: object | null, editorPreview: object | null }} 返回本轮捕获到的左右区域记录。
+ */
+function captureViewScrollAnchors(snapshot) {
+  updateCurrentScrollSnapshot(snapshot)
+
+  return {
+    editorCode: editorCodeScrollAnchor.captureCurrentAnchor(),
+    editorPreview: previewController.value === true
+      ? editorPreviewScrollAnchor.captureCurrentAnchor()
+      : null,
+  }
+}
+
+/**
+ * 按固定顺序恢复当前快照对应的滚动位置：
+ * 1. 打开恢复保护
+ * 2. 恢复左侧编辑区
+ * 3. 若右侧预览可见，再恢复右侧预览区
+ * 4. 关闭恢复保护
+ *
+ * 使用 request token 防止旧恢复请求在新恢复开始后回写错误状态。
+ *
+ * @param {{ sessionId?: string, revision?: number } | undefined} snapshot
+ * @returns {Promise<{ editorCode: boolean, editorPreview: boolean }>} 返回左右区域本轮是否实际完成恢复。
+ */
+async function scheduleRestoreForCurrentSnapshot(snapshot) {
+  updateCurrentScrollSnapshot(snapshot)
+  const requestToken = ++viewRestoreRequestToken
+
+  editorCodeScrollAnchor.cancelPendingRestore()
+  editorPreviewScrollAnchor.cancelPendingRestore()
+  restoreState.value.active = true
+  restoreState.value.editorCode = false
+  restoreState.value.editorPreview = false
+
+  const restoreResult = {
+    editorCode: false,
+    editorPreview: false,
+  }
+
+  try {
+    restoreState.value.editorCode = true
+    try {
+      restoreResult.editorCode = await editorCodeScrollAnchor.scheduleRestoreForCurrentSnapshot()
+    } finally {
+      if (requestToken === viewRestoreRequestToken) {
+        restoreState.value.editorCode = false
+      }
+    }
+
+    if (previewController.value === true) {
+      restoreState.value.editorPreview = true
+      try {
+        restoreResult.editorPreview = await editorPreviewScrollAnchor.scheduleRestoreForCurrentSnapshot()
+      } finally {
+        if (requestToken === viewRestoreRequestToken) {
+          restoreState.value.editorPreview = false
+        }
+      }
+    }
+
+    return restoreResult
+  } finally {
+    if (requestToken === viewRestoreRequestToken) {
+      resetRestoreState()
+    }
+  }
+}
+
+/**
+ * 取消当前挂起的滚动恢复请求，并立即解除恢复保护状态。
+ */
+function cancelPendingViewScrollRestore() {
+  viewRestoreRequestToken++
+  editorCodeScrollAnchor.cancelPendingRestore()
+  editorPreviewScrollAnchor.cancelPendingRestore()
+  resetRestoreState()
 }
 
 function onAnchorChange(changedAnchorList) {
@@ -429,14 +837,14 @@ onMounted(() => {
     extensionOptions: props.extension,
     keymapList: refreshKeymap(),
     extraExtensions: [linkedSourceHighlightField],
-    onDocChange: refresh,
+    onDocChange: scheduleModelSync,
     onSelectionChange: (update) => {
       if (isPointerSelectionUpdate(update)) {
         return
       }
       highlightByEditorCursor(update.state)
     },
-    onCompositionEnd: refresh,
+    onCompositionEnd: scheduleModelSync,
     onPaste: (event, view) => {
       const clipboardData = event.clipboardData
       if (!clipboardData) {
@@ -468,11 +876,14 @@ onActivated(() => {
 })
 
 onDeactivated(() => {
+  cancelPendingViewScrollRestore()
   closePreviewSearchBar()
   deactivatePreviewSearchTarget()
 })
 
 onBeforeUnmount(() => {
+  modelSyncScheduler.cancel()
+  cancelPendingViewScrollRestore()
   closePreviewSearchBar()
   deactivatePreviewSearchTarget()
   cancelScheduledCursorHighlight()
@@ -481,6 +892,14 @@ onBeforeUnmount(() => {
   clearScrollTimer()
   splitInstance && splitInstance.destroy(true)
   destroyEditor()
+})
+
+defineExpose({
+  flushPendingModelSync,
+  hasPendingModelSync,
+  captureViewScrollAnchors,
+  scheduleRestoreForCurrentSnapshot,
+  cancelPendingViewScrollRestore,
 })
 </script>
 
