@@ -2,7 +2,7 @@
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
-import { createVNode, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { createVNode, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import MarkdownEdit from '@/components/editor/MarkdownEdit.vue'
@@ -15,9 +15,6 @@ import commonUtil from '@/util/commonUtil.js'
 import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
-import {
-  getDocumentSessionSnapshotIdentity,
-} from '@/util/document-session/documentSessionSnapshotUtil.js'
 import {
   requestDocumentEdit,
   requestDocumentSave,
@@ -42,6 +39,7 @@ import {
   shouldCleanupMarkdownAfterDeleteResult,
 } from '@/util/editor/previewAssetRemovalUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
+import { createEditorViewActivationRestoreScheduler } from '@/views/editorViewActivationRestoreScheduler.js'
 
 // 预览资源右键菜单的基础状态工厂。
 // 每次关闭菜单时都重新生成一份干净状态，避免复用旧引用。
@@ -96,8 +94,6 @@ let contentUpdateToken = 0
 // 标记当前这次 content 变更是否来自 session snapshot，
 // 用于阻止 watch(content) 再次把同一份内容回写给主进程。
 let applyingSessionContent = false
-// keep-alive 激活后只先标记“本轮允许恢复”，真正恢复在 snapshot 应用收尾阶段统一触发。
-let pendingRestoreOnActivation = false
 // 单资源删除确认弹窗控制器，统一托管 confirm 实例的打开和销毁。
 const previewAssetDeleteConfirmController = createPreviewAssetDeleteConfirmController({
   createModal: config => Modal.confirm(config),
@@ -124,6 +120,12 @@ const editorSessionSnapshotController = createRendererSessionSnapshotController(
   promptRecentMissing: commonUtil.recentFileNotExists,
   syncClosePrompt: syncClosePromptSnapshot,
   store,
+})
+// 激活恢复调度器负责把“激活窗口内最新 snapshot identity”延迟到 nextTick 后再下发给子组件。
+const activationRestoreScheduler = createEditorViewActivationRestoreScheduler({
+  restoreSnapshot: (snapshotIdentity) => {
+    markdownEditRef.value?.scheduleRestoreForCurrentSnapshot(snapshotIdentity)?.then(() => {})
+  },
 })
 
 // 统一封装“把外部内容应用到编辑器”的过程。
@@ -163,16 +165,7 @@ function applyDocumentSessionSnapshot(snapshot) {
     skipContentSync: true,
   })
   ready.value = true
-
-  if (pendingRestoreOnActivation !== true) {
-    return
-  }
-
-  pendingRestoreOnActivation = false
-  const snapshotIdentity = getDocumentSessionSnapshotIdentity(snapshot)
-  nextTick(() => {
-    markdownEditRef.value?.scheduleRestoreForCurrentSnapshot(snapshotIdentity)?.then(() => {})
-  })
+  activationRestoreScheduler.applySnapshot(snapshot)
 }
 
 // 响应主进程或其他链路推送过来的 session snapshot 更新。
@@ -211,7 +204,7 @@ onMounted(async () => {
 
 onActivated(() => {
   // keep-alive 恢复后重新接管快照流。
-  pendingRestoreOnActivation = true
+  activationRestoreScheduler.markPendingRestore()
   editorSessionSnapshotController.activate()
   documentSessionSnapshotSubscription.activate()
   const activationAction = resolveRendererSessionActivationAction({
@@ -244,7 +237,7 @@ onBeforeUnmount(() => {
 
 onDeactivated(() => {
   // keep-alive 暂时失活时停止接收事件，并让资源相关 UI 全部失效。
-  pendingRestoreOnActivation = false
+  activationRestoreScheduler.cancelPendingRestore()
   editorSessionSnapshotController.deactivate()
   documentSessionSnapshotSubscription.deactivate()
   previewAssetSessionController.invalidateActiveContext({
@@ -262,7 +255,10 @@ onBeforeRouteLeave(async () => {
   }
 
   const latestSnapshot = await requestDocumentSessionSnapshot()
-  markdownEditRef.value?.captureViewScrollAnchors?.(getDocumentSessionSnapshotIdentity(latestSnapshot))
+  markdownEditRef.value?.captureViewScrollAnchors?.({
+    sessionId: latestSnapshot?.sessionId ?? null,
+    revision: Number.isInteger(latestSnapshot?.revision) ? latestSnapshot.revision : 0,
+  })
 })
 
 watch(() => content.value, (newValue, oldValue) => {
