@@ -2,6 +2,7 @@
 import Split from 'split-grid'
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createMarkdownEditScrollAnchorCapture } from '@/components/editor/composables/markdownEditScrollAnchorCaptureUtil.js'
 import { isPointerSelectionUpdate } from '@/components/editor/composables/selectionUpdateUtil.js'
 import { useAssetInsert } from '@/components/editor/composables/useAssetInsert.js'
 import { useAssociationHighlight } from '@/components/editor/composables/useAssociationHighlight.js'
@@ -437,6 +438,13 @@ const editorPreviewScrollAnchor = useViewScrollAnchor({
   },
 })
 
+const captureViewScrollAnchors = createMarkdownEditScrollAnchorCapture({
+  updateCurrentScrollSnapshot,
+  editorCodeScrollAnchor,
+  editorPreviewScrollAnchor,
+  previewControllerRef: previewController,
+})
+
 const {
   imageNetworkModel,
   imageNetworkData,
@@ -578,25 +586,6 @@ function refreshKeymap() {
   const keymapList = keymapUtil.createKeymap(shortcutKeyList.value, { 'editor-focus-line': jumpToTargetLine })
   keymapList.push(searchKeymap)
   return keymapList
-}
-
-/**
- * 记录当前编辑页可见区域的滚动锚点。
- * 左侧编辑区始终记录；右侧预览区仅在当前真实可见时才更新，
- * 这样预览隐藏时不会把上一轮有效锚点覆盖为空记录。
- *
- * @param {{ sessionId?: string, revision?: number } | undefined} snapshot
- * @returns {{ editorCode: object | null, editorPreview: object | null }} 返回本轮捕获到的左右区域记录。
- */
-function captureViewScrollAnchors(snapshot) {
-  updateCurrentScrollSnapshot(snapshot)
-
-  return {
-    editorCode: editorCodeScrollAnchor.captureCurrentAnchor(),
-    editorPreview: previewController.value === true
-      ? editorPreviewScrollAnchor.captureCurrentAnchor()
-      : null,
-  }
 }
 
 /**
