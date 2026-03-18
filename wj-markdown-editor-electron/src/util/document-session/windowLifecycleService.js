@@ -284,10 +284,31 @@ function finalizeWindowClose(winInfo, id) {
   checkWinList()
 }
 
-function continueWindowClose(winInfo) {
+async function refreshRecentOrderBeforeClose(winInfo) {
+  const documentPath = getSessionByWinInfo(winInfo)?.documentSource?.path || null
+  if (!documentPath) {
+    return false
+  }
+
+  try {
+    await recent.add(documentPath)
+    return true
+  } catch {
+    // recent 只是关闭链路的附属持久化，失败时不能阻塞真实关窗。
+    return false
+  }
+}
+
+async function continueWindowClose(winInfo) {
   if (!isWindowAlive(winInfo?.win)) {
     return false
   }
+
+  await refreshRecentOrderBeforeClose(winInfo)
+  if (!isWindowAlive(winInfo?.win) || findByWin(winInfo.win) !== winInfo) {
+    return false
+  }
+
   winInfo.allowImmediateClose = true
   winInfo.win.close()
   return true
@@ -501,6 +522,7 @@ function getCopySaveFailureMessage({ reason, error }) {
 async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
   const session = getSessionByWinInfo(winInfo)
   const hadDocumentPath = Boolean(session?.documentSource?.path)
+  const saveInvokedDuringClose = session?.closeRuntime?.intent === 'close'
 
   // 手动首存必须先回到标准命令流：
   // document.save -> open-save-dialog -> dialog.save-target-selected。
@@ -528,12 +550,13 @@ async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
     : manualRequestId
       ? false
       : Boolean(finalSession?.documentSource?.path && finalSnapshot?.saved)
-
   if (saved) {
-    publishWindowMessage(winInfo, {
-      type: 'success',
-      content: 'message.saveSuccessfully',
-    })
+    if (!saveInvokedDuringClose) {
+      publishWindowMessage(winInfo, {
+        type: 'success',
+        content: 'message.saveSuccessfully',
+      })
+    }
     return true
   }
 
@@ -1075,12 +1098,22 @@ async function createNew(filePath, isRecent = false) {
       return false
     }
 
-    if (result.effects.some(effect => effect.type === 'close-window')) {
+    if (currentWinInfo.forceClose === true
+      && result.effects.length === 1
+      && result.effects[0]?.type === 'close-window') {
       finalizeWindowClose(currentWinInfo, id)
       return
     }
 
-    finalizeWindowClose(currentWinInfo, id)
+    if (result.effects.length > 0) {
+      e.preventDefault()
+      applyEffects(currentWinInfo, result.effects).then(() => {}).catch(() => {})
+      return false
+    }
+
+    e.preventDefault()
+    continueWindowClose(currentWinInfo).then(() => {}).catch(() => {})
+    return false
   })
 
   win.on('blur', () => {

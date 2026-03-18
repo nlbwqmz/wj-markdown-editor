@@ -657,8 +657,7 @@ export function createDocumentEffectService({
       case 'close-window':
         // 真正继续执行关闭窗口。
         // 命令层已经完成所有保存/确认裁决，这里只负责落地动作。
-        continueWindowClose?.()
-        return null
+        return await continueWindowClose?.()
 
       case 'notify-save-failed':
         // 统一展示保存失败消息，文案由 trigger 和语言配置共同决定。

@@ -10,6 +10,7 @@ const showSaveDialogSyncMock = vi.fn()
 const openExternalMock = vi.fn()
 const showItemInFolderMock = vi.fn()
 const openLocalResourceInFolderMock = vi.fn()
+const recentAddMock = vi.fn()
 const createWatchStateMock = vi.fn(() => ({ pendingChange: null }))
 const startWatchingMock = vi.fn()
 const stopWatchingMock = vi.fn()
@@ -23,6 +24,7 @@ const settlePendingChangeMock = vi.fn((state) => {
   state.pendingChange = null
   return 'settled'
 })
+const appExitMock = vi.fn()
 const getConfigMock = vi.fn(() => ({ language: 'zh-CN', autoSave: [], startPage: 'editor' }))
 const browserWindowInstances = []
 let webContentsId = 1
@@ -137,7 +139,7 @@ vi.mock('electron', () => {
 
   return {
     app: {
-      exit: vi.fn(),
+      exit: appExitMock,
     },
     BrowserWindow,
     Notification: {
@@ -173,7 +175,7 @@ vi.mock('../../../data/configUtil.js', () => ({
 
 vi.mock('../../../data/recent.js', () => ({
   default: {
-    add: vi.fn(),
+    add: recentAddMock,
   },
 }))
 
@@ -284,6 +286,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     openExternalMock.mockReset()
     showItemInFolderMock.mockReset()
     openLocalResourceInFolderMock.mockReset()
+    recentAddMock.mockReset()
     createWatchStateMock.mockReset()
     startWatchingMock.mockReset()
     stopWatchingMock.mockReset()
@@ -291,6 +294,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     createContentVersionMock.mockClear()
     ignorePendingChangeMock.mockReset()
     settlePendingChangeMock.mockReset()
+    appExitMock.mockReset()
     getConfigMock.mockReset()
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startPage: 'editor' })
     pathExistsMock.mockResolvedValue(false)
@@ -1580,6 +1584,78 @@ describe('windowLifecycleService 生命周期 facade', () => {
     await vi.waitFor(() => {
       expect(winInfoUtil.getAll()).toHaveLength(0)
     })
+  })
+
+  it('多窗口按关闭顺序退出时，必须把最后关闭的文档重新顶到 recent 顶部', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
+
+    await winInfoUtil.createNew('D:/first.md')
+    await winInfoUtil.createNew('D:/second.md')
+
+    const [firstWinInfo, secondWinInfo] = winInfoUtil.getAll()
+    recentAddMock.mockClear()
+
+    secondWinInfo.win.close()
+    await vi.waitFor(() => {
+      expect(winInfoUtil.getAll()).toHaveLength(1)
+    })
+    expect(recentAddMock).toHaveBeenNthCalledWith(1, 'D:/second.md')
+
+    firstWinInfo.win.close()
+    await vi.waitFor(() => {
+      expect(winInfoUtil.getAll()).toHaveLength(0)
+    })
+    expect(recentAddMock).toHaveBeenNthCalledWith(2, 'D:/first.md')
+  })
+
+  it('最后一个文件窗口关闭前，必须等待 recent 顺序写入完成再真正退出', async () => {
+    const closeRecentDeferred = createDeferred()
+
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    recentAddMock.mockClear()
+    recentAddMock.mockReturnValueOnce(closeRecentDeferred.promise)
+
+    const closeEvent = winInfo.win.close()
+
+    expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
+    await Promise.resolve()
+    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(appExitMock).not.toHaveBeenCalled()
+    expect(recentAddMock).toHaveBeenCalledWith('D:/demo.md')
+
+    closeRecentDeferred.resolve()
+    await closeRecentDeferred.promise
+
+    await vi.waitFor(() => {
+      expect(winInfoUtil.getAll()).toHaveLength(0)
+    })
+    expect(appExitMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('recent 顺序写入失败时，也不能阻塞窗口关闭和应用退出', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    recentAddMock.mockClear()
+    recentAddMock.mockRejectedValueOnce(new Error('recent write failed'))
+
+    const closeEvent = winInfo.win.close()
+
+    expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => {
+      expect(winInfoUtil.getAll()).toHaveLength(0)
+    })
+    expect(recentAddMock).toHaveBeenCalledWith('D:/demo.md')
+    expect(appExitMock).toHaveBeenCalledTimes(1)
   })
 
   it('窗口内本地资源链接打开失败时，必须给出明确提示，不能静默结束', async () => {
