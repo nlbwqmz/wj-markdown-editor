@@ -53,6 +53,14 @@ describe('windowSessionBridge', () => {
     })
   })
 
+  it('getSessionSnapshot 应包含 editorSnapshot.revision', async () => {
+    const { bridge } = await createBridgeContext()
+
+    const snapshot = bridge.getSessionSnapshot(1001)
+
+    expect(snapshot.revision).toBe(1)
+  })
+
   it('命令收敛后发送一次性消息时，必须先推快照，再推 window.effect.message，且不能再补发 legacy message', async () => {
     const { bridge, sendToRenderer, win } = await createBridgeContext()
 

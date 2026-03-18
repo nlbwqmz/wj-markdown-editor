@@ -8,6 +8,7 @@
  */
 export function createDefaultDocumentSessionSnapshot() {
   return {
+    revision: 0,
     sessionId: null,
     content: '',
     fileName: 'Unnamed',
@@ -43,6 +44,10 @@ export function createDefaultExternalFileChangeState() {
     localContent: '',
     externalContent: '',
   }
+}
+
+function normalizeRevision(value) {
+  return Number.isInteger(value) && value >= 0 ? value : 0
 }
 
 function normalizeClosePrompt(closePrompt) {
@@ -91,9 +96,11 @@ export function normalizeDocumentSessionSnapshot(snapshot) {
   const saved = snapshot.saved == null ? defaultSnapshot.saved : snapshot.saved === true
   const exists = snapshot.exists == null ? defaultSnapshot.exists : snapshot.exists === true
   const dirty = snapshot.dirty == null ? !saved : snapshot.dirty === true
+  const revision = normalizeRevision(snapshot.revision)
   const normalizedSnapshot = {
     sessionId: snapshot.sessionId ?? null,
     content: typeof snapshot.content === 'string' ? snapshot.content : '',
+    revision,
     fileName,
     displayPath,
     recentMissingPath,

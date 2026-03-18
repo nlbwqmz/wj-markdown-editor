@@ -63,8 +63,12 @@ export function deriveDocumentSnapshot(session) {
   const saved = editorSnapshot.content === diskSnapshot.content
     && exists === Boolean(diskSnapshot.exists)
   const dirty = !saved
+  const revision = Number.isInteger(editorSnapshot.revision) && editorSnapshot.revision >= 0
+    ? editorSnapshot.revision
+    : 0
 
   return {
+    revision,
     // 当前文档快照所属的会话 id。
     // 渲染层通过它判断收到的快照是否仍对应当前打开的那一个文档会话。
     sessionId: session?.sessionId || null,

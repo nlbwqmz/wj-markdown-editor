@@ -25,6 +25,7 @@ describe('documentSnapshotUtil', () => {
       saved: false,
       exists: false,
     })
+    expect(snapshot.revision).toBe(1)
   })
 
   it('deriveDocumentSnapshot 在 recent-missing 会话上，应保持缺失路径展示语义', () => {
@@ -99,5 +100,17 @@ describe('documentSnapshotUtil', () => {
     expect(snapshot.recentMissingPath).toBe('C:/docs/missing.md')
     expect(snapshot.saved).toBe(true)
     expect(snapshot.dirty).toBe(false)
+    expect(snapshot.revision).toBe(0)
+  })
+
+  it('deriveDocumentSnapshot 会为非法 revision 回退到 0', () => {
+    const session = createDraftSession({
+      sessionId: 'revision-default-session',
+    })
+    session.editorSnapshot.revision = 'invalid'
+
+    const snapshot = deriveDocumentSnapshot(session)
+
+    expect(snapshot.revision).toBe(0)
   })
 })
