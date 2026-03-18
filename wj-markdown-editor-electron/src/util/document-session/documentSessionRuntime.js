@@ -21,14 +21,6 @@ function createDefaultWindowBridge(store) {
   })
 }
 
-function createDefaultJobIdGenerator() {
-  let sequence = 0
-  return () => {
-    sequence += 1
-    return `document-session-job-${sequence}`
-  }
-}
-
 function createFallbackDocumentContext(snapshot) {
   return {
     path: snapshot?.resourceContext?.documentPath || null,
@@ -161,19 +153,13 @@ const DOCUMENT_STATE_COMMAND_SET = new Set([
  * 窗口生命周期、BrowserWindow 事件接线仍保留给 Task 5。
  */
 export function createDocumentSessionRuntime(deps = {}) {
-  const now = deps.now || (() => Date.now())
-  const createJobId = deps.createJobId || createDefaultJobIdGenerator()
   const getConfig = deps.getConfig || (() => ({}))
   const store = deps.store || createDocumentSessionStore()
-  const saveCoordinator = deps.saveCoordinator || createSaveCoordinator({
-    createJobId,
-    now,
-  })
+  const saveCoordinator = deps.saveCoordinator || createSaveCoordinator()
   const commandService = deps.commandService || createDocumentCommandService({
     store,
     saveCoordinator,
     getConfig,
-    now,
   })
   const effectService = deps.effectService || createDocumentEffectService({
     fsModule: deps.fsModule,

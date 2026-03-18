@@ -304,6 +304,10 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     expect(createDocumentEffectService).toHaveBeenCalledTimes(1)
     expect(createWindowSessionBridge).toHaveBeenCalledTimes(1)
     expect(createDocumentResourceService).toHaveBeenCalledTimes(1)
+    expect(createSaveCoordinator).toHaveBeenCalledWith()
+    expect(createDocumentCommandService).toHaveBeenCalledWith(expect.not.objectContaining({
+      now: expect.anything(),
+    }))
     expect(firstRuntime.saveCoordinator).toBeDefined()
     expect(secondRuntime.saveCoordinator).toBe(firstRuntime.saveCoordinator)
     expect(secondRuntime.store).toBe(firstRuntime.store)

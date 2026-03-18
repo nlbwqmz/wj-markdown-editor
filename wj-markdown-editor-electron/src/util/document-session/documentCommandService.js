@@ -104,11 +104,10 @@ export function createDocumentCommandService({
   store,
   saveCoordinator,
   getConfig = () => ({}),
-  now = () => Date.now(),
 }) {
   // 文件监听相关命令统一交给 watchCoordinator 处理，
   // documentCommandService 只负责把它接入整体命令分发。
-  const watchCoordinator = createWatchCoordinator({ now })
+  const watchCoordinator = createWatchCoordinator()
 
   /**
    * 分发单条文档命令。
@@ -141,7 +140,7 @@ export function createDocumentCommandService({
         // 不允许直接把磁盘基线或 persistedSnapshot 一起改掉。
         session.editorSnapshot.content = payload?.content ?? ''
         session.editorSnapshot.revision = (session.editorSnapshot.revision || 0) + 1
-        session.editorSnapshot.updatedAt = now()
+        session.editorSnapshot.updatedAt = Date.now()
         session.saveRuntime.requestedRevision = Math.max(
           session.saveRuntime.requestedRevision || 0,
           session.editorSnapshot.revision,

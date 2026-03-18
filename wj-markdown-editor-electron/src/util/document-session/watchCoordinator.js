@@ -55,8 +55,8 @@ function ensureRuntime(session) {
   ensureExternalRuntime(session)
 }
 
-function normalizeObservedAt(observedAt, now) {
-  return Number.isFinite(observedAt) ? observedAt : now()
+function normalizeObservedAt(observedAt) {
+  return Number.isFinite(observedAt) ? observedAt : Date.now()
 }
 
 function isCurrentBindingToken(session, bindingToken) {
@@ -167,14 +167,14 @@ function createPendingExternalChange(session, {
   }
 }
 
-function applyDiskContentToEditor(session, diskContent, now) {
+function applyDiskContentToEditor(session, diskContent) {
   session.editorSnapshot.content = diskContent
   session.editorSnapshot.revision = (session.editorSnapshot.revision || 0) + 1
-  session.editorSnapshot.updatedAt = now()
+  session.editorSnapshot.updatedAt = Date.now()
 }
 
-function handleFileChanged(session, payload, { now, externalChangeStrategy }) {
-  const observedAt = normalizeObservedAt(payload?.observedAt, now)
+function handleFileChanged(session, payload, { externalChangeStrategy }) {
+  const observedAt = normalizeObservedAt(payload?.observedAt)
   if (!isCurrentBindingToken(session, payload?.bindingToken) || isLateObservedEvent(session, observedAt)) {
     return { session, effects: [] }
   }
@@ -212,7 +212,7 @@ function handleFileChanged(session, payload, { now, externalChangeStrategy }) {
   }
 
   if (externalChangeStrategy === 'apply') {
-    applyDiskContentToEditor(session, diskContent, now)
+    applyDiskContentToEditor(session, diskContent)
     markResolved(session, {
       result: 'applied',
       versionHash,
@@ -232,8 +232,8 @@ function handleFileChanged(session, payload, { now, externalChangeStrategy }) {
   return { session, effects: [] }
 }
 
-function handleFileMissing(session, payload, { now }) {
-  const observedAt = normalizeObservedAt(payload?.observedAt, now)
+function handleFileMissing(session, payload) {
+  const observedAt = normalizeObservedAt(payload?.observedAt)
   if (!isCurrentBindingToken(session, payload?.bindingToken) || isLateObservedEvent(session, observedAt)) {
     return { session, effects: [] }
   }
@@ -252,8 +252,8 @@ function handleFileMissing(session, payload, { now }) {
   return { session, effects: [] }
 }
 
-function handleFileRestored(session, payload, { now }) {
-  const observedAt = normalizeObservedAt(payload?.observedAt, now)
+function handleFileRestored(session, payload) {
+  const observedAt = normalizeObservedAt(payload?.observedAt)
   if (!isCurrentBindingToken(session, payload?.bindingToken) || isLateObservedEvent(session, observedAt)) {
     return { session, effects: [] }
   }
@@ -378,13 +378,13 @@ function handleRebindFailed(session, payload) {
   }
 }
 
-function handleExternalApply(session, payload, { now }) {
+function handleExternalApply(session, payload) {
   const pendingExternalChange = session.externalRuntime.pendingExternalChange
   if (!pendingExternalChange || !matchesPendingVersion(pendingExternalChange, payload)) {
     return { session, effects: [] }
   }
 
-  applyDiskContentToEditor(session, pendingExternalChange.diskContent ?? '', now)
+  applyDiskContentToEditor(session, pendingExternalChange.diskContent ?? '')
   markResolved(session, {
     result: 'applied',
     versionHash: pendingExternalChange.versionHash,
@@ -443,9 +443,7 @@ function dropStalePendingExternalChange(session) {
   return false
 }
 
-export function createWatchCoordinator({
-  now = () => Date.now(),
-} = {}) {
+export function createWatchCoordinator() {
   function prepareSession(session) {
     ensureRuntime(session)
 
@@ -523,13 +521,12 @@ export function createWatchCoordinator({
     switch (command) {
       case 'watch.file-changed':
         return handleFileChanged(session, payload, {
-          now,
           externalChangeStrategy,
         })
       case 'watch.file-missing':
-        return handleFileMissing(session, payload, { now })
+        return handleFileMissing(session, payload)
       case 'watch.file-restored':
-        return handleFileRestored(session, payload, { now })
+        return handleFileRestored(session, payload)
       case 'watch.error':
         return handleWatchError(session, payload)
       case 'watch.bound':
@@ -539,7 +536,7 @@ export function createWatchCoordinator({
       case 'watch.rebind-failed':
         return handleRebindFailed(session, payload)
       case 'document.external.apply':
-        return handleExternalApply(session, payload, { now })
+        return handleExternalApply(session, payload)
       case 'document.external.ignore':
         return handleExternalIgnore(session, payload)
       default:

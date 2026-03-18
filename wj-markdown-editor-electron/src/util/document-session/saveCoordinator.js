@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import path from 'node:path'
+import commonUtil from '../commonUtil.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 
 // 基于正文内容生成稳定哈希。
@@ -508,9 +509,9 @@ function mergeSaveTrigger(currentTrigger, incomingTrigger) {
 
 // 基于当前 editorSnapshot 冻结一份真正要落盘的 save job。
 // job 一旦创建，后续写盘必须只使用这份快照，不能再动态读取 session 当前值。
-function createSaveJob({ session, path: targetPath, trigger, createJobId }) {
+function createSaveJob({ session, path: targetPath, trigger }) {
   return {
-    jobId: createJobId(),
+    jobId: commonUtil.createId(),
     sessionId: session.sessionId,
     revision: session.editorSnapshot.revision,
     content: session.editorSnapshot.content,
@@ -596,7 +597,7 @@ function shouldStartSave(session, targetPath) {
 
 // 真正进入 save job 创建与排队的统一入口。
 // 所有 requestSave / 补写续跑最终都会落到这里，以共享同一套冻结逻辑。
-function beginSave(session, { trigger, path: targetPath, createJobId }) {
+function beginSave(session, { trigger, path: targetPath }) {
   ensureSaveRuntime(session)
 
   // 无论这次是否真的会起写盘 job，都先把“期望至少保存到哪个 revision”推进到最新。
@@ -642,7 +643,6 @@ function beginSave(session, { trigger, path: targetPath, createJobId }) {
     session,
     path: targetPath || session.documentSource.path,
     trigger,
-    createJobId,
   })
 
   // save job 一旦创建，运行态立即进入 queued，等待副作用层真正开始执行写盘。
@@ -673,7 +673,6 @@ function beginSave(session, { trigger, path: targetPath, createJobId }) {
 // 当前一轮 save 完成后，如 editor revision 又继续向前推进，则决定是否立刻补发下一轮 save。
 // 这是“单 session 单写盘，但允许排队追赶最新内容”的核心续跑逻辑。
 function continueQueuedSaveIfNeeded(session, {
-  createJobId,
   preferredTrigger,
 }) {
   ensureSaveRuntime(session)
@@ -691,7 +690,6 @@ function continueQueuedSaveIfNeeded(session, {
   return beginSave(session, {
     trigger: nextTrigger,
     path: session.documentSource.path,
-    createJobId,
   })
 }
 
@@ -701,10 +699,7 @@ function continueQueuedSaveIfNeeded(session, {
  * 这个协调器只负责维护“文档本体保存”和“保存副本”的状态机真相，
  * 不直接操作文件系统。真正的写盘、副本保存、对话框展示都通过 effects 交给外层执行。
  */
-export function createSaveCoordinator({
-  createJobId = () => `save-job-${Date.now()}`,
-  now = () => Date.now(),
-} = {}) {
+export function createSaveCoordinator() {
   return {
     /**
      * 统一发起“当前文档本体保存”。
@@ -793,7 +788,6 @@ export function createSaveCoordinator({
       const saveStarted = beginSave(session, {
         trigger,
         path: targetPath,
-        createJobId,
       })
       return {
         ...saveStarted,
@@ -865,7 +859,6 @@ export function createSaveCoordinator({
       return beginSave(session, {
         trigger: pendingSaveContext.trigger || 'manual-save',
         path: targetPath,
-        createJobId,
       })
     },
 
@@ -937,7 +930,7 @@ export function createSaveCoordinator({
       }
 
       const copySaveJob = {
-        jobId: createJobId(),
+        jobId: commonUtil.createId(),
         requestId: currentRequestId,
         sessionId: session.sessionId,
         revision: session.editorSnapshot.revision,
@@ -1022,7 +1015,7 @@ export function createSaveCoordinator({
         }
       }
 
-      const savedAt = Number.isFinite(payload.savedAt) ? payload.savedAt : now()
+      const savedAt = Number.isFinite(payload.savedAt) ? payload.savedAt : Date.now()
       const previousPath = session.documentSource.path
       const previousExists = session.documentSource.exists
       const savedHash = createContentHash(payload.content)
@@ -1096,7 +1089,6 @@ export function createSaveCoordinator({
 
       if (session.editorSnapshot.revision > payload.revision) {
         const nextResult = continueQueuedSaveIfNeeded(session, {
-          createJobId,
           preferredTrigger: closeWaitingCurrentJob
             ? 'close-auto-save'
             : mergeSaveTrigger(session.saveRuntime.trigger, payload.trigger),

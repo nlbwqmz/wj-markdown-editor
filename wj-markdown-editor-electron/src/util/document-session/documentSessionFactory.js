@@ -4,10 +4,6 @@ function createContentVersion(content = '') {
   return crypto.createHash('sha256').update(content, 'utf8').digest('hex')
 }
 
-function normalizeNow(now) {
-  return Number.isFinite(now) ? now : Date.now()
-}
-
 function assertNonEmptyString(value, fieldName) {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new TypeError(`${fieldName} 必须是非空字符串`)
@@ -64,10 +60,9 @@ function createBaseSession({
   missingPath,
   missingReason,
   stat,
-  now,
   diskSource,
 }) {
-  const observedAt = normalizeNow(now)
+  const observedAt = Date.now()
   const normalizedContent = content ?? ''
   const versionHash = createContentVersion(normalizedContent)
   const baseSession = {
@@ -223,7 +218,7 @@ function createBaseSession({
  * 后续通过 `deriveDocumentSnapshot(session)` 推导时，
  * 空白草稿会得到 `saved = true`，与现有产品的“新建后未编辑不算脏”保持一致。
  */
-export function createDraftSession({ sessionId, now }) {
+export function createDraftSession({ sessionId }) {
   assertNonEmptyString(sessionId, 'sessionId')
 
   return createBaseSession({
@@ -234,7 +229,6 @@ export function createDraftSession({ sessionId, now }) {
     missingPath: null,
     missingReason: null,
     stat: null,
-    now,
     diskSource: 'draft-init',
   })
 }
@@ -250,7 +244,6 @@ export function createBoundFileSession({
   path,
   content,
   stat,
-  now,
 }) {
   assertNonEmptyString(sessionId, 'sessionId')
   assertNonEmptyString(path, 'path')
@@ -263,7 +256,6 @@ export function createBoundFileSession({
     missingPath: null,
     missingReason: null,
     stat: stat || null,
-    now,
     diskSource: 'bound-file',
   })
 }
@@ -278,7 +270,7 @@ export function createBoundFileSession({
  * 之所以保留 `missingPath`，是为了让渲染层能提示用户移除哪一条 recent；
  * 之所以后续仍会把 `fileName` 推导成 `Unnamed`，是为了避免把一个并未成功绑定的路径伪装成当前文档身份。
  */
-export function createRecentMissingSession({ sessionId, missingPath, now }) {
+export function createRecentMissingSession({ sessionId, missingPath }) {
   assertNonEmptyString(sessionId, 'sessionId')
   assertNonEmptyString(missingPath, 'missingPath')
 
@@ -290,7 +282,6 @@ export function createRecentMissingSession({ sessionId, missingPath, now }) {
     missingPath,
     missingReason: 'recent-missing',
     stat: null,
-    now,
     diskSource: 'recent-missing',
   })
 }

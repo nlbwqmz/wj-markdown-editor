@@ -1,26 +1,36 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { createDocumentCommandService } from '../documentCommandService.js'
 import { createBoundFileSession, createDraftSession } from '../documentSessionFactory.js'
 import { createDocumentSessionStore } from '../documentSessionStore.js'
 import { createSaveCoordinator } from '../saveCoordinator.js'
 
+const { createIdMock } = vi.hoisted(() => {
+  return {
+    createIdMock: vi.fn(),
+  }
+})
+
+vi.mock('../../commonUtil.js', () => {
+  return {
+    default: {
+      createId: createIdMock,
+    },
+  }
+})
+
 function createTestContext(config = []) {
   const normalizedConfig = Array.isArray(config)
     ? { autoSave: config }
     : { autoSave: [], ...config }
-  let jobIndex = 1
   const store = createDocumentSessionStore()
-  const saveCoordinator = createSaveCoordinator({
-    createJobId: () => `job-${jobIndex++}`,
-    now: () => 1700000002000 + jobIndex,
-  })
+  const saveCoordinator = createSaveCoordinator()
   const service = createDocumentCommandService({
     store,
     saveCoordinator,
     getConfig: () => ({
       ...normalizedConfig,
     }),
-    now: () => 1700000002000 + jobIndex,
   })
 
   return {
@@ -39,6 +49,18 @@ function bindSession(store, session, windowId = 1001) {
 }
 
 describe('documentCommandService', () => {
+  beforeEach(() => {
+    let jobIndex = 1
+    createIdMock.mockReset()
+    createIdMock.mockImplementation(() => `job-${jobIndex++}`)
+    vi.useFakeTimers()
+    vi.setSystemTime(1700000002000)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('window.blur 触发自动保存时，必须走统一保存管线且 trigger=blur-auto-save，并且不发送成功提示', () => {
     const { store, service } = createTestContext(['blur'])
     const session = createBoundFileSession({

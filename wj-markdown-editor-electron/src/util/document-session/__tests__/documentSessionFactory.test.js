@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createBoundFileSession,
   createDraftSession,
@@ -7,10 +7,18 @@ import {
 import { deriveDocumentSnapshot } from '../documentSnapshotUtil.js'
 
 describe('documentSessionFactory', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1700000000000)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('createDraftSession 应为未命名草稿建立空磁盘基线，不直接混入派生快照字段', () => {
     const session = createDraftSession({
       sessionId: 'draft-session',
-      now: 1700000000000,
     })
 
     // 草稿态的磁盘基线必须固定为空字符串和不存在，
@@ -31,10 +39,10 @@ describe('documentSessionFactory', () => {
   })
 
   it('createRecentMissingSession 应只构造 startup recent-missing 会话数据，不在这里判断 trigger', () => {
+    vi.setSystemTime(1700000000001)
     const session = createRecentMissingSession({
       sessionId: 'recent-missing-session',
       missingPath: 'C:/docs/missing.md',
-      now: 1700000000001,
     })
 
     // 这里锁定 recent-missing 会话的展示语义：
@@ -57,6 +65,7 @@ describe('documentSessionFactory', () => {
   })
 
   it('createBoundFileSession 应为已绑定文件保留路径、内容和存在态', () => {
+    vi.setSystemTime(1700000000003)
     const stat = {
       size: 12,
       mtimeMs: 1700000000002,
@@ -66,7 +75,6 @@ describe('documentSessionFactory', () => {
       path: 'C:/docs/demo.md',
       content: '# 标题',
       stat,
-      now: 1700000000003,
     })
 
     expect(session.documentSource.path).toBe('C:/docs/demo.md')

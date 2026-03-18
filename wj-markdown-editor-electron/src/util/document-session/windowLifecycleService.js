@@ -45,15 +45,11 @@ function ensureSessionRuntimeInitialized() {
   }
 
   const store = createDocumentSessionStore()
-  const saveCoordinator = createSaveCoordinator({
-    createJobId: () => commonUtil.createId(),
-    now: () => Date.now(),
-  })
+  const saveCoordinator = createSaveCoordinator()
   const commandService = createDocumentCommandService({
     store,
     saveCoordinator,
     getConfig: () => configUtil.getConfig(),
-    now: () => Date.now(),
   })
   const effectService = createDocumentEffectService({
     recentStore: recent,
@@ -214,7 +210,6 @@ function createInitialSession({
       path: filePath,
       content,
       stat: null,
-      now: Date.now(),
     })
   }
 
@@ -222,13 +217,11 @@ function createInitialSession({
     return createRecentMissingSession({
       sessionId,
       missingPath: filePath,
-      now: Date.now(),
     })
   }
 
   const draftSession = createDraftSession({
     sessionId,
-    now: Date.now(),
   })
 
   if (filePath) {

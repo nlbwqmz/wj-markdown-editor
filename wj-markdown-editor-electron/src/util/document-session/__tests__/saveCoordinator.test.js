@@ -1,17 +1,40 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { createBoundFileSession, createDraftSession } from '../documentSessionFactory.js'
 import { deriveDocumentSnapshot } from '../documentSnapshotUtil.js'
 import { createSaveCoordinator } from '../saveCoordinator.js'
 
+const { createIdMock } = vi.hoisted(() => {
+  return {
+    createIdMock: vi.fn(),
+  }
+})
+
+vi.mock('../../commonUtil.js', () => {
+  return {
+    default: {
+      createId: createIdMock,
+    },
+  }
+})
+
 function createDeterministicCoordinator() {
-  let jobIndex = 1
-  return createSaveCoordinator({
-    createJobId: () => `job-${jobIndex++}`,
-    now: () => 1700000001000 + jobIndex,
-  })
+  return createSaveCoordinator()
 }
 
 describe('saveCoordinator', () => {
+  beforeEach(() => {
+    let jobIndex = 1
+    createIdMock.mockReset()
+    createIdMock.mockImplementation(() => `job-${jobIndex++}`)
+    vi.useFakeTimers()
+    vi.setSystemTime(1700000001000)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('手动保存时，同一 session 同时只能存在一个进行中的 save job', () => {
     const coordinator = createDeterministicCoordinator()
     const session = createBoundFileSession({

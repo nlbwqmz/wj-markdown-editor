@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBoundFileSession } from '../documentSessionFactory.js'
 import { createWatchCoordinator } from '../watchCoordinator.js'
 
@@ -10,7 +10,6 @@ function createSession() {
     stat: {
       mtimeMs: 1700000003000,
     },
-    now: 1700000003000,
   })
 
   session.watchRuntime.bindingToken = 1
@@ -29,10 +28,17 @@ function dispatchWatchCommand(coordinator, session, command, payload, options = 
 }
 
 describe('watchCoordinator', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1700000003000)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('watch.bound 只有 bindingToken 仍等于当前 token 时才允许落为 active', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003001,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
 
     // 先把会话推进到“正在重绑但尚未成功”的状态，
@@ -65,9 +71,7 @@ describe('watchCoordinator', () => {
   })
 
   it('watch.unbound 只有 current token 才允许回落 idle，缺 token 和 stale token 都必须丢弃', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003001,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.watchRuntime.bindingToken = 4
     session.watchRuntime.status = 'active'
@@ -98,9 +102,7 @@ describe('watchCoordinator', () => {
   })
 
   it('旧 token 的 watch.file-changed / watch.file-missing / watch.file-restored / watch.error 必须全部丢弃', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003002,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.editorSnapshot.content = '# 当前本地编辑'
     session.editorSnapshot.revision = 1
@@ -176,9 +178,7 @@ describe('watchCoordinator', () => {
   })
 
   it('同 token 下 observedAt 小于等于 eventFloorObservedAt 的迟到事件必须被丢弃', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003003,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.watchRuntime.eventFloorObservedAt = 1700000003010
     session.editorSnapshot.content = '# 本地内容'
@@ -216,9 +216,7 @@ describe('watchCoordinator', () => {
   })
 
   it('watch.file-missing 会把磁盘基线重置为空，但不能清空当前 editorSnapshot.content', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003004,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
 
     // 这里先制造一个待处理的外部版本，
@@ -259,9 +257,7 @@ describe('watchCoordinator', () => {
   })
 
   it('watch.file-restored 进入 restored 后，不能在 prepareSession 里直接回落；必须等首次有效读盘再收敛为 noop', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003008,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
 
     dispatchWatchCommand(coordinator, session, 'watch.file-missing', {
@@ -314,9 +310,7 @@ describe('watchCoordinator', () => {
   })
 
   it('watch.file-restored 自带 diskContent 时，必须立刻恢复磁盘基线，避免恢复后的 change 被去重吞掉后仍停在 missing', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003011,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.editorSnapshot.content = '# 恢复后的磁盘内容'
     session.editorSnapshot.revision = 1
@@ -354,9 +348,7 @@ describe('watchCoordinator', () => {
   })
 
   it('watch.file-restored 后的首次有效读盘若仍有差异，必须进入新的 pending-user，而不是直接回落为 idle', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003012,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.editorSnapshot.content = '# 本地继续编辑内容'
     session.editorSnapshot.revision = 1
@@ -399,9 +391,7 @@ describe('watchCoordinator', () => {
   })
 
   it('真实外部差异在 prompt 模式下会保留 pending，继续编辑时也不能被清掉', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003010,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
 
     const changed = dispatchWatchCommand(coordinator, session, 'watch.file-changed', {
@@ -434,9 +424,7 @@ describe('watchCoordinator', () => {
   })
 
   it('真实外部差异在 apply 模式下必须自动应用，不创建 pendingExternalChange', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003013,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.editorSnapshot.content = '# 本地未保存内容'
     session.editorSnapshot.revision = 1
@@ -471,9 +459,7 @@ describe('watchCoordinator', () => {
   })
 
   it('document.external.apply / ignore / noop 必须正确更新审计字段并做同版本去重', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003015,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.editorSnapshot.content = '# 本地编辑内容'
     session.editorSnapshot.revision = 1
@@ -556,9 +542,7 @@ describe('watchCoordinator', () => {
   })
 
   it('document.external.apply / ignore 遇到 version mismatch 时必须 no-op，不能错误消费更新后的 pending', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003022,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.editorSnapshot.content = '# 本地编辑内容'
     session.editorSnapshot.revision = 1
@@ -616,9 +600,7 @@ describe('watchCoordinator', () => {
   })
 
   it('旧结构 session 缺少 pendingChangeSequence 时，必须从当前 pending.version 补齐版本号，避免 stale 操作命中新 prompt', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003025,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.editorSnapshot.content = '# 本地编辑内容'
     session.editorSnapshot.revision = 1
@@ -663,9 +645,7 @@ describe('watchCoordinator', () => {
   })
 
   it('reconcileAfterSave 只有真正收敛到 pending 版本时才允许 noop，保存出本地版本时必须保留 pending', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003023,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.editorSnapshot.content = '# 本地内容'
     session.editorSnapshot.revision = 1
@@ -715,9 +695,7 @@ describe('watchCoordinator', () => {
   })
 
   it('同一路径 rebind 导致 bindingToken 变化时，reconcileAfterSave 不能把旧 pending 当 stale 丢掉', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003026,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
     session.editorSnapshot.content = '# 本地内容'
     session.editorSnapshot.revision = 1
@@ -776,9 +754,7 @@ describe('watchCoordinator', () => {
   })
 
   it('watch.error 必须立即发出 warning，并进入 rebinding；失败后再进入 degraded', () => {
-    const coordinator = createWatchCoordinator({
-      now: () => 1700000003021,
-    })
+    const coordinator = createWatchCoordinator()
     const session = createSession()
 
     const rebindRequested = dispatchWatchCommand(coordinator, session, 'watch.error', {
