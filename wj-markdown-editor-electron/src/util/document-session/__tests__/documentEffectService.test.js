@@ -18,6 +18,10 @@ async function createServiceContext() {
   const dialogApi = {
     showOpenDialogSync: vi.fn(),
   }
+  const showMock = vi.fn()
+  const notificationApi = {
+    isSupported: vi.fn(() => false),
+  }
   const fsModule = {
     pathExists: vi.fn(),
     stat: vi.fn(),
@@ -40,6 +44,8 @@ async function createServiceContext() {
     fsModule,
     recentStore,
     resourceUtil,
+    notificationApi,
+    createSystemNotification: showMock,
   })
 
   return {
@@ -48,6 +54,8 @@ async function createServiceContext() {
     fsModule,
     recentStore,
     resourceUtil,
+    notificationApi,
+    showMock,
   }
 }
 
@@ -533,6 +541,184 @@ describe('documentEffectService', () => {
     expect(showWindowMessage).toHaveBeenCalledWith({
       type: 'warning',
       content: 'message.fileExternalChangeReadFailed',
+    })
+  })
+
+  it('notify-external-change 在系统通知可用时，必须弹出系统通知而不是退回窗口消息', async () => {
+    const { service, notificationApi, showMock } = await createServiceContext()
+    const showWindowMessage = vi.fn()
+    const notificationInstance = {
+      on: vi.fn(),
+      show: vi.fn(),
+    }
+    const restore = vi.fn()
+    const focus = vi.fn()
+
+    notificationApi.isSupported.mockReturnValue(true)
+    showMock.mockReturnValue(notificationInstance)
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-external-change',
+        mode: 'applied',
+        documentPath: 'C:/docs/demo.md',
+      },
+      winInfo: {
+        win: {
+          isDestroyed: () => false,
+          isMinimized: () => true,
+          restore,
+          show: vi.fn(),
+          focus,
+        },
+      },
+      showWindowMessage,
+    })
+
+    expect(showMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: '文件内容已更新 - demo.md',
+      body: expect.stringContaining('检测到文件被外部修改，已自动应用最新内容。'),
+    }))
+    expect(notificationInstance.on).toHaveBeenCalledWith('click', expect.any(Function))
+    expect(notificationInstance.show).toHaveBeenCalledTimes(1)
+    expect(showWindowMessage).not.toHaveBeenCalled()
+  })
+
+  it('notify-external-change 在系统通知不可用时，必须退回统一窗口消息出口', async () => {
+    const { service, notificationApi, showMock } = await createServiceContext()
+    const showWindowMessage = vi.fn()
+
+    notificationApi.isSupported.mockReturnValue(false)
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-external-change',
+        mode: 'applied',
+        documentPath: 'C:/docs/demo.md',
+      },
+      showWindowMessage,
+    })
+
+    expect(showMock).not.toHaveBeenCalled()
+    expect(showWindowMessage).toHaveBeenCalledWith({
+      type: 'info',
+      content: 'message.fileExternalChangeAutoApplied',
+    })
+  })
+
+  it('notify-external-change(prompt) 在系统通知可用时，必须弹出“待处理”系统通知', async () => {
+    const { service, notificationApi, showMock } = await createServiceContext()
+    const showWindowMessage = vi.fn()
+    const notificationInstance = {
+      on: vi.fn(),
+      show: vi.fn(),
+    }
+
+    notificationApi.isSupported.mockReturnValue(true)
+    showMock.mockReturnValue(notificationInstance)
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-external-change',
+        mode: 'prompt',
+        documentPath: 'C:/docs/demo.md',
+      },
+      winInfo: {
+        win: {
+          isDestroyed: () => false,
+          isMinimized: () => false,
+          show: vi.fn(),
+          focus: vi.fn(),
+        },
+      },
+      showWindowMessage,
+    })
+
+    expect(showMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: '文件内容已更新 - demo.md',
+      body: expect.stringContaining('检测到文件被外部修改，请返回编辑器查看并处理。'),
+    }))
+    expect(notificationInstance.show).toHaveBeenCalledTimes(1)
+    expect(showWindowMessage).not.toHaveBeenCalled()
+  })
+
+  it('notify-external-change(prompt) 在系统通知不可用时，必须退回本地化提示文案', async () => {
+    const { service, notificationApi, showMock } = await createServiceContext()
+    const showWindowMessage = vi.fn()
+
+    notificationApi.isSupported.mockReturnValue(false)
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-external-change',
+        mode: 'prompt',
+        documentPath: 'C:/docs/demo.md',
+      },
+      showWindowMessage,
+    })
+
+    expect(showMock).not.toHaveBeenCalled()
+    expect(showWindowMessage).toHaveBeenCalledWith({
+      type: 'info',
+      content: expect.stringContaining('检测到文件被外部修改，请返回编辑器查看并处理。'),
+    })
+  })
+
+  it('notify-external-change(missing) 在系统通知可用时，必须弹出带文件路径的缺失通知', async () => {
+    const { service, notificationApi, showMock } = await createServiceContext()
+    const showWindowMessage = vi.fn()
+    const notificationInstance = {
+      on: vi.fn(),
+      show: vi.fn(),
+    }
+
+    notificationApi.isSupported.mockReturnValue(true)
+    showMock.mockReturnValue(notificationInstance)
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-external-change',
+        mode: 'missing',
+        documentPath: 'C:/docs/demo.md',
+      },
+      winInfo: {
+        win: {
+          isDestroyed: () => false,
+          isMinimized: () => false,
+          show: vi.fn(),
+          focus: vi.fn(),
+        },
+      },
+      showWindowMessage,
+    })
+
+    expect(showMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: '文件已被删除或移动 - demo.md',
+      body: expect.stringContaining('路径：C:/docs/demo.md'),
+    }))
+    expect(notificationInstance.show).toHaveBeenCalledTimes(1)
+    expect(showWindowMessage).not.toHaveBeenCalled()
+  })
+
+  it('notify-external-change(missing) 在系统通知不可用时，必须退回带文件路径的窗口消息', async () => {
+    const { service, notificationApi, showMock } = await createServiceContext()
+    const showWindowMessage = vi.fn()
+
+    notificationApi.isSupported.mockReturnValue(false)
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-external-change',
+        mode: 'missing',
+        documentPath: 'C:/docs/demo.md',
+      },
+      showWindowMessage,
+    })
+
+    expect(showMock).not.toHaveBeenCalled()
+    expect(showWindowMessage).toHaveBeenCalledWith({
+      type: 'info',
+      content: expect.stringContaining('路径：C:/docs/demo.md'),
     })
   })
 

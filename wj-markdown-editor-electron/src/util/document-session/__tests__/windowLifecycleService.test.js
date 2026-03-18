@@ -992,6 +992,13 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-is-saved')).toBe(false)
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-missing')).toBe(false)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'info',
+        content: expect.stringContaining('路径：D:/demo.md'),
+      },
+    })
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'document.snapshot.changed',
       data: expect.objectContaining({
         exists: false,
@@ -1056,6 +1063,13 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-is-saved')).toBe(false)
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-content-reloaded')).toBe(false)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'info',
+        content: 'message.fileExternalChangeAutoApplied',
+      },
+    })
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'document.snapshot.changed',
       data: expect.objectContaining({
         content: '# 外部新内容',
@@ -1090,6 +1104,13 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
 
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'file-external-changed')).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'info',
+        content: expect.stringContaining('检测到文件被外部修改，请返回编辑器查看并处理。'),
+      },
+    })
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'document.snapshot.changed',
       data: expect.objectContaining({

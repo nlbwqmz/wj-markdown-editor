@@ -1,10 +1,15 @@
 import path from 'node:path'
-import { dialog } from 'electron'
+import { fileURLToPath } from 'node:url'
+import { dialog, Notification } from 'electron'
 import fs from 'fs-extra'
 import {
   isMarkdownFilePath,
   resolveDocumentOpenPath,
 } from './documentOpenTargetUtil.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const EXTERNAL_CHANGE_NOTIFICATION_ICON_PATH = path.resolve(__dirname, '../../../icon/256x256.png')
 
 // 从多种 payload 形态里提取目标路径。
 // 兼容层有时直接传字符串，有时传对象，这里统一收口成 path 或 null。
@@ -77,6 +82,105 @@ function getWatchingDirectoryPath(rebindResult, fallbackPath = null) {
   return path.dirname(resolveDocumentOpenPath(watchingPath) || watchingPath)
 }
 
+function isWindowsLikePath(targetPath) {
+  return /^[a-z]:[\\/]/i.test(targetPath) || targetPath.startsWith('\\\\')
+}
+
+function getPathFileName(targetPath) {
+  if (typeof targetPath !== 'string' || targetPath.trim() === '') {
+    return ''
+  }
+
+  if (isWindowsLikePath(targetPath)) {
+    return path.win32.basename(targetPath.replaceAll('/', '\\'))
+  }
+
+  return path.posix.basename(targetPath.replaceAll('\\', '/'))
+}
+
+function getExternalChangeNotificationContent({
+  documentPath,
+  mode = 'applied',
+  language = 'zh-CN',
+}) {
+  const fileName = getPathFileName(documentPath)
+  const isPromptMode = mode === 'prompt'
+  const isMissingMode = mode === 'missing'
+
+  if (language === 'en-US') {
+    return {
+      title: isMissingMode
+        ? (fileName ? `File deleted or moved - ${fileName}` : 'File deleted or moved')
+        : (fileName ? `File content updated - ${fileName}` : 'File content updated'),
+      body: documentPath
+        ? `${isMissingMode
+          ? 'The file was deleted or moved externally. Please return to the editor to review it.'
+          : isPromptMode
+            ? 'The file was modified externally. Please return to the editor to review and handle it.'
+            : 'The file was modified externally and the latest content has been applied automatically.'}\nPath: ${documentPath}`
+        : isMissingMode
+          ? 'The file was deleted or moved externally. Please return to the editor to review it.'
+          : isPromptMode
+            ? 'The file was modified externally. Please return to the editor to review and handle it.'
+            : 'The file was modified externally and the latest content has been applied automatically.',
+    }
+  }
+
+  return {
+    title: isMissingMode
+      ? (fileName ? `文件已被删除或移动 - ${fileName}` : '文件已被删除或移动')
+      : (fileName ? `文件内容已更新 - ${fileName}` : '文件内容已更新'),
+    body: documentPath
+      ? `${isMissingMode
+        ? '检测到文件已被外部删除或移动，请返回编辑器查看。'
+        : isPromptMode
+          ? '检测到文件被外部修改，请返回编辑器查看并处理。'
+          : '检测到文件被外部修改，已自动应用最新内容。'}\n路径：${documentPath}`
+      : isMissingMode
+        ? '检测到文件已被外部删除或移动，请返回编辑器查看。'
+        : isPromptMode
+          ? '检测到文件被外部修改，请返回编辑器查看并处理。'
+          : '检测到文件被外部修改，已自动应用最新内容。',
+  }
+}
+
+function getExternalChangeFallbackMessage(mode, documentPath) {
+  if (mode === 'applied') {
+    return {
+      type: 'info',
+      content: 'message.fileExternalChangeAutoApplied',
+    }
+  }
+
+  if (mode === 'missing') {
+    return {
+      type: 'info',
+      content: documentPath
+        ? `检测到文件已被外部删除或移动，请返回编辑器查看。\n路径：${documentPath}`
+        : '检测到文件已被外部删除或移动，请返回编辑器查看。',
+    }
+  }
+
+  return {
+    type: 'info',
+    content: documentPath
+      ? `检测到文件被外部修改，请返回编辑器查看并处理。\n路径：${documentPath}`
+      : '检测到文件被外部修改，请返回编辑器查看并处理。',
+  }
+}
+
+function focusWindowFromNotification(win) {
+  if (!win || typeof win.isDestroyed === 'function' && win.isDestroyed()) {
+    return
+  }
+
+  if (typeof win.isMinimized === 'function' && win.isMinimized()) {
+    win.restore?.()
+  }
+  win.show?.()
+  win.focus?.()
+}
+
 /**
  * 主进程统一副作用层。
  *
@@ -93,6 +197,9 @@ function getWatchingDirectoryPath(rebindResult, fallbackPath = null) {
 export function createDocumentEffectService({
   fsModule = fs,
   dialogApi = dialog,
+  notificationApi = Notification,
+  createSystemNotification = options => new notificationApi(options),
+  notificationIconPath = EXTERNAL_CHANGE_NOTIFICATION_ICON_PATH,
   recentStore = {
     add: async () => {},
     remove: async () => {},
@@ -158,6 +265,36 @@ export function createDocumentEffectService({
       return isAutoSave ? `Auto save failed.${errorDetail}` : `Save failed.${errorDetail}`
     }
     return isAutoSave ? `自动保存失败。${errorDetail}` : `保存失败。${errorDetail}`
+  }
+
+  function notifyExternalChange(effect, { winInfo, showWindowMessage }) {
+    const content = getExternalChangeNotificationContent({
+      documentPath: effect?.documentPath || null,
+      mode: effect?.mode || 'applied',
+      language: getLanguage(getConfig),
+    })
+
+    try {
+      if (notificationApi?.isSupported?.() === true) {
+        const notification = createSystemNotification({
+          ...content,
+          icon: notificationIconPath,
+        })
+        notification?.on?.('click', () => {
+          focusWindowFromNotification(winInfo?.win)
+        })
+        notification?.show?.()
+        return null
+      }
+    } catch {
+      // 系统通知创建失败时，退回统一窗口消息，避免这类提示被静默吞掉。
+    }
+
+    showWindowMessage?.(getExternalChangeFallbackMessage(
+      effect?.mode || 'applied',
+      effect?.documentPath || null,
+    ))
+    return null
   }
 
   /**
@@ -535,6 +672,12 @@ export function createDocumentEffectService({
         // watcher 警告通过统一窗口消息入口展示。
         showWindowMessage?.(getWatchWarningMessage(effect))
         return null
+
+      case 'notify-external-change':
+        return notifyExternalChange(effect, {
+          winInfo: _winInfo,
+          showWindowMessage,
+        })
 
       case 'rebind-watch':
         {

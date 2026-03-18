@@ -217,7 +217,16 @@ function handleFileChanged(session, payload, { externalChangeStrategy }) {
       result: 'applied',
       versionHash,
     })
-    return { session, effects: [] }
+    return {
+      session,
+      effects: [
+        {
+          type: 'notify-external-change',
+          mode: 'applied',
+          documentPath: session.documentSource?.path || null,
+        },
+      ],
+    }
   }
 
   createPendingExternalChange(session, {
@@ -229,7 +238,16 @@ function handleFileChanged(session, payload, { externalChangeStrategy }) {
     watchingPath: session.watchRuntime?.watchingPath || session.documentSource?.path || null,
   })
 
-  return { session, effects: [] }
+  return {
+    session,
+    effects: [
+      {
+        type: 'notify-external-change',
+        mode: 'prompt',
+        documentPath: session.documentSource?.path || null,
+      },
+    ],
+  }
 }
 
 function handleFileMissing(session, payload) {
@@ -249,7 +267,16 @@ function handleFileMissing(session, payload) {
   session.externalRuntime.resolutionState = 'missing'
   session.externalRuntime.lastResolutionResult = 'missing'
 
-  return { session, effects: [] }
+  return {
+    session,
+    effects: [
+      {
+        type: 'notify-external-change',
+        mode: 'missing',
+        documentPath: session.documentSource?.path || null,
+      },
+    ],
+  }
 }
 
 function handleFileRestored(session, payload) {

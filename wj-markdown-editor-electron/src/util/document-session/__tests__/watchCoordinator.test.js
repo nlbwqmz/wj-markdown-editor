@@ -243,7 +243,13 @@ describe('watchCoordinator', () => {
       },
     })
 
-    expect(missing.effects).toEqual([])
+    expect(missing.effects).toEqual([
+      {
+        type: 'notify-external-change',
+        mode: 'missing',
+        documentPath: 'C:/docs/demo.md',
+      },
+    ])
     expect(missing.session.documentSource.exists).toBe(false)
     expect(missing.session.documentSource.lastKnownStat).toBeNull()
     expect(missing.session.editorSnapshot.content).toBe('# 用户继续编辑的本地内容')
@@ -403,6 +409,13 @@ describe('watchCoordinator', () => {
       },
     })
 
+    expect(changed.effects).toEqual([
+      {
+        type: 'notify-external-change',
+        mode: 'prompt',
+        documentPath: 'C:/docs/demo.md',
+      },
+    ])
     expect(changed.session.externalRuntime.resolutionState).toBe('pending-user')
     expect(changed.session.externalRuntime.pendingExternalChange).toMatchObject({
       version: 1,
@@ -447,7 +460,13 @@ describe('watchCoordinator', () => {
       },
     )
 
-    expect(autoApplied.effects).toEqual([])
+    expect(autoApplied.effects).toEqual([
+      {
+        type: 'notify-external-change',
+        mode: 'applied',
+        documentPath: 'C:/docs/demo.md',
+      },
+    ])
     expect(autoApplied.session.editorSnapshot.content).toBe('# 磁盘最新内容')
     expect(autoApplied.session.editorSnapshot.revision).toBe(2)
     expect(autoApplied.session.diskSnapshot.content).toBe('# 磁盘最新内容')
