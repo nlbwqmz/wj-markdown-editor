@@ -25,12 +25,10 @@ vi.mock('fs-extra', () => {
 
 async function createServiceContext() {
   const { createDocumentResourceService } = await import('../documentResourceService.js')
-  const { default: resourceFileUtil } = await import('../../resourceFileUtil.js')
   const store = createDocumentSessionStore()
   const showItemInFolder = vi.fn()
   const service = createDocumentResourceService({
     store,
-    resourceUtil: resourceFileUtil,
     showItemInFolder,
   })
 

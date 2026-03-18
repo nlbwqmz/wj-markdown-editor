@@ -1,15 +1,10 @@
 import { app, Menu, protocol } from 'electron'
 import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
-import {
-  handleSecondInstanceOpenRequest,
-  handleStartupOpenRequest,
-} from './util/appOpenRequestUtil.js'
+import { handleSecondInstanceOpenRequest, handleStartupOpenRequest } from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
 import { isMarkdownFilePath } from './util/document-session/documentOpenTargetUtil.js'
-import {
-  initializeDocumentSessionRuntime,
-} from './util/document-session/documentSessionRuntime.js'
+import { initializeDocumentSessionRuntime } from './util/document-session/documentSessionRuntime.js'
 import windowLifecycleService from './util/document-session/windowLifecycleService.js'
 import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
@@ -53,9 +48,7 @@ try {
  * 是否通过文件打开
  */
 function isOpenOnFile() {
-  return Boolean(process.argv
-    && process.argv.length > 0
-    && isMarkdownFilePath(process.argv[process.argv.length - 1]))
+  return Boolean(process.argv && process.argv.length > 0 && isMarkdownFilePath(process.argv[process.argv.length - 1]))
 }
 
 /**

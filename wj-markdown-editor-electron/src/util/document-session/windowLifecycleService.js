@@ -46,15 +46,8 @@ function ensureSessionRuntimeInitialized() {
 
   const store = createDocumentSessionStore()
   const saveCoordinator = createSaveCoordinator()
-  const commandService = createDocumentCommandService({
-    store,
-    saveCoordinator,
-    getConfig: () => configUtil.getConfig(),
-  })
-  const effectService = createDocumentEffectService({
-    recentStore: recent,
-    getConfig: () => configUtil.getConfig(),
-  })
+  const commandService = createDocumentCommandService({ store, saveCoordinator, getConfig: () => configUtil.getConfig() })
+  const effectService = createDocumentEffectService({ recentStore: recent, getConfig: () => configUtil.getConfig() })
   const windowBridge = createWindowSessionBridge({
     store,
     sendToRenderer: (win, payload) => {
@@ -65,11 +58,7 @@ function ensureSessionRuntimeInitialized() {
     },
     getAllWindows: () => winInfoList.map(item => item.win),
   })
-  const resourceService = createDocumentResourceService({
-    store,
-    resourceUtil: resourceFileUtil,
-    showItemInFolder: shell.showItemInFolder,
-  })
+  const resourceService = createDocumentResourceService({ store, showItemInFolder: shell.showItemInFolder })
 
   // Task 3 要求 runtime 相关单例只能在显式初始化或首次真实使用时创建，
   // 不能在模块导入阶段提前组装。

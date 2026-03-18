@@ -1,3 +1,4 @@
+import resourceFileUtil from '../resourceFileUtil.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 
 function normalizeComparablePath(targetPath) {
@@ -70,7 +71,6 @@ function createResourceContext(session) {
  */
 export function createDocumentResourceService({
   store,
-  resourceUtil,
   showItemInFolder = () => {},
 }) {
   function isStaleRequestContext(session, requestContext) {
@@ -109,7 +109,7 @@ export function createDocumentResourceService({
     }
 
     const documentContext = createResourceContext(session)
-    return await resourceUtil.openLocalResourceInFolder(
+    return await resourceFileUtil.openLocalResourceInFolder(
       documentContext,
       normalizedPayload,
       showItemInFolder,
@@ -129,7 +129,7 @@ export function createDocumentResourceService({
     }
 
     const documentContext = createResourceContext(session)
-    return await resourceUtil.deleteLocalResource(
+    return await resourceFileUtil.deleteLocalResource(
       documentContext,
       normalizedPayload.resourceUrl,
     )
@@ -151,7 +151,7 @@ export function createDocumentResourceService({
     }
 
     const documentContext = createResourceContext(session)
-    return await resourceUtil.getLocalResourceInfo(
+    return await resourceFileUtil.getLocalResourceInfo(
       documentContext,
       normalizedPayload.resourceUrl,
     )
@@ -159,7 +159,7 @@ export function createDocumentResourceService({
 
   function getComparableKey({ windowId, payload }) {
     const documentContext = getSessionResourceContext(windowId)
-    return resourceUtil.getLocalResourceComparableKey(
+    return resourceFileUtil.getLocalResourceComparableKey(
       documentContext,
       normalizeComparablePayload(payload),
     )
