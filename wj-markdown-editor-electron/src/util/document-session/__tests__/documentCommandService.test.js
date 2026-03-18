@@ -112,6 +112,43 @@ describe('documentCommandService', () => {
     expect(blurSaveSucceeded.effects.find(effect => effect.type === 'show-message')).toBeUndefined()
   })
 
+  it('document.edit 命中相同内容时必须走 no-op，不能继续推进 revision 或 requestedRevision', () => {
+    const { store, service } = createTestContext([])
+    const session = createBoundFileSession({
+      sessionId: 'document-edit-noop-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002001,
+    })
+    const windowId = bindSession(store, session)
+
+    const firstEdited = service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 最终内容',
+      },
+    })
+    const firstUpdatedAt = firstEdited.session.editorSnapshot.updatedAt
+
+    vi.setSystemTime(1700000002002)
+    const secondEdited = service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 最终内容',
+      },
+    })
+
+    expect(firstEdited.snapshot.revision).toBe(1)
+    expect(firstEdited.session.saveRuntime.requestedRevision).toBe(1)
+    expect(secondEdited.snapshot.content).toBe('# 最终内容')
+    expect(secondEdited.snapshot.revision).toBe(1)
+    expect(secondEdited.session.editorSnapshot.updatedAt).toBe(firstUpdatedAt)
+    expect(secondEdited.session.saveRuntime.requestedRevision).toBe(1)
+  })
+
   it('blur-auto-save 进行中收到 document.save 时，当前 save 失败通知必须升级为 manual-save', () => {
     const { store, service } = createTestContext(['blur'])
     const session = createBoundFileSession({

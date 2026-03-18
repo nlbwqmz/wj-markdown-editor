@@ -134,11 +134,19 @@ export function createDocumentCommandService({
 
     switch (command) {
       case 'document.edit':
+      {
+        const nextContent = payload?.content ?? ''
+        // document.edit 现在既被正常输入链路使用，也会被 route leave 当成
+        // “确保最终正文已经进入 session”的屏障；因此相同正文必须严格 no-op，
+        // 不能再把同一份内容重复推进成新 revision。
+        if (session.editorSnapshot.content === nextContent) {
+          break
+        }
         // 编辑命令只推进“编辑器事实”，不触碰磁盘事实。
         // 保存链路后续会基于 revision 和 requestedRevision 判断是否需要落盘。
         // 编辑命令只负责推进编辑快照与 revision，
         // 不允许直接把磁盘基线或 persistedSnapshot 一起改掉。
-        session.editorSnapshot.content = payload?.content ?? ''
+        session.editorSnapshot.content = nextContent
         session.editorSnapshot.revision = (session.editorSnapshot.revision || 0) + 1
         session.editorSnapshot.updatedAt = Date.now()
         session.saveRuntime.requestedRevision = Math.max(
@@ -146,6 +154,7 @@ export function createDocumentCommandService({
           session.editorSnapshot.revision,
         )
         break
+      }
 
       case 'document.save':
         {

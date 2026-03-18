@@ -615,13 +615,13 @@ async function executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch) {
 function updateTempContentWithDispatcher(winInfo, content, dispatch) {
   // 编辑更新直接进入统一命令流，
   // Electron 侧其他模块如需读取最新正文，必须回到 session getter，而不是继续依赖旧镜像字段。
-  dispatch('document.edit', {
+  return dispatch('document.edit', {
     content,
-  }).then(() => {})
+  })
 }
 
 function updateTempContent(winInfo, content) {
-  updateTempContentWithDispatcher(
+  return updateTempContentWithDispatcher(
     winInfo,
     content,
     (command, payload, options = {}) => dispatchCommand(winInfo, command, payload, options),
@@ -959,8 +959,9 @@ function initializeSessionRuntime() {
           )).commandResult
 
         case 'document.edit':
-          updateTempContentWithDispatcher(winInfo, payload?.content, dispatch)
-          return null
+          // route leave 需要把 document.edit 当成“session 已经推进到最终正文”的可等待屏障，
+          // 因此这里必须等待真实 dispatch 完成，并把最新快照直接返回给调用方。
+          return await updateTempContentWithDispatcher(winInfo, payload?.content, dispatch)
 
         case 'document.cancel-close':
         case 'document.confirm-force-close':

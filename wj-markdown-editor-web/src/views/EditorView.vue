@@ -253,11 +253,13 @@ onBeforeRouteLeave(async () => {
   // 否则后续请求到的 snapshot revision 可能仍停留在旧版本。
   markdownEditRef.value?.flushPendingModelSync?.()
 
-  if (content.value !== store.documentSessionSnapshot.content) {
-    await requestDocumentEdit(content.value)
-  }
+  // route leave 需要拿“最终正文对应的稳定 snapshot identity”来记录锚点。
+  // 如果当前正文尚未同步进主进程，就优先等待 document.edit 返回最新快照；
+  // 只有已经同步好的场景，才直接读取 session snapshot。
+  const latestSnapshot = content.value !== (store.documentSessionSnapshot?.content ?? '')
+    ? (await requestDocumentEdit(content.value))?.snapshot || await requestDocumentSessionSnapshot()
+    : await requestDocumentSessionSnapshot()
 
-  const latestSnapshot = await requestDocumentSessionSnapshot()
   markdownEditRef.value?.captureViewScrollAnchors?.({
     sessionId: latestSnapshot?.sessionId ?? null,
     revision: Number.isInteger(latestSnapshot?.revision) ? latestSnapshot.revision : 0,
