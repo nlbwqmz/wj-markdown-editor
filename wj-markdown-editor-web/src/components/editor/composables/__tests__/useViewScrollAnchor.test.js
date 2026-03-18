@@ -352,20 +352,52 @@ test('未注入 waitLayoutStable 时默认会执行 nextTick 与两次 requestAn
 
     const restorePromise = api.scheduleRestoreForCurrentSnapshot()
 
-    await flushMicrotasks(3)
+    /**
+     * 刚发起恢复时只能进入 `await nextTick()` 之前的同步阶段，
+     * 因此这时既不能注册第一帧 rAF，也绝不能提前执行恢复。
+     */
+    assert.equal(rafCallCount, 0)
+    assert.equal(rafCallbacks.length, 0)
+    assert.equal(restoreCalls.length, 0)
+
+    /**
+     * 冲刷 nextTick 对应的微任务后，才允许进入第一帧 rAF。
+     * 若实现退化为“直接 requestAnimationFrame”，上面的同步断言就会立刻失败；
+     * 若根本没有 nextTick，这里的阶段边界也会被打乱。
+     */
+    await flushMicrotasks(1)
 
     assert.equal(rafCallCount, 1)
     assert.equal(rafCallbacks.length, 1)
     assert.equal(restoreCalls.length, 0)
 
+    /**
+     * 触发第一帧回调本身只会结束第一轮等待，
+     * 第二帧 rAF 应该在随后的微任务继续链路时才被注册。
+     */
     rafCallbacks.shift()?.(16)
-    await flushMicrotasks(2)
+
+    assert.equal(rafCallCount, 1)
+    assert.equal(rafCallbacks.length, 0)
+    assert.equal(restoreCalls.length, 0)
+
+    await flushMicrotasks(1)
 
     assert.equal(rafCallCount, 2)
     assert.equal(rafCallbacks.length, 1)
     assert.equal(restoreCalls.length, 0)
 
+    /**
+     * 第二帧回调结束时，默认等待链才算完全走完；
+     * 真正调用 restoreAnchor 仍应发生在后续微任务中，而不是同步发生在回调内。
+     */
     rafCallbacks.shift()?.(32)
+
+    assert.equal(rafCallCount, 2)
+    assert.equal(rafCallbacks.length, 0)
+    assert.equal(restoreCalls.length, 0)
+
+    await flushMicrotasks(2)
     await restorePromise
 
     assert.equal(rafCallCount, 2)
