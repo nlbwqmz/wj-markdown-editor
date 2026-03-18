@@ -9,6 +9,7 @@ export function usePreviewSync({
   previewRef,
   scrolling,
   editorScrollTop,
+  restoreStateRef,
 }) {
   const SCROLL_IDLE_MS = 160
   const SCROLL_MAX_WAIT_MS = 5000
@@ -232,6 +233,11 @@ export function usePreviewSync({
     if (!view || !previewRef.value || scrolling.value.preview) {
       return
     }
+    // 文档恢复期间，滚动位置正在由恢复流程接管，此时必须禁止编辑区反向驱动预览区，
+    // 否则刚恢复出来的位置会立刻被同步逻辑覆盖，导致恢复结果不稳定。
+    if (restoreStateRef?.value?.active === true) {
+      return
+    }
 
     // 若竖向滚动条值没改变则表示横向滚动，直接跳过
     if (editorScrollTop.value === view.scrollDOM.scrollTop && refresh !== true) {
@@ -295,6 +301,11 @@ export function usePreviewSync({
   function syncPreviewToEditor() {
     const view = getEditorView()
     if (!view || !previewRef.value || scrolling.value.editor) {
+      return
+    }
+    // 文档恢复期间，编辑区滚动位置同样需要保持静止，避免预览区的同步逻辑在恢复尚未完成时
+    // 抢先写回编辑区，进而破坏恢复流程设定的滚动锚点。
+    if (restoreStateRef?.value?.active === true) {
       return
     }
     const previewScrollTop = previewRef.value.scrollTop
