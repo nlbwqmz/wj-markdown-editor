@@ -7,6 +7,35 @@ function normalizeCursorPosition(cursorPosition) {
 }
 
 /**
+ * 判断这次内容同步是否属于“滞后的 echo 回放”。
+ *
+ * 典型场景：
+ * 1. 编辑器本地已经继续输入，`currentContent` 比父层更近
+ * 2. 父层/主进程这时又把上一轮已经上浮过的内容 `nextContent` 回推回来
+ * 3. 如果直接整段回放，会把 CodeMirror 光标映射到错误位置
+ *
+ * 只有在“回推内容正好等于上一轮已上浮内容”且这次没有显式选区意图时，
+ * 才把它识别为可安全忽略的滞后 echo。
+ */
+export function shouldDeferStaleContentSync({
+  currentContent = '',
+  nextContent = '',
+  lastExposedContent = '',
+  hasExplicitSelection = false,
+} = {}) {
+  if (hasExplicitSelection === true) {
+    return false
+  }
+
+  if (currentContent === nextContent) {
+    return false
+  }
+
+  return currentContent !== lastExposedContent
+    && nextContent === lastExposedContent
+}
+
+/**
  * 判断下一次内容变更是否需要抑制向主进程回写。
  *
  * 这里专门处理“session snapshot 回放”这种程序性内容替换：
@@ -52,6 +81,7 @@ export function resolvePendingContentUpdateMeta({ handledToken = 0, contentUpdat
 }
 
 export default {
+  shouldDeferStaleContentSync,
   shouldSuppressNextContentSync,
   resolvePendingContentUpdateMeta,
 }

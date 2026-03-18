@@ -15,7 +15,10 @@ import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import commonUtil from '@/util/commonUtil.js'
-import { resolvePendingContentUpdateMeta } from '@/util/editor/contentUpdateMetaUtil.js'
+import {
+  resolvePendingContentUpdateMeta,
+  shouldDeferStaleContentSync,
+} from '@/util/editor/contentUpdateMetaUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
@@ -88,6 +91,8 @@ const previewVisible = ref(true)
 const previewController = ref(true)
 const gridAnimation = ref(false)
 const handledContentUpdateToken = ref(0)
+// 记录编辑器最近一次已经向上游暴露的正文，用于识别滞后的 snapshot echo。
+const lastExposedContent = ref(props.modelValue)
 
 const BOTTOM_GAP = '40vh'
 const EDITOR_EMIT_DEBOUNCE_MS = 160
@@ -226,7 +231,8 @@ const refresh = commonUtil.debounce(() => {
   if (!view) {
     return
   }
-  emits('update:modelValue', view.state.doc.toString())
+  lastExposedContent.value = view.state.doc.toString()
+  emits('update:modelValue', lastExposedContent.value)
 }, EDITOR_EMIT_DEBOUNCE_MS)
 
 function refreshToolbarList() {
@@ -299,6 +305,18 @@ watch(() => [props.modelValue, props.contentUpdateMeta?.token], ([newValue]) => 
       ? Math.max(0, Math.min(newValue.length, pendingContentUpdateMeta.cursorPosition))
       : null
 
+    // 编辑器已经继续输入、但父层这时只回放了上一轮已上浮内容时，说明拿到的是滞后的 echo。
+    // 这类内容如果整段重放，会把 CodeMirror 光标错误映射到文首。
+    if (shouldDeferStaleContentSync({
+      currentContent: currentValue,
+      nextContent: newValue,
+      lastExposedContent: lastExposedContent.value,
+      hasExplicitSelection: pendingContentUpdateMeta.shouldApplySelection,
+    })) {
+      restorePreviewLinkedHighlight()
+      return
+    }
+
     if (currentValue !== newValue) {
       const transaction = {
         changes: {
@@ -329,6 +347,7 @@ watch(() => [props.modelValue, props.contentUpdateMeta?.token], ([newValue]) => 
       view.focus()
     }
   }
+  lastExposedContent.value = newValue
   restorePreviewLinkedHighlight()
 })
 
