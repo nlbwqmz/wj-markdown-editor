@@ -28,9 +28,17 @@ export function saveAnchorRecord(store, record) {
     store[sessionId] = {}
   }
 
-  store[sessionId][scrollAreaKey] = record
+  const nextRecord = {
+    ...record,
+    // 这里额外复制一层 anchor，避免调用方后续继续改原对象时联动污染缓存。
+    anchor: record?.anchor != null && typeof record.anchor === 'object'
+      ? { ...record.anchor }
+      : record?.anchor ?? null,
+  }
 
-  return record
+  store[sessionId][scrollAreaKey] = nextRecord
+
+  return nextRecord
 }
 
 /**

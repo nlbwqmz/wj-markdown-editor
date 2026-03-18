@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import {
+  clearSessionAnchorRecords,
   createViewScrollAnchorSessionStore,
   getAnchorRecord,
   pruneAnchorRecords,
@@ -21,6 +22,35 @@ test('sessionId 与 scrollAreaKey 应共同定位唯一滚动锚点记录', () =
     fallbackScrollTop: 120,
     savedAt: 1,
   })
+
+  assert.deepEqual(getAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+  }), {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+    revision: 3,
+    anchor: { type: 'editor-line', lineNumber: 12, lineOffsetRatio: 0.5 },
+    fallbackScrollTop: 120,
+    savedAt: 1,
+  })
+})
+
+test('saveAnchorRecord 写入缓存时应复制 record 与 anchor，避免外部后续修改污染缓存', () => {
+  const store = createViewScrollAnchorSessionStore()
+  const record = {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+    revision: 3,
+    anchor: { type: 'editor-line', lineNumber: 12, lineOffsetRatio: 0.5 },
+    fallbackScrollTop: 120,
+    savedAt: 1,
+  }
+
+  saveAnchorRecord(store, record)
+
+  record.revision = 9
+  record.anchor.lineNumber = 99
 
   assert.deepEqual(getAnchorRecord(store, {
     sessionId: 'session-1',
@@ -90,6 +120,45 @@ test('shouldRestoreAnchorRecord 在 sessionId 或 revision 不匹配时应拒绝
     sessionId: 'session-1',
     revision: 3,
   }), true)
+})
+
+test('clearSessionAnchorRecords 应只移除指定 sessionId 的记录', () => {
+  const store = createViewScrollAnchorSessionStore()
+
+  saveAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+    revision: 1,
+    anchor: { type: 'editor-line', lineNumber: 1, lineOffsetRatio: 0 },
+    fallbackScrollTop: 0,
+    savedAt: 1,
+  })
+  saveAnchorRecord(store, {
+    sessionId: 'session-2',
+    scrollAreaKey: 'preview-page',
+    revision: 2,
+    anchor: { type: 'preview-line', lineStart: 10, lineEnd: 12, elementOffsetRatio: 0.1 },
+    fallbackScrollTop: 240,
+    savedAt: 2,
+  })
+
+  clearSessionAnchorRecords(store, 'session-1')
+
+  assert.equal(getAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-code',
+  }), null)
+  assert.deepEqual(getAnchorRecord(store, {
+    sessionId: 'session-2',
+    scrollAreaKey: 'preview-page',
+  }), {
+    sessionId: 'session-2',
+    scrollAreaKey: 'preview-page',
+    revision: 2,
+    anchor: { type: 'preview-line', lineStart: 10, lineEnd: 12, elementOffsetRatio: 0.1 },
+    fallbackScrollTop: 240,
+    savedAt: 2,
+  })
 })
 
 test('pruneAnchorRecords 应只保留活动 sessionId 的记录', () => {
