@@ -214,6 +214,39 @@ test('恢复请求 token 过期后，不会再执行旧恢复', async () => {
   assert.equal(restoreCalls[0].revision, 7)
 })
 
+test('等待期间 snapshot 漂移但 token 未变时，不会调用旧 restore，且返回 false', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const restoreCalls = []
+  const deferred = createDeferred()
+
+  seedAnchorRecord(store, { revision: 7 })
+
+  const { api, state } = createHarness({
+    store,
+    revision: 7,
+    waitLayoutStable: () => deferred.promise,
+    restoreAnchor: (payload) => {
+      restoreCalls.push(payload)
+      return true
+    },
+  })
+
+  const restorePromise = api.scheduleRestoreForCurrentSnapshot()
+
+  /**
+   * 这里故意不重新 schedule，也不取消 token，
+   * 只让当前快照在等待期间漂移到别的 revision，
+   * 用于验证 composable 会在真正 restore 前重新做资格判断。
+   */
+  state.revision = 8
+  deferred.resolve()
+
+  const restoreResult = await restorePromise
+
+  assert.equal(restoreResult, false)
+  assert.equal(restoreCalls.length, 0)
+})
+
 test('shouldRestoreAnchorRecord 为 false 时不会调用 restoreAnchor', async () => {
   const store = createViewScrollAnchorSessionStore()
   let waitCalls = 0
@@ -237,6 +270,32 @@ test('shouldRestoreAnchorRecord 为 false 时不会调用 restoreAnchor', async 
 
   assert.equal(waitCalls, 0)
   assert.equal(restoreCalls, 0)
+})
+
+test('缺失 restoreAnchor 时应返回 false，且 onRestoreFinish 看到的 restored 仍为 false', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const finishCalls = []
+  const scrollElement = createScrollElement({ scrollTop: 120 })
+
+  seedAnchorRecord(store)
+
+  const api = useViewScrollAnchor({
+    store,
+    sessionIdGetter: () => 'session-1',
+    revisionGetter: () => 7,
+    scrollAreaKey: 'preview-pane',
+    getScrollElement: () => scrollElement,
+    waitLayoutStable: async () => {},
+    onRestoreFinish: (payload) => {
+      finishCalls.push(payload)
+    },
+  })
+
+  const restoreResult = await api.scheduleRestoreForCurrentSnapshot()
+
+  assert.equal(restoreResult, false)
+  assert.equal(finishCalls.length, 1)
+  assert.equal(finishCalls[0].restored, false)
 })
 
 test('首轮布局不可用时只额外重试一次', async () => {

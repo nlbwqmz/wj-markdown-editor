@@ -248,13 +248,42 @@ export function useViewScrollAnchor(options = {}) {
           return false
         }
 
-        const restoreResult = typeof restoreAnchor === 'function'
-          ? await restoreAnchor({
-              ...restoreContext,
-              attempt,
-              scrollElement: typeof getScrollElement === 'function' ? getScrollElement() : null,
-            })
-          : true
+        /**
+         * 即使 token 仍然有效，也不能假设等待前读取到的快照仍然成立。
+         * 这里必须在真正 restore 前重新读取当前 snapshot 与缓存记录，
+         * 既防止等待期间 sessionId / revision 漂移后继续恢复旧记录，
+         * 也保证当前 restore 使用的是最新缓存中的同版本记录。
+         */
+        const latestSnapshotRecord = getSnapshotRecord()
+
+        if (latestSnapshotRecord.sessionId !== sessionId || latestSnapshotRecord.revision !== revision) {
+          return false
+        }
+
+        if (!shouldRestoreAnchorRecord({
+          record: latestSnapshotRecord.record,
+          sessionId: latestSnapshotRecord.sessionId,
+          revision: latestSnapshotRecord.revision,
+        })) {
+          return false
+        }
+
+        if (typeof restoreAnchor !== 'function') {
+          return false
+        }
+
+        const latestRestoreContext = {
+          ...restoreContext,
+          sessionId: latestSnapshotRecord.sessionId,
+          revision: latestSnapshotRecord.revision,
+          record: latestSnapshotRecord.record,
+        }
+
+        const restoreResult = await restoreAnchor({
+          ...latestRestoreContext,
+          attempt,
+          scrollElement: typeof getScrollElement === 'function' ? getScrollElement() : null,
+        })
 
         if (!isActiveRestoreToken(token)) {
           cancelled = true
