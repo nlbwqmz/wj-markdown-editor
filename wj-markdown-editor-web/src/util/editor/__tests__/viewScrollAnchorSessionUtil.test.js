@@ -232,6 +232,29 @@ test('导出 API 遇到异常入参时应保持安全返回或 no-op', () => {
   assert.equal(shouldRestoreAnchorRecord(undefined), false)
 })
 
+test('普通对象 store 应视为 invalid，避免继续读写并触发原型污染路径', () => {
+  const plainStore = {}
+  const pollutedKey = 'task2PollutedKey'
+
+  delete Object.prototype[pollutedKey]
+
+  assert.equal(saveAnchorRecord(plainStore, {
+    sessionId: '__proto__',
+    scrollAreaKey: pollutedKey,
+    revision: 1,
+    anchor: { type: 'editor-line', lineNumber: 1, lineOffsetRatio: 0 },
+    fallbackScrollTop: 0,
+    savedAt: 1,
+  }), null)
+  assert.equal(getAnchorRecord(plainStore, {
+    sessionId: '__proto__',
+    scrollAreaKey: 'x',
+  }), null)
+  assert.doesNotThrow(() => clearSessionAnchorRecords(plainStore, 'session-1'))
+  assert.doesNotThrow(() => pruneAnchorRecords(plainStore, 'session-1'))
+  assert.equal(Object.prototype[pollutedKey], undefined)
+})
+
 test('clearSessionAnchorRecords 应只移除指定 sessionId 的记录', () => {
   const store = createViewScrollAnchorSessionStore()
 

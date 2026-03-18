@@ -29,14 +29,28 @@ function cloneAnchorRecord(record) {
 }
 
 /**
- * 判断传入值是否为可安全读写的对象字典。
- * 这里不强制要求必须是无原型对象，只要求它是非 null 的对象，
- * 以便在工具层面对异常入参保持稳定降级。
+ * 判断传入值是否为合法的无原型字典。
+ * 这里明确收紧契约，只接受无原型字典，
+ * 从而避免普通对象在动态 key 场景下重新打开原型污染入口。
  *
  * @param {unknown} value
- * @returns {boolean} 返回该值是否可作为对象字典处理。
+ * @returns {boolean} 返回该值是否为合法的无原型字典。
  */
-function isObjectDictionary(value) {
+function isNullPrototypeDictionary(value) {
+  return value != null
+    && typeof value === 'object'
+    && Object.getPrototypeOf(value) === null
+}
+
+/**
+ * 判断传入值是否为普通可读对象。
+ * 该判断用于 options 这类只读入参，允许普通对象参与解构，
+ * 但不会把它们当作缓存容器写回。
+ *
+ * @param {unknown} value
+ * @returns {boolean} 返回该值是否可作为只读对象处理。
+ */
+function isReadableObject(value) {
   return value != null && typeof value === 'object'
 }
 
@@ -49,7 +63,7 @@ function isObjectDictionary(value) {
  * @returns {object | null} 返回成功写入的记录；缺少必要键时返回 null。
  */
 export function saveAnchorRecord(store, record) {
-  if (!isObjectDictionary(store)) {
+  if (!isNullPrototypeDictionary(store)) {
     return null
   }
 
@@ -65,7 +79,7 @@ export function saveAnchorRecord(store, record) {
     store[sessionId] = Object.create(null)
   }
 
-  if (!isObjectDictionary(store[sessionId])) {
+  if (!isNullPrototypeDictionary(store[sessionId])) {
     return null
   }
 
@@ -84,7 +98,7 @@ export function saveAnchorRecord(store, record) {
  * @returns {object | null} 返回命中的滚动锚点记录；未命中时返回 null。
  */
 export function getAnchorRecord(store, options) {
-  if (!isObjectDictionary(store) || !isObjectDictionary(options)) {
+  if (!isNullPrototypeDictionary(store) || !isReadableObject(options)) {
     return null
   }
 
@@ -104,7 +118,7 @@ export function getAnchorRecord(store, options) {
  * @param {string} sessionId
  */
 export function clearSessionAnchorRecords(store, sessionId) {
-  if (!isObjectDictionary(store)) {
+  if (!isNullPrototypeDictionary(store)) {
     return
   }
 
@@ -122,7 +136,7 @@ export function clearSessionAnchorRecords(store, sessionId) {
  * @param {string | null} activeSessionId
  */
 export function pruneAnchorRecords(store, activeSessionId) {
-  if (!isObjectDictionary(store)) {
+  if (!isNullPrototypeDictionary(store)) {
     return
   }
 
@@ -141,7 +155,7 @@ export function pruneAnchorRecords(store, activeSessionId) {
  * @returns {boolean} 返回该记录是否允许按当前会话与版本恢复。
  */
 export function shouldRestoreAnchorRecord(options) {
-  if (!isObjectDictionary(options)) {
+  if (!isReadableObject(options)) {
     return false
   }
 
