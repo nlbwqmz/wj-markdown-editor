@@ -235,7 +235,10 @@ export function usePreviewSync({
     }
     // 文档恢复期间，滚动位置正在由恢复流程接管，此时必须禁止编辑区反向驱动预览区，
     // 否则刚恢复出来的位置会立刻被同步逻辑覆盖，导致恢复结果不稳定。
+    // 但这里仍要把当前编辑区纵向滚动值写回缓存，避免恢复结束后的第一次同步
+    // 因为缓存滞后而把“未发生变化的滚动位置”误判成新滚动。
     if (restoreStateRef?.value?.active === true) {
+      editorScrollTop.value = view.scrollDOM.scrollTop
       return
     }
 

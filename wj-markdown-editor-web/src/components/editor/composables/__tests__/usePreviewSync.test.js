@@ -9,6 +9,8 @@ const previewElement = {
   clientHeight: 300,
   clientTop: 0,
   scrollToCalls: [],
+  addEventListener() {},
+  removeEventListener() {},
   getBoundingClientRect() {
     return {
       top: 0,
@@ -286,6 +288,87 @@ test('恢复期激活时，编辑区同步到预览区不应触发预览滚动',
   syncEditorToPreview()
 
   assert.equal(previewElement.scrollToCalls.length, 0)
+})
+
+test('恢复期结束后的首次编辑区同步，不应因滚动缓存滞后误触发预览滚动', () => {
+  previewElement.scrollTop = 0
+  previewElement.scrollToCalls = []
+
+  const lineHeights = new Map([
+    [1, 30],
+    [2, 30],
+    [3, 30],
+    [4, 30],
+    [5, 30],
+  ])
+  const editorView = createEditorView(lineHeights)
+  editorView.scrollDOM.scrollTop = 45
+  const elements = [
+    createElement({ tagName: 'p', lineStart: 1, lineEnd: 1, offsetTop: 0, actualTop: 0, height: 30 }),
+    createElement({ tagName: 'p', lineStart: 2, lineEnd: 2, offsetTop: 40, actualTop: 40, height: 30 }),
+    createElement({ tagName: 'p', lineStart: 3, lineEnd: 3, offsetTop: 80, actualTop: 80, height: 30 }),
+  ]
+  previewElement.querySelectorAll = () => elements
+
+  // 这里模拟“恢复期内编辑器已经到达目标位置，但 editorScrollTop 旧缓存仍停留在恢复前”的场景。
+  // 若恢复期短路时不顺便刷新缓存，恢复结束后的首次同步就会把同一个滚动值误判为新滚动。
+  const restoreStateRef = { value: { active: true } }
+  const editorScrollTop = { value: 0 }
+  const { syncEditorToPreview, clearScrollTimer } = usePreviewSync({
+    editorViewRef: { value: editorView },
+    previewRef: { value: previewElement },
+    scrolling: { value: { editor: false, preview: false } },
+    editorScrollTop,
+    restoreStateRef,
+  })
+
+  try {
+    syncEditorToPreview()
+    restoreStateRef.value.active = false
+    syncEditorToPreview()
+
+    assert.equal(previewElement.scrollToCalls.length, 0)
+    assert.equal(editorScrollTop.value, 45)
+  } finally {
+    clearScrollTimer()
+  }
+})
+
+test('省略 restoreStateRef 时，编辑区同步到预览区仍保持原有行为', () => {
+  previewElement.scrollTop = 0
+  previewElement.scrollToCalls = []
+
+  const lineHeights = new Map([
+    [1, 30],
+    [2, 30],
+    [3, 30],
+    [4, 30],
+    [5, 30],
+  ])
+  const editorView = createEditorView(lineHeights)
+  editorView.scrollDOM.scrollTop = 45
+  const elements = [
+    createElement({ tagName: 'p', lineStart: 1, lineEnd: 1, offsetTop: 0, actualTop: 0, height: 30 }),
+    createElement({ tagName: 'p', lineStart: 2, lineEnd: 2, offsetTop: 40, actualTop: 40, height: 30 }),
+    createElement({ tagName: 'p', lineStart: 3, lineEnd: 3, offsetTop: 80, actualTop: 80, height: 30 }),
+  ]
+  previewElement.querySelectorAll = () => elements
+
+  const { syncEditorToPreview, clearScrollTimer } = usePreviewSync({
+    editorViewRef: { value: editorView },
+    previewRef: { value: previewElement },
+    scrolling: { value: { editor: false, preview: false } },
+    editorScrollTop: { value: 0 },
+  })
+
+  try {
+    syncEditorToPreview()
+
+    assert.deepEqual(previewElement.scrollToCalls, [55])
+    assert.equal(previewElement.scrollTop, 55)
+  } finally {
+    clearScrollTimer()
+  }
 })
 
 test('恢复期激活时，预览区同步到编辑区不应触发编辑区滚动', () => {
