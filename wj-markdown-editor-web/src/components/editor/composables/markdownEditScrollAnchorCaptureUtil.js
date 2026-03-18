@@ -47,6 +47,71 @@ export function createMarkdownEditScrollAnchorCapture(options = {}) {
   }
 }
 
+/**
+ * 创建 MarkdownEdit 组件侧的预览区滚动恢复入口。
+ * 这一层负责把“锚点元素查找”“fallbackScrollTop 兜底”“最终写回滚动容器”串起来，
+ * 从而让组件 wiring 不会因为找不到精确 DOM 元素而直接放弃恢复。
+ *
+ * @param {{
+ *   findPreviewElementByAnchor?: (scrollElement: any, anchor: any) => any,
+ *   resolvePreviewLineAnchorScrollTop?: (payload: {
+ *     container: any,
+ *     element: any,
+ *     anchor: any,
+ *     fallbackScrollTop: number | undefined,
+ *   }) => number,
+ *   setScrollElementScrollTop?: (scrollElement: any, targetScrollTop: number) => void,
+ * }} options
+ * @returns {(payload: {
+ *   record?: { anchor?: any, fallbackScrollTop?: number } | null,
+ *   scrollElement?: any,
+ * }) => boolean} 返回供 useViewScrollAnchor 使用的 restoreAnchor 实现。
+ */
+export function createMarkdownEditPreviewScrollAnchorRestore(options = {}) {
+  const {
+    findPreviewElementByAnchor,
+    resolvePreviewLineAnchorScrollTop,
+    setScrollElementScrollTop,
+  } = options
+
+  /**
+   * 恢复右侧预览区滚动位置。
+   * 即使找不到精确锚点元素，也必须让 resolvePreviewLineAnchorScrollTop 接管兜底逻辑，
+   * 从而把已保存的 fallbackScrollTop 应用回滚动容器，而不是直接返回 false。
+   *
+   * @param {{
+   *   record?: { anchor?: any, fallbackScrollTop?: number } | null,
+   *   scrollElement?: any,
+   * }} payload
+   * @returns {boolean} 返回本轮是否已经完成一次有效恢复。
+   */
+  return function restorePreviewScrollAnchor(payload = {}) {
+    const { record, scrollElement } = payload
+    if (!scrollElement || typeof resolvePreviewLineAnchorScrollTop !== 'function') {
+      return false
+    }
+
+    const targetElement = typeof findPreviewElementByAnchor === 'function'
+      ? findPreviewElementByAnchor(scrollElement, record?.anchor)
+      : null
+
+    const targetScrollTop = resolvePreviewLineAnchorScrollTop({
+      container: scrollElement,
+      element: targetElement,
+      anchor: record?.anchor,
+      fallbackScrollTop: record?.fallbackScrollTop,
+    })
+
+    if (typeof setScrollElementScrollTop === 'function') {
+      setScrollElementScrollTop(scrollElement, targetScrollTop)
+      return true
+    }
+
+    return false
+  }
+}
+
 export default {
   createMarkdownEditScrollAnchorCapture,
+  createMarkdownEditPreviewScrollAnchorRestore,
 }

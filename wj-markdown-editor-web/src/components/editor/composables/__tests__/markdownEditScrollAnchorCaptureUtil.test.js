@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { ref } from 'vue'
 
+import { resolvePreviewLineAnchorScrollTop } from '../../../../util/editor/viewScrollAnchorMathUtil.js'
 import {
   createViewScrollAnchorSessionStore,
   getAnchorRecord,
@@ -31,6 +32,21 @@ function requireCreateMarkdownEditScrollAnchorCapture() {
   assert.equal(typeof createMarkdownEditScrollAnchorCapture, 'function')
 
   return createMarkdownEditScrollAnchorCapture
+}
+
+/**
+ * 统一断言组件侧 preview restore wiring 工具已经存在。
+ * 红灯阶段若导出缺失，测试会直接失败在这里，避免把问题误报成底层 store 或数学工具异常。
+ *
+ * @returns {Function} 返回待测的 createMarkdownEditPreviewScrollAnchorRestore 工厂函数。
+ */
+function requireCreateMarkdownEditPreviewScrollAnchorRestore() {
+  assert.ok(markdownEditScrollAnchorCaptureUtilModule, '缺少 markdown edit scroll anchor capture util')
+
+  const { createMarkdownEditPreviewScrollAnchorRestore } = markdownEditScrollAnchorCaptureUtilModule
+  assert.equal(typeof createMarkdownEditPreviewScrollAnchorRestore, 'function')
+
+  return createMarkdownEditPreviewScrollAnchorRestore
 }
 
 /**
@@ -110,6 +126,27 @@ function createEditorPreviewScrollAnchor(options) {
   })
 }
 
+/**
+ * 创建最小预览滚动容器。
+ * 这里保留 scrollTo 轨迹，便于断言 restore wiring 是否真正把 fallbackScrollTop 应用到了容器上。
+ *
+ * @returns {{
+ *   scrollTop: number,
+ *   scrollToCalls: number[],
+ *   scrollTo: ({ top }: { top: number }) => void,
+ * }} 返回带有滚动轨迹记录能力的最小滚动容器。
+ */
+function createPreviewScrollElement() {
+  return {
+    scrollTop: 0,
+    scrollToCalls: [],
+    scrollTo({ top }) {
+      this.scrollTop = top
+      this.scrollToCalls.push(top)
+    },
+  }
+}
+
 test('组件侧 captureViewScrollAnchors 在右侧预览隐藏时只更新 editor-code，并保留已有 editor-preview 记录', () => {
   const createMarkdownEditScrollAnchorCapture = requireCreateMarkdownEditScrollAnchorCapture()
   const store = createViewScrollAnchorSessionStore()
@@ -179,4 +216,47 @@ test('组件侧 captureViewScrollAnchors 在右侧预览隐藏时只更新 edito
   })
   assert.deepEqual(savedPreviewRecord.anchor, previousPreviewRecord.anchor)
   assert.equal(savedPreviewRecord.fallbackScrollTop, previousPreviewRecord.fallbackScrollTop)
+})
+
+test('组件侧预览恢复在找不到精确锚点元素时，会回退到 fallbackScrollTop', async () => {
+  const createMarkdownEditPreviewScrollAnchorRestore = requireCreateMarkdownEditPreviewScrollAnchorRestore()
+  const store = createViewScrollAnchorSessionStore()
+  const snapshotRef = createSnapshotRef()
+  const scrollElement = createPreviewScrollElement()
+
+  saveAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-preview',
+    revision: 7,
+    anchor: {
+      type: 'preview-line',
+      lineStart: 20,
+      lineEnd: 22,
+      elementOffsetRatio: 0.6,
+    },
+    fallbackScrollTop: 188,
+    savedAt: 1,
+  })
+
+  const editorPreviewScrollAnchor = useViewScrollAnchor({
+    store,
+    sessionIdGetter: () => snapshotRef.value.sessionId,
+    revisionGetter: () => snapshotRef.value.revision,
+    scrollAreaKey: 'editor-preview',
+    getScrollElement: () => scrollElement,
+    restoreAnchor: createMarkdownEditPreviewScrollAnchorRestore({
+      findPreviewElementByAnchor: () => null,
+      resolvePreviewLineAnchorScrollTop,
+      setScrollElementScrollTop: (targetScrollElement, targetScrollTop) => {
+        targetScrollElement.scrollTo({ top: targetScrollTop })
+      },
+    }),
+    waitLayoutStable: async () => {},
+  })
+
+  const restoreResult = await editorPreviewScrollAnchor.scheduleRestoreForCurrentSnapshot()
+
+  assert.equal(restoreResult, true)
+  assert.deepEqual(scrollElement.scrollToCalls, [188])
+  assert.equal(scrollElement.scrollTop, 188)
 })

@@ -2,7 +2,10 @@
 import Split from 'split-grid'
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { createMarkdownEditScrollAnchorCapture } from '@/components/editor/composables/markdownEditScrollAnchorCaptureUtil.js'
+import {
+  createMarkdownEditPreviewScrollAnchorRestore,
+  createMarkdownEditScrollAnchorCapture,
+} from '@/components/editor/composables/markdownEditScrollAnchorCaptureUtil.js'
 import { isPointerSelectionUpdate } from '@/components/editor/composables/selectionUpdateUtil.js'
 import { useAssetInsert } from '@/components/editor/composables/useAssetInsert.js'
 import { useAssociationHighlight } from '@/components/editor/composables/useAssociationHighlight.js'
@@ -419,23 +422,11 @@ const editorPreviewScrollAnchor = useViewScrollAnchor({
       scrollTop: scrollElement.scrollTop,
     })
   },
-  restoreAnchor: ({ record, scrollElement }) => {
-    if (!scrollElement) {
-      return false
-    }
-    const targetElement = findPreviewElementByAnchor(scrollElement, record?.anchor)
-    if (!targetElement) {
-      return false
-    }
-    const targetScrollTop = resolvePreviewLineAnchorScrollTop({
-      container: scrollElement,
-      element: targetElement,
-      anchor: record?.anchor,
-      fallbackScrollTop: record?.fallbackScrollTop,
-    })
-    setScrollElementScrollTop(scrollElement, targetScrollTop)
-    return true
-  },
+  restoreAnchor: createMarkdownEditPreviewScrollAnchorRestore({
+    findPreviewElementByAnchor,
+    resolvePreviewLineAnchorScrollTop,
+    setScrollElementScrollTop,
+  }),
 })
 
 const captureViewScrollAnchors = createMarkdownEditScrollAnchorCapture({
