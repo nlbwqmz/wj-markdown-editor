@@ -68,6 +68,10 @@ export function createEditorViewActivationRestoreScheduler(options = {}) {
           restoreInFlight = false
 
           if (scheduledToken !== requestToken) {
+            if (pendingRestore === true && latestSnapshotIdentity != null) {
+              rescheduleAfterInFlight = false
+              ensureScheduled()
+            }
             return
           }
 

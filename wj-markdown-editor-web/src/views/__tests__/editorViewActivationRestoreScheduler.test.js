@@ -168,3 +168,68 @@ test('restore 已启动但未完成时，后到 snapshot 应取消旧 restore，
     },
   ])
 })
+
+test('旧 restore 未完成就先失活再重新激活时，旧 promise 结束后仍会为新窗口的最新 identity 重新排队恢复', async () => {
+  const createEditorViewActivationRestoreScheduler = requireCreateEditorViewActivationRestoreScheduler()
+  const deferredScheduler = createDeferredScheduler()
+  const restoreCalls = []
+  const cancelCalls = []
+  const firstRestoreDeferred = createDeferred()
+
+  const scheduler = createEditorViewActivationRestoreScheduler({
+    schedule: deferredScheduler.schedule,
+    cancelActiveRestore: () => {
+      cancelCalls.push('cancelled')
+    },
+    restoreSnapshot: (snapshotIdentity) => {
+      restoreCalls.push(snapshotIdentity)
+
+      if (snapshotIdentity.revision === 7) {
+        return firstRestoreDeferred.promise
+      }
+    },
+  })
+
+  scheduler.markPendingRestore()
+  scheduler.applySnapshot({
+    sessionId: 'session-1',
+    revision: 7,
+  })
+
+  deferredScheduler.flush()
+
+  scheduler.cancelPendingRestore()
+  scheduler.markPendingRestore()
+  scheduler.applySnapshot({
+    sessionId: 'session-1',
+    revision: 9,
+  })
+
+  assert.equal(cancelCalls.length, 2)
+  assert.equal(deferredScheduler.queueSize(), 0)
+
+  // 新窗口此时只记录了最新 identity，但不会立即启动 restore；
+  // 真正恢复必须等旧 promise settle 后再重新排队。
+  assert.deepEqual(restoreCalls, [{
+    sessionId: 'session-1',
+    revision: 7,
+  }])
+
+  firstRestoreDeferred.resolve()
+  await firstRestoreDeferred.promise
+
+  assert.equal(deferredScheduler.queueSize(), 1)
+
+  deferredScheduler.flush()
+
+  assert.deepEqual(restoreCalls, [
+    {
+      sessionId: 'session-1',
+      revision: 7,
+    },
+    {
+      sessionId: 'session-1',
+      revision: 9,
+    },
+  ])
+})
