@@ -17,6 +17,12 @@ import settingUtil from './util/win/settingUtil.js'
 import './util/channel/ipcMainUtil.js'
 
 app.commandLine.appendSwitch('--disable-http-cache')
+/**
+ * 配置应用级 GPU 行为。
+ *
+ * 如果 windows 系统开启了 GPU渲染，当导出为图片时，在 Windows 机器上会触发 GPU 子进程崩溃，通过关闭硬件加速回退到软件渲染链路
+ */
+app.disableHardwareAcceleration()
 
 // 注册自定义协议特权（必须在 app.whenReady() 之前调用）
 try {

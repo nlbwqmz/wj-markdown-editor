@@ -87,9 +87,7 @@ function refreshSystemFontList() {
         })
       })
       systemFontList.value = list
-    }).catch((e) => {
-      message.error(e.message)
-    })
+    }).catch(() => {})
   }
 }
 

@@ -5,6 +5,7 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { useCommonStore } from '@/stores/counter.js'
 import { loadCodeTheme } from '@/util/codeThemeUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
+import { settleMermaidRender } from '@/util/previewMermaidRenderUtil.js'
 
 const props = defineProps({
   content: {
@@ -61,6 +62,7 @@ const PREVIEW_THROTTLE_MS = 180
 let previewRefreshRafId = null
 let previewRefreshTimer = null
 let lastPreviewRefreshAt = 0
+let previewRefreshSequence = 0
 
 function createRafTask(callback) {
   if (typeof requestAnimationFrame === 'function') {
@@ -339,7 +341,8 @@ watch(() => props.codeTheme, async (newTheme) => {
   }
 }, { immediate: true })
 
-function refreshPreview(doc, forceRefreshMermaid = false) {
+async function refreshPreview(doc, forceRefreshMermaid = false) {
+  const currentRefreshSequence = ++previewRefreshSequence
   let shouldRefreshMermaid = forceRefreshMermaid
   const rendered = md.render(doc)
   const tempElement = document.createElement('div')
@@ -359,8 +362,15 @@ function refreshPreview(doc, forceRefreshMermaid = false) {
   // 使用临时元素来更新，防止一些attribute没有映射到property上
   updateDOM(previewRef.value, tempElement)
 
-  if (shouldRefreshMermaid) {
-    mermaid.run()
+  await settleMermaidRender({
+    nodes: shouldRefreshMermaid ? previewRef.value.querySelectorAll('.mermaid') : [],
+    runMermaid: options => mermaid.run(options),
+    logError: (message, error) => {
+      console.error(message, error)
+    },
+  })
+  if (currentRefreshSequence !== previewRefreshSequence) {
+    return
   }
   updatePreviewAssetMetadata()
   pushAnchorList()
@@ -370,7 +380,7 @@ function refreshPreview(doc, forceRefreshMermaid = false) {
 function refreshPreviewImmediately(doc, forceRefreshMermaid = false) {
   clearPreviewRefreshScheduler()
   pendingContent.value = doc
-  refreshPreview(doc, forceRefreshMermaid)
+  refreshPreview(doc, forceRefreshMermaid).then(() => {})
   lastPreviewRefreshAt = Date.now()
 }
 
@@ -379,7 +389,7 @@ function flushScheduledPreviewRefresh() {
   const remainingMs = PREVIEW_THROTTLE_MS - (Date.now() - lastPreviewRefreshAt)
 
   if (remainingMs <= 0) {
-    refreshPreview(pendingContent.value)
+    refreshPreview(pendingContent.value).then(() => {})
     lastPreviewRefreshAt = Date.now()
     return
   }
@@ -389,7 +399,7 @@ function flushScheduledPreviewRefresh() {
   }
   previewRefreshTimer = setTimeout(() => {
     previewRefreshTimer = null
-    refreshPreview(pendingContent.value)
+    refreshPreview(pendingContent.value).then(() => {})
     lastPreviewRefreshAt = Date.now()
   }, remainingMs)
 }

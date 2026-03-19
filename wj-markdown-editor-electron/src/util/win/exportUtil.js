@@ -6,6 +6,8 @@ import configUtil from '../../data/configUtil.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
 import windowLifecycleService from '../document-session/windowLifecycleService.js'
+import { captureExportImageBuffer } from './exportImageCaptureUtil.js'
+import { createExportWindowOptions } from './exportWindowOptionsUtil.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -32,18 +34,10 @@ function createExportWin(winInfo, type) {
   if (filePath) {
     loadingKey = commonUtil.createId()
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: 'message.exporting', duration: 0, key: loadingKey } })
-    exportWin = new BrowserWindow({
-      width: 794,
-      frame: false,
-      modal: false,
-      maximizable: false,
-      resizable: false,
-      parent: winInfo.win,
-      show: false,
-      webPreferences: {
-        preload: path.resolve(__dirname, '../../preload.js'),
-      },
-    })
+    exportWin = new BrowserWindow(createExportWindowOptions({
+      parentWindow: winInfo.win,
+      preloadPath: path.resolve(__dirname, '../../preload.js'),
+    }))
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
       exportWin.loadURL(`http://localhost:8080/#/export?type=${type}&filePath=${filePath}`).then(() => {
         // exportWin.webContents.openDevTools({ mode: 'undocked' })
@@ -59,15 +53,11 @@ async function doExport(winInfo, data) {
     let buffer
     if (data.type === 'PNG' || data.type === 'JPEG') {
       const height = await exportWin.webContents.executeJavaScript(`document.documentElement.scrollHeight`)
-      exportWin.setSize(exportWin.getSize()[0], height)
-      // 等待调整布局
-      await new Promise(resolve => setTimeout(resolve, 500))
-      const image = await exportWin.webContents.capturePage()
-      if (data.type === 'PNG') {
-        buffer = image.toPNG()
-      } else if (data.type === 'JPEG') {
-        buffer = image.toJPEG(100)
-      }
+      buffer = await captureExportImageBuffer({
+        win: exportWin,
+        type: data.type,
+        contentHeight: height,
+      })
     } else if (data.type === 'PDF') {
       const config = configUtil.getConfig()
       const pageNumber = config.export.pdf.footer.pageNumber
@@ -89,7 +79,7 @@ async function doExport(winInfo, data) {
     console.error('导出失败', e)
     sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: 'message.exportFailed', duration: 3, key: loadingKey } })
   } finally {
-    exportWin.close()
+    exportWin?.close()
     exportWin = undefined
     loadingKey = undefined
   }
