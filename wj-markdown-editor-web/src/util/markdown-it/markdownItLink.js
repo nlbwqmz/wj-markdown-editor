@@ -1,5 +1,5 @@
 import commonUtil from '@/util/commonUtil.js'
-import { normalizeLocalResourcePath } from '@/util/resourceUrlUtil.js'
+import { normalizeLocalResourcePath, normalizeMarkdownAnchorHref } from '@/util/resourceUrlUtil.js'
 
 /**
  * 给链接加上_blank
@@ -23,6 +23,11 @@ export default function (md) {
     if (hrefIndex >= 0) {
       const href = tokens[idx].attrs[hrefIndex][1]
       if (href) {
+        if (href.startsWith('#')) {
+          tokens[idx].attrs[hrefIndex][1] = normalizeMarkdownAnchorHref(href)
+          return defaultRender(tokens, idx, options, env, self)
+        }
+
         const normalizedHref = normalizeLocalResourcePath(href)
         const convertedHref = commonUtil.convertResourceUrl(normalizedHref)
         tokens[idx].attrs[hrefIndex][1] = convertedHref

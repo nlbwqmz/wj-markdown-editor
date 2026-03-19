@@ -41,6 +41,33 @@ export function normalizeLocalResourcePath(src) {
 }
 
 /**
+ * 将 markdown 锚点链接规范化为与标题锚点一致的格式。
+ * 仅应用标题的基础 slug 规则，不处理重复标题编号。
+ * @param {string} href - 原始锚点链接
+ * @returns {string} - 规范化后的锚点链接
+ */
+export function normalizeMarkdownAnchorHref(href) {
+  if (typeof href !== 'string' || !href.startsWith('#') || href === '#') {
+    return href
+  }
+
+  const rawAnchor = href.slice(1)
+  let decodedAnchor = rawAnchor
+  try {
+    decodedAnchor = decodeURIComponent(rawAnchor)
+  } catch {
+    decodedAnchor = rawAnchor
+  }
+
+  const normalizedAnchor = String(decodedAnchor)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+
+  return `#${encodeURIComponent(normalizedAnchor)}`
+}
+
+/**
  * 将资源地址转换为稳定的资源 URL。
  * 本地路径转换为 wj 协议地址，显式协议地址、锚点链接和协议相对地址保持原样。
  * @param {string} src - 资源地址
@@ -69,5 +96,6 @@ export function convertResourceUrl(src) {
 export default {
   stringToHex,
   normalizeLocalResourcePath,
+  normalizeMarkdownAnchorHref,
   convertResourceUrl,
 }

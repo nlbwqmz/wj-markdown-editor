@@ -26,6 +26,56 @@ You can use toolbar shortcuts.
 |   Link   |          ['link', 'lj', 'lianjie', '链接']          |
 |   Color  |  ['color', 'text', 'ys', 'wzys', '文字颜色']   |
 
+## Anchor Links
+
+Headings generate anchors automatically. The recommended usage is to write the original heading text directly and let the renderer normalize the hash link for you.
+
+### Unique Headings
+
+\`\`\`markdown
+## Quick Start
+## 中文 / 标题
+## 中文 / 标题+++
+
+[Jump to Quick Start](#Quick Start)
+[Jump to 中文 / 标题](#中文 / 标题)
+[Jump to 中文 / 标题+++](#中文 / 标题+++)
+\`\`\`
+
+### Headings With Spaces or Symbols
+
+\`\`\`markdown
+## 中文   标题
+## 中文 /  标题
+## 中文  ---  标题-2
+## 中文 /  标题-1-2
+
+[Jump 1](#中文   标题)
+[Jump 2](#中文 /  标题)
+[Jump 3](#中文  ---  标题-2)
+[Jump 4](#中文 /  标题-1-2)
+\`\`\`
+
+### Duplicate Headings
+
+If the document contains duplicate headings, later headings receive suffixes such as \`-1\` and \`-2\`.  
+In that case, you need to link to the generated anchor explicitly instead of using the original heading text only.
+
+\`\`\`markdown
+## Hello World
+## Hello World
+
+[Jump to the first heading](#hello-world)
+[Jump to the second heading](#hello-world-1)
+\`\`\`
+
+### Notes
+
+- Markdown links starting with \`#\` are normalized with the same base rules as heading anchors during rendering.
+- The normalization rules are: trim leading and trailing spaces, convert to lowercase, collapse consecutive whitespace into a single \`-\`, and then URL-encode the result.
+- You do not need to manually encode Chinese text, spaces, \`/\`, \`+\`, or similar characters.
+- If you already wrote suffixes such as \`-1\` or \`-2\`, they are preserved and only encoded as part of the final anchor.
+
 ## Alert
 
 ### Syntax
