@@ -433,7 +433,7 @@ onActivated(async () => {
   if (activationAction === 'replay-store') {
     // 预览页恢复时同样先吃全局 store 里的最新真快照，
     // 避免在别的视图已经把 store 推进到最新正文后，这里还继续空白等待补拉。
-    applyDocumentSessionSnapshot(store.documentSessionSnapshot)
+    previewSessionSnapshotController.replaySnapshot(store.documentSessionSnapshot)
     return
   }
 

@@ -220,7 +220,7 @@ onActivated(() => {
     // 编辑页在 keep-alive 恢复时优先重放 store 里的最新真快照，
     // 这样就算当前视图自己的首轮 bootstrap 曾经失效，只要别的活动链路已经把 store 推进到真相，
     // 本页也能立刻恢复正文，而不用继续空白等待下一次 IPC。
-    applyDocumentSessionSnapshot(store.documentSessionSnapshot)
+    editorSessionSnapshotController.replaySnapshot(store.documentSessionSnapshot)
     return
   }
 

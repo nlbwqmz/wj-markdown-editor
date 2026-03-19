@@ -44,7 +44,7 @@ function createRendererSessionSnapshotController({
     throw new TypeError('syncClosePrompt 必须显式提供，避免视图遗漏 closePrompt 同步链路')
   }
 
-  return createEditorSessionSnapshotController({
+  const editorSessionSnapshotController = createEditorSessionSnapshotController({
     applySnapshot,
     // Editor / Preview 会各自持有一份 view 级 controller；
     // 如果 recent-missing 提示状态也跟着各自维护，keep-alive 下同一路径会各弹一次确认框。
@@ -57,6 +57,15 @@ function createRendererSessionSnapshotController({
     syncClosePrompt,
     setDocumentTitle,
   })
+
+  return {
+    ...editorSessionSnapshotController,
+    // keep-alive 恢复时如果直接重放 store 快照，也必须复用统一副作用链，
+    // 否则 recent-missing / closePrompt 会被绕开，直到下一次真实 push 才补弹。
+    replaySnapshot(snapshot) {
+      return editorSessionSnapshotController.applyPushedSnapshot(snapshot)
+    },
+  }
 }
 
 export {
