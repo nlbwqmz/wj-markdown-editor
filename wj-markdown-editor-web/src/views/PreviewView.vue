@@ -518,7 +518,17 @@ function onAssetOpen(assetInfo) {
     <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">
         <div class="h-full w-full" :style="{ width: `${config.previewWidth}%` }">
-          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" @refresh-complete="onPreviewRefreshComplete" @anchor-change="onAnchorChange" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
+          <MarkdownPreview
+            :content="content"
+            :code-theme="config.theme.code"
+            :preview-theme="config.theme.preview"
+            :preview-scroll-container="() => previewContainerRef"
+            :watermark="watermark"
+            @refresh-complete="onPreviewRefreshComplete"
+            @anchor-change="onAnchorChange"
+            @asset-contextmenu="onAssetContextmenu"
+            @asset-open="onAssetOpen"
+          />
         </div>
       </div>
     </div>
