@@ -1,5 +1,7 @@
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createBoundFileSession } from './document-session/documentSessionFactory.js'
+import { createWatchCoordinator } from './document-session/watchCoordinator.js'
 import fileWatchUtil from './fileWatchUtil.js'
 
 function sleep(ms = 0) {
@@ -49,12 +51,31 @@ describe('fileWatchUtil', () => {
 
     fileWatchUtil.markInternalSave(state, '# 标题')
     state.lastInternalSaveAt -= 10
+    state.recentInternalSaves[0].savedAt -= 10
 
     const result = fileWatchUtil.resolveExternalChange(state, '# 标题')
 
     expect(result.changed).toBe(true)
     expect(result.reason).toBe('external-change')
     expect(result.change.version).toBe(1)
+  })
+
+  it('连续内部保存时，较早一轮写盘内容在抑制窗口内晚到，也应继续识别为内部保存', () => {
+    const state = fileWatchUtil.createWatchState()
+
+    // 模拟连续补写：
+    // 先记录第一轮内部写盘，再立刻记录第二轮内部写盘。
+    // 如果此时 watcher 晚到的是第一轮的磁盘内容，仍然必须识别为 internal-save，
+    // 不能因为“最新槽位已被第二轮覆盖”就误判成外部修改。
+    fileWatchUtil.markInternalSave(state, '# 第一轮内容')
+    fileWatchUtil.markInternalSave(state, '# 第二轮内容')
+
+    const result = fileWatchUtil.resolveExternalChange(state, '# 第一轮内容')
+
+    expect(result.changed).toBe(false)
+    expect(result.reason).toBe('internal-save')
+    expect(state.currentVersion).toBe(0)
+    expect(state.pendingChange).toBeNull()
   })
 
   it('应该在忽略后清理状态，并抑制同一版本的重复事件', () => {
@@ -192,6 +213,39 @@ describe('fileWatchUtil', () => {
     })
   })
 
+  it('Windows 下目录 watcher 回调文件名大小写不同也必须命中同一订阅文件', async () => {
+    const state = fileWatchUtil.createWatchState()
+    const filePath = createFilePath('docs', 'demo.md')
+    const readFile = vi.fn().mockResolvedValue('# 外部版本 1')
+    const onExternalChange = vi.fn()
+    let listener
+
+    const watch = vi.fn((_targetPath, callback) => {
+      listener = callback
+      return { close: vi.fn() }
+    })
+
+    fileWatchUtil.startWatching({
+      state,
+      filePath,
+      debounceMs: 0,
+      readFile,
+      onExternalChange,
+      watch,
+    })
+
+    const eventFileName = process.platform === 'win32'
+      ? path.basename(filePath).toUpperCase()
+      : path.basename(filePath)
+
+    await listener('change', eventFileName)
+    await sleep()
+    await sleep()
+
+    expect(readFile).toHaveBeenCalledTimes(1)
+    expect(onExternalChange).toHaveBeenCalledTimes(1)
+  })
+
   it('目录事件未提供文件名时，应对目录下所有已订阅文件触发检查', async () => {
     const stateA = fileWatchUtil.createWatchState()
     const stateB = fileWatchUtil.createWatchState()
@@ -277,6 +331,95 @@ describe('fileWatchUtil', () => {
     expect(onExternalChange.mock.calls[0][0]).toMatchObject({
       version: 1,
       content: '# 恢复后的内容',
+    })
+  })
+
+  it('缺失后首次成功读盘如果同轮同时触发 restored/change，标准化 observedAt 必须保证协调器不会吞掉首个有效读盘', async () => {
+    const state = fileWatchUtil.createWatchState()
+    const filePath = createFilePath('docs', 'restored-same-turn.md')
+    const watchCoordinator = createWatchCoordinator({
+      now: () => 1700000004000,
+    })
+    const session = createBoundFileSession({
+      sessionId: 'restored-same-turn-session',
+      path: filePath,
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000004000,
+    })
+    let restoredMeta = null
+    let changedMeta = null
+    let listener
+
+    session.watchRuntime.bindingToken = 8
+    session.watchRuntime.status = 'active'
+    session.watchRuntime.watchingPath = filePath
+    session.watchRuntime.watchingDirectoryPath = path.dirname(filePath)
+
+    fileWatchUtil.startWatching({
+      state,
+      filePath,
+      bindingToken: 8,
+      debounceMs: 0,
+      readFile: vi.fn()
+        .mockRejectedValueOnce(createMissingError())
+        .mockResolvedValueOnce('# 恢复后的外部内容'),
+      onMissing: (_error, meta) => {
+        watchCoordinator.dispatch(session, {
+          command: 'watch.file-missing',
+          payload: {
+            bindingToken: meta.bindingToken,
+            watchingPath: meta.watchingPath,
+            observedAt: meta.observedAt,
+          },
+        })
+      },
+      onRestored: (_diskContent, meta) => {
+        restoredMeta = meta
+        watchCoordinator.dispatch(session, {
+          command: 'watch.file-restored',
+          payload: {
+            bindingToken: meta.bindingToken,
+            watchingPath: meta.watchingPath,
+            observedAt: meta.observedAt,
+          },
+        })
+      },
+      onExternalChange: (change, meta) => {
+        changedMeta = meta
+        watchCoordinator.dispatch(session, {
+          command: 'watch.file-changed',
+          payload: {
+            bindingToken: meta.bindingToken,
+            watchingPath: meta.watchingPath,
+            observedAt: meta.observedAt,
+            diskContent: change.content,
+          },
+        })
+      },
+      watch: (_targetPath, callback) => {
+        listener = callback
+        return { close: vi.fn() }
+      },
+    })
+
+    await listener('rename', path.basename(filePath))
+    await sleep()
+    await sleep()
+
+    expect(session.externalRuntime.resolutionState).toBe('missing')
+
+    await listener('rename', path.basename(filePath))
+    await sleep()
+    await sleep()
+
+    expect(restoredMeta).not.toBeNull()
+    expect(changedMeta).not.toBeNull()
+    expect(changedMeta.observedAt).toBeGreaterThan(restoredMeta.observedAt)
+    expect(session.externalRuntime.resolutionState).toBe('pending-user')
+    expect(session.externalRuntime.pendingExternalChange).toMatchObject({
+      diskContent: '# 恢复后的外部内容',
+      watchBindingToken: 8,
     })
   })
 
@@ -414,5 +557,86 @@ describe('fileWatchUtil', () => {
       versionHash: fileWatchUtil.createContentVersion('# 新文件版本'),
       content: '# 新文件版本',
     })
+  })
+
+  it('标准化 onExternalChange 回调 payload 必须携带 bindingToken、observedAt 和 watchingPath', async () => {
+    const state = fileWatchUtil.createWatchState()
+    const filePath = createFilePath('docs', 'payload-demo.md')
+    const onExternalChange = vi.fn()
+    let listener
+
+    fileWatchUtil.startWatching({
+      state,
+      filePath,
+      bindingToken: 9,
+      debounceMs: 0,
+      readFile: vi.fn().mockResolvedValue('# 外部最新内容'),
+      onExternalChange,
+      watch: (_targetPath, callback) => {
+        listener = callback
+        return { close: vi.fn() }
+      },
+    })
+
+    await listener('change', path.basename(filePath))
+    await sleep()
+    await sleep()
+
+    expect(onExternalChange).toHaveBeenCalledTimes(1)
+    expect(onExternalChange.mock.calls[0][1]).toMatchObject({
+      reason: 'external-change',
+      bindingToken: 9,
+      watchingPath: filePath,
+    })
+    expect(typeof onExternalChange.mock.calls[0][1].observedAt).toBe('number')
+  })
+
+  it('标准化 missing / restored 回调 payload 也必须携带 bindingToken、observedAt 和 watchingPath', async () => {
+    const state = fileWatchUtil.createWatchState()
+    const filePath = createFilePath('docs', 'payload-missing-restored.md')
+    const onMissing = vi.fn()
+    const onRestored = vi.fn()
+    let listener
+
+    fileWatchUtil.startWatching({
+      state,
+      filePath,
+      bindingToken: 12,
+      debounceMs: 0,
+      readFile: vi.fn()
+        .mockRejectedValueOnce(createMissingError())
+        .mockResolvedValueOnce('# 恢复后的内容'),
+      onExternalChange: vi.fn(),
+      onMissing,
+      onRestored,
+      watch: (_targetPath, callback) => {
+        listener = callback
+        return { close: vi.fn() }
+      },
+    })
+
+    await listener('rename', path.basename(filePath))
+    await sleep()
+    await sleep()
+
+    expect(onMissing).toHaveBeenCalledTimes(1)
+    expect(onMissing.mock.calls[0][1]).toMatchObject({
+      stage: 'missing',
+      bindingToken: 12,
+      watchingPath: filePath,
+    })
+    expect(typeof onMissing.mock.calls[0][1].observedAt).toBe('number')
+
+    await listener('rename', path.basename(filePath))
+    await sleep()
+    await sleep()
+
+    expect(onRestored).toHaveBeenCalledTimes(1)
+    expect(onRestored.mock.calls[0][1]).toMatchObject({
+      stage: 'restored',
+      bindingToken: 12,
+      watchingPath: filePath,
+    })
+    expect(typeof onRestored.mock.calls[0][1].observedAt).toBe('number')
   })
 })

@@ -1,10 +1,14 @@
 <script setup>
+import { message } from 'ant-design-vue'
 import { computed, onBeforeMount, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import log from '@/assets/img/logo.png'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import { createLayoutTopOpenFolderAction } from './layoutTopOpenFolderAction.js'
 
 const store = useCommonStore()
+const { t } = useI18n()
 
 function minimize() {
   channelUtil.send({ event: 'minimize' })
@@ -18,9 +22,12 @@ function restore() {
 function close() {
   channelUtil.send({ event: 'close' })
 }
-function openFolder() {
-  channelUtil.send({ event: 'open-folder' })
-}
+const openFolder = createLayoutTopOpenFolderAction({
+  sendCommand: payload => channelUtil.send(payload),
+  notifyDocumentNotSaved: () => {
+    message.warning(t('message.theCurrentFileIsNotSaved'))
+  },
+})
 
 function openAbout() {
   channelUtil.send({ event: 'open-about' })

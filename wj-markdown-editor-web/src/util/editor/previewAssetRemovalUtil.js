@@ -1,6 +1,7 @@
 import MarkdownIt from 'markdown-it'
 import linkRule from 'markdown-it/lib/rules_inline/link.mjs'
 import StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs'
+import { shouldContinueMarkdownCleanup } from './previewAssetDeleteDecisionUtil.js'
 
 const markdownItLinkMatcher = new MarkdownIt({
   html: true,
@@ -423,6 +424,18 @@ function resolveSelectedRemovalRange(content, asset, matchedAssetList) {
   return occurrenceMatch ? getStandaloneLineRemovalRange(content, occurrenceMatch) : null
 }
 
+export function shouldCleanupMarkdownAfterDeleteResult(deleteResult) {
+  if (deleteResult?.ok === true) {
+    return true
+  }
+
+  // renderer 侧只能根据主进程返回的结构化 reason 决定是否继续清理 Markdown。
+  // 这里单独收口的原因有两个：
+  // 1. `delete-failed` 必须明确阻断清理，避免“文件没删掉但正文先删了”的状态分叉
+  // 2. 旧编辑区和后续预览区如果都要复用这条裁决，就不应该再把原因判断散落在视图里
+  return shouldContinueMarkdownCleanup(deleteResult?.reason)
+}
+
 export function findAssetMarkdownRange(content, asset) {
   if (!content || !asset?.kind || !asset?.rawSrc) {
     return null
@@ -517,4 +530,5 @@ export default {
   findAssetMarkdownRange,
   removeAllAssetReferencesFromMarkdown,
   removeAssetFromMarkdown,
+  shouldCleanupMarkdownAfterDeleteResult,
 }

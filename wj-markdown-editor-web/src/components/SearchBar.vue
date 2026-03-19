@@ -3,113 +3,97 @@ import Mark from 'mark.js'
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useCommonStore } from '@/stores/counter.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
+import { createEmptySearchResult, getNextSearchCurrent, resolveSearchResult } from '@/util/searchBarStateUtil.js'
 
 const inputRef = ref()
 const searchBarRef = ref()
 const store = useCommonStore()
-let markInstance = null
 // 因是跨标签匹配，所以每一项为一个下标数组
 const markIndexGroup = ref([])
-
-function getMarkInstance() {
-  if (!markInstance) {
-    markInstance = new Mark('.allow-search')
-  }
-  return markInstance
-}
 
 const searchOption = ref({
   content: '',
   caseSensitive: false,
 })
 
-const result = ref({
-  total: 0,
-  current: 0,
-})
+const result = ref(createEmptySearchResult())
 
 // 拖拽相关状态
 const isDragging = ref(false)
 const startPos = ref({ x: 0, y: 0 })
 const modalPos = ref({ x: 0, y: 0 })
 
-function doSearch() {
-  const newValue = searchOption.value.content
-  const instance = getMarkInstance()
-  instance.unmark()
-  if (newValue) {
-    markIndexGroup.value = []
-    instance.mark(newValue, { element: 'span', className: 'search-mark', acrossElements: true, caseSensitive: searchOption.value.caseSensitive, done: () => {
-      nextTick(() => {
-        const markList = document.querySelectorAll('.search-mark')
-        const currentResult = { total: 0, current: 0 }
-        let text = ''
-        // 跨标签搜索，匹配项可能由好几个下标组成
-        for (let i = 0; i < markList.length; i++) {
-          const isNew = text === ''
-          text = isNew ? markList.item(i).textContent : text + markList.item(i).textContent
-          if ((searchOption.value.caseSensitive && text === newValue) || (!searchOption.value.caseSensitive && text.toUpperCase() === newValue.toUpperCase())) {
-            currentResult.total++
-            text = ''
-          }
-          if (isNew) {
-            markIndexGroup.value.push([i])
-          } else {
-            if (markIndexGroup.value.length === 0) {
-              markIndexGroup.value.push([])
-            }
-            markIndexGroup.value[markIndexGroup.value.length - 1].push(i)
-          }
-        }
-        result.value = currentResult
-      })
-    } })
-  } else {
-    result.value = {
-      total: 0,
-      current: 0,
-    }
-  }
+function getSearchTargetElements() {
+  return previewSearchBarController.getTargetElements()
 }
 
-watch(() => searchOption.value, () => {
-  doSearch()
-}, { deep: true })
+function getCleanupTargetElements() {
+  return previewSearchBarController.getCleanupTargetElements()
+}
 
-function renderActiveMarkHighlight() {
-  const highlightList = document.querySelectorAll('.search-mark-highlight')
-  highlightList.forEach((node) => {
+function collectMarkedNodes(className, targetElements = getSearchTargetElements()) {
+  const nodeSet = new Set()
+  const nodeList = []
+  targetElements.forEach((element) => {
+    const matchedNodes = element.querySelectorAll(`.${className}`)
+    matchedNodes.forEach((node) => {
+      if (!nodeSet.has(node)) {
+        nodeSet.add(node)
+        nodeList.push(node)
+      }
+    })
+  })
+  return nodeList
+}
+
+function clearActiveMarkHighlight(targetElements = getSearchTargetElements()) {
+  collectMarkedNodes('search-mark-highlight', targetElements).forEach((node) => {
     node.classList.remove('search-mark-highlight')
   })
-  const markList = document.querySelectorAll('.search-mark')
-  let executed = false
-  markIndexGroup.value[result.value.current - 1].forEach((index) => {
-    markList.item(index).classList.add('search-mark-highlight')
-    if (executed === false) {
-      markList.item(index).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-      executed = true
-    }
-  })
 }
 
-function handleSearchBarUp() {
-  if (result.value.total > 0) {
-    if (result.value.current <= 1) {
-      result.value.current = markIndexGroup.value.length
-    } else {
-      result.value.current--
-    }
-    renderActiveMarkHighlight()
+function clearSearchMarks(targetElements = getCleanupTargetElements()) {
+  if (targetElements.length === 0) {
+    return
   }
+  new Mark(targetElements).unmark({ element: 'span', className: 'search-mark' })
 }
-function handleSearchBarDown() {
-  if (result.value.total > 0) {
-    if (result.value.current === markIndexGroup.value.length) {
-      result.value.current = 1
-    } else {
-      result.value.current++
+
+function resetSearchIndex() {
+  markIndexGroup.value = []
+  result.value = createEmptySearchResult()
+}
+
+function buildMarkIndexGroup(markList, searchContent, caseSensitive) {
+  const nextMarkIndexGroup = []
+  let total = 0
+  let text = ''
+
+  for (let i = 0; i < markList.length; i++) {
+    const currentNode = markList[i]
+    const currentText = currentNode.textContent || ''
+    const isNew = text === ''
+
+    text = isNew ? currentText : text + currentText
+
+    if ((caseSensitive && text === searchContent) || (!caseSensitive && text.toUpperCase() === searchContent.toUpperCase())) {
+      total++
+      text = ''
     }
-    renderActiveMarkHighlight()
+
+    if (isNew) {
+      nextMarkIndexGroup.push([i])
+    } else {
+      if (nextMarkIndexGroup.length === 0) {
+        nextMarkIndexGroup.push([])
+      }
+      nextMarkIndexGroup[nextMarkIndexGroup.length - 1].push(i)
+    }
+  }
+
+  return {
+    total,
+    nextMarkIndexGroup,
   }
 }
 
@@ -146,14 +130,113 @@ function stopDrag() {
   window.removeEventListener('mouseup', stopDrag)
 }
 
-function clearSearchHighlight() {
-  markInstance?.unmark()
+function clearSearchHighlight({ targetElements } = {}) {
+  const cleanupTargetElements = targetElements || getCleanupTargetElements()
+  clearActiveMarkHighlight(cleanupTargetElements)
+  clearSearchMarks(cleanupTargetElements)
+  resetSearchIndex()
+}
+
+async function rebuildSearchIndex() {
+  const currentContent = searchOption.value.content
+  const targetElements = getSearchTargetElements()
+
+  clearActiveMarkHighlight()
+  clearSearchMarks(targetElements)
   markIndexGroup.value = []
-  result.value = {
-    total: 0,
-    current: 0,
+
+  if (!currentContent || targetElements.length === 0) {
+    resetSearchIndex()
+    return result.value
+  }
+
+  return await new Promise((resolve) => {
+    new Mark(targetElements).mark(currentContent, {
+      element: 'span',
+      className: 'search-mark',
+      acrossElements: true,
+      caseSensitive: searchOption.value.caseSensitive,
+      done: () => {
+        nextTick(() => {
+          const markList = collectMarkedNodes('search-mark')
+          const { total, nextMarkIndexGroup } = buildMarkIndexGroup(markList, currentContent, searchOption.value.caseSensitive)
+          markIndexGroup.value = nextMarkIndexGroup
+          result.value = resolveSearchResult({
+            total,
+            previousCurrent: result.value.current,
+            preserveCurrent: false,
+          })
+          if (result.value.current > 0) {
+            applyCurrentHighlight({ scrollIntoView: false })
+          }
+          resolve(result.value)
+        })
+      },
+    })
+  })
+}
+
+function applyCurrentHighlight({ scrollIntoView = true } = {}) {
+  clearActiveMarkHighlight()
+
+  const currentIndexGroup = markIndexGroup.value[result.value.current - 1]
+  if (!currentIndexGroup || currentIndexGroup.length === 0) {
+    return false
+  }
+
+  const markList = collectMarkedNodes('search-mark')
+  let executed = false
+
+  for (const index of currentIndexGroup) {
+    const targetNode = markList[index]
+    if (!targetNode) {
+      return false
+    }
+    targetNode.classList.add('search-mark-highlight')
+    if (executed === false && scrollIntoView === true) {
+      targetNode.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+      executed = true
+    }
+  }
+
+  return true
+}
+
+function handleSearchBarUp() {
+  if (!searchOption.value.content || result.value.total === 0) {
+    return
+  }
+
+  result.value.current = getNextSearchCurrent({
+    current: result.value.current,
+    total: result.value.total,
+    direction: 'up',
+  })
+
+  if (applyCurrentHighlight({ scrollIntoView: true }) === false) {
+    previewSearchBarController.close(store)
   }
 }
+
+function handleSearchBarDown() {
+  if (!searchOption.value.content || result.value.total === 0) {
+    return
+  }
+
+  result.value.current = getNextSearchCurrent({
+    current: result.value.current,
+    total: result.value.total,
+    direction: 'down',
+  })
+
+  if (applyCurrentHighlight({ scrollIntoView: true }) === false) {
+    previewSearchBarController.close(store)
+  }
+}
+
+watch(() => searchOption.value, async () => {
+  await rebuildSearchIndex()
+}, { deep: true })
 
 // 组件卸载时清理
 onUnmounted(() => {

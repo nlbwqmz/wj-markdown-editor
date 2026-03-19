@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { app } from 'electron'
 import fs from 'fs-extra'
+import { toComparableDocumentPath } from '../util/document-session/documentOpenTargetUtil.js'
 
 let recent = []
 let maxSize = 10
@@ -12,6 +13,42 @@ const recentPath = path.resolve(documentsPath, 'recent.json')
 async function write() {
   await fs.writeFile(recentPath, JSON.stringify(recent), 'utf-8')
   callback && callback(parseRecent())
+}
+
+function normalizeRecentPath(filePath) {
+  if (typeof filePath !== 'string' || filePath.trim() === '') {
+    return null
+  }
+
+  return filePath.trim()
+}
+
+function getRecentComparableKey(filePath) {
+  const normalizedFilePath = normalizeRecentPath(filePath)
+  if (!normalizedFilePath) {
+    return null
+  }
+
+  return toComparableDocumentPath(normalizedFilePath) || normalizedFilePath
+}
+
+function normalizeRecentList(recentList) {
+  if (!Array.isArray(recentList)) {
+    return []
+  }
+
+  const seenPathKey = new Set()
+  return recentList.reduce((result, item) => {
+    const normalizedFilePath = normalizeRecentPath(item)
+    const comparableKey = getRecentComparableKey(normalizedFilePath)
+    if (!normalizedFilePath || !comparableKey || seenPathKey.has(comparableKey)) {
+      return result
+    }
+
+    seenPathKey.add(comparableKey)
+    result.push(normalizedFilePath)
+    return result
+  }, [])
 }
 
 function parseRecent() {
@@ -29,11 +66,16 @@ async function initRecent(max, callbackFunction) {
   try {
     await fs.ensureDir(documentsPath)
     if (await fs.pathExists(recentPath)) {
-      recent = JSON.parse(await fs.readFile(recentPath, 'utf-8'))
+      const recentContent = JSON.parse(await fs.readFile(recentPath, 'utf-8'))
+      recent = normalizeRecentList(recentContent)
+      if (JSON.stringify(recentContent) !== JSON.stringify(recent)) {
+        await fs.writeFile(recentPath, JSON.stringify(recent), 'utf-8')
+      }
     } else {
       await fs.writeFile(recentPath, JSON.stringify([]), 'utf-8')
     }
   } catch {
+    recent = []
     await fs.writeFile(recentPath, JSON.stringify([]), 'utf-8')
   }
 }
@@ -44,21 +86,30 @@ async function clear() {
 }
 
 async function add(filePath) {
-  if (!maxSize || maxSize <= 0) {
+  const normalizedFilePath = normalizeRecentPath(filePath)
+  const comparableKey = getRecentComparableKey(normalizedFilePath)
+  if (!maxSize || maxSize <= 0 || !normalizedFilePath || !comparableKey) {
     return
   }
-  if (recent.includes(filePath)) {
-    recent.splice(recent.indexOf(filePath), 1)
-  }
-  if (recent.unshift(filePath) > maxSize) {
+
+  recent = recent.filter(item => getRecentComparableKey(item) !== comparableKey)
+  recent.unshift(normalizedFilePath)
+  recent = normalizeRecentList(recent)
+  if (recent.length > maxSize) {
     recent.pop()
   }
   await write()
 }
 
 async function remove(filePath) {
-  if (recent.includes(filePath)) {
-    recent.splice(recent.indexOf(filePath), 1)
+  const comparableKey = getRecentComparableKey(filePath)
+  if (!comparableKey) {
+    return
+  }
+
+  const nextRecent = recent.filter(item => getRecentComparableKey(item) !== comparableKey)
+  if (nextRecent.length !== recent.length) {
+    recent = nextRecent
     await write()
   }
 }
@@ -71,6 +122,7 @@ export default {
   get: () => parseRecent(),
   setMax: async (max) => {
     maxSize = max || 0
+    recent = normalizeRecentList(recent)
     while (recent.length > maxSize && recent.length !== 0) {
       recent.pop()
     }

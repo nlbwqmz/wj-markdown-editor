@@ -1,17 +1,44 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { net, protocol, session } from 'electron'
+import { BrowserWindow, net, protocol, session, webContents } from 'electron'
 import commonUtil from './commonUtil.js'
-import winInfoUtil from './win/winInfoUtil.js'
+import windowLifecycleService from './document-session/windowLifecycleService.js'
+import { resolveWindowIdForProtocolRequest } from './protocolRequestContextUtil.js'
 
 let headerHookInitialized = false
+
+/**
+ * 从请求来源的 webContents 中回退解析父窗口 ID。
+ *
+ * 导出页等临时子窗口不会注册到 windowLifecycleService，
+ * 但它们的本地资源解析仍应继承父编辑窗口的文档上下文。
+ *
+ * @param {number} webContentsId
+ * @returns {string | null} 返回可用于协议解析的父窗口 ID
+ */
+function getParentWindowIdByWebContentsId(webContentsId) {
+  if (!Number.isInteger(webContentsId)) {
+    return null
+  }
+
+  const requestWebContents = webContents.fromId(webContentsId)
+  if (!requestWebContents) {
+    return null
+  }
+
+  const requestWindow = BrowserWindow.fromWebContents(requestWebContents)
+  const parentWindow = requestWindow?.getParentWindow?.()
+  const parentWinInfo = parentWindow ? windowLifecycleService.getWinInfo(parentWindow) : null
+
+  return parentWinInfo?.id || null
+}
 
 /**
  * 检查文件类型是否允许通过协议访问。
  *
  * @param {string} filePath 文件路径
- * @returns {boolean}
+ * @returns {boolean} 是否允许通过协议访问该文件
  */
 function isAllowedFileType(filePath) {
   const ext = path.extname(filePath).toLowerCase()
@@ -47,7 +74,7 @@ function isAllowedFileType(filePath) {
  * 根据扩展名获取 MIME 类型。
  *
  * @param {string} filePath 文件路径
- * @returns {string}
+ * @returns {string} 对应的 MIME 类型
  */
 function getMimeType(filePath) {
   const ext = path.extname(filePath).toLowerCase()
@@ -84,7 +111,7 @@ function getMimeType(filePath) {
  *
  * @param {string} filePath 文件绝对路径
  * @param {string} rangeHeader Range 请求头
- * @returns {Promise<Response>}
+ * @returns {Promise<Response>} 供协议层直接返回的范围响应
  */
 async function handleRangeRequest(filePath, rangeHeader) {
   try {
@@ -152,9 +179,13 @@ function initHeaderHook() {
       try {
         const requestHeaders = details.requestHeaders || {}
         if (details.url.startsWith('wj:')) {
-          const winInfo = winInfoUtil.getByWebContentsId(details.webContentsId)
-          if (winInfo) {
-            requestHeaders['X-Window-ID'] = winInfo.id
+          const windowId = resolveWindowIdForProtocolRequest({
+            webContentsId: details.webContentsId,
+            getWindowIdByWebContentsId: webContentsId => windowLifecycleService.getByWebContentsId(webContentsId)?.id || null,
+            getParentWindowIdByWebContentsId,
+          })
+          if (windowId) {
+            requestHeaders['X-Window-ID'] = windowId
           }
         }
         callback({ requestHeaders })
@@ -195,19 +226,20 @@ export default {
             resolvedPath = decodedUrl
           } else {
             const windowId = request.headers.get('X-Window-ID')
-            const winInfo = winInfoUtil.getWinInfo(windowId)
+            const winInfo = windowLifecycleService.getWinInfo(windowId)
+            const documentContext = winInfo ? windowLifecycleService.getDocumentContext(winInfo) : null
 
-            if (!winInfo || !winInfo.path) {
+            if (!documentContext?.path) {
               console.warn('[Protocol] Cannot resolve relative path without window context:', {
                 decodedPath: decodedUrl,
                 windowId,
                 hasWinInfo: !!winInfo,
-                hasPath: winInfo ? !!winInfo.path : false,
+                hasPath: Boolean(documentContext?.path),
               })
               return new Response('Not Found: No document context for relative path', { status: 404 })
             }
 
-            const basePath = path.dirname(winInfo.path)
+            const basePath = path.dirname(documentContext.path)
             resolvedPath = path.resolve(basePath, decodedUrl)
           }
 

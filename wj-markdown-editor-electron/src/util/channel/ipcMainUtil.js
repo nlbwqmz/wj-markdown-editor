@@ -1,8 +1,9 @@
 import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
+import { getDocumentSessionRuntime } from '../document-session/documentSessionRuntime.js'
+import windowLifecycleService from '../document-session/windowLifecycleService.js'
 import fileUploadUtil from '../fileUploadUtil.js'
 import imgUtil from '../imgUtil.js'
 import resourceFileUtil from '../resourceFileUtil.js'
@@ -12,8 +13,10 @@ import exportUtil from '../win/exportUtil.js'
 import guideUtil from '../win/guideUtil.js'
 import screenshotsUtil from '../win/screenshotsUtil.js'
 import settingUtil from '../win/settingUtil.js'
-import winInfoUtil from '../win/winInfoUtil.js'
-import sendUtil from './sendUtil.js'
+
+function executeRuntimeUiCommand(winInfo, command, payload) {
+  return getDocumentSessionRuntime().executeUiCommand(winInfo?.id || winInfo?.win?.id || null, command, payload)
+}
 
 async function uploadImage(winInfo, data) {
   const config = configUtil.getConfig()
@@ -25,6 +28,38 @@ async function uploadImage(winInfo, data) {
     data.name += '.png'
   }
   return imgUtil.save(winInfo, data, config)
+}
+
+/**
+ * 资源打开失败后，统一经由 session bridge 下发一次性提示。
+ *
+ * 路径解析、query/hash 回退和未保存文档判定都必须交给 documentResourceService，
+ * IPC 层只负责把结构化结果翻译成当前 renderer 已收口的 `window.effect.message` 契约。
+ */
+async function handleResourceOpen(winInfo, data) {
+  const openResult = await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.open-in-folder', data)
+  if (!openResult) {
+    return openResult
+  }
+
+  if (openResult.ok !== true) {
+    const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
+    if (messageKey) {
+      windowLifecycleService.publishWindowMessage(winInfo, {
+        type: 'warning',
+        content: messageKey,
+      })
+    }
+    return openResult
+  }
+
+  if (openResult.opened !== true && openResult.reason === 'not-found') {
+    windowLifecycleService.publishWindowMessage(winInfo, {
+      type: 'warning',
+      content: 'message.theFileDoesNotExist',
+    })
+  }
+  return openResult
 }
 
 const handlerList = {
@@ -58,119 +93,44 @@ const handlerList = {
     winInfo.forceClose = true
     winInfo.win.close()
   },
-  'open-folder': async (winInfo, data) => {
-    if (typeof data === 'string' || (data && typeof data === 'object' && typeof data.resourceUrl === 'string')) {
-      const openResult = await resourceFileUtil.openLocalResourceInFolder(winInfo, data, shell.showItemInFolder)
-      if (openResult.ok !== true) {
-        const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
-        if (messageKey) {
-          sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: messageKey } })
-        }
-        return
+  'document.open-in-folder': async (winInfo) => {
+    const documentContext = windowLifecycleService.getDocumentContext(winInfo)
+    if (!documentContext.path || !documentContext.exists) {
+      return {
+        ok: false,
+        opened: false,
+        reason: 'document-not-saved',
+        path: null,
       }
-      if (openResult.opened !== true && openResult.reason === 'not-found') {
-        sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theFileDoesNotExist' } })
-      }
-      return
     }
-    if (!winInfo.path || !winInfo.exists) {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.theCurrentFileIsNotSaved' } })
-      return
-    }
-    shell.showItemInFolder(winInfo.path)
-  },
-  'save-other': async (winInfo) => {
-    let otherPath = dialog.showSaveDialogSync({
-      title: 'Save As',
-      filters: [
-        { name: 'Markdown File', extensions: ['md'] },
-      ],
-    })
-    if (otherPath) {
-      // 自动添加后缀
-      const extname = path.extname(otherPath)
-      if (!extname || extname.toLowerCase() !== '.md') {
-        otherPath += '.md'
-      }
-      await fs.writeFile(otherPath, winInfo.tempContent)
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.saveAsSuccessfully' } })
-    } else {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cancelSaveAs' } })
+    shell.showItemInFolder(documentContext.path)
+    return {
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: documentContext.path,
     }
   },
-  'save': async (winInfo) => {
-    if (!winInfo.path) {
-      winInfo.path = dialog.showSaveDialogSync({
-        title: 'Save',
-        filters: [
-          { name: 'Markdown File', extensions: ['md'] },
-        ],
-      })
-    }
-    if (winInfo.path) {
-      // 自动添加后缀
-      const extname = path.extname(winInfo.path)
-      if (!extname || extname.toLowerCase() !== '.md') {
-        winInfo.path += '.md'
-      }
-      await recent.add(winInfo.path)
-      await winInfoUtil.save(winInfo)
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.saveSuccessfully' } })
-    } else {
-      sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.cancelSave' } })
-    }
+  'document.resource.open-in-folder': async (winInfo, data) => await handleResourceOpen(winInfo, data),
+  // renderer 已经切到新的 session 命令名，这里只保留直连入口。
+  'document.save-copy': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.save-copy', null),
+  'document.save': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.save', null),
+  'document.get-session-snapshot': async (winInfo) => {
+    return await executeRuntimeUiCommand(winInfo, 'document.get-session-snapshot', null)
   },
-  'get-file-info': (winInfo) => {
-    return winInfoUtil.getFileInfoPayload(winInfo)
-  },
-  'file-content-update': (winInfo, content) => {
-    // 渲染端所有编辑动作最终都收口到这里，
-    // Electron 只认这一个入口来更新 tempContent。
-    winInfoUtil.updateTempContent(winInfo, content)
-  },
-  'file-external-change-apply': (winInfo, data) => {
-    // 提醒策略下，用户在 diff 弹窗中选择“应用”时走这里。
-    // 具体应用动作由 Electron 主导完成，再通知渲染端刷新。
-    return winInfoUtil.applyExternalPendingChange(winInfo, data?.version)
-  },
-  'file-external-change-ignore': (winInfo, data) => {
-    // 提醒策略下，用户在 diff 弹窗中选择“忽略”时走这里。
-    return winInfoUtil.ignoreExternalPendingChange(winInfo, data?.version)
-  },
+  'document.edit': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.edit', data),
+  'document.cancel-close': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.cancel-close', null),
+  'document.confirm-force-close': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.confirm-force-close', null),
+  'document.external.apply': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.external.apply', data),
+  'document.external.ignore': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.external.ignore', data),
   'create-new': () => {
-    winInfoUtil.createNew().then(() => {})
+    windowLifecycleService.createNew().then(() => {})
   },
-  'open-file': async (winInfo, targetPath) => {
-    if (targetPath) {
-      if (await fs.pathExists(targetPath)) {
-        winInfoUtil.createNew(targetPath).then(() => {
-          if (!winInfo.path && winInfo.content === winInfo.tempContent) {
-            winInfo.win.close()
-          }
-        })
-        return true
-      }
-      return false
-    } else {
-      const filePath = dialog.showOpenDialogSync({
-        title: 'Open Markdown File',
-        properties: ['openFile'],
-        filters: [
-          { name: 'markdown file', extensions: ['md'] },
-        ],
-      })
-      if (filePath && filePath.length > 0) {
-        if (path.extname(filePath[0]) === '.md') {
-          winInfoUtil.createNew(filePath[0]).then(() => {
-            if (!winInfo.path && winInfo.content === winInfo.tempContent) {
-              winInfo.win.close()
-            }
-          })
-        } else {
-          sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.pleaseSelectMarkdownFile' } })
-        }
-      }
-    }
+  'document.request-open-dialog': async (winInfo) => {
+    return await executeRuntimeUiCommand(winInfo, 'document.request-open-dialog', null)
+  },
+  'document.open-path': async (winInfo, data) => {
+    return await executeRuntimeUiCommand(winInfo, 'document.open-path', data)
   },
   'get-config': () => {
     return configUtil.getConfig()
@@ -178,12 +138,8 @@ const handlerList = {
   'upload-image': async (winInfo, data) => {
     return await uploadImage(winInfo, data)
   },
-  'delete-local-resource': async (winInfo, data) => {
-    return await resourceFileUtil.deleteLocalResource(winInfo, data)
-  },
-  'get-local-resource-info': async (winInfo, data) => {
-    return await resourceFileUtil.getLocalResourceInfo(winInfo, data)
-  },
+  'document.resource.delete-local': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
+  'resource.get-info': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'resource.get-info', data),
   'screenshot': (winInfo, data) => {
     return new Promise((resolve) => {
       const startCapture = () => {
@@ -233,7 +189,7 @@ const handlerList = {
     return { name: 'wj-markdown-editor', version: app.getVersion() }
   },
   'check-update': async () => {
-    return await updateUtil.checkUpdate(winInfoUtil.getAll())
+    return await updateUtil.checkUpdate(windowLifecycleService.getAll())
   },
   'download-update': () => {
     updateUtil.downloadUpdate(aboutUtil.get())
@@ -244,15 +200,9 @@ const handlerList = {
   'execute-update': () => {
     updateUtil.executeUpdate()
   },
-  'recent-clear': () => {
-    recent.clear().then(() => {})
-  },
-  'recent-remove': (winInfo, data) => {
-    recent.remove(data).then(() => {})
-  },
-  'get-recent-list': () => {
-    return recent.get()
-  },
+  'recent.clear': async winInfo => await executeRuntimeUiCommand(winInfo, 'recent.clear', null),
+  'recent.remove': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'recent.remove', data),
+  'recent.get-list': async winInfo => await executeRuntimeUiCommand(winInfo, 'recent.get-list', null),
   'file-upload': (winInfo, filePath) => {
     return fileUploadUtil.save(winInfo, filePath, configUtil.getConfig())
   },
@@ -266,20 +216,21 @@ const handlerListSync = {
     if (path.isAbsolute(filePath)) {
       return filePath
     }
-    if (winInfo.path) {
-      return path.resolve(path.dirname(winInfo.path), filePath)
+    const documentContext = windowLifecycleService.getDocumentContext(winInfo)
+    if (documentContext.path) {
+      return path.resolve(path.dirname(documentContext.path), filePath)
     }
     return null
   },
-  'get-local-resource-comparable-key': (winInfo, rawPath) => {
-    return resourceFileUtil.getLocalResourceComparableKey(winInfo, rawPath)
+  'resource.get-comparable-key': (winInfo, rawPath) => {
+    return windowLifecycleService.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
   },
 }
 
 ipcMain.handle('sendToMain', async (event, json) => {
   if (handlerList[json.event]) {
     const win = BrowserWindow.fromWebContents(event.sender)
-    return await handlerList[json.event](winInfoUtil.getWinInfo(win) || winInfoUtil.getWinInfo(win.getParentWindow()), json.data)
+    return await handlerList[json.event](windowLifecycleService.getWinInfo(win) || windowLifecycleService.getWinInfo(win.getParentWindow()), json.data)
   }
   return false
 })
@@ -287,7 +238,7 @@ ipcMain.handle('sendToMain', async (event, json) => {
 ipcMain.on('sendToMainSync', (event, json) => {
   if (handlerListSync[json.event]) {
     const win = BrowserWindow.fromWebContents(event.sender)
-    event.returnValue = handlerListSync[json.event](winInfoUtil.getWinInfo(win) || winInfoUtil.getWinInfo(win.getParentWindow()), json.data)
+    event.returnValue = handlerListSync[json.event](windowLifecycleService.getWinInfo(win) || windowLifecycleService.getWinInfo(win.getParentWindow()), json.data)
     return
   }
   event.returnValue = null

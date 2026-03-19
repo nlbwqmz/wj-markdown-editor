@@ -273,11 +273,13 @@ export default {
   },
   message: {
     theFileDoesNotExist: 'The file does not exist.',
+    onlyMarkdownFilesCanBeOpened: 'Only Markdown (.md) files can be opened.',
     invalidLocalResourceLink: 'The local resource link is invalid and cannot be resolved to a file.',
     theFileIsBeingSaved: 'The file is being saved.',
     theFileIsSavedSuccessfully: 'The file is saved successfully.',
     theCurrentFileIsNotSaved: 'The current file is not saved',
     relativeResourceRequiresSavedFile: 'The current document is not saved, so the relative resource cannot be resolved.',
+    openResourceLocationFailed: 'Failed to open the resource location.',
     cannotBeSavedToARelativePath: 'The current file is not saved and the resource cannot be saved to a relative path.',
     theAbsolutePathToSaveIsNotSet: 'The absolute path to save is not set.',
     theRelativePathToSaveIsNotSet: 'The relative path to save is not set.',

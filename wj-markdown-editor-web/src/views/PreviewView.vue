@@ -1,13 +1,40 @@
 <script setup>
 import dayjs from 'dayjs'
 import Split from 'split-grid'
-import { nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import { useViewScrollAnchor } from '@/components/editor/composables/useViewScrollAnchor.js'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.js'
 import eventEmit from '@/util/channel/eventEmit.js'
+import commonUtil from '@/util/commonUtil.js'
+import {
+  DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
+} from '@/util/document-session/documentSessionEventUtil.js'
+import {
+  getDocumentSessionSnapshotIdentity,
+} from '@/util/document-session/documentSessionSnapshotUtil.js'
+import {
+  requestDocumentSessionSnapshot,
+} from '@/util/document-session/rendererDocumentCommandUtil.js'
+import {
+  resolveRendererSessionActivationAction,
+  shouldBootstrapSessionSnapshotOnMounted,
+} from '@/util/document-session/rendererSessionActivationStrategy.js'
+import { createRendererSessionEventSubscription } from '@/util/document-session/rendererSessionEventSubscription.js'
+import { createRendererSessionSnapshotController } from '@/util/document-session/rendererSessionSnapshotController.js'
+import { createResourceRequestContext } from '@/util/editor/resourceRequestContextUtil.js'
+import {
+  capturePreviewLineAnchor,
+  resolvePreviewLineAnchorScrollTop,
+} from '@/util/editor/viewScrollAnchorMathUtil.js'
+import { createViewScrollAnchorSessionStore } from '@/util/editor/viewScrollAnchorSessionUtil.js'
+import { previewSearchBarController } from '@/util/searchBarController.js'
+import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
+import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
 
 const router = useRouter()
 
@@ -23,34 +50,320 @@ const menuController = ref(false)
 const previewContainer = ref()
 const config = ref({})
 const ready = ref(false)
-
+// 预览页自己的滚动恢复只依赖当前视图实例内的局部缓存，不和编辑页共用 store。
+const previewPageAnchorStore = createViewScrollAnchorSessionStore()
+let previewSearchTargetActive = false
+let pendingRestoreOnActivation = false
 const watermark = ref()
+const currentScrollSnapshot = ref({
+  sessionId: '',
+  revision: 0,
+})
+const previewSessionSnapshotController = createRendererSessionSnapshotController({
+  applySnapshot: (snapshot) => {
+    applyDocumentSessionSnapshot(snapshot)
+  },
+  promptRecentMissing: commonUtil.recentFileNotExists,
+  syncClosePrompt: syncClosePromptSnapshot,
+  store,
+})
 
-function syncFileMeta(data) {
-  window.document.title = data.fileName === 'Unnamed' ? 'wj-markdown-editor' : data.fileName
-  store.$patch({
-    fileName: data.fileName,
-    saved: data.saved,
+function getPreviewSearchTargetElements() {
+  return collectSearchTargetElements(previewContainer.value)
+}
+
+const previewSearchTargetProvider = () => getPreviewSearchTargetElements()
+
+function activatePreviewSearchTarget() {
+  if (previewSearchTargetActive === true) {
+    return
+  }
+  previewSearchTargetActive = true
+  previewSearchBarController.registerTargetProvider(previewSearchTargetProvider)
+}
+
+function deactivatePreviewSearchTarget() {
+  if (previewSearchTargetActive === false) {
+    return
+  }
+  previewSearchTargetActive = false
+  previewSearchBarController.unregisterTargetProvider(previewSearchTargetProvider)
+}
+
+function closePreviewSearchBar() {
+  closeSearchBarIfVisible({
+    controller: previewSearchBarController,
+    store,
   })
 }
 
-function updateFileInfo(data, options = { syncMeta: true }) {
-  // 预览页也是被动接收 Electron 已确认的最终内容，
-  // 不参与外部修改的应用决策，只负责展示结果。
-  content.value = data.content
-  ready.value = true
-  if (options.syncMeta === true) {
-    syncFileMeta(data)
-  }
-  if (!content.value) {
-    anchorList.value = []
+/**
+ * 统一更新当前预览页滚动恢复所绑定的快照身份。
+ *
+ * @param {object | null | undefined} snapshot
+ */
+function updateCurrentScrollSnapshot(snapshot) {
+  const snapshotIdentity = getDocumentSessionSnapshotIdentity(snapshot)
+
+  currentScrollSnapshot.value = {
+    sessionId: snapshotIdentity.sessionId || '',
+    revision: snapshotIdentity.revision,
   }
 }
 
-function onFileContentReloaded(data) {
-  // fileName / saved / title 由全局事件层统一更新，
-  // 这里仅刷新预览内容，避免重复状态同步。
-  updateFileInfo(data, { syncMeta: false })
+/**
+ * 统一设置滚动容器位置。
+ * 优先走 scrollTo，便于真实 DOM 与测试桩共享同一套写回逻辑。
+ *
+ * @param {{ scrollTop?: number, scrollTo?: Function } | null | undefined} scrollElement
+ * @param {number} targetScrollTop
+ */
+function setScrollElementScrollTop(scrollElement, targetScrollTop) {
+  if (!scrollElement || Number.isFinite(targetScrollTop) !== true) {
+    return
+  }
+
+  if (typeof scrollElement.scrollTo === 'function') {
+    scrollElement.scrollTo({ top: targetScrollTop })
+    return
+  }
+
+  scrollElement.scrollTop = targetScrollTop
+}
+
+/**
+ * 解析预览元素的 Markdown 行号。
+ *
+ * @param {unknown} value
+ * @returns {number | null} 返回合法行号；非法值返回 null。
+ */
+function parsePreviewLineNumber(value) {
+  const lineNumber = Number(value)
+
+  if (!Number.isInteger(lineNumber) || lineNumber <= 0) {
+    return null
+  }
+
+  return lineNumber
+}
+
+/**
+ * 读取预览节点携带的 Markdown 行范围。
+ *
+ * @param {{ dataset?: Record<string, string> } | null | undefined} element
+ * @returns {{ lineStart: number, lineEnd: number } | null} 返回合法行范围；缺失时返回 null。
+ */
+function getPreviewElementLineRange(element) {
+  const lineStart = parsePreviewLineNumber(element?.dataset?.lineStart)
+  if (lineStart === null) {
+    return null
+  }
+
+  const parsedLineEnd = parsePreviewLineNumber(element?.dataset?.lineEnd)
+  const lineEnd = parsedLineEnd ?? lineStart
+
+  return {
+    lineStart,
+    lineEnd: Math.max(lineStart, lineEnd),
+  }
+}
+
+/**
+ * 计算预览节点相对滚动容器内容顶部的真实位置。
+ *
+ * @param {HTMLElement | null | undefined} container
+ * @param {HTMLElement | null | undefined} element
+ * @returns {number | null} 返回真实顶部位置；无法计算时返回 null。
+ */
+function getPreviewElementToTopDistance(container, element) {
+  if (!container || !element) {
+    return null
+  }
+
+  const containerRect = container.getBoundingClientRect?.()
+  const elementRect = element.getBoundingClientRect?.()
+  if (!Number.isFinite(containerRect?.top) || !Number.isFinite(elementRect?.top)) {
+    return null
+  }
+
+  return elementRect.top - containerRect.top - container.clientTop + container.scrollTop
+}
+
+/**
+ * 当多个节点映射到同一段 Markdown 时，优先选择更内层的真实内容节点。
+ *
+ * @param {HTMLElement | null | undefined} element
+ * @returns {number} 返回节点相对滚动容器的嵌套深度。
+ */
+function getPreviewElementDepth(element) {
+  let depth = 0
+  let current = element
+
+  while (current && current !== previewContainerRef.value) {
+    depth++
+    current = current.parentElement
+  }
+
+  return depth
+}
+
+/**
+ * 获取纯预览页中所有带行号映射的节点。
+ *
+ * @returns {HTMLElement[]} 返回当前滚动容器内可用于锚点计算的节点列表。
+ */
+function getPreviewAnchorElements() {
+  if (!previewContainerRef.value) {
+    return []
+  }
+
+  return Array.from(previewContainerRef.value.querySelectorAll('[data-line-start]'))
+}
+
+/**
+ * 根据当前 scrollTop 找到最接近顶部的预览节点。
+ *
+ * @param {HTMLElement} container
+ * @param {number} scrollTop
+ * @returns {HTMLElement | null} 返回当前位置对应的预览节点。
+ */
+function findPreviewElementAtScrollTop(container, scrollTop) {
+  const elements = getPreviewAnchorElements()
+  let target = elements[0] ?? null
+
+  for (const element of elements) {
+    const elementTop = getPreviewElementToTopDistance(container, element)
+    if (Number.isFinite(elementTop) && elementTop <= scrollTop) {
+      target = element
+    } else {
+      break
+    }
+  }
+
+  return target
+}
+
+/**
+ * 按锚点中的 Markdown 行范围反查当前预览节点。
+ *
+ * @param {HTMLElement} container
+ * @param {{ lineStart?: number, lineEnd?: number } | null | undefined} anchor
+ * @returns {HTMLElement | null} 返回命中的预览节点；找不到时返回 null。
+ */
+function findPreviewElementByAnchor(container, anchor) {
+  const lineStart = parsePreviewLineNumber(anchor?.lineStart)
+  const lineEnd = parsePreviewLineNumber(anchor?.lineEnd) ?? lineStart
+
+  if (!container || lineStart === null || lineEnd === null) {
+    return null
+  }
+
+  const waiting = []
+  for (const element of getPreviewAnchorElements()) {
+    const lineRange = getPreviewElementLineRange(element)
+    if (!lineRange) {
+      continue
+    }
+    if (lineRange.lineStart === lineStart && lineRange.lineEnd === lineEnd) {
+      waiting.push({
+        element,
+        depth: getPreviewElementDepth(element),
+        span: lineRange.lineEnd - lineRange.lineStart,
+      })
+    }
+  }
+
+  waiting.sort((a, b) => {
+    const spanCompare = a.span - b.span
+    if (spanCompare !== 0) {
+      return spanCompare
+    }
+    return b.depth - a.depth
+  })
+
+  return waiting[0]?.element ?? null
+}
+
+const previewPageScrollAnchor = useViewScrollAnchor({
+  store: previewPageAnchorStore,
+  sessionIdGetter: () => currentScrollSnapshot.value.sessionId,
+  revisionGetter: () => currentScrollSnapshot.value.revision,
+  scrollAreaKey: 'preview-page',
+  getScrollElement: () => previewContainerRef.value ?? null,
+  captureAnchor: ({ scrollElement }) => {
+    if (!scrollElement) {
+      return null
+    }
+
+    const targetElement = findPreviewElementAtScrollTop(scrollElement, scrollElement.scrollTop)
+    if (!targetElement) {
+      return null
+    }
+
+    return capturePreviewLineAnchor({
+      container: scrollElement,
+      element: targetElement,
+      scrollTop: scrollElement.scrollTop,
+    })
+  },
+  restoreAnchor: ({ record, scrollElement }) => {
+    if (!scrollElement) {
+      return false
+    }
+
+    const targetElement = findPreviewElementByAnchor(scrollElement, record?.anchor)
+    const targetScrollTop = resolvePreviewLineAnchorScrollTop({
+      container: scrollElement,
+      element: targetElement,
+      anchor: record?.anchor,
+      fallbackScrollTop: record?.fallbackScrollTop,
+    })
+
+    setScrollElementScrollTop(scrollElement, targetScrollTop)
+    return true
+  },
+})
+
+function applyDocumentSessionSnapshot(snapshot) {
+  if (!snapshot) {
+    return
+  }
+
+  // 预览页只消费已经收敛完毕的 session snapshot，
+  // 不直接参与保存态或外部修改态推导。
+  content.value = snapshot.content
+  ready.value = true
+  if (!content.value) {
+    anchorList.value = []
+  }
+
+  updateCurrentScrollSnapshot(snapshot)
+
+  if (pendingRestoreOnActivation !== true) {
+    return
+  }
+
+  pendingRestoreOnActivation = false
+  nextTick(() => {
+    previewPageScrollAnchor.scheduleRestoreForCurrentSnapshot().then(() => {})
+  })
+}
+
+function onDocumentSessionSnapshotChanged(snapshot) {
+  previewSessionSnapshotController.applyPushedSnapshot(snapshot)
+}
+
+const documentSessionSnapshotSubscription = createRendererSessionEventSubscription({
+  eventName: DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
+  listener: onDocumentSessionSnapshotChanged,
+  addListener: (eventName, listener) => eventEmit.on(eventName, listener),
+  removeListener: (eventName, listener) => eventEmit.remove(eventName, listener),
+})
+
+async function loadCurrentDocumentSessionSnapshot() {
+  const requestContext = previewSessionSnapshotController.beginBootstrapRequest()
+  const snapshot = await requestDocumentSessionSnapshot()
+  previewSessionSnapshotController.applyBootstrapSnapshot(requestContext, snapshot)
 }
 
 watch(() => store.config, (newValue) => {
@@ -67,16 +380,26 @@ watch(() => store.config, (newValue) => {
 
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
-  // 当 Electron 自动应用外部修改，或者用户手动应用完成后，
-  // 预览页会收到统一的刷新事件。
-  eventEmit.on('file-content-reloaded', onFileContentReloaded)
+  activatePreviewSearchTarget()
+  previewSessionSnapshotController.activate()
+  documentSessionSnapshotSubscription.activate()
+  if (shouldBootstrapSessionSnapshotOnMounted({
+    insideKeepAlive: true,
+  }) === true) {
+    loadCurrentDocumentSessionSnapshot().then(() => {})
+  }
 })
 
 onBeforeUnmount(() => {
-  eventEmit.remove('file-content-reloaded', onFileContentReloaded)
+  previewSessionSnapshotController.dispose()
+  documentSessionSnapshotSubscription.dispose()
+  closePreviewSearchBar()
+  deactivatePreviewSearchTarget()
 })
 
 watch(() => menuVisible.value, (newValue) => {
+  closePreviewSearchBar()
+
   if (newValue) {
     menuController.value = true
     nextTick(() => {
@@ -96,8 +419,41 @@ watch(() => menuVisible.value, (newValue) => {
 })
 
 onActivated(async () => {
-  const data = await channelUtil.send({ event: 'get-file-info' })
-  updateFileInfo(data, { syncMeta: true })
+  pendingRestoreOnActivation = true
+  previewSessionSnapshotController.activate()
+  documentSessionSnapshotSubscription.activate()
+  activatePreviewSearchTarget()
+  closePreviewSearchBar()
+  const activationAction = resolveRendererSessionActivationAction({
+    hasAppliedSnapshot: previewSessionSnapshotController.hasAppliedSnapshot?.() === true,
+    needsBootstrapOnActivate: previewSessionSnapshotController.needsBootstrapOnActivate?.() === true,
+    storeSnapshot: store.documentSessionSnapshot,
+  })
+
+  if (activationAction === 'replay-store') {
+    // 预览页恢复时同样先吃全局 store 里的最新真快照，
+    // 避免在别的视图已经把 store 推进到最新正文后，这里还继续空白等待补拉。
+    previewSessionSnapshotController.replaySnapshot(store.documentSessionSnapshot)
+    return
+  }
+
+  if (activationAction === 'request-bootstrap') {
+    loadCurrentDocumentSessionSnapshot().then(() => {})
+  }
+})
+
+onDeactivated(() => {
+  pendingRestoreOnActivation = false
+  previewPageScrollAnchor.cancelPendingRestore()
+  previewSessionSnapshotController.deactivate()
+  documentSessionSnapshotSubscription.deactivate()
+  closePreviewSearchBar()
+  deactivatePreviewSearchTarget()
+})
+
+onBeforeRouteLeave(() => {
+  updateCurrentScrollSnapshot(store.documentSessionSnapshot)
+  previewPageScrollAnchor.captureCurrentAnchor()
 })
 
 function toEdit() {
@@ -110,12 +466,20 @@ function onAnchorChange(changedAnchorList) {
   anchorList.value = changedAnchorList
 }
 
+function onPreviewRefreshComplete() {
+  closePreviewSearchBar()
+}
+
 function onAssetContextmenu(assetInfo) {
+  if (!assetInfo?.resourceUrl) {
+    return
+  }
   channelUtil.send({
-    event: 'open-folder',
+    event: 'document.resource.open-in-folder',
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
+      requestContext: createResourceRequestContext(store.documentSessionSnapshot),
     },
   })
 }
@@ -125,10 +489,11 @@ function onAssetOpen(assetInfo) {
     return
   }
   channelUtil.send({
-    event: 'open-folder',
+    event: 'document.resource.open-in-folder',
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
+      requestContext: createResourceRequestContext(store.documentSessionSnapshot),
     },
   })
 }
@@ -153,7 +518,17 @@ function onAssetOpen(assetInfo) {
     <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">
         <div class="h-full w-full" :style="{ width: `${config.previewWidth}%` }">
-          <MarkdownPreview :content="content" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" @anchor-change="onAnchorChange" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
+          <MarkdownPreview
+            :content="content"
+            :code-theme="config.theme.code"
+            :preview-theme="config.theme.preview"
+            :preview-scroll-container="() => previewContainerRef"
+            :watermark="watermark"
+            @refresh-complete="onPreviewRefreshComplete"
+            @anchor-change="onAnchorChange"
+            @asset-contextmenu="onAssetContextmenu"
+            @asset-open="onAssetOpen"
+          />
         </div>
       </div>
     </div>

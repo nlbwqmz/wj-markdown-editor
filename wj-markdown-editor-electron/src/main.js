@@ -1,7 +1,11 @@
 import { app, Menu, protocol } from 'electron'
 import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
+import { handleSecondInstanceOpenRequest, handleStartupOpenRequest } from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
+import { isMarkdownFilePath } from './util/document-session/documentOpenTargetUtil.js'
+import { initializeDocumentSessionRuntime } from './util/document-session/documentSessionRuntime.js'
+import windowLifecycleService from './util/document-session/windowLifecycleService.js'
 import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
 import updateUtil from './util/updateUtil.js'
@@ -10,10 +14,15 @@ import exportUtil from './util/win/exportUtil.js'
 import guideUtil from './util/win/guideUtil.js'
 import screenshotsUtil from './util/win/screenshotsUtil.js'
 import settingUtil from './util/win/settingUtil.js'
-import winInfoUtil from './util/win/winInfoUtil.js'
 import './util/channel/ipcMainUtil.js'
 
 app.commandLine.appendSwitch('--disable-http-cache')
+/**
+ * 配置应用级 GPU 行为。
+ *
+ * 如果 windows 系统开启了 GPU渲染，当导出为图片时，在 Windows 机器上会触发 GPU 子进程崩溃，通过关闭硬件加速回退到软件渲染链路
+ */
+// app.disableHardwareAcceleration()
 
 // 注册自定义协议特权（必须在 app.whenReady() 之前调用）
 try {
@@ -45,7 +54,7 @@ try {
  * 是否通过文件打开
  */
 function isOpenOnFile() {
-  return Boolean(process.argv && process.argv.length > 0 && /.*\.md$/.test(process.argv[process.argv.length - 1]))
+  return Boolean(process.argv && process.argv.length > 0 && isMarkdownFilePath(process.argv[process.argv.length - 1]))
 }
 
 /**
@@ -55,19 +64,54 @@ function getOpenOnFilePath() {
   return isOpenOnFile() ? process.argv[process.argv.length - 1] : null
 }
 
-const lock = app.requestSingleInstanceLock({ filePath: getOpenOnFilePath() })
+let documentSessionRuntime = null
+
+function initializeAppDocumentSessionRuntime() {
+  if (documentSessionRuntime) {
+    return documentSessionRuntime
+  }
+
+  documentSessionRuntime = initializeDocumentSessionRuntime({
+    ...windowLifecycleService.initializeSessionRuntime(),
+    openDocumentWindow: async (targetPath, options = {}) => {
+      return await windowLifecycleService.createNew(targetPath, options.isRecent === true)
+    },
+  })
+
+  return documentSessionRuntime
+}
+
+const lock = app.requestSingleInstanceLock({
+  filePath: getOpenOnFilePath(),
+  // second-instance 打开相对路径时，首实例必须拿到发起实例自己的工作目录，
+  // 才能把 `docs/demo.md` 这类路径解析到正确的绝对目标上。
+  baseDir: process.cwd(),
+})
 
 if (!lock) {
   app.quit()
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
-    winInfoUtil.createNew(additionalData.filePath).then(() => {})
+    if (additionalData.filePath) {
+      app.whenReady().then(async () => {
+        const runtime = initializeAppDocumentSessionRuntime()
+        await handleSecondInstanceOpenRequest({
+          targetPath: additionalData.filePath,
+          baseDir: additionalData.baseDir || workingDirectory || process.cwd(),
+          openDocumentPath: (targetPath, options) => runtime.openDocumentPath(targetPath, options),
+        })
+      }).then(() => {})
+      return
+    }
+    const activeWindow = windowLifecycleService.getAll()[0]
+    activeWindow?.win?.show()
   })
   logUtil.init()
   app.whenReady().then(async () => {
+    const runtime = initializeAppDocumentSessionRuntime()
     Menu.setApplicationMenu(null)
     await configUtil.initConfig((config) => {
-      winInfoUtil.getAll().forEach((item) => {
+      windowLifecycleService.getAll().forEach((item) => {
         sendUtil.send(item.win, { event: 'update-config', data: config })
       })
       if (aboutUtil.get()) {
@@ -84,9 +128,7 @@ if (!lock) {
       }
     })
     await recent.initRecent(configUtil.getConfig().recentMax, (recentList) => {
-      winInfoUtil.getAll().forEach((item) => {
-        sendUtil.send(item.win, { event: 'update-recent', data: recentList })
-      })
+      runtime.publishRecentListChanged(recentList)
     })
 
     // 初始化协议处理器，捕获可能的错误
@@ -102,18 +144,28 @@ if (!lock) {
 
     const openOnFilePath = getOpenOnFilePath()
     if (openOnFilePath) {
-      await winInfoUtil.createNew(openOnFilePath)
+      await handleStartupOpenRequest({
+        targetPath: openOnFilePath,
+        baseDir: process.cwd(),
+        openDocumentPath: (targetPath, options) => runtime.openDocumentPath(targetPath, options),
+        createDraftWindow: () => windowLifecycleService.createNew(null),
+      })
     } else if (configUtil.getConfig().openRecent) {
       const recentList = recent.get()
       if (recentList && recentList.length > 0) {
-        await winInfoUtil.createNew(recentList[0].path, true)
+        const openRecentResult = await runtime.openRecent(recentList[0].path, {
+          trigger: 'startup',
+        })
+        if (openRecentResult?.ok !== true) {
+          await windowLifecycleService.createNew(null)
+        }
       } else {
-        await winInfoUtil.createNew(null)
+        await windowLifecycleService.createNew(null)
       }
     } else {
-      await winInfoUtil.createNew(null)
+      await windowLifecycleService.createNew(null)
     }
     screenshotsUtil.init()
-    updateUtil.initUpdater(() => winInfoUtil.getAll())
+    updateUtil.initUpdater(() => windowLifecycleService.getAll())
   })
 }

@@ -3,6 +3,7 @@ import {
   countRemainingAssetReferences,
   removeAllAssetReferencesFromMarkdown,
   removeAssetFromMarkdown,
+  shouldCleanupMarkdownAfterDeleteResult,
 } from '../previewAssetRemovalUtil.js'
 
 const { test } = await import('node:test')
@@ -321,4 +322,13 @@ test('无法证明资源身份时，删除全部引用不应误删文件名包�
     '[文档 B](assets/a#c.md)',
     '第三段',
   ].join('\n'))
+})
+
+test('删除本地资源返回 delete-failed 时，不得继续清理 Markdown', () => {
+  assert.equal(shouldCleanupMarkdownAfterDeleteResult({
+    ok: false,
+    removed: false,
+    reason: 'delete-failed',
+    path: 'D:\\docs\\assets\\demo.png',
+  }), false)
 })

@@ -1,12 +1,17 @@
 <script setup>
-import { useCommonStore } from '@/stores/counter.js'
-import channelUtil from '@/util/channel/channelUtil.js'
-import commonUtil from '@/util/commonUtil.js'
-import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { Modal, Tooltip } from 'ant-design-vue'
 import { createVNode, h, onBeforeMount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useCommonStore } from '@/stores/counter.js'
+import channelUtil from '@/util/channel/channelUtil.js'
+import commonUtil from '@/util/commonUtil.js'
+import {
+  isDocumentOpenMissingResult,
+  requestDocumentOpenPath,
+  requestRecentClear,
+} from '@/util/document-session/rendererDocumentCommandUtil.js'
+import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const { t } = useI18n()
 const store = useCommonStore()
@@ -21,8 +26,8 @@ function createRecentListVNode() {
       key: commonUtil.createId(),
       label: commonUtil.createRecentLabel(item.path, item.name),
       click: () => {
-        channelUtil.send({ event: 'open-file', data: item.path }).then((exists) => {
-          if (exists === false) {
+        requestDocumentOpenPath(item.path).then((result) => {
+          if (isDocumentOpenMissingResult(result)) {
             commonUtil.recentFileNotExists(item.path)
           }
         })
@@ -59,7 +64,7 @@ function updateMenuList() {
           okText: t('config.yes'),
           cancelText: t('config.no'),
           onOk: () => {
-            channelUtil.send({ event: 'recent-clear' })
+            requestRecentClear().then(() => {})
           },
         })
       },

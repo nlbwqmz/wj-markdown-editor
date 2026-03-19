@@ -9,8 +9,11 @@ export function usePreviewSync({
   previewRef,
   scrolling,
   editorScrollTop,
+  restoreStateRef,
 }) {
-  let checkScrollCallbackTimer
+  const SCROLL_IDLE_MS = 160
+  const SCROLL_MAX_WAIT_MS = 5000
+  let activeScrollWatch
 
   function getEditorView() {
     return editorViewRef.value
@@ -57,54 +60,114 @@ export function usePreviewSync({
     return { element: waiting[0].element, found: first }
   }
 
+  function scheduleAnimationFrame(callback) {
+    if (typeof requestAnimationFrame === 'function') {
+      return requestAnimationFrame(callback)
+    }
+    return setTimeout(callback, 16)
+  }
+
+  function cancelScheduledAnimationFrame(id) {
+    if (id === undefined || id === null) {
+      return
+    }
+    if (typeof cancelAnimationFrame === 'function' && typeof requestAnimationFrame === 'function') {
+      cancelAnimationFrame(id)
+      return
+    }
+    clearTimeout(id)
+  }
+
+  function clearActiveScrollWatch() {
+    if (!activeScrollWatch) {
+      return
+    }
+    activeScrollWatch.finished = true
+    cancelScheduledAnimationFrame(activeScrollWatch.rafId)
+    activeScrollWatch.element?.removeEventListener('scrollend', activeScrollWatch.onScrollEnd)
+    activeScrollWatch = undefined
+  }
+
   function checkScrollTop(element, top, callback) {
     if (!element) {
       callback && callback()
       return
     }
 
-    // 清除之前的定时器
-    if (checkScrollCallbackTimer) {
-      clearTimeout(checkScrollCallbackTimer)
+    const normalizedTop = Math.max(0, Math.min(element.scrollHeight - element.clientHeight, top))
+    if (Math.abs(element.scrollTop - normalizedTop) < 1) {
+      callback && callback()
+      return
     }
 
-    // 标准化目标滚动位置
-    top = Math.max(0, Math.min(element.scrollHeight - element.clientHeight, top))
+    clearActiveScrollWatch()
 
-    const handleScrollComplete = () => {
-      element.removeEventListener('scrollend', handleScrollComplete)
-      clearTimeout(checkScrollCallbackTimer)
+    const watch = {
+      element,
+      rafId: undefined,
+      onScrollEnd: undefined,
+      lastScrollTop: element.scrollTop,
+      lastMovementAt: Date.now(),
+      startedAt: Date.now(),
+      finished: false,
+    }
+
+    const finish = () => {
+      if (watch.finished === true) {
+        return
+      }
+      watch.finished = true
+      if (activeScrollWatch === watch) {
+        activeScrollWatch = undefined
+      }
+      cancelScheduledAnimationFrame(watch.rafId)
+      watch.element.removeEventListener('scrollend', watch.onScrollEnd)
       callback && callback()
     }
 
-    if ('onscrollend' in element) {
-      element.addEventListener('scrollend', handleScrollComplete, { once: true })
-      checkScrollCallbackTimer = setTimeout(() => {
-        element.removeEventListener('scrollend', handleScrollComplete)
-        callback && callback()
-      }, 1000)
-    } else {
-      let lastScrollTop = -1
-      const pollScroll = () => {
-        const normalizedTop = Math.max(0, Math.min(element.scrollHeight - element.clientHeight, top))
-        if (Math.abs(element.scrollTop - normalizedTop) < 1 || element.scrollTop === lastScrollTop) {
-          callback && callback()
-        } else {
-          lastScrollTop = element.scrollTop
-          checkScrollCallbackTimer = requestAnimationFrame(pollScroll)
-        }
+    const pollScroll = () => {
+      if (watch.finished === true) {
+        return
       }
-      pollScroll()
+      const currentScrollTop = element.scrollTop
+      const now = Date.now()
+      if (Math.abs(currentScrollTop - normalizedTop) < 1) {
+        finish()
+        return
+      }
+      if (Math.abs(currentScrollTop - watch.lastScrollTop) >= 1) {
+        watch.lastScrollTop = currentScrollTop
+        watch.lastMovementAt = now
+      } else if (now - watch.lastMovementAt >= SCROLL_IDLE_MS) {
+        finish()
+        return
+      }
+      if (now - watch.startedAt >= SCROLL_MAX_WAIT_MS) {
+        finish()
+        return
+      }
+      watch.rafId = scheduleAnimationFrame(pollScroll)
     }
+
+    watch.onScrollEnd = () => {
+      if (Math.abs(element.scrollTop - normalizedTop) < 1) {
+        finish()
+        return
+      }
+      watch.lastScrollTop = element.scrollTop
+      watch.lastMovementAt = Date.now()
+    }
+
+    if ('onscrollend' in element) {
+      element.addEventListener('scrollend', watch.onScrollEnd)
+    }
+
+    activeScrollWatch = watch
+    watch.rafId = scheduleAnimationFrame(pollScroll)
   }
 
   function clearScrollTimer() {
-    if (!checkScrollCallbackTimer) {
-      return
-    }
-    clearTimeout(checkScrollCallbackTimer)
-    cancelAnimationFrame(checkScrollCallbackTimer)
-    checkScrollCallbackTimer = undefined
+    clearActiveScrollWatch()
   }
 
   function getTotalLineHeight(start, end) {
@@ -170,6 +233,14 @@ export function usePreviewSync({
     if (!view || !previewRef.value || scrolling.value.preview) {
       return
     }
+    // 文档恢复期间，滚动位置正在由恢复流程接管，此时必须禁止编辑区反向驱动预览区，
+    // 否则刚恢复出来的位置会立刻被同步逻辑覆盖，导致恢复结果不稳定。
+    // 但这里仍要把当前编辑区纵向滚动值写回缓存，避免恢复结束后的第一次同步
+    // 因为缓存滞后而把“未发生变化的滚动位置”误判成新滚动。
+    if (restoreStateRef?.value?.active === true) {
+      editorScrollTop.value = view.scrollDOM.scrollTop
+      return
+    }
 
     // 若竖向滚动条值没改变则表示横向滚动，直接跳过
     if (editorScrollTop.value === view.scrollDOM.scrollTop && refresh !== true) {
@@ -233,6 +304,11 @@ export function usePreviewSync({
   function syncPreviewToEditor() {
     const view = getEditorView()
     if (!view || !previewRef.value || scrolling.value.editor) {
+      return
+    }
+    // 文档恢复期间，编辑区滚动位置同样需要保持静止，避免预览区的同步逻辑在恢复尚未完成时
+    // 抢先写回编辑区，进而破坏恢复流程设定的滚动锚点。
+    if (restoreStateRef?.value?.active === true) {
       return
     }
     const previewScrollTop = previewRef.value.scrollTop

@@ -21,6 +21,12 @@ function getLocalResourceFailureMessageKey(reason) {
   if (reason === 'relative-resource-without-document') {
     return 'message.relativeResourceRequiresSavedFile'
   }
+  // `open-failed` 代表底层 shell / 文件系统已经明确失败。
+  // 这个分支必须继续走统一消息 key，而不是让上层各自特判，
+  // 否则旧 IPC、窗口内链接点击和后续新资源命令会再次分叉出多套提示语义。
+  if (reason === 'open-failed') {
+    return 'message.openResourceLocationFailed'
+  }
   if (reason === 'invalid-resource-url' || reason === 'invalid-resource-payload') {
     return 'message.invalidLocalResourceLink'
   }
@@ -79,17 +85,49 @@ function normalizeResourceOpenInput(resourceData) {
   }
 }
 
-function resolveRawLocalPath(winInfo, rawPath) {
+function getDocumentPathFromContext(documentContext) {
+  return typeof documentContext?.documentPath === 'string' && documentContext.documentPath.trim() !== ''
+    ? documentContext.documentPath
+    : null
+}
+
+/**
+ * 同步比较 key 查询必须保持“尽力返回结果”。
+ *
+ * 这个 helper 故意吞掉 `pathExistsSync` 的异常，
+ * 因为当前编辑区引用统计是同步流程，任何底层瞬时 I/O 异常都不应该把整次右键删除交互打崩。
+ */
+function pathExistsSyncSafe(targetPath) {
+  if (!targetPath) {
+    return false
+  }
+  try {
+    return fs.pathExistsSync(targetPath)
+  } catch {
+    return false
+  }
+}
+
+function attachResourceErrorContext(error, { decodedPath, resolvedPath }) {
+  if (error && typeof error === 'object') {
+    error.decodedPath = decodedPath ?? null
+    error.resourcePath = resolvedPath ?? null
+  }
+  return error
+}
+
+function resolveRawLocalPath(documentContext, rawPath) {
   if (!rawPath || typeof rawPath !== 'string') {
     return null
   }
   if (path.isAbsolute(rawPath)) {
     return path.normalize(rawPath)
   }
-  if (!winInfo?.path) {
+  const documentPath = getDocumentPathFromContext(documentContext)
+  if (!documentPath) {
     return null
   }
-  return path.resolve(path.dirname(winInfo.path), rawPath)
+  return path.resolve(path.dirname(documentPath), rawPath)
 }
 
 function decodeRawLocalPath(rawPath) {
@@ -118,7 +156,7 @@ function extractRawPathname(rawPath) {
   return rawPath.slice(0, Math.min(...suffixIndexList))
 }
 
-function getLocalResourceComparableKey(winInfo, rawPath) {
+function getLocalResourceComparableKey(documentContext, rawPath) {
   if (!rawPath || typeof rawPath !== 'string') {
     return null
   }
@@ -134,15 +172,15 @@ function getLocalResourceComparableKey(winInfo, rawPath) {
     return null
   }
 
-  const exactResolvedPath = resolveRawLocalPath(winInfo, trimmedRawPath)
-  if (exactResolvedPath && fs.pathExistsSync(exactResolvedPath)) {
+  const exactResolvedPath = resolveRawLocalPath(documentContext, trimmedRawPath)
+  if (pathExistsSyncSafe(exactResolvedPath)) {
     return createComparableKey(exactResolvedPath)
   }
 
   const pathname = extractRawPathname(trimmedRawPath)
   if (pathname !== trimmedRawPath) {
-    const pathnameResolvedPath = resolveRawLocalPath(winInfo, pathname)
-    if (pathnameResolvedPath && fs.pathExistsSync(pathnameResolvedPath)) {
+    const pathnameResolvedPath = resolveRawLocalPath(documentContext, pathname)
+    if (pathExistsSyncSafe(pathnameResolvedPath)) {
       return createComparableKey(pathnameResolvedPath)
     }
     return null
@@ -152,24 +190,31 @@ function getLocalResourceComparableKey(winInfo, rawPath) {
 }
 
 async function enrichResolvedPath(decodedPath, resolvedPath) {
-  if (!await fs.pathExists(resolvedPath)) {
+  try {
+    if (!await fs.pathExists(resolvedPath)) {
+      return createResolveResult(true, 'resolved', {
+        decodedPath,
+        path: resolvedPath,
+      })
+    }
+
+    const resourceStat = await fs.stat(resolvedPath)
     return createResolveResult(true, 'resolved', {
       decodedPath,
       path: resolvedPath,
+      exists: true,
+      isDirectory: resourceStat.isDirectory(),
+      isFile: resourceStat.isFile(),
+    })
+  } catch (error) {
+    throw attachResourceErrorContext(error, {
+      decodedPath,
+      resolvedPath,
     })
   }
-
-  const resourceStat = await fs.stat(resolvedPath)
-  return createResolveResult(true, 'resolved', {
-    decodedPath,
-    path: resolvedPath,
-    exists: true,
-    isDirectory: resourceStat.isDirectory(),
-    isFile: resourceStat.isFile(),
-  })
 }
 
-async function resolveLocalResource(winInfo, resourceUrl) {
+async function resolveLocalResource(documentContext, resourceUrl) {
   if (!resourceUrl || typeof resourceUrl !== 'string' || !resourceUrl.startsWith('wj://')) {
     return createResolveResult(false, 'invalid-resource-url')
   }
@@ -185,7 +230,8 @@ async function resolveLocalResource(winInfo, resourceUrl) {
     return await enrichResolvedPath(decodedPath, decodedPath)
   }
 
-  if (!winInfo?.path) {
+  const documentPath = getDocumentPathFromContext(documentContext)
+  if (!documentPath) {
     return createResolveResult(false, 'relative-resource-without-document', {
       decodedPath,
     })
@@ -193,17 +239,17 @@ async function resolveLocalResource(winInfo, resourceUrl) {
 
   return await enrichResolvedPath(
     decodedPath,
-    path.resolve(path.dirname(winInfo.path), decodedPath),
+    path.resolve(path.dirname(documentPath), decodedPath),
   )
 }
 
 /**
  * 解析本地资源对应的真实文件路径
- * @param {object} winInfo - 当前窗口信息
+ * @param {object} documentContext - 当前文档上下文
  * @param {string} resourceUrl - wj 协议资源地址
  * @returns {string | null} 解析后的本地文件路径，无法解析时返回 null
  */
-function resolveLocalResourcePath(winInfo, resourceUrl) {
+function resolveLocalResourcePath(documentContext, resourceUrl) {
   if (!resourceUrl || typeof resourceUrl !== 'string' || !resourceUrl.startsWith('wj://')) {
     return null
   }
@@ -218,69 +264,98 @@ function resolveLocalResourcePath(winInfo, resourceUrl) {
   if (path.isAbsolute(decodedPath)) {
     return decodedPath
   }
-  if (!winInfo?.path) {
+  const documentPath = getDocumentPathFromContext(documentContext)
+  if (!documentPath) {
     return null
   }
 
-  return path.resolve(path.dirname(winInfo.path), decodedPath)
+  return path.resolve(path.dirname(documentPath), decodedPath)
 }
 
 /**
  * 删除本地资源文件，不存在时直接忽略
- * @param {object} winInfo - 当前窗口信息
+ * @param {object} documentContext - 当前文档上下文
  * @param {string} resourceUrl - wj 协议资源地址
- * @returns {Promise<boolean>} 删除流程是否成功进入执行分支
+ * @returns {Promise<object>} 结构化删除结果
  */
-async function deleteLocalResource(winInfo, resourceUrl) {
-  const resourceInfo = await resolveLocalResource(winInfo, resourceUrl)
-  if (resourceInfo.ok !== true) {
-    return createDeleteResult(false, false, resourceInfo.reason, resourceInfo.path)
-  }
+async function deleteLocalResource(documentContext, resourceUrl) {
+  let resolvedPath = resolveLocalResourcePath(documentContext, resourceUrl)
+  try {
+    const resourceInfo = await resolveLocalResource(documentContext, resourceUrl)
+    resolvedPath = resourceInfo.path
+    if (resourceInfo.ok !== true) {
+      return createDeleteResult(false, false, resourceInfo.reason, resourceInfo.path)
+    }
 
-  if (resourceInfo.exists !== true) {
-    return createDeleteResult(true, false, 'not-found', resourceInfo.path)
-  }
+    if (resourceInfo.exists !== true) {
+      return createDeleteResult(true, false, 'not-found', resourceInfo.path)
+    }
 
-  if (resourceInfo.isDirectory === true) {
-    return createDeleteResult(false, false, 'directory-not-allowed', resourceInfo.path)
-  }
-  if (resourceInfo.isFile !== true) {
-    return createDeleteResult(false, false, 'unsupported-target', resourceInfo.path)
-  }
+    if (resourceInfo.isDirectory === true) {
+      return createDeleteResult(false, false, 'directory-not-allowed', resourceInfo.path)
+    }
+    if (resourceInfo.isFile !== true) {
+      return createDeleteResult(false, false, 'unsupported-target', resourceInfo.path)
+    }
 
-  await fs.remove(resourceInfo.path)
-  return createDeleteResult(true, true, 'deleted', resourceInfo.path)
+    await fs.remove(resourceInfo.path)
+    return createDeleteResult(true, true, 'deleted', resourceInfo.path)
+  } catch (error) {
+    // 删除动作一旦进入文件系统分支，就必须在主进程内统一吸收异常并裁决成 `delete-failed`。
+    // 否则 renderer 无法区分“还能继续只清理 Markdown”的软失败，和“本地文件其实没删掉”的硬失败，
+    // 会直接把原文误清掉，造成设计文档禁止的语义回退。
+    return createDeleteResult(false, false, 'delete-failed', error?.resourcePath ?? resolvedPath)
+  }
 }
 
-async function openLocalResourceInFolder(winInfo, resourceUrl, showItemInFolder) {
+async function openLocalResourceInFolder(documentContext, resourceUrl, showItemInFolder) {
   const { resourceUrl: normalizedResourceUrl, rawPath } = normalizeResourceOpenInput(resourceUrl)
-  const resourceInfo = await resolveLocalResource(winInfo, normalizedResourceUrl)
-  if (resourceInfo.ok !== true) {
-    return createOpenFolderResult(false, false, resourceInfo.reason, resourceInfo.path)
-  }
+  let resolvedPath = resolveLocalResourcePath(documentContext, normalizedResourceUrl)
+  try {
+    const resourceInfo = await resolveLocalResource(documentContext, normalizedResourceUrl)
+    resolvedPath = resourceInfo.path
+    if (resourceInfo.ok !== true) {
+      return createOpenFolderResult(false, false, resourceInfo.reason, resourceInfo.path)
+    }
 
-  if (resourceInfo.exists !== true && rawPath) {
-    const pathname = extractRawPathname(rawPath)
-    if (pathname !== rawPath) {
-      const pathnameResolvedPath = resolveRawLocalPath(winInfo, decodeRawLocalPath(pathname))
-      if (pathnameResolvedPath && await fs.pathExists(pathnameResolvedPath)) {
-        showItemInFolder(pathnameResolvedPath)
-        return createOpenFolderResult(true, true, 'opened', pathnameResolvedPath)
+    if (resourceInfo.exists !== true && rawPath) {
+      const pathname = extractRawPathname(rawPath)
+      if (pathname !== rawPath) {
+        const pathnameResolvedPath = resolveRawLocalPath(documentContext, decodeRawLocalPath(pathname))
+        if (pathnameResolvedPath && await fs.pathExists(pathnameResolvedPath)) {
+          resolvedPath = pathnameResolvedPath
+          showItemInFolder(pathnameResolvedPath)
+          return createOpenFolderResult(true, true, 'opened', pathnameResolvedPath)
+        }
       }
     }
-  }
 
-  if (resourceInfo.exists !== true) {
-    return createOpenFolderResult(true, false, 'not-found', resourceInfo.path)
-  }
+    if (resourceInfo.exists !== true) {
+      return createOpenFolderResult(true, false, 'not-found', resourceInfo.path)
+    }
 
-  showItemInFolder(resourceInfo.path)
-  return createOpenFolderResult(true, true, 'opened', resourceInfo.path)
+    resolvedPath = resourceInfo.path
+    showItemInFolder(resourceInfo.path)
+    return createOpenFolderResult(true, true, 'opened', resourceInfo.path)
+  } catch (error) {
+    // “在资源管理器打开”只允许把结构化结果回给上层，不能把 shell / fs 的原始异常抛给 renderer。
+    // 这样旧 IPC、新 IPC、预览区 query/hash 回退三条兼容链路，才能共享同一个 `open-failed` 裁决出口。
+    return createOpenFolderResult(false, false, 'open-failed', error?.resourcePath ?? resolvedPath)
+  }
 }
 
-async function getLocalResourceInfo(winInfo, resourceUrl) {
-  const resolveResult = await resolveLocalResource(winInfo, resourceUrl)
-  return createResourceInfoResult(resolveResult.ok, resolveResult.path, resolveResult)
+async function getLocalResourceInfo(documentContext, resourceUrl) {
+  let resolvedPath = resolveLocalResourcePath(documentContext, resourceUrl)
+  try {
+    const resolveResult = await resolveLocalResource(documentContext, resourceUrl)
+    return createResourceInfoResult(resolveResult.ok, resolveResult.path, resolveResult)
+  } catch (error) {
+    resolvedPath = error?.resourcePath ?? resolvedPath
+    return createResourceInfoResult(false, resolvedPath, {
+      reason: 'info-failed',
+      decodedPath: error?.decodedPath ?? null,
+    })
+  }
 }
 
 export default {

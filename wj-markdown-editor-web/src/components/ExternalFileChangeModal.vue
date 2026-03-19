@@ -5,6 +5,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import {
+  DOCUMENT_EXTERNAL_APPLY_COMMAND,
+  DOCUMENT_EXTERNAL_IGNORE_COMMAND,
+} from '@/util/document-session/documentSessionEventUtil.js'
 import 'diff2html/bundles/css/diff2html.min.css'
 
 const { t } = useI18n()
@@ -41,14 +45,18 @@ async function ignoreExternalChange() {
   const version = externalFileChange.value.version
   store.setExternalFileChangeLoading(true)
   try {
-    const success = await channelUtil.send({
-      event: 'file-external-change-ignore',
+    const result = await channelUtil.send({
+      event: DOCUMENT_EXTERNAL_IGNORE_COMMAND,
       data: { version },
     })
-    if (success && store.externalFileChange.version === version) {
-      store.resetExternalFileChange()
+    const shouldResetLoading = result === false
+      || result?.ok === false
+      || result?.snapshot?.externalPrompt?.version === version
+
+    if (shouldResetLoading && store.externalFileChange.version === version) {
+      store.setExternalFileChangeLoading(false)
     }
-  } finally {
+  } catch {
     if (store.externalFileChange.version === version) {
       store.setExternalFileChangeLoading(false)
     }
@@ -57,22 +65,26 @@ async function ignoreExternalChange() {
 
 async function applyExternalChange() {
   // 应用动作由 Electron 主导完成：
-  // Electron 会直接更新 tempContent / 保存状态，
-  // 然后再通过 `file-content-reloaded` 通知渲染端刷新。
+  // Electron 会直接更新会话内容与保存状态，
+  // renderer 只通过最新 snapshot 收敛 UI。
   if (externalFileChange.value.loading) {
     return
   }
   const version = externalFileChange.value.version
   store.setExternalFileChangeLoading(true)
   try {
-    const success = await channelUtil.send({
-      event: 'file-external-change-apply',
+    const result = await channelUtil.send({
+      event: DOCUMENT_EXTERNAL_APPLY_COMMAND,
       data: { version },
     })
-    if (success && store.externalFileChange.version === version) {
-      store.resetExternalFileChange()
+    const shouldResetLoading = result === false
+      || result?.ok === false
+      || result?.snapshot?.externalPrompt?.version === version
+
+    if (shouldResetLoading && store.externalFileChange.version === version) {
+      store.setExternalFileChangeLoading(false)
     }
-  } finally {
+  } catch {
     if (store.externalFileChange.version === version) {
       store.setExternalFileChangeLoading(false)
     }

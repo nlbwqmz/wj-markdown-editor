@@ -17,6 +17,17 @@ function createContentVersion(content = '') {
 // 真正的内部保存抑制、版本去重、pending 管理仍然保留在窗口级 state 中。
 const directoryWatchRegistry = new Map()
 
+function toRegistryPathKey(targetPath) {
+  if (typeof targetPath !== 'string' || targetPath.trim() === '') {
+    return null
+  }
+
+  const resolvedPath = path.resolve(targetPath)
+  return process.platform === 'win32'
+    ? resolvedPath.toLowerCase()
+    : resolvedPath
+}
+
 /**
  * 文件监听状态。
  *
@@ -37,6 +48,7 @@ function createWatchState() {
     internalSaveWindowMs: 2000,
     lastInternalSaveAt: 0,
     lastInternalSavedVersion: null,
+    recentInternalSaves: [],
     lastHandledVersionHash: null,
     pendingChange: null,
     fileExists: null,
@@ -50,9 +62,34 @@ function resetTrackedState(state) {
   state.currentVersion = 0
   state.lastInternalSaveAt = 0
   state.lastInternalSavedVersion = null
+  state.recentInternalSaves = []
   state.lastHandledVersionHash = null
   state.pendingChange = null
   state.fileExists = null
+}
+
+/**
+ * 清理 internal-save 抑制窗口之外的历史记录。
+ *
+ * 连续补写时，同一个文件可能在极短时间内产生多轮内部写盘。
+ * watcher 事件并不保证严格按“写盘完成顺序”被我们读到，
+ * 所以不能只保留最后一轮 hash，而要在抑制窗口内保留最近几轮。
+ */
+function pruneExpiredInternalSaves(state, now = Date.now()) {
+  if (!Array.isArray(state?.recentInternalSaves) || state.recentInternalSaves.length === 0) {
+    state.recentInternalSaves = []
+    state.lastInternalSaveAt = 0
+    state.lastInternalSavedVersion = null
+    return state.recentInternalSaves
+  }
+
+  state.recentInternalSaves = state.recentInternalSaves
+    .filter(item => now - item.savedAt <= state.internalSaveWindowMs)
+
+  const latestInternalSave = state.recentInternalSaves.at(-1) || null
+  state.lastInternalSaveAt = latestInternalSave?.savedAt || 0
+  state.lastInternalSavedVersion = latestInternalSave?.versionHash || null
+  return state.recentInternalSaves
 }
 
 function isSubscriptionCurrent(subscription) {
@@ -67,21 +104,23 @@ function isSubscriptionCurrent(subscription) {
 }
 
 function getDirectoryEntry(directoryPath) {
-  return directoryWatchRegistry.get(directoryPath) || null
+  return directoryWatchRegistry.get(toRegistryPathKey(directoryPath)) || null
 }
 
 function createDirectoryEntry(directoryPath, watch) {
+  const registryKey = toRegistryPathKey(directoryPath)
   const watcher = watch(directoryPath, (_eventType, filename) => {
     routeDirectoryEvent(directoryPath, filename).catch(() => {})
   })
 
   const entry = {
     directoryPath,
+    registryKey,
     watcher,
     files: new Map(),
   }
 
-  directoryWatchRegistry.set(directoryPath, entry)
+  directoryWatchRegistry.set(registryKey, entry)
   return entry
 }
 
@@ -96,6 +135,7 @@ function getOrCreateDirectoryEntry(directoryPath, watch) {
 function createFileEntry(filePath) {
   return {
     filePath,
+    fileRegistryKey: toRegistryPathKey(filePath),
     baseName: path.basename(filePath),
     subscriptions: new Set(),
     debounceTimer: null,
@@ -104,13 +144,14 @@ function createFileEntry(filePath) {
 }
 
 function getOrCreateFileEntry(directoryEntry, filePath) {
-  const currentEntry = directoryEntry.files.get(filePath)
+  const fileRegistryKey = toRegistryPathKey(filePath)
+  const currentEntry = directoryEntry.files.get(fileRegistryKey)
   if (currentEntry) {
     return currentEntry
   }
 
   const nextEntry = createFileEntry(filePath)
-  directoryEntry.files.set(filePath, nextEntry)
+  directoryEntry.files.set(fileRegistryKey, nextEntry)
   return nextEntry
 }
 
@@ -124,7 +165,7 @@ function removeFileEntryIfEmpty(directoryEntry, fileEntry) {
     fileEntry.debounceTimer = null
   }
 
-  directoryEntry.files.delete(fileEntry.filePath)
+  directoryEntry.files.delete(fileEntry.fileRegistryKey)
 }
 
 function removeDirectoryEntryIfEmpty(directoryEntry) {
@@ -136,7 +177,7 @@ function removeDirectoryEntryIfEmpty(directoryEntry) {
     directoryEntry.watcher.close()
   }
 
-  directoryWatchRegistry.delete(directoryEntry.directoryPath)
+  directoryWatchRegistry.delete(directoryEntry.registryKey)
 }
 
 function pruneInactiveSubscriptions(fileEntry) {
@@ -176,6 +217,19 @@ function isMissingError(error) {
   return error?.code === 'ENOENT'
 }
 
+function createCallbackMeta(subscription, baseMeta = {}) {
+  return {
+    ...baseMeta,
+    bindingToken: Number.isFinite(subscription?.bindingToken)
+      ? subscription.bindingToken
+      : null,
+    watchingPath: subscription?.filePath || null,
+    observedAt: Number.isFinite(baseMeta?.observedAt)
+      ? baseMeta.observedAt
+      : Date.now(),
+  }
+}
+
 /**
  * 标记一次“软件内部保存”。
  *
@@ -184,8 +238,17 @@ function isMissingError(error) {
  * 同内容事件会直接被识别为 internal-save 并跳过。
  */
 function markInternalSave(state, content) {
-  state.lastInternalSaveAt = Date.now()
-  state.lastInternalSavedVersion = createContentVersion(content)
+  const savedAt = Date.now()
+  const versionHash = createContentVersion(content)
+  const recentInternalSaves = pruneExpiredInternalSaves(state, savedAt)
+
+  // 相同内容可能被重复写盘，这里只保留最新一次时间戳，
+  // 避免历史数组因为重复 hash 无意义增长。
+  state.recentInternalSaves = recentInternalSaves
+    .filter(item => item.versionHash !== versionHash)
+    .concat({ versionHash, savedAt })
+  state.lastInternalSaveAt = savedAt
+  state.lastInternalSavedVersion = versionHash
   state.pendingChange = null
   state.fileExists = true
 }
@@ -220,11 +283,9 @@ function resolveExternalChange(state, diskContent) {
   }
 
   const versionHash = createContentVersion(diskContent)
+  const recentInternalSaves = pruneExpiredInternalSaves(state)
 
-  if (
-    versionHash === state.lastInternalSavedVersion
-    && Date.now() - state.lastInternalSaveAt <= state.internalSaveWindowMs
-  ) {
+  if (recentInternalSaves.some(item => item.versionHash === versionHash)) {
     return {
       changed: false,
       reason: 'internal-save',
@@ -272,7 +333,7 @@ function ignorePendingChange(state) {
   return settlePendingChange(state, state.pendingChange.versionHash)
 }
 
-async function notifyMissing(subscriptions, error) {
+async function notifyMissing(subscriptions, error, observedAt) {
   for (const subscription of subscriptions) {
     if (!isSubscriptionCurrent(subscription)) {
       continue
@@ -286,14 +347,20 @@ async function notifyMissing(subscriptions, error) {
     }
 
     try {
-      await subscription.onMissing(error, { stage: 'missing' })
+      await subscription.onMissing(error, createCallbackMeta(subscription, {
+        stage: 'missing',
+        observedAt,
+      }))
     } catch (callbackError) {
-      subscription.onError && subscription.onError(callbackError, { stage: 'missing-callback' })
+      subscription.onError && subscription.onError(callbackError, createCallbackMeta(subscription, {
+        stage: 'missing-callback',
+        observedAt,
+      }))
     }
   }
 }
 
-async function notifyRestored(subscriptions, diskContent) {
+async function notifyRestored(subscriptions, diskContent, observedAt) {
   for (const subscription of subscriptions) {
     if (!isSubscriptionCurrent(subscription)) {
       continue
@@ -307,19 +374,28 @@ async function notifyRestored(subscriptions, diskContent) {
     }
 
     try {
-      await subscription.onRestored(diskContent, { stage: 'restored' })
+      await subscription.onRestored(diskContent, createCallbackMeta(subscription, {
+        stage: 'restored',
+        observedAt,
+      }))
     } catch (callbackError) {
-      subscription.onError && subscription.onError(callbackError, { stage: 'restored-callback' })
+      subscription.onError && subscription.onError(callbackError, createCallbackMeta(subscription, {
+        stage: 'restored-callback',
+        observedAt,
+      }))
     }
   }
 }
 
-async function notifyReadError(subscriptions, error) {
+async function notifyReadError(subscriptions, error, observedAt) {
   for (const subscription of subscriptions) {
     if (!isSubscriptionCurrent(subscription) || !subscription.onError) {
       continue
     }
-    subscription.onError(error, { stage: 'read' })
+    subscription.onError(error, createCallbackMeta(subscription, {
+      stage: 'read',
+      observedAt,
+    }))
   }
 }
 
@@ -329,6 +405,7 @@ async function runResolveChange(fileEntry, runToken) {
     return null
   }
 
+  const restoredObservedAt = Date.now()
   const reader = getReadFile(subscriptionsBeforeRead[0])
   let diskContent
 
@@ -351,7 +428,7 @@ async function runResolveChange(fileEntry, runToken) {
     }
 
     if (isMissingError(error)) {
-      await notifyMissing(currentSubscriptions, error)
+      await notifyMissing(currentSubscriptions, error, restoredObservedAt)
       return {
         changed: false,
         reason: 'missing',
@@ -359,7 +436,7 @@ async function runResolveChange(fileEntry, runToken) {
       }
     }
 
-    await notifyReadError(currentSubscriptions, error)
+    await notifyReadError(currentSubscriptions, error, restoredObservedAt)
     return {
       changed: false,
       reason: 'read-error',
@@ -382,7 +459,12 @@ async function runResolveChange(fileEntry, runToken) {
     }
   }
 
-  await notifyRestored(subscriptionsAfterRead, diskContent)
+  await notifyRestored(subscriptionsAfterRead, diskContent, restoredObservedAt)
+
+  // “文件刚恢复”与“恢复后的首次有效读盘内容”是两条不同业务事件。
+  // 如果它们共用同一个 observedAt，命令层先处理 restored 再处理 changed 时，
+  // event floor 会把这次首个有效读盘误判成迟到事件吞掉。
+  const changeObservedAt = Math.max(Date.now(), restoredObservedAt + 1)
 
   const resultList = []
 
@@ -392,6 +474,11 @@ async function runResolveChange(fileEntry, runToken) {
     }
 
     const result = resolveExternalChange(subscription.state, diskContent)
+    result.bindingToken = Number.isFinite(subscription.bindingToken)
+      ? subscription.bindingToken
+      : null
+    result.watchingPath = subscription.filePath
+    result.observedAt = changeObservedAt
     resultList.push(result)
 
     if (result.changed !== true || !subscription.onExternalChange || !isSubscriptionCurrent(subscription)) {
@@ -401,7 +488,10 @@ async function runResolveChange(fileEntry, runToken) {
     try {
       await subscription.onExternalChange(result.change, result)
     } catch (error) {
-      subscription.onError && subscription.onError(error, { stage: 'callback' })
+      subscription.onError && subscription.onError(error, createCallbackMeta(subscription, {
+        stage: 'callback',
+        observedAt: changeObservedAt,
+      }))
     }
   }
 
@@ -446,7 +536,7 @@ function routeDirectoryEvent(directoryPath, filename) {
 
   const fileNameText = Buffer.isBuffer(filename) ? filename.toString('utf8') : String(filename)
   const targetFilePath = path.resolve(directoryPath, fileNameText)
-  const targetFileEntry = directoryEntry.files.get(targetFilePath)
+  const targetFileEntry = directoryEntry.files.get(toRegistryPathKey(targetFilePath))
 
   if (!targetFileEntry) {
     return Promise.resolve()
@@ -466,7 +556,7 @@ function detachSubscription(subscription) {
     return
   }
 
-  const fileEntry = directoryEntry.files.get(subscription.filePath)
+  const fileEntry = directoryEntry.files.get(subscription.fileRegistryKey)
   if (!fileEntry) {
     return
   }
@@ -485,6 +575,7 @@ function detachSubscription(subscription) {
 function startWatching({
   state,
   filePath,
+  bindingToken = null,
   debounceMs = 120,
   readFile = targetPath => fs.readFile(targetPath, 'utf-8'),
   onExternalChange,
@@ -514,7 +605,9 @@ function startWatching({
     token: state.subscriptionToken,
     state,
     filePath,
+    fileRegistryKey: fileEntry.fileRegistryKey,
     directoryPath,
+    bindingToken: Number.isFinite(bindingToken) ? bindingToken : null,
     debounceMs,
     readFile,
     onExternalChange,
