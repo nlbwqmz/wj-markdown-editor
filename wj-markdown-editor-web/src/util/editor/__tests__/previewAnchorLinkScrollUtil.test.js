@@ -83,6 +83,14 @@ function createClickEvent(href) {
   }
 }
 
+function createAnchorEvent(href) {
+  return createClickEvent(href)
+}
+
+function createFootnoteEvent(href) {
+  return createClickEvent(href)
+}
+
 test('点击普通 hash 锚点时，应阻止默认行为并平滑滚动到预览容器目标位置', () => {
   const target = createTargetElement({
     id: 'section-1',
@@ -211,6 +219,65 @@ test('previewScrollContainer 返回空值时，应回退到 previewRoot', () => 
   assert.equal(preventedGetter(), true)
   assert.deepEqual(previewRoot.scrollToCalls, [{
     top: 60,
+    behavior: 'smooth',
+  }])
+})
+
+test('脚注 hash 链接应交还给脚注分支处理，不应触发通用锚点滚动', () => {
+  const footnoteTarget = createTargetElement({
+    id: 'fn1',
+    top: 180,
+  })
+  const previewRoot = createPreviewContainer({
+    top: 0,
+    targets: [footnoteTarget],
+  })
+  const outerContainer = createPreviewContainer({
+    top: 30,
+    scrollTop: 40,
+  })
+
+  const { event, preventedGetter } = createFootnoteEvent('#fn1')
+  const handled = handlePreviewHashAnchorClick({
+    event,
+    previewRoot,
+    previewScrollContainer: () => outerContainer,
+  })
+
+  assert.equal(handled, false)
+  assert.equal(preventedGetter(), false)
+  assert.equal(previewRoot.scrollToCalls.length, 0)
+  assert.equal(outerContainer.scrollToCalls.length, 0)
+})
+
+test('显式提供外层滚动容器时，普通 hash 锚点应优先滚动外层容器', () => {
+  const target = createTargetElement({
+    id: 'section-2',
+    top: 220,
+  })
+  const previewRoot = createPreviewContainer({
+    top: 40,
+    scrollTop: 10,
+    targets: [target],
+  })
+  const outerContainer = createPreviewContainer({
+    top: 120,
+    clientTop: 8,
+    scrollTop: 30,
+  })
+
+  const { event, preventedGetter } = createAnchorEvent('#section-2')
+  const handled = handlePreviewHashAnchorClick({
+    event,
+    previewRoot,
+    previewScrollContainer: () => outerContainer,
+  })
+
+  assert.equal(handled, true)
+  assert.equal(preventedGetter(), true)
+  assert.equal(previewRoot.scrollToCalls.length, 0)
+  assert.deepEqual(outerContainer.scrollToCalls, [{
+    top: 122,
     behavior: 'smooth',
   }])
 })

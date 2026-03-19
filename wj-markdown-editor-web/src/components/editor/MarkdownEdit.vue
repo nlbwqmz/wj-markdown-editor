@@ -894,7 +894,7 @@ defineExpose({
       <div
         v-if="previewController"
         ref="previewRef"
-        class="allow-search wj-scrollbar h-full p-2"
+        class="wj-scrollbar allow-search h-full p-2"
         :style="previewContainerStyle"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"
@@ -904,6 +904,7 @@ defineExpose({
           :content="props.modelValue"
           :code-theme="codeTheme"
           :preview-theme="previewTheme"
+          :preview-scroll-container="() => previewRef"
           :watermark="watermark"
           @refresh-complete="onPreviewRefreshComplete"
           @anchor-change="onAnchorChange"

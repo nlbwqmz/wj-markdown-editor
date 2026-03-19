@@ -86,7 +86,14 @@ onUnmounted(() => {
       <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
         <div class="h-full w-full flex justify-center">
           <div class="h-full w-full">
-            <MarkdownPreview :content="content" code-theme="atom-one-dark" preview-theme="github" @refresh-complete="onPreviewRefreshComplete" @anchor-change="onAnchorChange" />
+            <MarkdownPreview
+              :content="content"
+              :preview-scroll-container="() => previewContainerRef"
+              code-theme="atom-one-dark"
+              preview-theme="github"
+              @refresh-complete="onPreviewRefreshComplete"
+              @anchor-change="onAnchorChange"
+            />
           </div>
         </div>
       </div>

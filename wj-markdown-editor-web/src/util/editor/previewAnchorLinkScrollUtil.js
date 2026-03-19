@@ -15,6 +15,14 @@ function normalizeHashAnchor(href) {
   }
 }
 
+function isFootnoteHashAnchor(href) {
+  if (typeof href !== 'string') {
+    return false
+  }
+
+  return /^#fn(?:ref)?(?::|\d)/.test(href)
+}
+
 export function resolvePreviewScrollContainer({
   previewRoot,
   previewScrollContainer,
@@ -53,6 +61,9 @@ export function handlePreviewHashAnchorClick({
   const linkElement = event?.target?.closest?.('a[href]')
   const href = linkElement?.getAttribute?.('href')
   if (!href?.startsWith('#') || href === '#') {
+    return false
+  }
+  if (isFootnoteHashAnchor(href)) {
     return false
   }
 

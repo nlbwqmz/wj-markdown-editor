@@ -4,6 +4,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useCommonStore } from '@/stores/counter.js'
 import { loadCodeTheme } from '@/util/codeThemeUtil.js'
+import { handlePreviewHashAnchorClick } from '@/util/editor/previewAnchorLinkScrollUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
 import { settleMermaidRender } from '@/util/previewMermaidRenderUtil.js'
 
@@ -22,6 +23,10 @@ const props = defineProps({
   },
   watermark: {
     type: Object,
+    default: () => null,
+  },
+  previewScrollContainer: {
+    type: Function,
     default: () => null,
   },
 })
@@ -153,6 +158,15 @@ function handlePreviewClick(e) {
     if (targetElement) {
       targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
+    return
+  }
+
+  if (handlePreviewHashAnchorClick({
+    event: e,
+    previewRoot: previewRef.value,
+    previewScrollContainer: props.previewScrollContainer,
+  })) {
+    return void 0
   }
 }
 
