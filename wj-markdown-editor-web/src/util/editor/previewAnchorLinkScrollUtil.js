@@ -1,18 +1,21 @@
 function normalizeHashAnchor(href) {
   if (typeof href !== 'string' || !href.startsWith('#') || href === '#') {
-    return ''
+    return []
   }
 
   const rawAnchor = href.slice(1).trim()
   if (!rawAnchor) {
-    return ''
+    return []
   }
 
+  const anchorValueSet = new Set([rawAnchor])
   try {
-    return decodeURIComponent(rawAnchor)
+    anchorValueSet.add(decodeURIComponent(rawAnchor))
   } catch {
-    return rawAnchor
+    // 保留原始值，兼容非法编码或无需解码的锚点
   }
+
+  return Array.from(anchorValueSet)
 }
 
 function isFootnoteLinkTarget(event) {
@@ -34,14 +37,15 @@ export function findPreviewAnchorTarget({
   previewRoot,
   href,
 }) {
-  const anchor = normalizeHashAnchor(href)
-  if (!anchor || !previewRoot?.querySelectorAll) {
+  const anchorValueList = normalizeHashAnchor(href)
+  if (anchorValueList.length === 0 || !previewRoot?.querySelectorAll) {
     return null
   }
 
   const candidateList = previewRoot.querySelectorAll('[id], a[name]')
   for (const candidate of candidateList) {
-    if (candidate?.id === anchor || candidate?.getAttribute?.('name') === anchor) {
+    const candidateAnchorValueList = normalizeHashAnchor(`#${candidate?.id || candidate?.getAttribute?.('name') || ''}`)
+    if (candidateAnchorValueList.some(anchorValue => anchorValueList.includes(anchorValue))) {
       return candidate
     }
   }

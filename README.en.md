@@ -59,6 +59,7 @@ Powered by `Electron + Vue 3`, it provides a complete writing workflow covering 
 
 - Accurate synchronized scrolling between editor and preview
 - Automatic outline extraction and navigation
+- Heading anchors and in-document hash link jumping with smooth scrolling in preview
 - Image preview with zoom, pagination, and rotation
 - Global theme switching (light / dark)
 - Multiple code highlighting themes and preview themes
@@ -112,6 +113,50 @@ cd ../wj-markdown-editor-electron
 npm install
 npm run start
 ```
+
+## Anchor Usage
+
+Markdown headings automatically generate anchors, and clicking in-document `Hash` links inside preview will smoothly scroll to the matching section.
+
+### Basic Syntax
+
+```md
+## 快速开始
+
+跳转到[快速开始](#快速开始)
+```
+
+This direct form works well for Chinese headings without spaces. After rendering, the link is encoded automatically and jumps to the matching heading in the current document.
+
+For headings containing English words, spaces, or symbols, it is safer to link with the generated anchor directly:
+
+```md
+## Hello World
+## API / SDK
+
+Jump to [Hello World](#hello-world)
+Jump to [API / SDK](#api-%2F-sdk)
+```
+
+### Anchor Generation Rules
+
+- Only `#` to `######` headings generate anchors automatically
+- Anchors are generated from plain text and inline code text inside the heading
+- Leading and trailing spaces are trimmed, then the text is converted to lowercase
+- Consecutive whitespace is collapsed into a single `-`
+- The result is URL-encoded, so Chinese text and special symbols become encoded in the final `id`
+- Duplicate headings receive numeric suffixes such as `-1`, `-2`, and so on
+
+Examples:
+
+| Heading | Recommended link | Generated `id` |
+| --- | --- | --- |
+| `## 快速开始` | `[Jump](#快速开始)` | `%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B` |
+| `## Hello World` | `[Jump](#hello-world)` | `hello-world` |
+| second `## Hello World` | `[Jump](#hello-world-1)` | `hello-world-1` |
+| `## API / SDK` | `[Jump](#api-%2F-sdk)` | `api-%2F-sdk` |
+
+If you need to build the link manually, derive the `id` with the rules above. For Chinese headings without spaces, `[text](#标题)` usually works as expected as well.
 
 ## Build and Package
 
