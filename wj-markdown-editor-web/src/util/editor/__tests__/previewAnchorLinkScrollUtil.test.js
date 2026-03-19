@@ -5,8 +5,15 @@ import * as previewAnchorLinkScrollUtil from '../previewAnchorLinkScrollUtil.js'
 
 const { test } = await import('node:test')
 
-test('工具模块只暴露规格要求的具名导出，不应额外提供默认导出', () => {
-  assert.equal(Object.hasOwn(previewAnchorLinkScrollUtil, 'default'), false)
+test('工具模块只暴露规格要求的 3 个具名导出', () => {
+  assert.deepEqual(
+    Object.keys(previewAnchorLinkScrollUtil).sort(),
+    [
+      'findPreviewAnchorTarget',
+      'handlePreviewHashAnchorClick',
+      'resolvePreviewScrollContainer',
+    ],
+  )
 })
 
 function createTargetElement({ id, name, top }) {
