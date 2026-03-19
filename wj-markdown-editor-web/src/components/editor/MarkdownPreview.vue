@@ -1,6 +1,8 @@
 <script setup>
+import { message } from 'ant-design-vue'
 import mermaid from 'mermaid'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useCommonStore } from '@/stores/counter.js'
 import { loadCodeTheme } from '@/util/codeThemeUtil.js'
@@ -34,6 +36,7 @@ const props = defineProps({
 const emits = defineEmits(['refreshComplete', 'anchorChange', 'assetContextmenu', 'assetOpen'])
 
 const store = useCommonStore()
+const { t } = useI18n()
 
 /**
  * 根据全局主题获取 mermaid 主题
@@ -165,6 +168,10 @@ function handlePreviewClick(e) {
     event: e,
     previewRoot: previewRef.value,
     previewScrollContainer: props.previewScrollContainer,
+    // 统一在组件层处理提示，便于复用国际化文案与现有消息样式配置。
+    onTargetMissing: () => {
+      message.warning(t('message.anchorTargetDoesNotExist'))
+    },
   })) {
     return void 0
   }

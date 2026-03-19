@@ -272,6 +272,7 @@ export default {
     confirmExecuteUpdate: '当前操作不会校验文件是否保存，请确保文件已保存，安装后程序将重启，确认继续？',
   },
   message: {
+    anchorTargetDoesNotExist: '锚点目标位置不存在',
     theFileDoesNotExist: '文件不存在',
     onlyMarkdownFilesCanBeOpened: '只能打开 Markdown（.md）文件。',
     invalidLocalResourceLink: '当前本地资源链接无效，无法定位到对应文件。',

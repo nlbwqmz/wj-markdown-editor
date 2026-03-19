@@ -272,6 +272,7 @@ export default {
     confirmExecuteUpdate: 'Current operation will not check if the file is saved, please ensure the file is saved, the program will restart after installation, confirm continue?',
   },
   message: {
+    anchorTargetDoesNotExist: 'The anchor target does not exist.',
     theFileDoesNotExist: 'The file does not exist.',
     onlyMarkdownFilesCanBeOpened: 'Only Markdown (.md) files can be opened.',
     invalidLocalResourceLink: 'The local resource link is invalid and cannot be resolved to a file.',

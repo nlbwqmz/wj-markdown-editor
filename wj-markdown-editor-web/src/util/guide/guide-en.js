@@ -37,9 +37,9 @@ Headings generate anchors automatically. The recommended usage is to write the o
 ## 中文 / 标题
 ## 中文 / 标题+++
 
-[Jump to Quick Start](#Quick Start)
-[Jump to 中文 / 标题](#中文 / 标题)
-[Jump to 中文 / 标题+++](#中文 / 标题+++)
+[Jump to Quick Start](<#Quick Start>)
+[Jump to 中文 / 标题](<#中文 / 标题>)
+[Jump to 中文 / 标题+++](<#中文 / 标题+++>)
 \`\`\`
 
 ### Headings With Spaces or Symbols
@@ -50,10 +50,10 @@ Headings generate anchors automatically. The recommended usage is to write the o
 ## 中文  ---  标题-2
 ## 中文 /  标题-1-2
 
-[Jump 1](#中文   标题)
-[Jump 2](#中文 /  标题)
-[Jump 3](#中文  ---  标题-2)
-[Jump 4](#中文 /  标题-1-2)
+[Jump 1](<#中文   标题>)
+[Jump 2](<#中文 /  标题>)
+[Jump 3](<#中文  ---  标题-2>)
+[Jump 4](<#中文 /  标题-1-2>)
 \`\`\`
 
 ### Duplicate Headings
@@ -65,8 +65,8 @@ In that case, you need to link to the generated anchor explicitly instead of usi
 ## Hello World
 ## Hello World
 
-[Jump to the first heading](#hello-world)
-[Jump to the second heading](#hello-world-1)
+[Jump to the first heading](<#hello-world>)
+[Jump to the second heading](<#hello-world-1>)
 \`\`\`
 
 ### Notes

@@ -19,6 +19,15 @@ function requireNormalizeMarkdownAnchorHref() {
   return normalizeMarkdownAnchorHref
 }
 
+function requireShouldOpenMarkdownLinkInNewWindow() {
+  assert.ok(resourceUrlUtilModule, '缺少 resource url util')
+
+  const { shouldOpenMarkdownLinkInNewWindow } = resourceUrlUtilModule
+  assert.equal(typeof shouldOpenMarkdownLinkInNewWindow, 'function')
+
+  return shouldOpenMarkdownLinkInNewWindow
+}
+
 test('markdown 锚点链接应按标题锚点规则编码普通中文标题', () => {
   const normalizeMarkdownAnchorHref = requireNormalizeMarkdownAnchorHref()
 
@@ -81,4 +90,19 @@ test('非锚点链接不应被 markdown 锚点规则改写', () => {
     'https://example.com/#中文标题',
   )
   assert.equal(normalizeMarkdownAnchorHref('#'), '#')
+})
+
+test('markdown 井号锚点链接不应被标记为新窗口打开', () => {
+  const shouldOpenMarkdownLinkInNewWindow = requireShouldOpenMarkdownLinkInNewWindow()
+
+  assert.equal(shouldOpenMarkdownLinkInNewWindow('#标题锚点'), false)
+  assert.equal(shouldOpenMarkdownLinkInNewWindow('#'), false)
+})
+
+test('普通外链与资源链接仍应允许新窗口打开', () => {
+  const shouldOpenMarkdownLinkInNewWindow = requireShouldOpenMarkdownLinkInNewWindow()
+
+  assert.equal(shouldOpenMarkdownLinkInNewWindow('https://example.com'), true)
+  assert.equal(shouldOpenMarkdownLinkInNewWindow('wj://74657374'), true)
+  assert.equal(shouldOpenMarkdownLinkInNewWindow('./docs/demo.md'), true)
 })

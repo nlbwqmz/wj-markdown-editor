@@ -68,6 +68,21 @@ export function normalizeMarkdownAnchorHref(href) {
 }
 
 /**
+ * 判断 Markdown 链接是否应该以新窗口方式打开。
+ * 以 `#` 开头的站内锚点属于当前预览区内导航，不应再附加 `_blank`，
+ * 否则找不到锚点时会落回浏览器默认打开链路，最终被 Electron 转交到外部浏览器。
+ * @param {string} href - 原始链接地址
+ * @returns {boolean} - `true` 表示允许新窗口打开；`false` 表示应保留在当前上下文处理
+ */
+export function shouldOpenMarkdownLinkInNewWindow(href) {
+  if (typeof href !== 'string' || !href) {
+    return false
+  }
+
+  return !href.startsWith('#')
+}
+
+/**
  * 将资源地址转换为稳定的资源 URL。
  * 本地路径转换为 wj 协议地址，显式协议地址、锚点链接和协议相对地址保持原样。
  * @param {string} src - 资源地址
@@ -97,5 +112,6 @@ export default {
   stringToHex,
   normalizeLocalResourcePath,
   normalizeMarkdownAnchorHref,
+  shouldOpenMarkdownLinkInNewWindow,
   convertResourceUrl,
 }

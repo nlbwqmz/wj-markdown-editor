@@ -57,6 +57,7 @@ export function handlePreviewHashAnchorClick({
   event,
   previewRoot,
   previewScrollContainer,
+  onTargetMissing,
 }) {
   if (isFootnoteLinkTarget(event)) {
     return false
@@ -64,8 +65,14 @@ export function handlePreviewHashAnchorClick({
 
   const linkElement = event?.target?.closest?.('a[href]')
   const href = linkElement?.getAttribute?.('href')
-  if (!href?.startsWith('#') || href === '#') {
+  if (!href?.startsWith('#')) {
     return false
+  }
+
+  // 只要已经识别为 hash 锚点，就应接管默认行为，避免浏览器继续走 location/hash 或 `_blank` 打开链路。
+  event.preventDefault?.()
+  if (href === '#') {
+    return true
   }
 
   const targetElement = findPreviewAnchorTarget({
@@ -73,7 +80,8 @@ export function handlePreviewHashAnchorClick({
     href,
   })
   if (!targetElement) {
-    return false
+    onTargetMissing?.({ href })
+    return true
   }
 
   const container = resolvePreviewScrollContainer({
@@ -81,14 +89,14 @@ export function handlePreviewHashAnchorClick({
     previewScrollContainer,
   })
   if (!container?.scrollTo || !container?.getBoundingClientRect || !targetElement?.getBoundingClientRect) {
-    return false
+    onTargetMissing?.({ href })
+    return true
   }
 
   const containerRect = container.getBoundingClientRect()
   const targetRect = targetElement.getBoundingClientRect()
   const targetTop = targetRect.top - containerRect.top - container.clientTop + container.scrollTop
 
-  event.preventDefault?.()
   container.scrollTo({
     top: targetTop,
     behavior: 'smooth',

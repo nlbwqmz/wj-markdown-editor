@@ -1,5 +1,9 @@
 import commonUtil from '@/util/commonUtil.js'
-import { normalizeLocalResourcePath, normalizeMarkdownAnchorHref } from '@/util/resourceUrlUtil.js'
+import {
+  normalizeLocalResourcePath,
+  normalizeMarkdownAnchorHref,
+  shouldOpenMarkdownLinkInNewWindow,
+} from '@/util/resourceUrlUtil.js'
 
 /**
  * 给链接加上_blank
@@ -9,23 +13,27 @@ export default function (md) {
     return self.renderToken(tokens, idx, options)
   }
   md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
-    // If you are sure other plugins can't add `target` - drop check below
-    const targetIndex = tokens[idx].attrIndex('target')
-    if (targetIndex < 0) {
-      // add new attribute
-      tokens[idx].attrPush(['target', '_blank'])
-    } else {
-      // replace value of existing attr
-      tokens[idx].attrs[targetIndex][1] = '_blank'
-    }
-
     const hrefIndex = tokens[idx].attrIndex('href')
     if (hrefIndex >= 0) {
       const href = tokens[idx].attrs[hrefIndex][1]
       if (href) {
         if (href.startsWith('#')) {
           tokens[idx].attrs[hrefIndex][1] = normalizeMarkdownAnchorHref(href)
+          const targetIndex = tokens[idx].attrIndex('target')
+          if (targetIndex >= 0) {
+            tokens[idx].attrs.splice(targetIndex, 1)
+          }
           return defaultRender(tokens, idx, options, env, self)
+        }
+
+        if (shouldOpenMarkdownLinkInNewWindow(href)) {
+          const targetIndex = tokens[idx].attrIndex('target')
+          if (targetIndex < 0) {
+            // 非锚点链接继续沿用新窗口打开策略，避免打断现有外链与资源打开体验。
+            tokens[idx].attrPush(['target', '_blank'])
+          } else {
+            tokens[idx].attrs[targetIndex][1] = '_blank'
+          }
         }
 
         const normalizedHref = normalizeLocalResourcePath(href)

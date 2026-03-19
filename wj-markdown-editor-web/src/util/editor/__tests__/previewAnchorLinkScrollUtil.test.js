@@ -158,7 +158,7 @@ test('href 为外链时，不应拦截点击行为', () => {
   assert.equal(previewRoot.scrollToCalls.length, 0)
 })
 
-test('href 仅为井号时，不应执行锚点滚动', () => {
+test('href 仅为井号时，应阻止默认行为且不执行锚点滚动', () => {
   const target = createTargetElement({
     id: '',
     top: 120,
@@ -173,23 +173,28 @@ test('href 仅为井号时，不应执行锚点滚动', () => {
     previewRoot,
   })
 
-  assert.equal(handled, false)
-  assert.equal(preventedGetter(), false)
+  assert.equal(handled, true)
+  assert.equal(preventedGetter(), true)
   assert.equal(previewRoot.scrollToCalls.length, 0)
 })
 
-test('找不到锚点目标元素时，不应阻止默认行为', () => {
+test('找不到锚点目标元素时，应阻止默认行为并触发缺失回调', () => {
   const previewRoot = createPreviewContainer()
   const { event, preventedGetter } = createClickEvent('#missing-target')
+  const missingHrefList = []
 
   const handled = handlePreviewHashAnchorClick({
     event,
     previewRoot,
+    onTargetMissing: ({ href }) => {
+      missingHrefList.push(href)
+    },
   })
 
-  assert.equal(handled, false)
-  assert.equal(preventedGetter(), false)
+  assert.equal(handled, true)
+  assert.equal(preventedGetter(), true)
   assert.equal(previewRoot.scrollToCalls.length, 0)
+  assert.deepEqual(missingHrefList, ['#missing-target'])
 })
 
 test('提供 previewScrollContainer 时，应滚动该容器而不是 previewRoot', () => {
