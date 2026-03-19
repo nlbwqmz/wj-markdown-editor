@@ -15,12 +15,8 @@ function normalizeHashAnchor(href) {
   }
 }
 
-function isFootnoteHashAnchor(href) {
-  if (typeof href !== 'string') {
-    return false
-  }
-
-  return /^#fn(?:ref)?(?::|\d)/.test(href)
+function isFootnoteLinkTarget(event) {
+  return Boolean(event?.target?.closest?.('.footnote-ref a, .footnote-backref'))
 }
 
 export function resolvePreviewScrollContainer({
@@ -58,12 +54,13 @@ export function handlePreviewHashAnchorClick({
   previewRoot,
   previewScrollContainer,
 }) {
+  if (isFootnoteLinkTarget(event)) {
+    return false
+  }
+
   const linkElement = event?.target?.closest?.('a[href]')
   const href = linkElement?.getAttribute?.('href')
   if (!href?.startsWith('#') || href === '#') {
-    return false
-  }
-  if (isFootnoteHashAnchor(href)) {
     return false
   }
 
