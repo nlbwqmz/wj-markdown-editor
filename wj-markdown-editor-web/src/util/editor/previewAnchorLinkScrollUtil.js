@@ -84,9 +84,3 @@ export function handlePreviewHashAnchorClick({
 
   return true
 }
-
-export default {
-  findPreviewAnchorTarget,
-  handlePreviewHashAnchorClick,
-  resolvePreviewScrollContainer,
-}

@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict'
 
 import { handlePreviewHashAnchorClick } from '../previewAnchorLinkScrollUtil.js'
+import * as previewAnchorLinkScrollUtil from '../previewAnchorLinkScrollUtil.js'
 
 const { test } = await import('node:test')
+
+test('工具模块只暴露规格要求的具名导出，不应额外提供默认导出', () => {
+  assert.equal(Object.hasOwn(previewAnchorLinkScrollUtil, 'default'), false)
+})
 
 function createTargetElement({ id, name, top }) {
   return {
