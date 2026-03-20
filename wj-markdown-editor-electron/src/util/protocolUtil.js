@@ -1,38 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { BrowserWindow, net, protocol, session, webContents } from 'electron'
+import { net, protocol, session } from 'electron'
 import commonUtil from './commonUtil.js'
 import windowLifecycleService from './document-session/windowLifecycleService.js'
 import { resolveWindowIdForProtocolRequest } from './protocolRequestContextUtil.js'
 
 let headerHookInitialized = false
-
-/**
- * 从请求来源的 webContents 中回退解析父窗口 ID。
- *
- * 导出页等临时子窗口不会注册到 windowLifecycleService，
- * 但它们的本地资源解析仍应继承父编辑窗口的文档上下文。
- *
- * @param {number} webContentsId
- * @returns {string | null} 返回可用于协议解析的父窗口 ID
- */
-function getParentWindowIdByWebContentsId(webContentsId) {
-  if (!Number.isInteger(webContentsId)) {
-    return null
-  }
-
-  const requestWebContents = webContents.fromId(webContentsId)
-  if (!requestWebContents) {
-    return null
-  }
-
-  const requestWindow = BrowserWindow.fromWebContents(requestWebContents)
-  const parentWindow = requestWindow?.getParentWindow?.()
-  const parentWinInfo = parentWindow ? windowLifecycleService.getWinInfo(parentWindow) : null
-
-  return parentWinInfo?.id || null
-}
 
 /**
  * 检查文件类型是否允许通过协议访问。
@@ -181,8 +155,8 @@ function initHeaderHook() {
         if (details.url.startsWith('wj:')) {
           const windowId = resolveWindowIdForProtocolRequest({
             webContentsId: details.webContentsId,
-            getWindowIdByWebContentsId: webContentsId => windowLifecycleService.getByWebContentsId(webContentsId)?.id || null,
-            getParentWindowIdByWebContentsId,
+            getWindowIdByWebContentsId: id => windowLifecycleService.getWindowIdByWebContentsId(id),
+            getParentWindowIdByWebContentsId: id => windowLifecycleService.getParentWindowIdByWebContentsId(id),
           })
           if (windowId) {
             requestHeaders['X-Window-ID'] = windowId

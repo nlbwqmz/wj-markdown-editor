@@ -180,6 +180,7 @@ describe('isSafePath - 路径安全验证', () => {
     })
   })
 
+  // eslint-disable-next-line test/prefer-lowercase-title
   describe('Windows 特定测试', () => {
     it('应该正确处理 Windows 路径分隔符', () => {
       const basePath = 'C:\\Users\\user\\docs'
@@ -200,6 +201,7 @@ describe('isSafePath - 路径安全验证', () => {
     })
   })
 
+  // eslint-disable-next-line test/prefer-lowercase-title
   describe('Unix/Linux 特定测试', () => {
     it('应该阻止访问 /etc 目录', () => {
       const basePath = '/home/user/docs'
@@ -714,6 +716,159 @@ describe('protocolUtil 协议上下文回退', () => {
     return `wj://${Buffer.from(resourcePath, 'utf8').toString('hex')}`
   }
 
+  async function setupRealWindowLifecycleServiceParentFallback() {
+    const childWebContentsId = 401
+    const missingWebContentsId = 999
+    const parentWindowId = 'parent-window'
+    const parentWindow = { id: 41 }
+    const childWindow = {
+      id: 40,
+      getParentWindow: () => parentWindow,
+    }
+    const childWebContents = {
+      id: childWebContentsId,
+    }
+    const hostStateStore = {
+      getWindowState: vi.fn(() => null),
+      findWindowStateByWin: vi.fn(() => null),
+      updateWindowState: vi.fn(),
+      unregisterWindowState: vi.fn(),
+      registerWindowState: vi.fn(),
+    }
+    const windowMap = new Map([[parentWindowId, parentWindow]])
+    const sessionMap = new Map()
+    const registry = {
+      registerWindow: vi.fn(({ windowId, win }) => {
+        windowMap.set(String(windowId), win)
+        return win
+      }),
+      unregisterWindow: vi.fn((windowId) => {
+        sessionMap.delete(String(windowId))
+        return windowMap.delete(String(windowId))
+      }),
+      bindSession: vi.fn(({ windowId, sessionId }) => {
+        sessionMap.set(String(windowId), sessionId)
+        return sessionId
+      }),
+      getSessionIdByWindowId: vi.fn(windowId => sessionMap.get(String(windowId)) || null),
+      getWindowById: vi.fn(windowId => windowMap.get(String(windowId)) || null),
+      getAllWindows: vi.fn(() => Array.from(windowMap.values())),
+    }
+
+    vi.doUnmock('./document-session/windowLifecycleService.js')
+    vi.doMock('electron', () => ({
+      app: {
+        exit: vi.fn(),
+      },
+      BrowserWindow: {
+        fromWebContents: vi.fn((target) => {
+          if (target === childWebContents) {
+            return childWindow
+          }
+          return null
+        }),
+      },
+      dialog: {
+        showSaveDialogSync: vi.fn(),
+      },
+      screen: {
+        getPrimaryDisplay: vi.fn(() => ({ workAreaSize: { width: 1920, height: 1080 } })),
+      },
+      shell: {
+        openExternal: vi.fn(),
+        showItemInFolder: vi.fn(),
+      },
+      webContents: {
+        fromId: vi.fn((id) => {
+          if (id === childWebContentsId) {
+            return childWebContents
+          }
+          return null
+        }),
+      },
+    }))
+    vi.doMock('fs-extra', () => ({
+      default: {
+        readFile: vi.fn(),
+        writeFile: vi.fn(),
+        pathExists: vi.fn(),
+        stat: vi.fn(),
+      },
+    }))
+    vi.doMock('../data/configUtil.js', () => ({
+      default: {
+        getConfig: vi.fn(() => ({ language: 'zh-CN', autoSave: [], startPage: 'editor' })),
+      },
+    }))
+    vi.doMock('../data/recent.js', () => ({
+      default: {
+        add: vi.fn(),
+      },
+    }))
+    vi.doMock('./channel/sendUtil.js', () => ({
+      default: {
+        send: vi.fn(),
+      },
+    }))
+    vi.doMock('./commonUtil.js', () => ({
+      default: {
+        createId: vi.fn(() => 'test-id-1'),
+        decodeWjUrl: vi.fn(),
+      },
+    }))
+    vi.doMock('./fileWatchUtil.js', () => ({
+      default: {
+        createWatchState: vi.fn(() => ({ pendingChange: null })),
+      },
+    }))
+    vi.doMock('./resourceFileUtil.js', () => ({
+      default: {
+        getLocalResourceFailureMessageKey: vi.fn(() => null),
+      },
+    }))
+    vi.doMock('./updateUtil.js', () => ({
+      default: {
+        checkUpdate: vi.fn(),
+      },
+    }))
+    vi.doMock('./document-session/documentOpenTargetUtil.js', () => ({
+      resolveDocumentOpenPath: vi.fn(targetPath => targetPath),
+    }))
+    vi.doMock('./document-session/documentSessionFactory.js', () => ({
+      createBoundFileSession: vi.fn(),
+      createDraftSession: vi.fn(),
+      createRecentMissingSession: vi.fn(),
+    }))
+    vi.doMock('./document-session/documentSessionRuntime.js', () => ({
+      getDocumentSessionRuntime: vi.fn(),
+    }))
+    vi.doMock('./document-session/documentSnapshotUtil.js', () => ({
+      deriveDocumentSnapshot: vi.fn(() => null),
+    }))
+    vi.doMock('./document-session/externalWatchBridge.js', () => ({
+      createExternalWatchBridge: vi.fn(() => ({
+        start: vi.fn(),
+        stop: vi.fn(),
+      })),
+    }))
+    vi.doMock('./document-session/windowHostStateStore.js', () => ({
+      createWindowHostStateStore: vi.fn(() => hostStateStore),
+    }))
+
+    const { default: windowLifecycleService } = await import('./document-session/windowLifecycleService.js')
+    windowLifecycleService.configure({
+      registry,
+    })
+    windowLifecycleService.getWinInfo(parentWindowId)
+
+    return {
+      childWebContentsId,
+      missingWebContentsId,
+      parentWindowId,
+      windowLifecycleService,
+    }
+  }
+
   async function setupProtocolHeaderHook({
     directWindowId = null,
     parentWindowId = null,
@@ -774,34 +929,41 @@ describe('protocolUtil 协议上下文回退', () => {
         }),
       },
     }))
-    vi.doMock('./document-session/windowLifecycleService.js', () => ({
-      default: {
-        getByWebContentsId: vi.fn((id) => {
-          if (id !== requestWebContentsId || directWindowId == null) {
-            return null
-          }
-          return { id: directWindowId }
-        }),
-        getWinInfo: vi.fn((target) => {
-          if (target === parentWindow && parentWindowId != null) {
-            return { id: parentWindowId, win: parentWindow }
-          }
-          if (target === directWindowId || target === String(directWindowId)) {
-            return directWindowId == null
-              ? null
-              : { id: directWindowId, win: requestWindow }
-          }
-          if (target === parentWindowId || target === String(parentWindowId)) {
-            return parentWindowId == null
-              ? null
-              : { id: parentWindowId, win: parentWindow }
-          }
+    const windowLifecycleService = {
+      getWindowIdByWebContentsId: vi.fn((id) => {
+        if (id !== requestWebContentsId || directWindowId == null) {
           return null
-        }),
-        getDocumentContext: vi.fn(() => ({
-          path: 'D:/docs/demo.md',
-        })),
-      },
+        }
+        return directWindowId
+      }),
+      getParentWindowIdByWebContentsId: vi.fn((id) => {
+        if (id !== requestWebContentsId || parentWindowId == null) {
+          return null
+        }
+        return parentWindowId
+      }),
+      getWinInfo: vi.fn((target) => {
+        if (target === parentWindow && parentWindowId != null) {
+          return { id: parentWindowId, win: parentWindow }
+        }
+        if (target === directWindowId || target === String(directWindowId)) {
+          return directWindowId == null
+            ? null
+            : { id: directWindowId, win: requestWindow }
+        }
+        if (target === parentWindowId || target === String(parentWindowId)) {
+          return parentWindowId == null
+            ? null
+            : { id: parentWindowId, win: parentWindow }
+        }
+        return null
+      }),
+      getDocumentContext: vi.fn(() => ({
+        path: 'D:/docs/demo.md',
+      })),
+    }
+    vi.doMock('./document-session/windowLifecycleService.js', () => ({
+      default: windowLifecycleService,
     }))
 
     const { default: protocolUtil } = await import('./protocolUtil.js')
@@ -824,6 +986,18 @@ describe('protocolUtil 协议上下文回退', () => {
     })
 
     expect(result).toBe(currentWindowId)
+  })
+
+  it('windowLifecycleService.getParentWindowIdByWebContentsId 必须返回父窗口 ID 或 null', async () => {
+    const {
+      childWebContentsId,
+      missingWebContentsId,
+      parentWindowId,
+      windowLifecycleService,
+    } = await setupRealWindowLifecycleServiceParentFallback()
+
+    expect(windowLifecycleService.getParentWindowIdByWebContentsId(childWebContentsId)).toBe(parentWindowId)
+    expect(windowLifecycleService.getParentWindowIdByWebContentsId(missingWebContentsId)).toBeNull()
   })
 
   it('未注册子窗口的协议请求必须回退到父窗口 ID 注入 X-Window-ID', async () => {

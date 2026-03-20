@@ -655,34 +655,41 @@ describe('protocolUtil 协议上下文继承集成', () => {
         }),
       },
     }))
-    vi.doMock('./document-session/windowLifecycleService.js', () => ({
-      default: {
-        getByWebContentsId: vi.fn((id) => {
-          if (id !== requestWebContentsId || directWindowId == null) {
-            return null
-          }
-          return { id: directWindowId }
-        }),
-        getWinInfo: vi.fn((target) => {
-          if (target === parentWindow && parentWindowId != null) {
-            return { id: parentWindowId, win: parentWindow }
-          }
-          if (target === directWindowId || target === String(directWindowId)) {
-            return directWindowId == null
-              ? null
-              : { id: directWindowId, win: requestWindow }
-          }
-          if (target === parentWindowId || target === String(parentWindowId)) {
-            return parentWindowId == null
-              ? null
-              : { id: parentWindowId, win: parentWindow }
-          }
+    const windowLifecycleService = {
+      getWindowIdByWebContentsId: vi.fn((id) => {
+        if (id !== requestWebContentsId || directWindowId == null) {
           return null
-        }),
-        getDocumentContext: vi.fn(() => ({
-          path: documentPath,
-        })),
-      },
+        }
+        return directWindowId
+      }),
+      getParentWindowIdByWebContentsId: vi.fn((id) => {
+        if (id !== requestWebContentsId || parentWindowId == null) {
+          return null
+        }
+        return parentWindowId
+      }),
+      getWinInfo: vi.fn((target) => {
+        if (target === parentWindow && parentWindowId != null) {
+          return { id: parentWindowId, win: parentWindow }
+        }
+        if (target === directWindowId || target === String(directWindowId)) {
+          return directWindowId == null
+            ? null
+            : { id: directWindowId, win: requestWindow }
+        }
+        if (target === parentWindowId || target === String(parentWindowId)) {
+          return parentWindowId == null
+            ? null
+            : { id: parentWindowId, win: parentWindow }
+        }
+        return null
+      }),
+      getDocumentContext: vi.fn(() => ({
+        path: documentPath,
+      })),
+    }
+    vi.doMock('./document-session/windowLifecycleService.js', () => ({
+      default: windowLifecycleService,
     }))
 
     const { default: protocolUtil } = await import('./protocolUtil.js')

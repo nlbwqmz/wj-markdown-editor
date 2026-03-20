@@ -1,7 +1,7 @@
 import { watch } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, screen, shell, webContents } from 'electron'
 import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
@@ -348,6 +348,20 @@ function getWindowIdByWin(win) {
 function getWindowIdByWebContentsId(webContentsId) {
   const win = (getOptionalWindowRegistry()?.getAllWindows?.() || []).find(item => item?.webContents?.id === webContentsId) || null
   return win ? findRegisteredWindowIdByWin(win) : null
+}
+
+function getParentWindowIdByWebContentsId(webContentsId) {
+  if (!Number.isInteger(webContentsId)) {
+    return null
+  }
+
+  const requestWebContents = webContents.fromId(webContentsId)
+  if (!requestWebContents) {
+    return null
+  }
+
+  const parentWindow = BrowserWindow.fromWebContents(requestWebContents)?.getParentWindow?.()
+  return parentWindow ? getWindowIdByWin(parentWindow) : null
 }
 
 function listWindows() {
@@ -1333,6 +1347,7 @@ Object.assign(windowLifecycleService, {
   getWindowById,
   getWindowIdByWin,
   getWindowIdByWebContentsId,
+  getParentWindowIdByWebContentsId,
   listWindows,
   getWinInfo,
   getAll: () => {
