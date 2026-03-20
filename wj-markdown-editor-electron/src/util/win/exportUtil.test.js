@@ -106,10 +106,11 @@ describe('exportUtil', () => {
     const { default: exportUtil } = await import('./exportUtil.js')
     const parentWindow = { id: 1 }
 
-    await exportUtil.channel['export-start']({
+    const result = await exportUtil.channel['export-start']({
       win: parentWindow,
     }, 'PDF')
 
+    expect(result).toBeUndefined()
     expect(dialogShowSaveDialogSync).toHaveBeenCalledTimes(1)
     expect(send).toHaveBeenCalledWith(parentWindow, expect.objectContaining({
       event: 'message',
