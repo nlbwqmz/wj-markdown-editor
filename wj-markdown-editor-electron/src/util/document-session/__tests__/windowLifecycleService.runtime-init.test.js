@@ -276,6 +276,16 @@ vi.mock('../../win/settingUtil.js', () => {
 })
 
 describe('windowLifecycleService runtime 初始化时机', () => {
+  function createRegistryStub() {
+    return {
+      registerWindow: vi.fn(),
+      unregisterWindow: vi.fn(),
+      bindSession: vi.fn(),
+      getWindowById: vi.fn(() => null),
+      getAllWindows: vi.fn(() => []),
+    }
+  }
+
   beforeEach(() => {
     vi.resetModules()
     browserWindowFromWebContents.mockReset()
@@ -324,11 +334,33 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     expect(getDocumentSessionRuntime).not.toHaveBeenCalled()
   })
 
+  it('windowLifecycleService 在未显式配置 registry 时，不能暴露 host deps 给主入口继续初始化', async () => {
+    const moduleNs = await import('../windowLifecycleService.js')
+
+    expect(() => moduleNs.default.getDocumentSessionRuntimeHostDeps()).toThrow('windowLifecycleService 尚未配置 windowRegistry')
+  })
+
+  it('windowLifecycleService 配置过 registry 后，不能静默切换到另一份实例', async () => {
+    const moduleNs = await import('../windowLifecycleService.js')
+    const firstRegistry = createRegistryStub()
+    const secondRegistry = createRegistryStub()
+
+    expect(() => moduleNs.default.configure({
+      registry: firstRegistry,
+    })).not.toThrow()
+    expect(() => moduleNs.default.configure({
+      registry: secondRegistry,
+    })).toThrow('windowLifecycleService 已绑定其他 windowRegistry')
+  })
+
   it('未显式初始化 runtime 时，windowLifecycleService.createNew 必须直接失败，不能在内部自举 runtime', async () => {
     getDocumentSessionRuntime.mockImplementation(() => {
       throw new Error('document session runtime 尚未初始化')
     })
     const moduleNs = await import('../windowLifecycleService.js')
+    moduleNs.default.configure({
+      registry: createRegistryStub(),
+    })
 
     await expect(moduleNs.default.createNew(null)).rejects.toThrow('document session runtime 尚未初始化')
     expect(initializeDocumentSessionRuntime).not.toHaveBeenCalled()

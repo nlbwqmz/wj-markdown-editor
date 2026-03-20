@@ -227,17 +227,52 @@ const {
 const {
   createDocumentSessionRuntimeComposition,
 } = await import('../documentSessionRuntimeComposition.js')
-const {
-  createWindowRegistry,
-} = await import('../windowRegistry.js')
 const { default: winInfoUtil } = await import('../windowLifecycleService.js')
 
+function createResettableWindowRegistry() {
+  const windowMap = new Map()
+  const sessionMap = new Map()
+
+  function normalizeWindowId(windowId) {
+    return String(windowId)
+  }
+
+  return {
+    registerWindow({ windowId, win }) {
+      windowMap.set(normalizeWindowId(windowId), win)
+      return win
+    },
+    unregisterWindow(windowId) {
+      const normalizedWindowId = normalizeWindowId(windowId)
+      sessionMap.delete(normalizedWindowId)
+      return windowMap.delete(normalizedWindowId)
+    },
+    bindSession({ windowId, sessionId }) {
+      sessionMap.set(normalizeWindowId(windowId), sessionId)
+      return sessionId
+    },
+    getWindowById(windowId) {
+      return windowMap.get(normalizeWindowId(windowId)) || null
+    },
+    getAllWindows() {
+      return Array.from(windowMap.values())
+    },
+    reset() {
+      windowMap.clear()
+      sessionMap.clear()
+    },
+  }
+}
+
+const lifecycleRegistry = createResettableWindowRegistry()
+
 function initializeRuntimeForWindowLifecycleTests() {
-  const registry = createWindowRegistry()
-  winInfoUtil.setWindowRegistry(registry)
+  winInfoUtil.configure({
+    registry: lifecycleRegistry,
+  })
   initializeDocumentSessionRuntime({
     ...createDocumentSessionRuntimeComposition({
-      registry,
+      registry: lifecycleRegistry,
       getConfig: () => getConfigMock(),
       recentStore: {
         add: recentAddMock,
@@ -311,6 +346,7 @@ async function emitWatchRestored(winInfo, diskContent, {
 describe('windowLifecycleService 生命周期 facade', () => {
   beforeEach(() => {
     resetDocumentSessionRuntime()
+    lifecycleRegistry.reset()
     sendMock.mockReset()
     writeFileMock.mockReset()
     readFileMock.mockReset()

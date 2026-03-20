@@ -32,35 +32,45 @@ const MISSING_PATH_REASON = {
 }
 
 const winInfoList = []
+const REQUIRED_WINDOW_REGISTRY_METHODS = [
+  'registerWindow',
+  'unregisterWindow',
+  'bindSession',
+  'getWindowById',
+  'getAllWindows',
+]
 
-function createWinInfoWindowRegistryAdapter() {
-  return {
-    registerWindow({ win }) {
-      return win
-    },
-    unregisterWindow() {
-      return true
-    },
-    bindSession({ sessionId }) {
-      return sessionId
-    },
-    getWindowById(windowId) {
-      return winInfoList.find(item => item.id === windowId)?.win || null
-    },
-    getAllWindows() {
-      return winInfoList.map(item => item.win)
-    },
+let activeWindowRegistry = null
+const windowLifecycleService = {}
+
+function assertWindowRegistryContract(registry) {
+  if (!registry || typeof registry !== 'object') {
+    throw new TypeError('windowLifecycleService.configure 需要有效的 windowRegistry')
+  }
+
+  const missingMethod = REQUIRED_WINDOW_REGISTRY_METHODS.find((methodName) => {
+    return typeof registry[methodName] !== 'function'
+  })
+  if (missingMethod) {
+    throw new TypeError(`windowRegistry 缺少必要方法: ${missingMethod}`)
   }
 }
 
-let activeWindowRegistry = createWinInfoWindowRegistryAdapter()
+export function configureWindowLifecycleService({ registry } = {}) {
+  assertWindowRegistryContract(registry)
 
-export function setWindowRegistry(registry) {
-  activeWindowRegistry = registry || createWinInfoWindowRegistryAdapter()
-  return activeWindowRegistry
+  if (activeWindowRegistry && activeWindowRegistry !== registry) {
+    throw new Error('windowLifecycleService 已绑定其他 windowRegistry，不能静默切换')
+  }
+
+  activeWindowRegistry = registry
+  return windowLifecycleService
 }
 
 function getWindowRegistry() {
+  if (!activeWindowRegistry) {
+    throw new Error('windowLifecycleService 尚未配置 windowRegistry')
+  }
   return activeWindowRegistry
 }
 
@@ -134,6 +144,7 @@ function buildRuntimeHostDeps() {
 }
 
 export function getDocumentSessionRuntimeHostDeps() {
+  getWindowRegistry()
   return buildRuntimeHostDeps()
 }
 
@@ -978,6 +989,7 @@ function notifyRecentListChanged(recentList) {
 }
 
 async function createNew(filePath, isRecent = false) {
+  const windowRegistry = getWindowRegistry()
   const { store } = ensureSessionRuntimeInitialized()
   const normalizedFilePath = resolveDocumentOpenPath(filePath)
   const exists = Boolean(normalizedFilePath && await fs.pathExists(normalizedFilePath))
@@ -1023,7 +1035,7 @@ async function createNew(filePath, isRecent = false) {
     lastClosedManualRequestCompletions: [],
   }
   winInfoList.push(winInfo)
-  getWindowRegistry().registerWindow?.({
+  windowRegistry.registerWindow({
     windowId: id,
     win,
   })
@@ -1135,11 +1147,11 @@ async function createNew(filePath, isRecent = false) {
   return winInfo
 }
 
-export default {
+Object.assign(windowLifecycleService, {
   deleteEditorWin,
   createNew,
   openDocumentPath,
-  setWindowRegistry,
+  configure: configureWindowLifecycleService,
   getDocumentSessionRuntimeHostDeps,
   notifyRecentListChanged,
   executeCommand,
@@ -1159,4 +1171,6 @@ export default {
   updateTempContent,
   startExternalWatch,
   stopExternalWatch,
-}
+})
+
+export default windowLifecycleService

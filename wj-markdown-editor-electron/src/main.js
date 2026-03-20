@@ -69,7 +69,9 @@ function getOpenOnFilePath() {
 let documentSessionRuntime = null
 const windowRegistry = createWindowRegistry()
 
-windowLifecycleService.setWindowRegistry(windowRegistry)
+windowLifecycleService.configure({
+  registry: windowRegistry,
+})
 
 function initializeAppDocumentSessionRuntime() {
   if (documentSessionRuntime) {
