@@ -114,7 +114,12 @@ describe('exportUtil', () => {
     expect(dialogShowSaveDialogSync).toHaveBeenCalledTimes(1)
     expect(send).toHaveBeenCalledWith(parentWindow, expect.objectContaining({
       event: 'message',
-      data: expect.objectContaining({ content: 'message.exporting' }),
+      data: expect.objectContaining({
+        type: 'loading',
+        content: 'message.exporting',
+        duration: 0,
+        key: 'export-loading-key',
+      }),
     }))
     expect(browserWindowInstances).toHaveLength(1)
   })

@@ -86,7 +86,12 @@ describe('fileUploadUtil', () => {
     expect(copyFile).toHaveBeenCalledWith('C:/upload/demo.pdf', expect.stringMatching(/[\\/]files[\\/]demo\.pdf$/))
     expect(send).toHaveBeenCalledWith(win, expect.objectContaining({
       event: 'message',
-      data: expect.objectContaining({ content: 'message.theFileIsSavedSuccessfully' }),
+      data: expect.objectContaining({
+        type: 'success',
+        content: 'message.theFileIsSavedSuccessfully',
+        duration: 3,
+        key: 'file-loading-key',
+      }),
     }))
   })
 })

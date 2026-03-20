@@ -672,13 +672,13 @@ describe('ipcMainUtil save', () => {
     expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.save', null)
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(result).toBe(false)
-    expect(send).not.toHaveBeenCalledWith(win, {
-      event: 'message',
-      data: {
-        type: 'success',
-        content: 'message.saveSuccessfully',
-      },
+    const saveSuccessMessages = send.mock.calls.filter(([targetWin, payload]) => {
+      return targetWin === win
+        && payload?.event === 'window.effect.message'
+        && payload?.data?.type === 'success'
+        && payload?.data?.content === 'message.saveSuccessfully'
     })
+    expect(saveSuccessMessages).toHaveLength(0)
   })
 
   it('document.save-copy 直连入口必须直接命中新命令，避免 renderer 迁移后继续依赖 save-other', async () => {

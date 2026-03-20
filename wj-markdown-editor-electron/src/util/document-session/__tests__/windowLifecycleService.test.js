@@ -1138,9 +1138,23 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
     sendMock.mockClear()
 
-    await executeTestCommand(winInfo, 'document.save-copy')
+    const copySaveResult = await executeTestCommand(winInfo, 'document.save-copy')
 
     expect(writeFileMock).toHaveBeenCalledWith('D:/copy.md', '# 副本内容')
+    expect(copySaveResult).toEqual(expect.objectContaining({
+      copySaveRequestId: expect.any(String),
+      snapshot: expect.objectContaining({
+        content: '# 副本内容',
+        saved: false,
+      }),
+      effects: [
+        expect.objectContaining({
+          type: 'open-copy-dialog',
+          requestId: expect.any(String),
+        }),
+      ],
+    }))
+    expect(copySaveResult.copySaveRequestId).toBe(copySaveResult.effects[0].requestId)
     expect(winInfoUtil.getDocumentContext(winInfo).path).toBe('D:/demo.md')
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'window.effect.message',

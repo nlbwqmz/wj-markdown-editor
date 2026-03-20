@@ -108,7 +108,12 @@ describe('imgUtil', () => {
     expect(base64ToImg).toHaveBeenCalledWith('data:image/png;base64,AAAA', expect.stringMatching(/[\\/]assets[\\/]image\.png$/))
     expect(send).toHaveBeenCalledWith(win, expect.objectContaining({
       event: 'message',
-      data: expect.objectContaining({ content: 'message.imageSavedSuccessfully' }),
+      data: expect.objectContaining({
+        type: 'success',
+        content: 'message.imageSavedSuccessfully',
+        duration: 3,
+        key: 'img-loading-key',
+      }),
     }))
   })
 })

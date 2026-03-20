@@ -93,6 +93,7 @@ describe('updateUtil', () => {
       version: '2.16.0',
     })
     expect(autoUpdaterSetFeedURL).toHaveBeenCalledWith('https://github.com/nlbwqmz/wj-markdown-editor/releases/download/v2.16.0')
+    expect(send).toHaveBeenCalledTimes(2)
     expect(send).toHaveBeenNthCalledWith(1, firstWin, { event: 'has-new-version', data: true })
     expect(send).toHaveBeenNthCalledWith(2, secondWin, { event: 'has-new-version', data: true })
   })
