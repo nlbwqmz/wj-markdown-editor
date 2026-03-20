@@ -136,10 +136,21 @@ const DOCUMENT_STATE_COMMAND_SET = new Set([
   'document.edit',
   'document.save',
   'document.save-copy',
+  'document.request-close',
   'document.cancel-close',
   'document.confirm-force-close',
   'document.external.apply',
   'document.external.ignore',
+])
+
+const RESOURCE_COMMAND_SET = new Set([
+  'document.resource.open-in-folder',
+  'document.resource.delete-local',
+  'resource.get-info',
+])
+
+const SYNC_QUERY_SET = new Set([
+  'resource.get-comparable-key',
 ])
 
 /**
@@ -173,6 +184,7 @@ export function createDocumentSessionRuntime(deps = {}) {
   const getDocumentContextByWindowId = deps.getDocumentContext || null
   const openDocumentWindow = deps.openDocumentWindow || null
   const buildRunnerEffectContext = deps.buildRunnerEffectContext || (() => ({}))
+  let runtimeApi = null
   const executeDocumentCommand = deps.executeDocumentCommand || (async ({
     windowId,
     command,
@@ -181,6 +193,83 @@ export function createDocumentSessionRuntime(deps = {}) {
   }) => {
     return await runtime.dispatch(windowId, command, payload)
   })
+  async function executeResourceCommand({
+    windowId,
+    command,
+    payload,
+  }) {
+    if (typeof deps.executeResourceCommand === 'function') {
+      return await deps.executeResourceCommand({
+        windowId,
+        command,
+        payload,
+        runtime: runtimeApi,
+      })
+    }
+
+    if (!resourceService) {
+      throw new Error('document resource service 尚未配置')
+    }
+
+    switch (command) {
+      case 'document.resource.open-in-folder':
+        return await resourceService.openInFolder({
+          windowId,
+          payload,
+        })
+
+      case 'document.resource.delete-local':
+        return await resourceService.deleteLocal({
+          windowId,
+          payload,
+        })
+
+      case 'resource.get-info':
+        return await resourceService.getInfo({
+          windowId,
+          payload,
+        })
+
+      default:
+        throw new Error(`未知资源命令: ${command}`)
+    }
+  }
+
+  function executeResourceQuery({
+    windowId,
+    command,
+    payload,
+  }) {
+    if (typeof deps.executeResourceQuery === 'function') {
+      return deps.executeResourceQuery({
+        windowId,
+        command,
+        payload,
+        runtime: runtimeApi,
+      })
+    }
+    if (typeof deps.executeSyncQuery === 'function') {
+      return deps.executeSyncQuery({
+        windowId,
+        command,
+        payload,
+        runtime: runtimeApi,
+      })
+    }
+
+    if (!resourceService) {
+      throw new Error('document resource service 尚未配置')
+    }
+
+    if (command === 'resource.get-comparable-key') {
+      return resourceService.getComparableKey({
+        windowId,
+        payload,
+      })
+    }
+
+    throw new Error(`未知同步资源查询: ${command}`)
+  }
   const commandRunner = deps.commandRunner || createDocumentCommandRunner({
     commandService,
     getSessionSnapshot: windowId => getSessionSnapshot(windowId),
@@ -199,7 +288,6 @@ export function createDocumentSessionRuntime(deps = {}) {
       })
     },
   })
-  let runtimeApi = null
 
   function getSessionSnapshot(windowId) {
     if (!isValidWindowId(windowId)) {
@@ -245,13 +333,32 @@ export function createDocumentSessionRuntime(deps = {}) {
     })
   }
 
-  async function executeUiCommand(windowId, command, payload) {
+  function normalizeEffectCommandResult(normalizedWindowId, command, payload, result) {
+    const normalizedResult = normalizeOpenCommandResult({
+      command,
+      result,
+      targetPath: typeof payload?.path === 'string' ? payload.path : null,
+    })
+
+    if (normalizedWindowId != null
+      && normalizedResult?.ok === false
+      && (normalizedResult.reason === 'open-target-invalid-extension' || normalizedResult.reason === 'open-target-not-file')) {
+      publishWindowMessage(normalizedWindowId, {
+        type: 'warning',
+        content: 'message.onlyMarkdownFilesCanBeOpened',
+      })
+    }
+
+    return normalizedResult
+  }
+
+  function executeUiCommand(windowId, command, payload) {
     const normalizedWindowId = isValidWindowId(windowId) ? windowId : null
     const winInfo = normalizedWindowId == null
       ? null
       : getWindowContext(normalizedWindowId)
     if (normalizedWindowId != null && DOCUMENT_STATE_COMMAND_SET.has(command)) {
-      return await executeDocumentCommand({
+      return executeDocumentCommand({
         windowId: normalizedWindowId,
         command,
         payload,
@@ -260,7 +367,15 @@ export function createDocumentSessionRuntime(deps = {}) {
       })
     }
 
-    const result = await effectService.executeCommand({
+    if (normalizedWindowId != null && RESOURCE_COMMAND_SET.has(command)) {
+      return executeResourceCommand({
+        windowId: normalizedWindowId,
+        command,
+        payload,
+      })
+    }
+
+    return Promise.resolve(effectService.executeCommand({
       command,
       payload,
       winInfo,
@@ -280,23 +395,24 @@ export function createDocumentSessionRuntime(deps = {}) {
         })
       },
       getSessionSnapshot: () => getSessionSnapshot(normalizedWindowId),
-    })
-    const normalizedResult = normalizeOpenCommandResult({
+    })).then(result => normalizeEffectCommandResult(
+      normalizedWindowId,
       command,
+      payload,
       result,
-      targetPath: typeof payload?.path === 'string' ? payload.path : null,
-    })
+    ))
+  }
 
-    if (normalizedWindowId != null
-      && normalizedResult?.ok === false
-      && (normalizedResult.reason === 'open-target-invalid-extension' || normalizedResult.reason === 'open-target-not-file')) {
-      publishWindowMessage(normalizedWindowId, {
-        type: 'warning',
-        content: 'message.onlyMarkdownFilesCanBeOpened',
+  function executeSyncQuery(windowId, command, payload) {
+    const normalizedWindowId = isValidWindowId(windowId) ? windowId : null
+    if (normalizedWindowId != null && SYNC_QUERY_SET.has(command)) {
+      return executeResourceQuery({
+        windowId: normalizedWindowId,
+        command,
+        payload,
       })
     }
-
-    return normalizedResult
+    throw new Error(`未知同步查询: ${command}`)
   }
 
   function publishRecentListChanged(recentList) {
@@ -328,6 +444,7 @@ export function createDocumentSessionRuntime(deps = {}) {
     resourceService,
     dispatch,
     executeUiCommand,
+    executeSyncQuery,
     getSessionSnapshot,
     getDocumentContext,
     publishRecentListChanged,

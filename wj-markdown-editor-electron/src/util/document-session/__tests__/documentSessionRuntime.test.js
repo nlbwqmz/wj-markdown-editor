@@ -21,6 +21,27 @@ function createDeferred() {
   }
 }
 
+const DOCUMENT_STATE_COMMAND_SET = new Set([
+  'document.edit',
+  'document.save',
+  'document.save-copy',
+  'document.request-close',
+  'document.cancel-close',
+  'document.confirm-force-close',
+  'document.external.apply',
+  'document.external.ignore',
+])
+
+const RESOURCE_COMMAND_SET = new Set([
+  'document.resource.open-in-folder',
+  'document.resource.delete-local',
+  'resource.get-info',
+])
+
+const SYNC_QUERY_SET = new Set([
+  'resource.get-comparable-key',
+])
+
 function createRuntimeContext() {
   const windowContextMap = new Map()
 
@@ -301,6 +322,18 @@ describe('documentSessionRuntime', () => {
     expect(typeof runtime.getSessionSnapshot).toBe('function')
     expect(typeof runtime.getDocumentContext).toBe('function')
     expect(typeof runtime.publishRecentListChanged).toBe('function')
+  })
+
+  it('task 4 路由表必须显式覆盖关闭命令、资源命令与同步查询命令', () => {
+    expect(DOCUMENT_STATE_COMMAND_SET.has('document.request-close')).toBe(true)
+    expect(DOCUMENT_STATE_COMMAND_SET.has('document.cancel-close')).toBe(true)
+    expect(DOCUMENT_STATE_COMMAND_SET.has('document.confirm-force-close')).toBe(true)
+    expect(DOCUMENT_STATE_COMMAND_SET.has('document.external.apply')).toBe(true)
+    expect(DOCUMENT_STATE_COMMAND_SET.has('document.external.ignore')).toBe(true)
+    expect(RESOURCE_COMMAND_SET.has('document.resource.open-in-folder')).toBe(true)
+    expect(RESOURCE_COMMAND_SET.has('document.resource.delete-local')).toBe(true)
+    expect(RESOURCE_COMMAND_SET.has('resource.get-info')).toBe(true)
+    expect(SYNC_QUERY_SET.has('resource.get-comparable-key')).toBe(true)
   })
 
   it('dispatch 必须委托给 commandRunner.run', async () => {

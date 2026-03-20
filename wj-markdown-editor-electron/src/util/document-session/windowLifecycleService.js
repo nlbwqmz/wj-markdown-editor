@@ -18,8 +18,6 @@ import {
 } from './documentSessionFactory.js'
 import {
   getDocumentSessionRuntime,
-  normalizeOpenCommandResult,
-  openDocumentWindowWithRuntimePolicy,
 } from './documentSessionRuntime.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 import { createExternalWatchBridge } from './externalWatchBridge.js'
@@ -355,7 +353,7 @@ function buildRuntimeHostDeps() {
         dispatchCommand,
       })
     },
-    executeDocumentCommand: async ({
+    executeDocumentCommand: ({
       windowId,
       command,
       payload,
@@ -370,31 +368,43 @@ function buildRuntimeHostDeps() {
 
       switch (command) {
         case 'document.save':
-          return await executeDocumentSaveCommandWithDispatcher(winInfo, dispatch)
+          return executeDocumentSaveCommandWithDispatcher(winInfo, dispatch)
 
         case 'document.save-copy':
-          return await executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch)
+          return executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch)
 
         case 'document.external.apply':
         case 'document.external.ignore':
-          return (await executeExternalResolutionCommandWithDispatcher(
+          return executeExternalResolutionCommandWithDispatcher(
             winInfo,
             command,
             payload || {},
             dispatch,
-          )).commandResult
+          ).then(result => result.commandResult)
 
         case 'document.edit':
           // route leave 需要把 document.edit 当成“session 已经推进到最终正文”的可等待屏障，
           // 因此这里必须等待真实 dispatch 完成，并把最新快照直接返回给调用方。
-          return await updateTempContentWithDispatcher(winInfo, payload?.content, dispatch)
+          return updateTempContentWithDispatcher(winInfo, payload?.content, dispatch)
+
+        case 'document.request-close':
+          // BrowserWindow close 事件需要先拿到结构化 effects，再决定 preventDefault 与执行时机；
+          // 因此这里不能像普通 UI 命令那样直接跑完整 effect 链。
+          return dispatchCommandStateOnly(winInfo, command, payload)
 
         case 'document.cancel-close':
+          return dispatch(command, payload)
+
         case 'document.confirm-force-close':
-          return await dispatch(command, payload)
+          // 旧 force-close 宿主入口会先打 host flag 再触发原生 close；
+          // 此时 close 事件仍需保留既有 preventDefault / finalize 语义，先只推进状态不落地 effect。
+          if (winInfo.forceClose === true) {
+            return dispatchCommandStateOnly(winInfo, command, payload)
+          }
+          return dispatch(command, payload)
 
         default:
-          return await dispatch(command, payload)
+          return dispatch(command, payload)
       }
     },
     openDocumentWindow: async (targetPath, options = {}) => {
@@ -673,6 +683,30 @@ async function continueWindowClose(winInfo) {
   return true
 }
 
+function dispatchCommandStateOnly(winInfo, command, payload, options = {}) {
+  if (!winInfo) {
+    return null
+  }
+
+  const { commandService } = ensureSessionRuntimeInitialized()
+  const publishSnapshotMode = options.publishSnapshotChanged || 'always'
+  const previousSnapshot = publishSnapshotMode === 'if-changed'
+    ? getSessionSnapshot(winInfo)
+    : null
+  const result = commandService.dispatch({
+    windowId: winInfo.id,
+    command,
+    payload,
+  })
+  syncWinInfoFromSession(winInfo, result.session)
+  const nextSnapshot = result?.snapshot || getSessionSnapshot(winInfo)
+  if (publishSnapshotMode === 'always'
+    || getSnapshotSignature(previousSnapshot) !== getSnapshotSignature(nextSnapshot)) {
+    publishSnapshotChanged(winInfo, nextSnapshot)
+  }
+  return result
+}
+
 function getSaveDialogTarget() {
   const selectedPath = dialog.showSaveDialogSync({
     title: 'Save',
@@ -694,25 +728,9 @@ function getCopyDialogTarget() {
 }
 
 async function dispatchCommand(winInfo, command, payload, options = {}) {
-  if (!winInfo) {
+  const result = dispatchCommandStateOnly(winInfo, command, payload, options)
+  if (!result) {
     return null
-  }
-
-  const { commandService } = ensureSessionRuntimeInitialized()
-  const publishSnapshotMode = options.publishSnapshotChanged || 'always'
-  const previousSnapshot = publishSnapshotMode === 'if-changed'
-    ? getSessionSnapshot(winInfo)
-    : null
-  const result = commandService.dispatch({
-    windowId: winInfo.id,
-    command,
-    payload,
-  })
-  syncWinInfoFromSession(winInfo, result.session)
-  const nextSnapshot = result?.snapshot || getSessionSnapshot(winInfo)
-  if (publishSnapshotMode === 'always'
-    || getSnapshotSignature(previousSnapshot) !== getSnapshotSignature(nextSnapshot)) {
-    publishSnapshotChanged(winInfo, nextSnapshot)
   }
   await applyEffects(winInfo, result.effects)
   return result
@@ -825,17 +843,12 @@ async function executeExternalResolutionCommandWithDispatcher(winInfo, command, 
   }
 }
 
-async function executeExternalResolutionCommand(winInfo, command, payload = {}) {
-  return await executeExternalResolutionCommandWithDispatcher(
-    winInfo,
-    command,
-    payload,
-    (nextCommand, nextPayload) => dispatchCommand(winInfo, nextCommand, nextPayload),
-  )
-}
-
 async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
-  const openResult = await executeResourceCommand(winInfo, 'document.resource.open-in-folder', resourceUrl)
+  const openResult = await getDocumentSessionRuntime().executeUiCommand(
+    winInfo?.id || null,
+    'document.resource.open-in-folder',
+    resourceUrl,
+  )
   if (openResult.ok !== true) {
     const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
     if (messageKey && winInfo?.win) {
@@ -858,6 +871,13 @@ async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
   }
 
   return openResult
+}
+
+function shouldHoldWindowClose(effectList = []) {
+  return effectList.some(effect => effect.type === 'hold-window-close'
+    || effect.type === 'open-save-dialog'
+    || effect.type === 'execute-save'
+    || effect.type === 'show-unsaved-prompt')
 }
 
 function getCopySaveFailureMessage({ reason, error }) {
@@ -930,13 +950,6 @@ async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
   }
 
   return false
-}
-
-async function executeDocumentSaveCommand(winInfo) {
-  return await executeDocumentSaveCommandWithDispatcher(
-    winInfo,
-    (command, payload, options = {}) => dispatchCommand(winInfo, command, payload, options),
-  )
 }
 
 async function executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch) {
@@ -1104,165 +1117,6 @@ async function waitForManualSaveRequestCompletion(winInfo, requestId, {
   }
 }
 
-async function executeResourceCommand(winInfo, command, payload) {
-  if (!winInfo?.id) {
-    return null
-  }
-
-  const { resourceService } = ensureSessionRuntimeInitialized()
-  // 资源命令单独分流到 documentResourceService，
-  // 是为了把“当前 active session 上下文裁决”和“底层文件系统操作”固定收口到一条边界。
-  // 这样旧 IPC 名称、新 IPC 名称、窗口内链接点击三条入口就不会再各自偷读 winInfo 状态。
-  switch (command) {
-    case 'document.resource.open-in-folder':
-      return await resourceService.openInFolder({
-        windowId: winInfo.id,
-        payload,
-      })
-
-    case 'document.resource.delete-local':
-      return await resourceService.deleteLocal({
-        windowId: winInfo.id,
-        payload,
-      })
-
-    case 'resource.get-info':
-      return await resourceService.getInfo({
-        windowId: winInfo.id,
-        payload,
-      })
-
-    default:
-      throw new Error(`未知资源命令: ${command}`)
-  }
-}
-
-function executeResourceCommandSync(winInfo, command, payload) {
-  if (!winInfo?.id) {
-    return null
-  }
-
-  const { resourceService } = ensureSessionRuntimeInitialized()
-  if (command === 'resource.get-comparable-key') {
-    // 比较 key 仍然保留同步语义，
-    // 因为编辑区统计引用数和批量删除裁决都在同一次交互里立即完成，
-    // 如果这里改成异步，旧逻辑会在“统计前先删文案/打开弹窗”之间产生新的竞态窗口。
-    return resourceService.getComparableKey({
-      windowId: winInfo.id,
-      payload,
-    })
-  }
-
-  throw new Error(`未知同步资源命令: ${command}`)
-}
-
-async function openDocumentWindow(targetPath, {
-  isRecent = false,
-  trigger = 'user',
-  sourceWinInfo = null,
-} = {}) {
-  return await openDocumentWindowWithRuntimePolicy({
-    targetPath,
-    trigger,
-    isRecent,
-    sourceWindowId: sourceWinInfo?.id || null,
-    openWindow: async (nextTargetPath, options = {}) => {
-      return await createNew(nextTargetPath, options.isRecent === true)
-    },
-    getWindowContext: windowId => getWinInfo(windowId),
-    getDocumentContext: windowId => getDocumentContext(getWinInfo(windowId)),
-    getSessionSnapshot: windowId => getSessionSnapshot(getWinInfo(windowId)),
-  })
-}
-
-async function openDocumentPath(targetPath, {
-  trigger = 'user',
-  baseDir = null,
-} = {}) {
-  // 启动参数 / second-instance 这类“显式路径打开”入口也必须走统一 opening policy，
-  // 不能再直接 createNew() 绕过 `存在 + .md + regular file` 校验。
-  return await executeCommand(null, 'document.open-path', {
-    path: targetPath,
-    trigger,
-    baseDir,
-  })
-}
-
-async function executeCommand(winInfo, command, payload) {
-  switch (command) {
-    case 'document.save':
-      return await executeDocumentSaveCommand(winInfo)
-
-    case 'document.save-copy':
-      return await executeDocumentCopySaveCommandWithDispatcher(
-        winInfo,
-        (command, payload, options = {}) => dispatchCommand(winInfo, command, payload, options),
-      )
-
-    case 'document.get-session-snapshot':
-      return getSessionSnapshot(winInfo)
-
-    case 'document.external.apply':
-    case 'document.external.ignore':
-      // 外部修改处理已经完全收口到统一命令入口，
-      // 这里只保留一个私有 helper，把命令层结果与 fileWatchUtil 的 pending 结算同步在一起。
-      return (await executeExternalResolutionCommand(winInfo, command, payload || {})).commandResult
-
-    case 'document.resource.open-in-folder':
-    case 'document.resource.delete-local':
-    case 'resource.get-info':
-      return await executeResourceCommand(winInfo, command, payload)
-
-    case 'resource.get-comparable-key':
-      return executeResourceCommandSync(winInfo, command, payload)
-
-    case 'document.request-open-dialog':
-    case 'document.open-path':
-    case 'dialog.open-target-selected':
-    case 'dialog.open-target-cancelled':
-    case 'document.open-recent':
-    case 'recent.get-list':
-    case 'recent.remove':
-    case 'recent.clear':
-    {
-      const { effectService } = ensureSessionRuntimeInitialized()
-      const result = await effectService.executeCommand({
-        command,
-        payload,
-        winInfo,
-        dispatchCommand: (nextCommand, nextPayload) => executeCommand(winInfo, nextCommand, nextPayload),
-        openDocumentWindow: (targetPath, options = {}) => {
-          return openDocumentWindow(targetPath, {
-            ...options,
-            sourceWinInfo: winInfo,
-          })
-        },
-        getSessionSnapshot: () => getSessionSnapshot(winInfo),
-      })
-      if (result?.ok === false
-        && (result?.reason === 'open-target-invalid-extension' || result?.reason === 'open-target-not-file')) {
-        publishWindowMessage(winInfo, {
-          type: 'warning',
-          content: 'message.onlyMarkdownFilesCanBeOpened',
-        })
-      }
-      return normalizeOpenCommandResult({
-        command,
-        result,
-        targetPath: typeof payload?.path === 'string' ? payload.path : null,
-      })
-    }
-
-    default:
-      return await dispatchCommand(winInfo, command, payload)
-  }
-}
-
-function notifyRecentListChanged(recentList) {
-  const { windowBridge } = ensureSessionRuntimeInitialized()
-  return windowBridge.publishRecentListChanged(recentList)
-}
-
 async function createNew(filePath, isRecent = false) {
   const windowRegistry = getWindowRegistry()
   const { store } = ensureSessionRuntimeInitialized()
@@ -1375,40 +1229,46 @@ async function createNew(filePath, isRecent = false) {
     const command = currentWinInfo.forceClose === true
       ? 'document.confirm-force-close'
       : 'document.request-close'
-    const { commandService } = ensureSessionRuntimeInitialized()
-    const result = commandService.dispatch({
-      windowId: currentWinInfo.id,
-      command,
-    })
-    syncWinInfoFromSession(currentWinInfo, result.session)
-    publishSnapshotChanged(currentWinInfo)
+    const runtime = getDocumentSessionRuntime()
+    const handleCloseCommandResult = (result) => {
+      const effectList = Array.isArray(result?.effects) ? result.effects : []
 
-    const shouldHoldClose = result.effects.some(effect => effect.type === 'hold-window-close'
-      || effect.type === 'open-save-dialog'
-      || effect.type === 'execute-save'
-      || effect.type === 'show-unsaved-prompt')
+      if (currentWinInfo.forceClose === true
+        && effectList.length === 1
+        && effectList[0]?.type === 'close-window') {
+        finalizeWindowClose(currentWinInfo, id)
+        return
+      }
 
-    if (shouldHoldClose) {
-      e.preventDefault()
-      applyEffects(currentWinInfo, result.effects).then(() => {}).catch(() => {})
-      return false
+      if (shouldHoldWindowClose(effectList)) {
+        applyEffects(currentWinInfo, effectList).then(() => {}).catch(() => {})
+        return
+      }
+
+      if (effectList.length > 0) {
+        applyEffects(currentWinInfo, effectList).then(() => {}).catch(() => {})
+        return
+      }
+
+      continueWindowClose(currentWinInfo).then(() => {}).catch(() => {})
     }
 
-    if (currentWinInfo.forceClose === true
-      && result.effects.length === 1
-      && result.effects[0]?.type === 'close-window') {
-      finalizeWindowClose(currentWinInfo, id)
+    if (currentWinInfo.forceClose !== true) {
+      e.preventDefault()
+    }
+
+    const closeCommandResult = runtime.executeUiCommand(currentWinInfo.id, command, null)
+    if (closeCommandResult && typeof closeCommandResult.then === 'function') {
+      closeCommandResult
+        .then(handleCloseCommandResult)
+        .catch(() => {})
+    } else {
+      handleCloseCommandResult(closeCommandResult)
+    }
+
+    if (currentWinInfo.forceClose === true) {
       return
     }
-
-    if (result.effects.length > 0) {
-      e.preventDefault()
-      applyEffects(currentWinInfo, result.effects).then(() => {}).catch(() => {})
-      return false
-    }
-
-    e.preventDefault()
-    continueWindowClose(currentWinInfo).then(() => {}).catch(() => {})
     return false
   })
 
@@ -1431,13 +1291,8 @@ async function createNew(filePath, isRecent = false) {
 Object.assign(windowLifecycleService, {
   deleteEditorWin,
   createNew,
-  openDocumentPath,
   configure: configureWindowLifecycleService,
   getDocumentSessionRuntimeHostDeps,
-  notifyRecentListChanged,
-  executeCommand,
-  executeResourceCommand,
-  executeResourceCommandSync,
   getWinInfo,
   getAll: () => {
     return getAllWindowInfoFacades()

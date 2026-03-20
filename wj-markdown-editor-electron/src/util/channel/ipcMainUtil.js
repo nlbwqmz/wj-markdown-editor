@@ -18,6 +18,10 @@ function executeRuntimeUiCommand(winInfo, command, payload) {
   return getDocumentSessionRuntime().executeUiCommand(winInfo?.id || winInfo?.win?.id || null, command, payload)
 }
 
+function executeRuntimeSyncQuery(winInfo, command, payload) {
+  return getDocumentSessionRuntime().executeSyncQuery(winInfo?.id || winInfo?.win?.id || null, command, payload)
+}
+
 async function uploadImage(winInfo, data) {
   const config = configUtil.getConfig()
   if (!imgUtil.check(winInfo, data, config)) {
@@ -37,7 +41,7 @@ async function uploadImage(winInfo, data) {
  * IPC 层只负责把结构化结果翻译成当前 renderer 已收口的 `window.effect.message` 契约。
  */
 async function handleResourceOpen(winInfo, data) {
-  const openResult = await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.open-in-folder', data)
+  const openResult = await executeRuntimeUiCommand(winInfo, 'document.resource.open-in-folder', data)
   if (!openResult) {
     return openResult
   }
@@ -138,8 +142,8 @@ const handlerList = {
   'upload-image': async (winInfo, data) => {
     return await uploadImage(winInfo, data)
   },
-  'document.resource.delete-local': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'document.resource.delete-local', data),
-  'resource.get-info': async (winInfo, data) => await windowLifecycleService.executeResourceCommand(winInfo, 'resource.get-info', data),
+  'document.resource.delete-local': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.resource.delete-local', data),
+  'resource.get-info': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'resource.get-info', data),
   'screenshot': (winInfo, data) => {
     return new Promise((resolve) => {
       const startCapture = () => {
@@ -223,7 +227,7 @@ const handlerListSync = {
     return null
   },
   'resource.get-comparable-key': (winInfo, rawPath) => {
-    return windowLifecycleService.executeResourceCommandSync(winInfo, 'resource.get-comparable-key', rawPath)
+    return executeRuntimeSyncQuery(winInfo, 'resource.get-comparable-key', rawPath)
   },
 }
 
