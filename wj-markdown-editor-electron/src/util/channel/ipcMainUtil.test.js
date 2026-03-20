@@ -3,13 +3,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   appGetVersion,
   browserWindowFromWebContents,
+  configGetConfig,
   dialogShowOpenDialogSync,
   dialogShowSaveDialogSync,
   executeResourceCommand,
   executeResourceCommandSync,
+  exportCreateExportWin,
+  exportDoExport,
+  fileUploadSave,
   getDocumentSessionRuntime,
   getWinInfoMock,
   getLocalResourceComparableKey,
+  imgCheckCallSnapshots,
+  imgUtilCheck,
+  imgSaveCallSnapshots,
+  imgUtilSave,
   ipcMainHandle,
   ipcMainOn,
   openLocalResourceInFolder,
@@ -21,13 +29,21 @@ const {
   return {
     appGetVersion: vi.fn(() => '2.15.0'),
     browserWindowFromWebContents: vi.fn(),
+    configGetConfig: vi.fn(),
     dialogShowOpenDialogSync: vi.fn(),
     dialogShowSaveDialogSync: vi.fn(),
     executeResourceCommand: vi.fn(),
     executeResourceCommandSync: vi.fn(),
+    exportCreateExportWin: vi.fn(),
+    exportDoExport: vi.fn(),
+    fileUploadSave: vi.fn(),
     getDocumentSessionRuntime: vi.fn(),
     getWinInfoMock: vi.fn(),
     getLocalResourceComparableKey: vi.fn(),
+    imgCheckCallSnapshots: [],
+    imgUtilCheck: vi.fn(),
+    imgSaveCallSnapshots: [],
+    imgUtilSave: vi.fn(),
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
     openLocalResourceInFolder: vi.fn(),
@@ -72,7 +88,7 @@ vi.mock('fs-extra', () => {
 vi.mock('../../data/configUtil.js', () => {
   return {
     default: {
-      getConfig: vi.fn(() => ({ theme: { global: 'light' } })),
+      getConfig: configGetConfig,
       getDefaultConfig: vi.fn(() => ({})),
       setConfig: vi.fn(),
       setThemeGlobal: vi.fn(),
@@ -96,7 +112,7 @@ vi.mock('../../data/recent.js', () => {
 vi.mock('../fileUploadUtil.js', () => {
   return {
     default: {
-      save: vi.fn(),
+      save: fileUploadSave,
     },
   }
 })
@@ -104,8 +120,8 @@ vi.mock('../fileUploadUtil.js', () => {
 vi.mock('../imgUtil.js', () => {
   return {
     default: {
-      check: vi.fn(() => true),
-      save: vi.fn(),
+      check: imgUtilCheck,
+      save: imgUtilSave,
     },
   }
 })
@@ -147,6 +163,8 @@ vi.mock('../win/aboutUtil.js', () => {
 vi.mock('../win/exportUtil.js', () => {
   return {
     default: {
+      createExportWin: exportCreateExportWin,
+      doExport: exportDoExport,
       channel: {},
     },
   }
@@ -191,10 +209,10 @@ vi.mock('../document-session/windowLifecycleService.js', () => {
           data,
         })
       }),
-      getDocumentContext: vi.fn(winInfo => ({
-        path: winInfo?.path || null,
-        exists: winInfo?.exists === true,
-        content: typeof winInfo?.tempContent === 'string' ? winInfo.tempContent : '',
+      getDocumentContext: vi.fn(target => ({
+        path: typeof target === 'object' ? target?.path || null : 'D:\\docs\\note.md',
+        exists: typeof target === 'object' ? target?.exists === true : true,
+        content: typeof target === 'object' && typeof target?.tempContent === 'string' ? target.tempContent : '',
       })),
       updateTempContent: vi.fn(),
     },
@@ -218,12 +236,18 @@ vi.mock('./sendUtil.js', () => {
 describe('ipcMainUtil 文档与资源打开契约', () => {
   beforeEach(() => {
     vi.resetModules()
+    configGetConfig.mockReset()
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
     executeResourceCommand.mockReset()
     executeResourceCommandSync.mockReset()
+    exportCreateExportWin.mockReset()
+    exportDoExport.mockReset()
+    fileUploadSave.mockReset()
     getWinInfoMock.mockReset()
     getLocalResourceComparableKey.mockReset()
+    imgUtilCheck.mockReset()
+    imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
@@ -233,9 +257,30 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
     runtimeExecuteUiCommand.mockReset()
     send.mockReset()
     showItemInFolder.mockReset()
+    configGetConfig.mockReturnValue({ theme: { global: 'light' } })
+    imgCheckCallSnapshots.length = 0
+    imgSaveCallSnapshots.length = 0
+    imgUtilCheck.mockImplementation((payload) => {
+      imgCheckCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return true
+    })
+    imgUtilSave.mockImplementation(async (payload) => {
+      imgSaveCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return undefined
+    })
     getWinInfoMock.mockImplementation(() => ({
+      id: 1,
       path: 'D:\\docs\\note.md',
       exists: true,
+      tempContent: '# 导出内容',
       win: { id: 1 },
     }))
     getDocumentSessionRuntime.mockReturnValue({
@@ -486,17 +531,42 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
 describe('ipcMainUtil sync comparable key', () => {
   beforeEach(() => {
     vi.resetModules()
+    configGetConfig.mockReset()
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
     executeResourceCommand.mockReset()
     executeResourceCommandSync.mockReset()
+    exportCreateExportWin.mockReset()
+    exportDoExport.mockReset()
+    fileUploadSave.mockReset()
     getLocalResourceComparableKey.mockReset()
     getDocumentSessionRuntime.mockReset()
+    imgUtilCheck.mockReset()
+    imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     runtimeExecuteSyncQuery.mockReset()
     runtimeExecuteUiCommand.mockReset()
     browserWindowFromWebContents.mockReset()
+    configGetConfig.mockReturnValue({ theme: { global: 'light' } })
+    imgCheckCallSnapshots.length = 0
+    imgSaveCallSnapshots.length = 0
+    imgUtilCheck.mockImplementation((payload) => {
+      imgCheckCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return true
+    })
+    imgUtilSave.mockImplementation(async (payload) => {
+      imgSaveCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return undefined
+    })
     getDocumentSessionRuntime.mockReturnValue({
       executeSyncQuery: runtimeExecuteSyncQuery,
       executeUiCommand: runtimeExecuteUiCommand,
@@ -612,17 +682,42 @@ describe('ipcMainUtil sync comparable key', () => {
 describe('ipcMainUtil save', () => {
   beforeEach(() => {
     vi.resetModules()
+    configGetConfig.mockReset()
     dialogShowOpenDialogSync.mockReset()
     dialogShowSaveDialogSync.mockReset()
     executeResourceCommand.mockReset()
     executeResourceCommandSync.mockReset()
+    exportCreateExportWin.mockReset()
+    exportDoExport.mockReset()
+    fileUploadSave.mockReset()
     getDocumentSessionRuntime.mockReset()
+    imgUtilCheck.mockReset()
+    imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
     runtimeExecuteSyncQuery.mockReset()
     runtimeExecuteUiCommand.mockReset()
     send.mockReset()
+    configGetConfig.mockReturnValue({ theme: { global: 'light' } })
+    imgCheckCallSnapshots.length = 0
+    imgSaveCallSnapshots.length = 0
+    imgUtilCheck.mockImplementation((payload) => {
+      imgCheckCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return true
+    })
+    imgUtilSave.mockImplementation(async (payload) => {
+      imgSaveCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return undefined
+    })
     getDocumentSessionRuntime.mockReturnValue({
       executeSyncQuery: runtimeExecuteSyncQuery,
       executeUiCommand: runtimeExecuteUiCommand,
@@ -647,8 +742,10 @@ describe('ipcMainUtil save', () => {
     winInfoUtil.executeCommand.mockReset()
     winInfoUtil.updateTempContent.mockReset()
     winInfoUtil.getWinInfo.mockImplementation(() => ({
+      id: 1,
       path: 'D:\\docs\\note.md',
       exists: true,
+      tempContent: '# 导出内容',
       win: { id: 1 },
     }))
 
@@ -702,18 +799,291 @@ describe('ipcMainUtil save', () => {
   })
 })
 
-describe('ipcMainUtil command mapping', () => {
+describe('ipcMainUtil 工具模块参数组装', () => {
   beforeEach(() => {
     vi.resetModules()
+    configGetConfig.mockReset()
     dialogShowOpenDialogSync.mockReset()
+    dialogShowSaveDialogSync.mockReset()
     executeResourceCommand.mockReset()
     executeResourceCommandSync.mockReset()
+    exportCreateExportWin.mockReset()
+    exportDoExport.mockReset()
+    fileUploadSave.mockReset()
     getDocumentSessionRuntime.mockReset()
+    getWinInfoMock.mockReset()
+    imgUtilCheck.mockReset()
+    imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
     runtimeExecuteSyncQuery.mockReset()
     runtimeExecuteUiCommand.mockReset()
+    send.mockReset()
+    configGetConfig.mockReturnValue({ theme: { global: 'light' } })
+    imgCheckCallSnapshots.length = 0
+    imgSaveCallSnapshots.length = 0
+    imgUtilCheck.mockImplementation((payload) => {
+      imgCheckCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return true
+    })
+    imgUtilSave.mockImplementation(async (payload) => {
+      imgSaveCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return undefined
+    })
+    getWinInfoMock.mockImplementation(() => ({
+      id: 1,
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      tempContent: '# 导出内容',
+      win: { id: 1 },
+    }))
+    getDocumentSessionRuntime.mockReturnValue({
+      executeSyncQuery: runtimeExecuteSyncQuery,
+      executeUiCommand: runtimeExecuteUiCommand,
+    })
+  })
+
+  async function setupToolHandler() {
+    let sendToMainHandler
+    ipcMainHandle.mockImplementation((channel, handler) => {
+      if (channel === 'sendToMain') {
+        sendToMainHandler = handler
+      }
+    })
+
+    const sender = { id: 9527 }
+    const win = { id: 1 }
+    browserWindowFromWebContents.mockReturnValue(win)
+
+    await import('./ipcMainUtil.js')
+
+    return {
+      sender,
+      win,
+      sendToMainHandler,
+    }
+  }
+
+  it('upload-image 必须把 win、documentPath、data、config 和 notify 组装成显式参数对象传给 imgUtil', async () => {
+    const { sender, win, sendToMainHandler } = await setupToolHandler()
+    configGetConfig.mockReturnValue({
+      imgLocal: '4',
+      imgNetwork: '4',
+      imgRelativePath: 'assets',
+      theme: { global: 'light' },
+    })
+    imgUtilSave.mockImplementationOnce(async (payload) => {
+      imgSaveCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return { name: 'image.png', path: 'assets/image.png' }
+    })
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'upload-image',
+      data: {
+        mode: 'local',
+        name: 'image',
+        base64: 'data:image/png;base64,AAAA',
+      },
+    })
+
+    expect(result).toEqual({ name: 'image.png', path: 'assets/image.png' })
+    expect(imgCheckCallSnapshots).toHaveLength(1)
+    expect(imgCheckCallSnapshots[0]).toEqual(expect.objectContaining({
+      win,
+      documentPath: 'D:\\docs\\note.md',
+      data: {
+        mode: 'local',
+        name: 'image',
+        base64: 'data:image/png;base64,AAAA',
+      },
+      config: {
+        imgLocal: '4',
+        imgNetwork: '4',
+        imgRelativePath: 'assets',
+        theme: { global: 'light' },
+      },
+      notify: expect.any(Function),
+    }))
+    expect(imgSaveCallSnapshots).toHaveLength(1)
+    expect(imgSaveCallSnapshots[0]).toEqual(expect.objectContaining({
+      win,
+      documentPath: 'D:\\docs\\note.md',
+      data: {
+        mode: 'local',
+        name: 'image.png',
+        base64: 'data:image/png;base64,AAAA',
+      },
+      config: {
+        imgLocal: '4',
+        imgNetwork: '4',
+        imgRelativePath: 'assets',
+        theme: { global: 'light' },
+      },
+      notify: expect.any(Function),
+    }))
+
+    const notify = imgUtilSave.mock.calls[0][0].notify
+    notify({ type: 'success', content: 'message.imageSavedSuccessfully' })
+    expect(send).toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.imageSavedSuccessfully',
+      },
+    })
+  })
+
+  it('file-upload 必须把 win、documentPath、filePath、config 和 notify 组装成显式参数对象传给 fileUploadUtil', async () => {
+    const { sender, win, sendToMainHandler } = await setupToolHandler()
+    configGetConfig.mockReturnValue({
+      fileMode: '4',
+      fileRelativePath: 'files',
+      theme: { global: 'light' },
+    })
+    fileUploadSave.mockResolvedValueOnce({ name: 'demo.pdf', path: 'files/demo.pdf' })
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'file-upload',
+      data: 'C:\\upload\\demo.pdf',
+    })
+
+    expect(result).toEqual({ name: 'demo.pdf', path: 'files/demo.pdf' })
+    expect(fileUploadSave).toHaveBeenCalledWith(expect.objectContaining({
+      win,
+      documentPath: 'D:\\docs\\note.md',
+      filePath: 'C:\\upload\\demo.pdf',
+      config: {
+        fileMode: '4',
+        fileRelativePath: 'files',
+        theme: { global: 'light' },
+      },
+      notify: expect.any(Function),
+    }))
+
+    const notify = fileUploadSave.mock.calls[0][0].notify
+    notify({ type: 'success', content: 'message.theFileIsSavedSuccessfully' })
+    expect(send).toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.theFileIsSavedSuccessfully',
+      },
+    })
+  })
+
+  it('export-start 必须把 parentWindow、documentContext、type 和 notify 组装成显式参数对象传给 exportUtil.createExportWin', async () => {
+    const { sender, win, sendToMainHandler } = await setupToolHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'export-start',
+      data: 'PDF',
+    })
+
+    expect(exportCreateExportWin).toHaveBeenCalledWith(expect.objectContaining({
+      parentWindow: win,
+      documentContext: expect.objectContaining({
+        path: 'D:\\docs\\note.md',
+        content: '# 导出内容',
+      }),
+      type: 'PDF',
+      notify: expect.any(Function),
+    }))
+
+    const notify = exportCreateExportWin.mock.calls[0][0].notify
+    notify({ type: 'loading', content: 'message.exporting' })
+    expect(send).toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'loading',
+        content: 'message.exporting',
+      },
+    })
+  })
+
+  it('export-end 必须把 data 和 notify 组装成显式参数对象传给 exportUtil.doExport', async () => {
+    const { sender, win, sendToMainHandler } = await setupToolHandler()
+    exportDoExport.mockResolvedValueOnce({ ok: true })
+
+    const exportData = {
+      type: 'PDF',
+      filePath: 'D:\\exports\\demo.pdf',
+    }
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'export-end',
+      data: exportData,
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(exportDoExport).toHaveBeenCalledTimes(1)
+    expect(exportDoExport.mock.calls[0]).toHaveLength(1)
+    expect(exportDoExport).toHaveBeenCalledWith(expect.objectContaining({
+      data: exportData,
+      notify: expect.any(Function),
+    }))
+
+    const notify = exportDoExport.mock.calls[0][0].notify
+    notify({ type: 'success', content: 'message.exportSuccessfully' })
+    expect(send).toHaveBeenCalledWith(win, {
+      event: 'message',
+      data: {
+        type: 'success',
+        content: 'message.exportSuccessfully',
+      },
+    })
+  })
+})
+
+describe('ipcMainUtil command mapping', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    configGetConfig.mockReset()
+    dialogShowOpenDialogSync.mockReset()
+    executeResourceCommand.mockReset()
+    executeResourceCommandSync.mockReset()
+    exportCreateExportWin.mockReset()
+    exportDoExport.mockReset()
+    fileUploadSave.mockReset()
+    getDocumentSessionRuntime.mockReset()
+    imgUtilCheck.mockReset()
+    imgUtilSave.mockReset()
+    ipcMainHandle.mockReset()
+    ipcMainOn.mockReset()
+    browserWindowFromWebContents.mockReset()
+    runtimeExecuteSyncQuery.mockReset()
+    runtimeExecuteUiCommand.mockReset()
+    configGetConfig.mockReturnValue({ theme: { global: 'light' } })
+    imgCheckCallSnapshots.length = 0
+    imgSaveCallSnapshots.length = 0
+    imgUtilCheck.mockImplementation((payload) => {
+      imgCheckCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return true
+    })
+    imgUtilSave.mockImplementation(async (payload) => {
+      imgSaveCallSnapshots.push({
+        ...payload,
+        data: payload?.data ? { ...payload.data } : payload?.data,
+        config: payload?.config ? JSON.parse(JSON.stringify(payload.config)) : payload?.config,
+      })
+      return undefined
+    })
     getDocumentSessionRuntime.mockReturnValue({
       executeSyncQuery: runtimeExecuteSyncQuery,
       executeUiCommand: runtimeExecuteUiCommand,
@@ -738,8 +1108,10 @@ describe('ipcMainUtil command mapping', () => {
     winInfoUtil.executeCommand.mockReset()
     winInfoUtil.updateTempContent.mockReset()
     winInfoUtil.getWinInfo.mockImplementation(() => ({
+      id: 1,
       path: 'D:\\docs\\note.md',
       exists: true,
+      tempContent: '# 导出内容',
       win: { id: 1 },
     }))
 

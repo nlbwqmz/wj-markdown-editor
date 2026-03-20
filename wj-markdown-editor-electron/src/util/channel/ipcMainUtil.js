@@ -13,6 +13,7 @@ import exportUtil from '../win/exportUtil.js'
 import guideUtil from '../win/guideUtil.js'
 import screenshotsUtil from '../win/screenshotsUtil.js'
 import settingUtil from '../win/settingUtil.js'
+import sendUtil from './sendUtil.js'
 
 function executeRuntimeUiCommand(winInfo, command, payload) {
   return getDocumentSessionRuntime().executeUiCommand(winInfo?.id || winInfo?.win?.id || null, command, payload)
@@ -28,16 +29,40 @@ function executeRuntimeSyncQuery(winInfo, command, payload) {
   return getDocumentSessionRuntime().executeSyncQuery(windowId, command, payload)
 }
 
+function getCurrentDocumentPath(winInfo) {
+  return windowLifecycleService.getDocumentContext(winInfo)?.path || null
+}
+
+function createWindowMessageNotifier(win) {
+  return (message) => {
+    sendUtil.send(win, { event: 'message', data: message })
+  }
+}
+
 async function uploadImage(winInfo, data) {
   const config = configUtil.getConfig()
-  if (!imgUtil.check(winInfo, data, config)) {
+  const documentPath = getCurrentDocumentPath(winInfo)
+  const notify = createWindowMessageNotifier(winInfo.win)
+  if (!imgUtil.check({
+    win: winInfo.win,
+    documentPath,
+    data,
+    config,
+    notify,
+  })) {
     return
   }
   data.name = data.name ? data.name : 'image.png'
   if (!path.extname(data.name)) {
     data.name += '.png'
   }
-  return imgUtil.save(winInfo, data, config)
+  return imgUtil.save({
+    win: winInfo.win,
+    documentPath,
+    data,
+    config,
+    notify,
+  })
 }
 
 /**
@@ -74,9 +99,22 @@ async function handleResourceOpen(winInfo, data) {
 
 const handlerList = {
   ...settingUtil.channel,
-  ...exportUtil.channel,
   ...aboutUtil.channel,
   ...guideUtil.channel,
+  'export-start': (winInfo, type) => {
+    return exportUtil.createExportWin({
+      parentWindow: winInfo.win,
+      documentContext: windowLifecycleService.getDocumentContext(winInfo),
+      type,
+      notify: createWindowMessageNotifier(winInfo.win),
+    })
+  },
+  'export-end': (winInfo, data) => {
+    return exportUtil.doExport({
+      data,
+      notify: createWindowMessageNotifier(winInfo.win),
+    })
+  },
   'open-dir-select': () => {
     const dirList = dialog.showOpenDialogSync({
       title: 'Select Folder',
@@ -214,7 +252,13 @@ const handlerList = {
   'recent.remove': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'recent.remove', data),
   'recent.get-list': async winInfo => await executeRuntimeUiCommand(winInfo, 'recent.get-list', null),
   'file-upload': (winInfo, filePath) => {
-    return fileUploadUtil.save(winInfo, filePath, configUtil.getConfig())
+    return fileUploadUtil.save({
+      win: winInfo.win,
+      documentPath: getCurrentDocumentPath(winInfo),
+      filePath,
+      config: configUtil.getConfig(),
+      notify: createWindowMessageNotifier(winInfo.win),
+    })
   },
   'get-global-theme': () => {
     return configUtil.getConfig().theme.global

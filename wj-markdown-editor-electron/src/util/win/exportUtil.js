@@ -3,9 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { BrowserWindow, dialog } from 'electron'
 import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
-import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
-import windowLifecycleService from '../document-session/windowLifecycleService.js'
 import { captureExportImageBuffer } from './exportImageCaptureUtil.js'
 import { createExportWindowOptions } from './exportWindowOptionsUtil.js'
 
@@ -14,14 +12,13 @@ const __dirname = path.dirname(__filename)
 
 let exportWin
 let loadingKey
-function createExportWin(winInfo, type) {
-  const documentContext = windowLifecycleService.getDocumentContext(winInfo)
+function createExportWin({ parentWindow, documentContext, type, notify }) {
   if (exportWin) {
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.exportingPleaseWait' } })
+    notify({ type: 'warning', content: 'message.exportingPleaseWait' })
     return
   }
   if (!documentContext.content) {
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'warning', content: 'message.contentIsEmpty' } })
+    notify({ type: 'warning', content: 'message.contentIsEmpty' })
     return
   }
   const filePath = dialog.showSaveDialogSync({
@@ -33,9 +30,9 @@ function createExportWin(winInfo, type) {
   })
   if (filePath) {
     loadingKey = commonUtil.createId()
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'loading', content: 'message.exporting', duration: 0, key: loadingKey } })
+    notify({ type: 'loading', content: 'message.exporting', duration: 0, key: loadingKey })
     exportWin = new BrowserWindow(createExportWindowOptions({
-      parentWindow: winInfo.win,
+      parentWindow,
       preloadPath: path.resolve(__dirname, '../../preload.js'),
     }))
     if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
@@ -48,7 +45,7 @@ function createExportWin(winInfo, type) {
   }
 }
 
-async function doExport(winInfo, data) {
+async function doExport({ data, notify }) {
   try {
     let buffer
     if (data.type === 'PNG' || data.type === 'JPEG') {
@@ -74,10 +71,10 @@ async function doExport(winInfo, data) {
       })
     }
     await fs.writeFile(data.filePath, buffer)
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'success', content: 'message.exportSuccessfully', duration: 3, key: loadingKey } })
+    notify({ type: 'success', content: 'message.exportSuccessfully', duration: 3, key: loadingKey })
   } catch (e) {
     console.error('导出失败', e)
-    sendUtil.send(winInfo.win, { event: 'message', data: { type: 'error', content: 'message.exportFailed', duration: 3, key: loadingKey } })
+    notify({ type: 'error', content: 'message.exportFailed', duration: 3, key: loadingKey })
   } finally {
     exportWin?.close()
     exportWin = undefined
@@ -87,8 +84,6 @@ async function doExport(winInfo, data) {
 
 export default {
   get: () => exportWin,
-  channel: {
-    'export-start': createExportWin,
-    'export-end': doExport,
-  },
+  createExportWin,
+  doExport,
 }

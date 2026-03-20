@@ -88,32 +88,53 @@ describe('imgUtil', () => {
     })
   })
 
-  it('相对路径本地保存成功后，必须返回稳定相对路径并发送成功提示', async () => {
+  it('显式参数对象保存相对路径本地图片成功后，必须返回稳定相对路径并通过 notify 发送成功提示', async () => {
     const { default: imgUtil } = await import('./imgUtil.js')
     const win = { id: 1 }
+    const notify = vi.fn()
     const result = await imgUtil.save({
       win,
-    }, {
-      mode: 'local',
-      name: 'image.png',
-      base64: 'data:image/png;base64,AAAA',
-    }, {
-      imgLocal: '4',
-      imgNetwork: '4',
-      imgRelativePath: 'assets',
+      documentPath: 'D:/docs/demo.md',
+      data: {
+        mode: 'local',
+        name: 'image.png',
+        base64: 'data:image/png;base64,AAAA',
+      },
+      config: {
+        imgLocal: '4',
+        imgNetwork: '4',
+        imgRelativePath: 'assets',
+      },
+      notify,
     })
 
     expect(result).toEqual({ name: 'image.png', path: 'assets/image.png' })
     expect(ensureDirSafe).toHaveBeenCalled()
     expect(base64ToImg).toHaveBeenCalledWith('data:image/png;base64,AAAA', expect.stringMatching(/[\\/]assets[\\/]image\.png$/))
-    expect(send).toHaveBeenCalledWith(win, expect.objectContaining({
-      event: 'message',
-      data: expect.objectContaining({
-        type: 'success',
-        content: 'message.imageSavedSuccessfully',
-        duration: 3,
-        key: 'img-loading-key',
-      }),
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'success',
+      content: 'message.imageSavedSuccessfully',
+      duration: 3,
+      key: 'img-loading-key',
     }))
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('旧三参 save 调用方式必须不再允许', async () => {
+    const { default: imgUtil } = await import('./imgUtil.js')
+
+    await expect(imgUtil.save(
+      { win: { id: 1 } },
+      {
+        mode: 'local',
+        name: 'image.png',
+        base64: 'data:image/png;base64,AAAA',
+      },
+      {
+        imgLocal: '4',
+        imgNetwork: '4',
+        imgRelativePath: 'assets',
+      },
+    )).rejects.toThrow()
   })
 })

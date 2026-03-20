@@ -102,25 +102,61 @@ describe('exportUtil', () => {
     })
   })
 
-  it('开始导出时，必须先向父窗口发送 exporting 提示', async () => {
+  it('createExportWin 使用显式参数对象时，必须先通过 notify 向父窗口发送 exporting 提示', async () => {
     const { default: exportUtil } = await import('./exportUtil.js')
     const parentWindow = { id: 1 }
+    const notify = vi.fn()
 
-    const result = await exportUtil.channel['export-start']({
-      win: parentWindow,
-    }, 'PDF')
+    const result = await exportUtil.createExportWin({
+      parentWindow,
+      documentContext: {
+        path: 'D:/docs/demo.md',
+        content: '# 导出内容',
+      },
+      type: 'PDF',
+      notify,
+    })
 
     expect(result).toBeUndefined()
     expect(dialogShowSaveDialogSync).toHaveBeenCalledTimes(1)
-    expect(send).toHaveBeenCalledWith(parentWindow, expect.objectContaining({
-      event: 'message',
-      data: expect.objectContaining({
-        type: 'loading',
-        content: 'message.exporting',
-        duration: 0,
-        key: 'export-loading-key',
-      }),
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'loading',
+      content: 'message.exporting',
+      duration: 0,
+      key: 'export-loading-key',
     }))
+    expect(send).not.toHaveBeenCalled()
     expect(browserWindowInstances).toHaveLength(1)
+  })
+
+  it('documentContext.content 为空时，必须通过 notify 发出 contentIsEmpty 提示且不启动导出流程', async () => {
+    const { default: exportUtil } = await import('./exportUtil.js')
+    const parentWindow = { id: 1 }
+    const notify = vi.fn()
+
+    const result = await exportUtil.createExportWin({
+      parentWindow,
+      documentContext: {
+        path: 'D:/docs/demo.md',
+        content: '',
+      },
+      type: 'PDF',
+      notify,
+    })
+
+    expect(result).toBeUndefined()
+    expect(notify).toHaveBeenCalledWith({
+      type: 'warning',
+      content: 'message.contentIsEmpty',
+    })
+    expect(dialogShowSaveDialogSync).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+    expect(browserWindowInstances).toHaveLength(0)
+  })
+
+  it('默认导出不应继续暴露失效的 channel 入口，避免旧形态调用绕过显式参数边界', async () => {
+    const { default: exportUtil } = await import('./exportUtil.js')
+
+    expect(exportUtil).not.toHaveProperty('channel')
   })
 })
