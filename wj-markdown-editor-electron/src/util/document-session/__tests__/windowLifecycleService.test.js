@@ -440,13 +440,15 @@ describe('windowLifecycleService 生命周期 facade', () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
-    await winInfoUtil.createNew('D:/demo.md')
+    const createdWindowId = await winInfoUtil.createNew('D:/demo.md')
 
     const [winInfo] = listWindowRefs()
     const winInfoById = getWindowRefById(winInfo.id)
     const winInfoByWebContentsId = getWindowRefByWebContentsId(winInfo.win.webContents.id)
+    const hostDeps = winInfoUtil.getDocumentSessionRuntimeHostDeps()
 
     expect(listWindowRefs()).toHaveLength(1)
+    expect(createdWindowId).toBe(winInfo.id)
     expect(winInfoById).toMatchObject({
       id: winInfo.id,
       win: winInfo.win,
@@ -454,6 +456,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(winInfoByWebContentsId).toEqual(winInfoById)
     expect(winInfoUtil.getWindowById(winInfo.id)).toBe(winInfo.win)
     expect(winInfoUtil.getWindowIdByWebContentsId(winInfo.win.webContents.id)).toBe(winInfo.id)
+    expect(hostDeps.getWindowContext).toBeUndefined()
+    expect(hostDeps.getWindowById(winInfo.id)).toBe(winInfo.win)
     expect(winInfoUtil.getAllWindowInfoFacades).toBeUndefined()
     expect(winInfoUtil.windowInfoFacadeMap).toBeUndefined()
     expect(winInfoUtil.createWindowInfoFacade).toBeUndefined()
@@ -2067,7 +2071,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
   it('窗口内本地资源链接打开失败时，必须给出明确提示，不能静默结束', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
-    openLocalResourceInFolderMock.mockResolvedValue({
+    const runtime = getDocumentSessionRuntime()
+    const executeUiCommandMock = vi.spyOn(runtime, 'executeUiCommand').mockResolvedValueOnce({
       ok: false,
       opened: false,
       reason: 'open-failed',
@@ -2087,6 +2092,12 @@ describe('windowLifecycleService 生命周期 facade', () => {
       reason: 'open-failed',
       path: 'D:/assets/demo.png',
     })
+    expect(executeUiCommandMock).toHaveBeenCalledWith(
+      winInfo.id,
+      'document.resource.open-in-folder',
+      'wj://2e2f6173736574732f64656d6f2e706e67',
+    )
+    expect(openLocalResourceInFolderMock).not.toHaveBeenCalled()
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'window.effect.message',
       data: {
@@ -2094,12 +2105,14 @@ describe('windowLifecycleService 生命周期 facade', () => {
         content: 'message.openResourceLocationFailed',
       },
     })
+    executeUiCommandMock.mockRestore()
   })
 
-  it('窗口内相对本地资源链接成功打开时，传给底层资源解析的上下文必须保留 documentPath 基准目录', async () => {
+  it('窗口内相对本地资源链接成功打开时，必须通过 runtime 统一资源命令入口委托裁决', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
-    openLocalResourceInFolderMock.mockResolvedValue({
+    const runtime = getDocumentSessionRuntime()
+    const executeUiCommandMock = vi.spyOn(runtime, 'executeUiCommand').mockResolvedValueOnce({
       ok: true,
       opened: true,
       reason: 'opened',
@@ -2119,14 +2132,14 @@ describe('windowLifecycleService 生命周期 facade', () => {
       reason: 'opened',
       path: 'D:/assets/demo.png',
     })
-    expect(openLocalResourceInFolderMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        documentPath: 'D:/demo.md',
-      }),
+    expect(executeUiCommandMock).toHaveBeenCalledWith(
+      winInfo.id,
+      'document.resource.open-in-folder',
       'wj://2e2f6173736574732f64656d6f2e706e67',
-      showItemInFolderMock,
     )
+    expect(openLocalResourceInFolderMock).not.toHaveBeenCalled()
     expect(sendMock).not.toHaveBeenCalled()
+    executeUiCommandMock.mockRestore()
   })
 
   it('notifyRecentListChanged 只应在列表真实变化时广播 recent 刷新事件', async () => {

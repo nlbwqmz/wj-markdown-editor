@@ -24,16 +24,6 @@ function createFallbackDocumentContext(snapshot) {
   }
 }
 
-function getWindowContextId(windowContext) {
-  if (isValidWindowId(windowContext?.id)) {
-    return windowContext.id
-  }
-  if (isValidWindowId(windowContext?.win?.id)) {
-    return windowContext.win.id
-  }
-  return null
-}
-
 function isPristineDraftWindow({
   windowId,
   getDocumentContext,
@@ -70,7 +60,7 @@ export async function openDocumentWindowWithRuntimePolicy({
   isRecent = false,
   sourceWindowId = null,
   openWindow,
-  getWindowContext = () => null,
+  getWindowById = () => null,
   getDocumentContext = () => null,
   getSessionSnapshot = () => null,
 }) {
@@ -83,36 +73,38 @@ export async function openDocumentWindowWithRuntimePolicy({
     }
   }
 
-  const openedWindowContext = await openWindow(targetPath, {
+  const openedWindowId = await openWindow(targetPath, {
     isRecent,
     trigger,
   })
-  if (openedWindowContext?.ok === false) {
-    return openedWindowContext
+  if (openedWindowId?.ok === false) {
+    return openedWindowId
   }
 
   const normalizedSourceWindowId = isValidWindowId(sourceWindowId)
     ? sourceWindowId
     : null
-  const openedWindowId = getWindowContextId(openedWindowContext)
+  const normalizedOpenedWindowId = isValidWindowId(openedWindowId)
+    ? openedWindowId
+    : null
 
   if (normalizedSourceWindowId != null
-    && openedWindowId != null
-    && String(openedWindowId) !== String(normalizedSourceWindowId)
+    && normalizedOpenedWindowId != null
+    && String(normalizedOpenedWindowId) !== String(normalizedSourceWindowId)
     && isPristineDraftWindow({
       windowId: normalizedSourceWindowId,
       getDocumentContext,
       getSessionSnapshot,
     })) {
-    getWindowContext(normalizedSourceWindowId)?.win?.close?.()
+    getWindowById(normalizedSourceWindowId)?.close?.()
   }
 
-  const snapshot = openedWindowId == null
+  const snapshot = normalizedOpenedWindowId == null
     ? null
-    : getSessionSnapshot(openedWindowId)
-  const documentContext = openedWindowId == null
+    : getSessionSnapshot(normalizedOpenedWindowId)
+  const documentContext = normalizedOpenedWindowId == null
     ? null
-    : getDocumentContext(openedWindowId)
+    : getDocumentContext(normalizedOpenedWindowId)
 
   return {
     ok: true,
@@ -175,7 +167,7 @@ export function createDocumentSessionRuntime(deps = {}) {
   const commandService = deps.commandService
   const effectService = deps.effectService
   const windowBridge = deps.windowBridge
-  const getWindowContext = deps.getWindowContext || (() => null)
+  const getWindowById = deps.getWindowById || (() => null)
   const getDocumentContextByWindowId = deps.getDocumentContext || null
   const openDocumentWindow = deps.openDocumentWindow || null
   const buildRunnerEffectContext = deps.buildRunnerEffectContext || (() => ({}))
@@ -391,7 +383,7 @@ export function createDocumentSessionRuntime(deps = {}) {
           isRecent: options.isRecent === true,
           sourceWindowId: normalizedWindowId,
           openWindow: openDocumentWindow,
-          getWindowContext,
+          getWindowById,
           getDocumentContext,
           getSessionSnapshot,
         })

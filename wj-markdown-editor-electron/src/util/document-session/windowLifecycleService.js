@@ -201,18 +201,10 @@ function listWindows() {
   return getOptionalWindowRegistry()?.getAllWindows?.() || []
 }
 
-function buildWindowContext(windowId) {
-  return createWindowContext(windowId)
-}
-
-function buildDocumentContext(windowId) {
-  return getDocumentContext(windowId)
-}
-
 function buildRuntimeHostDeps() {
   return {
-    getWindowContext: windowId => buildWindowContext(windowId),
-    getDocumentContext: windowId => buildDocumentContext(windowId),
+    getWindowById: windowId => getWindowById(windowId),
+    getDocumentContext: windowId => getDocumentContext(windowId),
     buildRunnerEffectContext: ({ windowId, dispatchCommand }) => {
       if (!getWindowById(windowId)) {
         return {}
@@ -309,19 +301,6 @@ function deleteEditorWin(id) {
 function checkWinList() {
   if ((getOptionalWindowRegistry()?.getAllWindows?.() || []).length === 0) {
     app.exit()
-  }
-}
-
-function createWindowContext(windowId) {
-  const normalizedWindowId = normalizeWindowId(windowId)
-  const win = normalizedWindowId ? getRegistryWindow(normalizedWindowId) : null
-  if (!normalizedWindowId || !win) {
-    return null
-  }
-
-  return {
-    id: normalizedWindowId,
-    win,
   }
 }
 
@@ -852,14 +831,10 @@ async function executeExternalResolutionCommandWithDispatcher(windowId, command,
 async function handleLocalResourceLinkOpen(win, windowId, resourceUrl) {
   const normalizedWindowId = normalizeWindowId(windowId)
   const targetWin = getWindowById(normalizedWindowId)
-  const documentContext = getDocumentContext(normalizedWindowId)
-  const openResult = await resourceFileUtil.openLocalResourceInFolder(
-    {
-      ...documentContext,
-      documentPath: documentContext.path,
-    },
+  const openResult = await getDocumentSessionRuntime().executeUiCommand(
+    normalizedWindowId,
+    'document.resource.open-in-folder',
     resourceUrl,
-    shell.showItemInFolder,
   )
   if (openResult.ok !== true) {
     const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
@@ -1160,7 +1135,7 @@ async function createNew(filePath, isRecent = false) {
       const existedWin = existedWindowId ? getWindowById(existedWindowId) : null
       if (existedWin) {
         existedWin.show()
-        return createWindowContext(existedWindowId)
+        return existedWindowId
       }
     }
   }
@@ -1311,7 +1286,7 @@ async function createNew(filePath, isRecent = false) {
     win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: content ? configUtil.getConfig().startPage : 'editor' }).then(() => {})
   }
 
-  return createWindowContext(id)
+  return id
 }
 
 Object.assign(windowLifecycleService, {

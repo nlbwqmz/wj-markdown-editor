@@ -4,6 +4,7 @@ import {
   createDocumentSessionRuntime,
   getDocumentSessionRuntime,
   initializeDocumentSessionRuntime,
+  openDocumentWindowWithRuntimePolicy,
   resetDocumentSessionRuntime,
 } from '../documentSessionRuntime.js'
 
@@ -74,19 +75,16 @@ function createRequiredRuntimeDeps(overrides = {}) {
 }
 
 function createRuntimeContext() {
-  const windowContextMap = new Map()
+  const windowByIdMap = new Map()
 
-  function getOrCreateWindowContext(windowId) {
-    if (!windowContextMap.has(windowId)) {
-      windowContextMap.set(windowId, {
+  function getOrCreateWindow(windowId) {
+    if (!windowByIdMap.has(windowId)) {
+      windowByIdMap.set(windowId, {
         id: windowId,
-        win: {
-          id: windowId,
-          close: vi.fn(),
-        },
+        close: vi.fn(),
       })
     }
-    return windowContextMap.get(windowId)
+    return windowByIdMap.get(windowId)
   }
 
   const commandRunner = {
@@ -182,9 +180,9 @@ function createRuntimeContext() {
     publishMessage: vi.fn(),
     publishRecentListChanged: vi.fn(recentList => recentList),
   }
-  const getWindowContext = vi.fn(windowId => (windowId == null
+  const getWindowById = vi.fn(windowId => (windowId == null
     ? null
-    : getOrCreateWindowContext(windowId)))
+    : getOrCreateWindow(windowId)))
   const getDocumentContext = vi.fn(windowId => ({
     path: windowId == null ? null : `C:/docs/${windowId}.md`,
     exists: true,
@@ -192,8 +190,8 @@ function createRuntimeContext() {
     saved: false,
     fileName: `${windowId}.md`,
   }))
-  const openDocumentWindow = vi.fn(async (_targetPath, options = {}) => getOrCreateWindowContext(
-    options.isRecent === true ? 19 : 18,
+  const openDocumentWindow = vi.fn(async (_targetPath, options = {}) => (
+    options.isRecent === true ? 19 : 18
   ))
 
   const runtime = createDocumentSessionRuntime({
@@ -217,7 +215,7 @@ function createRuntimeContext() {
     executeResourceCommand,
     executeSyncQuery,
     windowBridge,
-    getWindowContext,
+    getWindowById,
     getDocumentContext,
     openDocumentWindow,
   })
@@ -230,7 +228,7 @@ function createRuntimeContext() {
     executeResourceCommand,
     executeSyncQuery,
     windowBridge,
-    getWindowContext,
+    getWindowById,
     getDocumentContext,
     openDocumentWindow,
   }
@@ -316,7 +314,7 @@ describe('documentSessionRuntime', () => {
     })
     const runtime = initializeDocumentSessionRuntime({
       ...composition,
-      getWindowContext: () => null,
+      getWindowById: () => null,
       getDocumentContext: () => null,
       buildRunnerEffectContext: () => ({}),
       openDocumentWindow: vi.fn(),
@@ -453,12 +451,9 @@ describe('documentSessionRuntime', () => {
       }),
       effectService,
       buildRunnerEffectContext,
-      getWindowContext: vi.fn(windowId => ({
+      getWindowById: vi.fn(windowId => ({
         id: windowId,
-        win: {
-          id: windowId,
-          close: vi.fn(),
-        },
+        close: vi.fn(),
       })),
     })
 
@@ -583,12 +578,9 @@ describe('documentSessionRuntime', () => {
       }),
       effectService,
       executeDocumentCommand,
-      getWindowContext: vi.fn(windowId => ({
+      getWindowById: vi.fn(windowId => ({
         id: windowId,
-        win: {
-          id: windowId,
-          close: vi.fn(),
-        },
+        close: vi.fn(),
       })),
       getDocumentContext: vi.fn(() => ({
         path: 'C:/docs/demo.md',
@@ -818,12 +810,87 @@ describe('documentSessionRuntime', () => {
     }))
   })
 
+  it('openDocumentWindowWithRuntimePolicy 必须只接受 openWindow 返回的 windowId，并通过 getWindowById 关闭空白草稿源窗口', async () => {
+    const sourceWin = {
+      id: 7,
+      close: vi.fn(),
+    }
+    const getWindowById = vi.fn(windowId => (windowId === 7 ? sourceWin : null))
+    const getDocumentContext = vi.fn((windowId) => {
+      if (windowId === 7) {
+        return {
+          path: null,
+          exists: false,
+          content: '',
+          saved: true,
+          fileName: 'Unnamed',
+        }
+      }
+      if (windowId === 18) {
+        return {
+          path: 'C:/docs/opened.md',
+          exists: true,
+          content: '# 打开的内容',
+          saved: false,
+          fileName: 'opened.md',
+        }
+      }
+      return null
+    })
+    const getSessionSnapshot = vi.fn((windowId) => {
+      if (windowId === 7) {
+        return {
+          sessionId: 'session-7',
+          content: '',
+          saved: true,
+        }
+      }
+      if (windowId === 18) {
+        return {
+          sessionId: 'session-18',
+          content: '# 18',
+          saved: false,
+        }
+      }
+      return null
+    })
+    const openWindow = vi.fn(async () => 18)
+
+    const result = await openDocumentWindowWithRuntimePolicy({
+      targetPath: 'C:/docs/opened.md',
+      trigger: 'user',
+      sourceWindowId: 7,
+      openWindow,
+      getWindowById,
+      getDocumentContext,
+      getSessionSnapshot,
+    })
+
+    expect(openWindow).toHaveBeenCalledWith('C:/docs/opened.md', {
+      isRecent: false,
+      trigger: 'user',
+    })
+    expect(getWindowById).toHaveBeenCalledWith(7)
+    expect(sourceWin.close).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({
+      ok: true,
+      reason: 'opened',
+      path: 'C:/docs/opened.md',
+      trigger: 'user',
+      snapshot: {
+        sessionId: 'session-18',
+        content: '# 18',
+        saved: false,
+      },
+    })
+  })
+
   it('document.open-path 必须由 runtime 组装打开结果，并在打开其他文档后关闭空白草稿源窗口', async () => {
     const {
       runtime,
       openDocumentWindow,
       getDocumentContext,
-      getWindowContext,
+      getWindowById,
       windowBridge,
     } = createRuntimeContext()
     getDocumentContext.mockImplementation((windowId) => {
@@ -859,7 +926,7 @@ describe('documentSessionRuntime', () => {
       saved: windowId === 7,
     }))
 
-    const sourceWindow = getWindowContext(7)
+    const sourceWindow = getWindowById(7)
     const result = await runtime.executeUiCommand(7, 'document.open-path', {
       path: 'C:/docs/opened.md',
       trigger: 'user',
@@ -869,7 +936,7 @@ describe('documentSessionRuntime', () => {
       isRecent: false,
       trigger: 'user',
     })
-    expect(sourceWindow.win.close).toHaveBeenCalledTimes(1)
+    expect(sourceWindow.close).toHaveBeenCalledTimes(1)
     expect(result).toEqual({
       ok: true,
       reason: 'opened',
@@ -999,7 +1066,7 @@ describe('documentSessionRuntime', () => {
     const {
       runtime,
       getDocumentContext,
-      getWindowContext,
+      getWindowById,
       windowBridge,
     } = createRuntimeContext()
     getDocumentContext.mockImplementation((windowId) => {
@@ -1036,13 +1103,13 @@ describe('documentSessionRuntime', () => {
       isRecentMissing: windowId === 7,
     }))
 
-    const sourceWindow = getWindowContext(7)
+    const sourceWindow = getWindowById(7)
     await runtime.executeUiCommand(7, 'document.open-path', {
       path: 'C:/docs/opened.md',
       trigger: 'user',
     })
 
-    expect(sourceWindow.win.close).not.toHaveBeenCalled()
+    expect(sourceWindow.close).not.toHaveBeenCalled()
   })
 
   it('recent 列表广播必须继续走 windowBridge 的统一出口', () => {
