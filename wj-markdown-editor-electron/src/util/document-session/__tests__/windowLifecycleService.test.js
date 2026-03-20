@@ -384,7 +384,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     initializeRuntimeForWindowLifecycleTests()
   })
 
-  it('兼容 winInfo facade 必须让 sessionId 跟随 registry，同时保留宿主状态可写能力', async () => {
+  it('兼容 winInfo facade 必须让 sessionId 跟随 registry，且 sessionId setter 不得反向改写 registry，同时保留宿主状态可写能力', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -410,6 +410,11 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     expect(winInfo.sessionId).toBe('session-rebound')
 
+    winInfo.sessionId = 'session-shadow'
+
+    expect(lifecycleRegistry.getSessionIdByWindowId(winInfo.id)).toBe('session-rebound')
+    expect(winInfo.sessionId).toBe('session-rebound')
+
     winInfo.forceClose = true
     winInfo.externalWatch.pendingChange = {
       versionHash: 'pending-hash',
@@ -419,6 +424,24 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(winInfoUtil.getByWebContentsId(winInfo.win.webContents.id).externalWatch.pendingChange).toEqual({
       versionHash: 'pending-hash',
     })
+  })
+
+  it('registry 已移除窗口映射后，lifecycle 查询必须立即视为窗口不存在，即使宿主状态尚未清理', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+
+    lifecycleRegistry.unregisterWindow(winInfo.id)
+
+    expect(winInfoUtil.getAll()).toHaveLength(0)
+    expect(winInfoUtil.getWinInfo(winInfo.id)).toBeNull()
+    expect(winInfoUtil.getWinInfo(winInfo.win)).toBeNull()
+    expect(winInfoUtil.getByWebContentsId(winInfo.win.webContents.id)).toBeNull()
+
+    expect(winInfoUtil.deleteEditorWin(winInfo.id)).toBe(true)
   })
 
   it('window.blur 触发自动保存时，必须复用统一保存管线且不发送成功提示', async () => {
