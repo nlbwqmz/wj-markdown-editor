@@ -23,6 +23,7 @@ import {
 } from './documentSessionRuntime.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 import { createExternalWatchBridge } from './externalWatchBridge.js'
+import { createWindowHostStateStore } from './windowHostStateStore.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -31,16 +32,18 @@ const MISSING_PATH_REASON = {
   OPEN_TARGET_MISSING: 'open-target-missing',
 }
 
-const winInfoList = []
 const REQUIRED_WINDOW_REGISTRY_METHODS = [
   'registerWindow',
   'unregisterWindow',
   'bindSession',
+  'getSessionIdByWindowId',
   'getWindowById',
   'getAllWindows',
 ]
 
 let activeWindowRegistry = null
+const hostStateStore = createWindowHostStateStore()
+const windowInfoFacadeMap = new Map()
 const windowLifecycleService = {}
 
 function assertWindowRegistryContract(registry) {
@@ -72,6 +75,200 @@ function getWindowRegistry() {
     throw new Error('windowLifecycleService 尚未配置 windowRegistry')
   }
   return activeWindowRegistry
+}
+
+function normalizeWindowId(windowId) {
+  if (typeof windowId === 'number' && Number.isFinite(windowId)) {
+    return String(windowId)
+  }
+
+  if (typeof windowId === 'string' && windowId.trim() !== '') {
+    return windowId.trim()
+  }
+
+  return null
+}
+
+function getRegistrySessionId(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  return getWindowRegistry().getSessionIdByWindowId?.(normalizedWindowId) || null
+}
+
+function syncDetachedWindowInfoSnapshot(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  return windowInfoFacadeMap.get(normalizedWindowId)?.syncSnapshot?.() || null
+}
+
+function createWindowInfoFacade(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const detachedSnapshot = {
+    id: normalizedWindowId,
+    win: null,
+    sessionId: null,
+    externalWatch: null,
+    externalWatchBridge: null,
+    allowImmediateClose: false,
+    forceClose: false,
+    lastClosedManualRequestCompletions: [],
+  }
+
+  function syncSnapshot() {
+    const liveState = hostStateStore.getWindowState(normalizedWindowId)
+    if (liveState) {
+      detachedSnapshot.win = liveState.win || null
+      detachedSnapshot.externalWatch = liveState.externalWatch || null
+      detachedSnapshot.externalWatchBridge = liveState.externalWatchBridge || null
+      detachedSnapshot.allowImmediateClose = liveState.allowImmediateClose === true
+      detachedSnapshot.forceClose = liveState.forceClose === true
+      detachedSnapshot.lastClosedManualRequestCompletions = Array.isArray(liveState.lastClosedManualRequestCompletions)
+        ? liveState.lastClosedManualRequestCompletions
+        : []
+    }
+
+    const sessionId = getRegistrySessionId(normalizedWindowId)
+    if (sessionId != null) {
+      detachedSnapshot.sessionId = sessionId
+    }
+
+    return detachedSnapshot
+  }
+
+  function readHostValue(key, defaultValue = null) {
+    const liveState = hostStateStore.getWindowState(normalizedWindowId)
+    if (liveState) {
+      const value = liveState[key]
+      detachedSnapshot[key] = value === undefined ? defaultValue : value
+      return detachedSnapshot[key]
+    }
+
+    if (!(key in detachedSnapshot)) {
+      detachedSnapshot[key] = defaultValue
+    }
+    return detachedSnapshot[key]
+  }
+
+  function writeHostValue(key, value) {
+    detachedSnapshot[key] = value
+    const liveState = hostStateStore.getWindowState(normalizedWindowId)
+    if (liveState) {
+      liveState[key] = value
+    }
+  }
+
+  const facade = {}
+  Object.defineProperties(facade, {
+    id: {
+      enumerable: true,
+      get() {
+        return normalizedWindowId
+      },
+    },
+    win: {
+      enumerable: true,
+      get() {
+        return readHostValue('win', null)
+      },
+      set(value) {
+        writeHostValue('win', value)
+      },
+    },
+    sessionId: {
+      enumerable: true,
+      get() {
+        const sessionId = getRegistrySessionId(normalizedWindowId)
+        if (sessionId != null) {
+          detachedSnapshot.sessionId = sessionId
+        }
+        return sessionId ?? detachedSnapshot.sessionId ?? null
+      },
+      set(value) {
+        detachedSnapshot.sessionId = value ?? null
+        if (value == null) {
+          return
+        }
+        getWindowRegistry().bindSession?.({
+          windowId: normalizedWindowId,
+          sessionId: value,
+        })
+      },
+    },
+    externalWatch: {
+      enumerable: true,
+      get() {
+        return readHostValue('externalWatch', null)
+      },
+      set(value) {
+        writeHostValue('externalWatch', value)
+      },
+    },
+    externalWatchBridge: {
+      enumerable: true,
+      get() {
+        return readHostValue('externalWatchBridge', null)
+      },
+      set(value) {
+        writeHostValue('externalWatchBridge', value)
+      },
+    },
+    allowImmediateClose: {
+      enumerable: true,
+      get() {
+        return readHostValue('allowImmediateClose', false) === true
+      },
+      set(value) {
+        writeHostValue('allowImmediateClose', value === true)
+      },
+    },
+    forceClose: {
+      enumerable: true,
+      get() {
+        return readHostValue('forceClose', false) === true
+      },
+      set(value) {
+        writeHostValue('forceClose', value === true)
+      },
+    },
+    lastClosedManualRequestCompletions: {
+      enumerable: true,
+      get() {
+        return readHostValue('lastClosedManualRequestCompletions', [])
+      },
+      set(value) {
+        writeHostValue('lastClosedManualRequestCompletions', Array.isArray(value) ? value : [])
+      },
+    },
+  })
+
+  syncSnapshot()
+  return {
+    facade,
+    syncSnapshot,
+  }
+}
+
+function ensureWindowInfoFacade(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  if (!windowInfoFacadeMap.has(normalizedWindowId)) {
+    windowInfoFacadeMap.set(normalizedWindowId, createWindowInfoFacade(normalizedWindowId))
+  }
+
+  return windowInfoFacadeMap.get(normalizedWindowId)?.facade || null
+}
+
+function getAllWindowInfoFacades() {
+  return hostStateStore.getAllWindowStates().map(state => ensureWindowInfoFacade(state.windowId))
 }
 
 function buildWindowContext(windowId) {
@@ -153,30 +350,39 @@ function ensureSessionRuntimeInitialized() {
 }
 
 function deleteEditorWin(id) {
-  const index = winInfoList.findIndex(win => win.id === id)
-  if (index < 0) {
+  const normalizedWindowId = normalizeWindowId(id)
+  if (!normalizedWindowId || !hostStateStore.getWindowState(normalizedWindowId)) {
     return false
   }
-  getWindowRegistry().unregisterWindow?.(id)
-  winInfoList.splice(index, 1)
+  syncDetachedWindowInfoSnapshot(normalizedWindowId)
+  getWindowRegistry().unregisterWindow?.(normalizedWindowId)
+  hostStateStore.unregisterWindowState(normalizedWindowId)
+  windowInfoFacadeMap.delete(normalizedWindowId)
   return true
 }
 
 function checkWinList() {
-  if (winInfoList.length === 0) {
+  if (hostStateStore.getAllWindowStates().length === 0) {
     app.exit()
   }
 }
 
 function findByWin(win) {
-  return winInfoList.find(item => item.win === win)
+  const windowState = hostStateStore.findWindowStateByWin(win)
+  return windowState ? ensureWindowInfoFacade(windowState.windowId) : null
 }
 
 function getWinInfo(target) {
-  if (typeof target === 'string') {
-    return winInfoList.find(item => item.id === target)
+  const normalizedWindowId = normalizeWindowId(target)
+  if (normalizedWindowId) {
+    if (!hostStateStore.getWindowState(normalizedWindowId)) {
+      return null
+    }
+    return ensureWindowInfoFacade(normalizedWindowId)
   }
-  return winInfoList.find(item => item.win === target || item.id === target)
+
+  const windowState = hostStateStore.findWindowStateByWin(target)
+  return windowState ? ensureWindowInfoFacade(windowState.windowId) : null
 }
 
 function isWindowAlive(win) {
@@ -997,7 +1203,12 @@ async function createNew(filePath, isRecent = false) {
     await recent.add(normalizedFilePath)
     const existedSession = store.findSessionByComparablePath(normalizedFilePath)
     if (existedSession) {
-      const existedWinInfo = winInfoList.find(item => item.sessionId === existedSession.sessionId)
+      const existedWindowState = hostStateStore.getAllWindowStates().find((state) => {
+        return getRegistrySessionId(state.windowId) === existedSession.sessionId
+      })
+      const existedWinInfo = existedWindowState
+        ? ensureWindowInfoFacade(existedWindowState.windowId)
+        : null
       if (existedWinInfo?.win) {
         existedWinInfo.win.show()
         return existedWinInfo
@@ -1025,20 +1236,27 @@ async function createNew(filePath, isRecent = false) {
   })
 
   const content = exists ? await fs.readFile(normalizedFilePath, 'utf-8') : ''
-  const winInfo = {
-    id,
-    win,
-    sessionId: null,
-    externalWatch: createExternalWatchState(),
-    allowImmediateClose: false,
-    forceClose: false,
-    lastClosedManualRequestCompletions: [],
-  }
-  winInfoList.push(winInfo)
   windowRegistry.registerWindow({
     windowId: id,
     win,
   })
+
+  hostStateStore.registerWindowState({
+    windowId: id,
+    state: {
+      win,
+      externalWatch: createExternalWatchState(),
+      externalWatchBridge: null,
+      allowImmediateClose: false,
+      forceClose: false,
+      lastClosedManualRequestCompletions: [],
+    },
+  })
+  const winInfo = ensureWindowInfoFacade(id)
+  const initialHostState = hostStateStore.getWindowState(id)
+  if (initialHostState) {
+    winInfo.win = initialHostState.win
+  }
 
   const session = createInitialSession({
     sessionId: commonUtil.createId(),
@@ -1056,7 +1274,7 @@ async function createNew(filePath, isRecent = false) {
   win.once('ready-to-show', () => {
     win.show()
     setTimeout(() => {
-      updateUtil.checkUpdate(winInfoList)
+      updateUtil.checkUpdate(getAllWindowInfoFacades())
     }, 30000)
   })
   win.on('unmaximize', () => {
@@ -1073,7 +1291,7 @@ async function createNew(filePath, isRecent = false) {
     if (url.match('^http')) {
       shell.openExternal(url).then(() => {})
     } else if (url.match('^wj://')) {
-      const currentWinInfo = winInfoList.find(item => item.id === id)
+      const currentWinInfo = getWinInfo(id)
       handleLocalResourceLinkOpen(win, currentWinInfo, url).then(() => {}).catch(() => {})
     }
     return { action: 'deny' }
@@ -1159,10 +1377,11 @@ Object.assign(windowLifecycleService, {
   executeResourceCommandSync,
   getWinInfo,
   getAll: () => {
-    return winInfoList
+    return getAllWindowInfoFacades()
   },
   getByWebContentsId: (webContentsId) => {
-    return winInfoList.find(item => item.win.webContents.id === webContentsId)
+    const windowState = hostStateStore.findWindowStateByWebContentsId(webContentsId)
+    return windowState ? ensureWindowInfoFacade(windowState.windowId) : null
   },
   publishWindowMessage,
   getDocumentContext,

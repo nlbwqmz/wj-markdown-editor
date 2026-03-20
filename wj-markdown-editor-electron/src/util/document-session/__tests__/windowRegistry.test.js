@@ -27,6 +27,9 @@ describe('windowRegistry', () => {
     expect('updateTempContent' in registry).toBe(false)
     expect('handleExternalChange' in registry).toBe(false)
     expect('getDocumentContext' in registry).toBe(false)
+    expect('registerWindowState' in registry).toBe(false)
+    expect('getWindowState' in registry).toBe(false)
+    expect('findWindowStateByWin' in registry).toBe(false)
   })
 
   it('registerWindow / bindSession / unregisterWindow 应维护稳定映射', () => {

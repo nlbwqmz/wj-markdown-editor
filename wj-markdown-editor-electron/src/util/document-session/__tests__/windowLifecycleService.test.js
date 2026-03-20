@@ -254,6 +254,9 @@ function createResettableWindowRegistry() {
     getWindowById(windowId) {
       return windowMap.get(normalizeWindowId(windowId)) || null
     },
+    getSessionIdByWindowId(windowId) {
+      return sessionMap.get(normalizeWindowId(windowId)) || null
+    },
     getAllWindows() {
       return Array.from(windowMap.values())
     },
@@ -345,6 +348,9 @@ async function emitWatchRestored(winInfo, diskContent, {
 
 describe('windowLifecycleService 生命周期 facade', () => {
   beforeEach(() => {
+    for (const winInfo of [...winInfoUtil.getAll()]) {
+      winInfoUtil.deleteEditorWin(winInfo.id)
+    }
     resetDocumentSessionRuntime()
     lifecycleRegistry.reset()
     sendMock.mockReset()
@@ -375,8 +381,44 @@ describe('windowLifecycleService 生命周期 facade', () => {
     writeFileMock.mockResolvedValue(undefined)
     browserWindowInstances.length = 0
     webContentsId = 1
-    winInfoUtil.getAll().length = 0
     initializeRuntimeForWindowLifecycleTests()
+  })
+
+  it('兼容 winInfo facade 必须让 sessionId 跟随 registry，同时保留宿主状态可写能力', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    const winInfoById = winInfoUtil.getWinInfo(winInfo.id)
+    const winInfoByWebContentsId = winInfoUtil.getByWebContentsId(winInfo.win.webContents.id)
+
+    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(winInfoById).toBe(winInfo)
+    expect(winInfoByWebContentsId).toBe(winInfo)
+    expect(winInfoById).toMatchObject({
+      id: winInfo.id,
+      win: winInfo.win,
+      sessionId: winInfo.sessionId,
+    })
+
+    lifecycleRegistry.bindSession({
+      windowId: winInfo.id,
+      sessionId: 'session-rebound',
+    })
+
+    expect(winInfo.sessionId).toBe('session-rebound')
+
+    winInfo.forceClose = true
+    winInfo.externalWatch.pendingChange = {
+      versionHash: 'pending-hash',
+    }
+
+    expect(winInfoUtil.getWinInfo(winInfo.id).forceClose).toBe(true)
+    expect(winInfoUtil.getByWebContentsId(winInfo.win.webContents.id).externalWatch.pendingChange).toEqual({
+      versionHash: 'pending-hash',
+    })
   })
 
   it('window.blur 触发自动保存时，必须复用统一保存管线且不发送成功提示', async () => {

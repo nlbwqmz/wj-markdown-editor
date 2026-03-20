@@ -281,6 +281,7 @@ describe('windowLifecycleService runtime 初始化时机', () => {
       registerWindow: vi.fn(),
       unregisterWindow: vi.fn(),
       bindSession: vi.fn(),
+      getSessionIdByWindowId: vi.fn(() => null),
       getWindowById: vi.fn(() => null),
       getAllWindows: vi.fn(() => []),
     }
