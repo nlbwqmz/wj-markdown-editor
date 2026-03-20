@@ -280,6 +280,7 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
     })
 
     expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.resource.open-in-folder', data)
+    expect(executeResourceCommand).not.toHaveBeenCalled()
     return result
   }
 
@@ -710,6 +711,27 @@ describe('ipcMainUtil command mapping', () => {
     }
   }
 
+  async function dispatchRuntimeResourceCommand({
+    sender,
+    sendToMainHandler,
+    winInfoUtil,
+    event,
+    data,
+    result,
+  }) {
+    winInfoUtil.executeResourceCommand.mockResolvedValueOnce(result)
+    runtimeExecuteUiCommand.mockResolvedValueOnce(result)
+
+    const commandResult = await sendToMainHandler({ sender }, {
+      event,
+      data,
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, event, data)
+    expect(winInfoUtil.executeResourceCommand).not.toHaveBeenCalled()
+    return commandResult
+  }
+
   it('document.request-open-dialog 直连入口必须直接走统一命令流', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
 
@@ -912,9 +934,12 @@ describe('ipcMainUtil command mapping', () => {
     expect(result).toEqual(recentList)
   })
 
-  it('resource.get-info 必须统一委托给 documentResourceService 边界', async () => {
+  it('resource.get-info 必须先经 runtime 统一命令入口，并返回结构化资源信息', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
-    winInfoUtil.executeResourceCommand.mockResolvedValue({
+    const infoPayload = {
+      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    }
+    const infoResult = {
       ok: true,
       reason: 'resolved',
       decodedPath: './assets/demo.png',
@@ -922,47 +947,42 @@ describe('ipcMainUtil command mapping', () => {
       isDirectory: false,
       isFile: true,
       path: 'D:\\docs\\assets\\demo.png',
-    })
+    }
 
-    await sendToMainHandler({ sender }, {
+    const result = await dispatchRuntimeResourceCommand({
+      sender,
+      sendToMainHandler,
+      winInfoUtil,
       event: 'resource.get-info',
-      data: {
-        resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
-      },
+      data: infoPayload,
+      result: infoResult,
     })
 
-    expect(winInfoUtil.executeResourceCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'resource.get-info', {
-      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
-    })
+    expect(result).toEqual(infoResult)
   })
 
-  it('document.resource.delete-local 必须统一委托给 documentResourceService 边界', async () => {
+  it('document.resource.delete-local 必须先经 runtime 统一命令入口，并返回结构化删除结果', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
-    winInfoUtil.executeResourceCommand.mockResolvedValue({
+    const deletePayload = {
+      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    }
+    const deleteResult = {
       ok: true,
       removed: true,
       reason: 'deleted',
       path: 'D:\\docs\\assets\\demo.png',
-    })
+    }
 
-    await sendToMainHandler({ sender }, {
+    const result = await dispatchRuntimeResourceCommand({
+      sender,
+      sendToMainHandler,
+      winInfoUtil,
       event: 'document.resource.delete-local',
-      data: {
-        resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
-      },
+      data: deletePayload,
+      result: deleteResult,
     })
 
-    expect(winInfoUtil.executeResourceCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.resource.delete-local', {
-      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
-    })
+    expect(result).toEqual(deleteResult)
   })
 
   it('document.external.apply / document.external.ignore 必须暴露为新的统一 IPC 命令', async () => {
