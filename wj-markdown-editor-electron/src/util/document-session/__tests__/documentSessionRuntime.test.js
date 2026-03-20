@@ -42,6 +42,37 @@ const SYNC_QUERY_SET = new Set([
   'resource.get-comparable-key',
 ])
 
+function createRequiredRuntimeDeps(overrides = {}) {
+  return {
+    store: {
+      getSession: vi.fn(() => null),
+      getSessionByWindowId: vi.fn(() => null),
+    },
+    saveCoordinator: {
+      consumeCopySaveCompletion: vi.fn(() => null),
+    },
+    commandService: {
+      dispatch: vi.fn(() => ({
+        session: null,
+        snapshot: null,
+        effects: [],
+      })),
+    },
+    effectService: {
+      executeCommand: vi.fn(async () => ({
+        ok: true,
+      })),
+    },
+    windowBridge: {
+      getSessionSnapshot: vi.fn(() => null),
+      publishSnapshotChanged: vi.fn(),
+      publishMessage: vi.fn(),
+      publishRecentListChanged: vi.fn(recentList => recentList),
+    },
+    ...overrides,
+  }
+}
+
 function createRuntimeContext() {
   const windowContextMap = new Map()
 
@@ -166,6 +197,20 @@ function createRuntimeContext() {
   ))
 
   const runtime = createDocumentSessionRuntime({
+    store: {
+      getSession: vi.fn(() => null),
+      getSessionByWindowId: vi.fn(() => null),
+    },
+    saveCoordinator: {
+      consumeCopySaveCompletion: vi.fn(() => null),
+    },
+    commandService: {
+      dispatch: vi.fn(() => ({
+        session: null,
+        snapshot: null,
+        effects: [],
+      })),
+    },
     commandRunner,
     effectService,
     executeDocumentCommand,
@@ -313,6 +358,22 @@ describe('documentSessionRuntime', () => {
     expect(runtime.windowBridge).toBe(composition.windowBridge)
   })
 
+  it('initializeDocumentSessionRuntime 在缺少必要依赖时必须直接失败，不能静默走默认组装路径', () => {
+    resetDocumentSessionRuntime()
+
+    expect(() => initializeDocumentSessionRuntime({
+      effectService: {
+        executeCommand: vi.fn(),
+      },
+      windowBridge: {
+        getSessionSnapshot: vi.fn(() => null),
+        publishSnapshotChanged: vi.fn(),
+        publishMessage: vi.fn(),
+        publishRecentListChanged: vi.fn(),
+      },
+    })).toThrow('createDocumentSessionRuntime 缺少必要依赖')
+  })
+
   it('必须作为统一组合根暴露 dispatch / executeUiCommand / executeSyncQuery / getSessionSnapshot / getDocumentContext', () => {
     const { runtime } = createRuntimeContext()
 
@@ -420,13 +481,17 @@ describe('documentSessionRuntime', () => {
       }
     })
     const runtime = createDocumentSessionRuntime({
+      ...createRequiredRuntimeDeps({
+        effectService,
+        windowBridge: {
+          getSessionSnapshot: vi.fn(() => currentSnapshot),
+          publishSnapshotChanged: vi.fn(),
+          publishMessage: vi.fn(),
+          publishRecentListChanged: vi.fn(recentList => recentList),
+        },
+      }),
       effectService,
       executeDocumentCommand,
-      windowBridge: {
-        getSessionSnapshot: vi.fn(() => currentSnapshot),
-        publishMessage: vi.fn(),
-        publishRecentListChanged: vi.fn(recentList => recentList),
-      },
       getWindowContext: vi.fn(windowId => ({
         id: windowId,
         win: {
@@ -863,17 +928,19 @@ describe('documentSessionRuntime', () => {
     expect(() => getDocumentSessionRuntime()).toThrow('document session runtime 尚未初始化')
 
     const runtime = initializeDocumentSessionRuntime({
+      ...createRequiredRuntimeDeps({
+        effectService: {
+          executeCommand: vi.fn(),
+        },
+        windowBridge: {
+          getSessionSnapshot: vi.fn(() => null),
+          publishSnapshotChanged: vi.fn(),
+          publishMessage: vi.fn(),
+          publishRecentListChanged: vi.fn(),
+        },
+      }),
       commandRunner: {
         run: vi.fn(),
-      },
-      effectService: {
-        executeCommand: vi.fn(),
-      },
-      windowBridge: {
-        getSessionSnapshot: vi.fn(() => null),
-        publishSnapshotChanged: vi.fn(),
-        publishMessage: vi.fn(),
-        publishRecentListChanged: vi.fn(),
       },
       executeDocumentCommand: vi.fn(),
     })

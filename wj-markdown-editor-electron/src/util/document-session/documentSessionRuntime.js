@@ -1,24 +1,17 @@
 import { createDocumentCommandRunner } from './documentCommandRunner.js'
-import { createDocumentCommandService } from './documentCommandService.js'
-import { createDocumentEffectService } from './documentEffectService.js'
-import { createDocumentSessionStore } from './documentSessionStore.js'
-import { createSaveCoordinator } from './saveCoordinator.js'
-import { createWindowSessionBridge } from './windowSessionBridge.js'
 
 let activeDocumentSessionRuntime = null
+const REQUIRED_RUNTIME_DEP_KEYS = [
+  'store',
+  'saveCoordinator',
+  'commandService',
+  'effectService',
+  'windowBridge',
+]
 
 function isValidWindowId(windowId) {
   return (typeof windowId === 'number' && Number.isFinite(windowId))
     || (typeof windowId === 'string' && windowId.trim() !== '')
-}
-
-function createDefaultWindowBridge(store) {
-  return createWindowSessionBridge({
-    store,
-    sendToRenderer: () => {},
-    resolveWindowById: () => null,
-    getAllWindows: () => [],
-  })
 }
 
 function createFallbackDocumentContext(snapshot) {
@@ -153,6 +146,16 @@ const SYNC_QUERY_SET = new Set([
   'resource.get-comparable-key',
 ])
 
+function assertRequiredRuntimeDeps(deps) {
+  const missingDepList = REQUIRED_RUNTIME_DEP_KEYS.filter((depKey) => {
+    return deps?.[depKey] == null
+  })
+
+  if (missingDepList.length > 0) {
+    throw new Error(`createDocumentSessionRuntime 缺少必要依赖: ${missingDepList.join(', ')}`)
+  }
+}
+
 /**
  * 创建 document-session 统一运行时。
  *
@@ -164,22 +167,14 @@ const SYNC_QUERY_SET = new Set([
  * 窗口生命周期、BrowserWindow 事件接线仍保留给 Task 5。
  */
 export function createDocumentSessionRuntime(deps = {}) {
-  const getConfig = deps.getConfig || (() => ({}))
-  const store = deps.store || createDocumentSessionStore()
-  const saveCoordinator = deps.saveCoordinator || createSaveCoordinator()
+  assertRequiredRuntimeDeps(deps)
+
+  const store = deps.store
+  const saveCoordinator = deps.saveCoordinator
   const resourceService = deps.resourceService || null
-  const commandService = deps.commandService || createDocumentCommandService({
-    store,
-    saveCoordinator,
-    getConfig,
-  })
-  const effectService = deps.effectService || createDocumentEffectService({
-    fsModule: deps.fsModule,
-    dialogApi: deps.dialogApi,
-    recentStore: deps.recentStore,
-    getConfig,
-  })
-  const windowBridge = deps.windowBridge || createDefaultWindowBridge(store)
+  const commandService = deps.commandService
+  const effectService = deps.effectService
+  const windowBridge = deps.windowBridge
   const getWindowContext = deps.getWindowContext || (() => null)
   const getDocumentContextByWindowId = deps.getDocumentContext || null
   const openDocumentWindow = deps.openDocumentWindow || null
