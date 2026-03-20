@@ -413,6 +413,76 @@ describe('documentSessionRuntime', () => {
     }))
   })
 
+  it('非状态 UI 命令只应向 effectService 暴露显式 effectContext，不再透传公共 winInfo', async () => {
+    const closeHostController = {
+      requestForceClose: vi.fn(),
+      continueWindowClose: vi.fn(),
+      finalizeWindowClose: vi.fn(),
+      getClosedManualRequestCompletions: vi.fn(() => []),
+    }
+    const externalWatchController = {
+      start: vi.fn(),
+      stop: vi.fn(),
+      getContext: vi.fn(() => ({
+        bindingToken: 11,
+        watchingPath: 'C:/docs/11.md',
+        shouldRebindAfterSave: false,
+      })),
+      markInternalSave: vi.fn(),
+      settlePendingChange: vi.fn(),
+      ignorePendingChange: vi.fn(),
+    }
+    const windowMessageController = {
+      publishWindowMessage: vi.fn(),
+      publishSnapshotChanged: vi.fn(),
+    }
+    const buildRunnerEffectContext = vi.fn(({ dispatchCommand, windowId }) => ({
+      closeHostController,
+      externalWatchController,
+      windowMessageController,
+      marker: `${windowId}:${typeof dispatchCommand}`,
+    }))
+    const effectService = {
+      executeCommand: vi.fn(async () => ({
+        ok: true,
+      })),
+    }
+    const runtime = createDocumentSessionRuntime({
+      ...createRequiredRuntimeDeps({
+        effectService,
+      }),
+      effectService,
+      buildRunnerEffectContext,
+      getWindowContext: vi.fn(windowId => ({
+        id: windowId,
+        win: {
+          id: windowId,
+          close: vi.fn(),
+        },
+      })),
+    })
+
+    await runtime.executeUiCommand(11, 'document.request-open-dialog', null)
+
+    expect(buildRunnerEffectContext).toHaveBeenCalledWith({
+      windowId: 11,
+      dispatchCommand: expect.any(Function),
+    })
+    const effectCommandCall = effectService.executeCommand.mock.calls[0]?.[0]
+    expect(effectCommandCall).toEqual(expect.objectContaining({
+      command: 'document.request-open-dialog',
+      payload: null,
+      dispatchCommand: expect.any(Function),
+      openDocumentWindow: expect.any(Function),
+      getSessionSnapshot: expect.any(Function),
+      closeHostController,
+      externalWatchController,
+      windowMessageController,
+      marker: '11:function',
+    }))
+    expect(effectCommandCall).not.toHaveProperty('winInfo')
+  })
+
   it('document.save / save-copy / document.edit 这类状态推进命令必须经 runtime 回流到真实 dispatch 链路', async () => {
     const { runtime, executeDocumentCommand, commandRunner } = createRuntimeContext()
 

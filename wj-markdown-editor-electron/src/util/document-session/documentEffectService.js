@@ -169,18 +169,6 @@ function getExternalChangeFallbackMessage(mode, documentPath) {
   }
 }
 
-function focusWindowFromNotification(win) {
-  if (!win || typeof win.isDestroyed === 'function' && win.isDestroyed()) {
-    return
-  }
-
-  if (typeof win.isMinimized === 'function' && win.isMinimized()) {
-    win.restore?.()
-  }
-  win.show?.()
-  win.focus?.()
-}
-
 /**
  * 主进程统一副作用层。
  *
@@ -267,7 +255,19 @@ export function createDocumentEffectService({
     return isAutoSave ? `自动保存失败。${errorDetail}` : `保存失败。${errorDetail}`
   }
 
-  function notifyExternalChange(effect, { winInfo, showWindowMessage }) {
+  function getExternalWatchContext(externalWatchController) {
+    return externalWatchController?.getContext?.() || {}
+  }
+
+  function shouldRebindExternalWatchAfterSave(externalWatchController) {
+    return getExternalWatchContext(externalWatchController)?.shouldRebindAfterSave === true
+  }
+
+  function publishWindowMessage(windowMessageController, data) {
+    return windowMessageController?.publishWindowMessage?.(data) || null
+  }
+
+  function notifyExternalChange(effect, { focusWindow, windowMessageController }) {
     const content = getExternalChangeNotificationContent({
       documentPath: effect?.documentPath || null,
       mode: effect?.mode || 'applied',
@@ -281,7 +281,7 @@ export function createDocumentEffectService({
           icon: notificationIconPath,
         })
         notification?.on?.('click', () => {
-          focusWindowFromNotification(winInfo?.win)
+          focusWindow?.()
         })
         notification?.show?.()
         return null
@@ -290,7 +290,7 @@ export function createDocumentEffectService({
       // 系统通知创建失败时，退回统一窗口消息，避免这类提示被静默吞掉。
     }
 
-    showWindowMessage?.(getExternalChangeFallbackMessage(
+    publishWindowMessage(windowMessageController, getExternalChangeFallbackMessage(
       effect?.mode || 'applied',
       effect?.documentPath || null,
     ))
@@ -310,7 +310,6 @@ export function createDocumentEffectService({
   async function executeCommand({
     command,
     payload,
-    winInfo,
     dispatchCommand,
     openDocumentWindow,
     getSessionSnapshot,
@@ -429,7 +428,7 @@ export function createDocumentEffectService({
       case 'document.get-session-snapshot':
         // effect 层对外暴露当前窗口对应的只读 snapshot。
         // 不直接返回 session 真相，避免调用方修改状态模型。
-        return getSessionSnapshot?.(winInfo) || null
+        return getSessionSnapshot?.() || null
 
       case 'recent.get-list':
         // recent 读取是纯同步视角，不做任何额外加工。
@@ -488,17 +487,15 @@ export function createDocumentEffectService({
    */
   async function applyEffect({
     effect,
-    winInfo: _winInfo,
     dispatchCommand,
     getSaveDialogTarget,
     getCopyDialogTarget,
-    continueWindowClose,
+    closeHostController,
     showUnsavedPrompt,
     showSaveFailedMessage,
-    showWindowMessage,
-    shouldRebindExternalWatchAfterSave,
-    getExternalWatchContext,
-    externalWatchBridge,
+    externalWatchController,
+    windowMessageController,
+    focusWindow,
   }) {
     if (!effect) {
       // 空 effect 直接忽略，保持调用方可以安全地按序执行返回列表。
@@ -552,19 +549,19 @@ export function createDocumentEffectService({
 
         // 某些场景下，保存成功后需要重绑 watcher。
         // 例如首次保存新文件时，监听目标路径可能已经发生变化。
-        if (shouldRebindExternalWatchAfterSave?.() === true) {
-          const watchContext = getExternalWatchContext?.() || {}
+        if (shouldRebindExternalWatchAfterSave(externalWatchController)) {
+          const watchContext = getExternalWatchContext(externalWatchController)
           const bindingToken = Number.isFinite(watchContext.bindingToken)
             ? watchContext.bindingToken
             : null
           const watchingPath = watchContext.watchingPath || effect.job.path
 
           try {
-            if (typeof externalWatchBridge?.start !== 'function') {
-              throw new TypeError('external watch bridge not configured')
+            if (typeof externalWatchController?.start !== 'function') {
+              throw new TypeError('external watch controller not configured')
             }
 
-            const rebindResult = await externalWatchBridge.start({
+            const rebindResult = await externalWatchController.start({
               bindingToken,
               watchingPath,
             })
@@ -575,7 +572,7 @@ export function createDocumentEffectService({
 
             // 成功重绑后，把这次写盘内容标记为内部写入，
             // 避免 watcher 立刻把刚刚自己的保存又识别成外部变更。
-            externalWatchBridge.markInternalSave?.(effect.job.content)
+            externalWatchController.markInternalSave?.(effect.job.content)
             await dispatchCommand?.('watch.bound', {
               bindingToken,
               watchingPath: rebindResult?.watchingPath || watchingPath,
@@ -657,7 +654,7 @@ export function createDocumentEffectService({
       case 'close-window':
         // 真正继续执行关闭窗口。
         // 命令层已经完成所有保存/确认裁决，这里只负责落地动作。
-        return await continueWindowClose?.()
+        return await closeHostController?.continueWindowClose?.()
 
       case 'notify-save-failed':
         // 统一展示保存失败消息，文案由 trigger 和语言配置共同决定。
@@ -669,13 +666,13 @@ export function createDocumentEffectService({
 
       case 'notify-watch-warning':
         // watcher 警告通过统一窗口消息入口展示。
-        showWindowMessage?.(getWatchWarningMessage(effect))
+        publishWindowMessage(windowMessageController, getWatchWarningMessage(effect))
         return null
 
       case 'notify-external-change':
         return notifyExternalChange(effect, {
-          winInfo: _winInfo,
-          showWindowMessage,
+          focusWindow,
+          windowMessageController,
         })
 
       case 'rebind-watch':
@@ -684,11 +681,11 @@ export function createDocumentEffectService({
           // 成功回流 watch.bound，失败回流 watch.rebind-failed。
           const watchingPath = effect.watchingPath || null
           try {
-            if (typeof externalWatchBridge?.start !== 'function') {
-              throw new TypeError('external watch bridge not configured')
+            if (typeof externalWatchController?.start !== 'function') {
+              throw new TypeError('external watch controller not configured')
             }
 
-            const rebindResult = await externalWatchBridge.start({
+            const rebindResult = await externalWatchController.start({
               bindingToken: effect.bindingToken,
               watchingPath,
             })

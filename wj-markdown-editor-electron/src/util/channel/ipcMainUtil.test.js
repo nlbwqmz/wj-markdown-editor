@@ -21,6 +21,7 @@ const {
   ipcMainHandle,
   ipcMainOn,
   openLocalResourceInFolder,
+  requestForceClose,
   runtimeExecuteSyncQuery,
   runtimeExecuteUiCommand,
   send,
@@ -47,6 +48,7 @@ const {
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
     openLocalResourceInFolder: vi.fn(),
+    requestForceClose: vi.fn(),
     runtimeExecuteSyncQuery: vi.fn(),
     runtimeExecuteUiCommand: vi.fn(),
     send: vi.fn(),
@@ -203,6 +205,7 @@ vi.mock('../document-session/windowLifecycleService.js', () => {
       executeCommand: vi.fn(),
       executeResourceCommand,
       executeResourceCommandSync,
+      requestForceClose,
       publishWindowMessage: vi.fn((winInfo, data) => {
         send(winInfo.win, {
           event: 'window.effect.message',
@@ -252,6 +255,7 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
     openLocalResourceInFolder.mockReset()
+    requestForceClose.mockReset()
     getDocumentSessionRuntime.mockReset()
     runtimeExecuteSyncQuery.mockReset()
     runtimeExecuteUiCommand.mockReset()
@@ -541,6 +545,7 @@ describe('ipcMainUtil sync comparable key', () => {
     fileUploadSave.mockReset()
     getLocalResourceComparableKey.mockReset()
     getDocumentSessionRuntime.mockReset()
+    requestForceClose.mockReset()
     imgUtilCheck.mockReset()
     imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
@@ -691,6 +696,7 @@ describe('ipcMainUtil save', () => {
     exportDoExport.mockReset()
     fileUploadSave.mockReset()
     getDocumentSessionRuntime.mockReset()
+    requestForceClose.mockReset()
     imgUtilCheck.mockReset()
     imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
@@ -740,6 +746,7 @@ describe('ipcMainUtil save', () => {
     const { default: winInfoUtil } = await import('../document-session/windowLifecycleService.js')
     winInfoUtil.getWinInfo.mockReset()
     winInfoUtil.executeCommand.mockReset()
+    winInfoUtil.requestForceClose.mockReset()
     winInfoUtil.updateTempContent.mockReset()
     winInfoUtil.getWinInfo.mockImplementation(() => ({
       id: 1,
@@ -812,6 +819,7 @@ describe('ipcMainUtil 工具模块参数组装', () => {
     fileUploadSave.mockReset()
     getDocumentSessionRuntime.mockReset()
     getWinInfoMock.mockReset()
+    requestForceClose.mockReset()
     imgUtilCheck.mockReset()
     imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
@@ -1058,6 +1066,7 @@ describe('ipcMainUtil command mapping', () => {
     exportDoExport.mockReset()
     fileUploadSave.mockReset()
     getDocumentSessionRuntime.mockReset()
+    requestForceClose.mockReset()
     imgUtilCheck.mockReset()
     imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
@@ -1436,6 +1445,30 @@ describe('ipcMainUtil command mapping', () => {
     expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(1, 1, 'document.cancel-close', null)
     expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(2, 1, 'document.confirm-force-close', null)
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+  })
+
+  it('force-close 必须委托 windowLifecycleService.requestForceClose，不能在 IPC 层直接改写 facade 状态', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    const close = vi.fn()
+    const winInfo = {
+      id: 1,
+      forceClose: false,
+      path: 'D:\\docs\\note.md',
+      exists: true,
+      tempContent: '# 导出内容',
+      win: { id: 1, close },
+    }
+    winInfoUtil.getWinInfo.mockImplementation(() => winInfo)
+
+    await sendToMainHandler({ sender }, {
+      event: 'force-close',
+      data: null,
+    })
+
+    expect(winInfoUtil.requestForceClose).toHaveBeenCalledWith(1)
+    expect(winInfo.forceClose).toBe(false)
+    expect(close).not.toHaveBeenCalled()
+    expect(runtimeExecuteUiCommand).not.toHaveBeenCalled()
   })
 
   it('document.edit 必须把结构化正文 payload 送入 runtime 命令流', async () => {

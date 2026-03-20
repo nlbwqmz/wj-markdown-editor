@@ -451,6 +451,66 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
   })
 
+  it('runtime host deps 构造 effectContext 时，必须只暴露显式 controller，不再暴露旧聚合宿主字段', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    const dispatchCommand = vi.fn()
+    const hostDeps = winInfoUtil.getDocumentSessionRuntimeHostDeps()
+    const effectContext = hostDeps.buildRunnerEffectContext({
+      windowId: winInfo.id,
+      dispatchCommand,
+    })
+
+    expect(effectContext).toEqual(expect.objectContaining({
+      dispatchCommand,
+      closeHostController: expect.objectContaining({
+        requestForceClose: expect.any(Function),
+        continueWindowClose: expect.any(Function),
+        finalizeWindowClose: expect.any(Function),
+        getClosedManualRequestCompletions: expect.any(Function),
+      }),
+      externalWatchController: expect.objectContaining({
+        start: expect.any(Function),
+        stop: expect.any(Function),
+        getContext: expect.any(Function),
+        markInternalSave: expect.any(Function),
+        settlePendingChange: expect.any(Function),
+        ignorePendingChange: expect.any(Function),
+      }),
+      windowMessageController: expect.objectContaining({
+        publishWindowMessage: expect.any(Function),
+        publishSnapshotChanged: expect.any(Function),
+      }),
+    }))
+    expect(effectContext).not.toHaveProperty('winInfo')
+    expect(effectContext).not.toHaveProperty('continueWindowClose')
+    expect(effectContext).not.toHaveProperty('showWindowMessage')
+    expect(effectContext).not.toHaveProperty('externalWatchBridge')
+    expect(effectContext).not.toHaveProperty('getExternalWatchContext')
+  })
+
+  it('requestForceClose 必须先标记 forceClose 再触发原生 close，保持 confirm-force-close 的关闭时序', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+
+    expect(winInfoUtil.requestForceClose(winInfo.id)).toBe(true)
+    expect(winInfo.forceClose).toBe(true)
+    expect(winInfo.win.closeEvents).toHaveLength(1)
+    expect(winInfo.win.closeEvents[0].preventDefault).not.toHaveBeenCalled()
+
+    await vi.waitFor(() => {
+      expect(winInfoUtil.getAll()).toHaveLength(0)
+    })
+  })
+
   it('只读窗口查询接口必须只暴露窗口对象、窗口身份和文档上下文，不带 facade 宿主状态', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')

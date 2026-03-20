@@ -313,6 +313,12 @@ export function createDocumentSessionRuntime(deps = {}) {
     }) || null
   }
 
+  function createUiDispatchCommand(windowId) {
+    return (nextCommand, nextPayload) => {
+      return executeUiCommand(windowId, nextCommand, nextPayload)
+    }
+  }
+
   async function dispatch(windowId, command, payload, options = {}) {
     return await commandRunner.run({
       windowId,
@@ -349,16 +355,12 @@ export function createDocumentSessionRuntime(deps = {}) {
 
   function executeUiCommand(windowId, command, payload) {
     const normalizedWindowId = isValidWindowId(windowId) ? windowId : null
-    const winInfo = normalizedWindowId == null
-      ? null
-      : getWindowContext(normalizedWindowId)
     if (normalizedWindowId != null && DOCUMENT_STATE_COMMAND_SET.has(command)) {
       return executeDocumentCommand({
         windowId: normalizedWindowId,
         command,
         payload,
         runtime: runtimeApi,
-        winInfo,
       })
     }
 
@@ -370,13 +372,18 @@ export function createDocumentSessionRuntime(deps = {}) {
       })
     }
 
+    const dispatchCommand = createUiDispatchCommand(normalizedWindowId)
+    const effectContext = normalizedWindowId == null
+      ? {}
+      : buildRunnerEffectContext({
+          windowId: normalizedWindowId,
+          dispatchCommand,
+        })
+
     return Promise.resolve(effectService.executeCommand({
       command,
       payload,
-      winInfo,
-      dispatchCommand: (nextCommand, nextPayload) => {
-        return executeUiCommand(normalizedWindowId, nextCommand, nextPayload)
-      },
+      dispatchCommand,
       openDocumentWindow: (targetPath, options = {}) => {
         return openDocumentWindowWithRuntimePolicy({
           targetPath,
@@ -390,6 +397,7 @@ export function createDocumentSessionRuntime(deps = {}) {
         })
       },
       getSessionSnapshot: () => getSessionSnapshot(normalizedWindowId),
+      ...effectContext,
     })).then(result => normalizeEffectCommandResult(
       normalizedWindowId,
       command,

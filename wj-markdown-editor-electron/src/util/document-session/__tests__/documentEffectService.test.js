@@ -59,6 +59,36 @@ async function createServiceContext() {
   }
 }
 
+function createEffectHostControllers(overrides = {}) {
+  return {
+    closeHostController: {
+      requestForceClose: vi.fn(),
+      continueWindowClose: vi.fn(async () => true),
+      finalizeWindowClose: vi.fn(),
+      getClosedManualRequestCompletions: vi.fn(() => []),
+      ...overrides.closeHostController,
+    },
+    externalWatchController: {
+      start: vi.fn(),
+      stop: vi.fn(),
+      getContext: vi.fn(() => ({
+        bindingToken: null,
+        watchingPath: null,
+        shouldRebindAfterSave: false,
+      })),
+      markInternalSave: vi.fn(),
+      settlePendingChange: vi.fn(),
+      ignorePendingChange: vi.fn(),
+      ...overrides.externalWatchController,
+    },
+    windowMessageController: {
+      publishWindowMessage: vi.fn(),
+      publishSnapshotChanged: vi.fn(),
+      ...overrides.windowMessageController,
+    },
+  }
+}
+
 describe('documentEffectService', () => {
   it('document.request-open-dialog 选中文件时，必须通过 dialog.open-target-selected 回流', async () => {
     const { service, dialogApi } = await createServiceContext()
@@ -360,6 +390,7 @@ describe('documentEffectService', () => {
   it('writeFile 已成功时，即使 recent.add 失败，也必须继续回流 save.succeeded，不能把真实保存误判成失败', async () => {
     const { service, fsModule, recentStore } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({})
+    const { externalWatchController } = createEffectHostControllers()
 
     fsModule.writeFile.mockResolvedValue(undefined)
     recentStore.add.mockRejectedValue(new Error('recent store unavailable'))
@@ -376,7 +407,7 @@ describe('documentEffectService', () => {
         },
       },
       dispatchCommand,
-      shouldRebindExternalWatchAfterSave: () => false,
+      externalWatchController,
     })
 
     expect(dispatchCommand).toHaveBeenNthCalledWith(1, 'save.started', {
@@ -396,6 +427,7 @@ describe('documentEffectService', () => {
     const { service, fsModule, recentStore } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({})
     const recentDeferred = createDeferred()
+    const { externalWatchController } = createEffectHostControllers()
 
     fsModule.writeFile.mockResolvedValue(undefined)
     recentStore.add.mockReturnValue(recentDeferred.promise)
@@ -412,7 +444,7 @@ describe('documentEffectService', () => {
         },
       },
       dispatchCommand,
-      shouldRebindExternalWatchAfterSave: () => false,
+      externalWatchController,
     })
 
     await vi.waitFor(() => {
@@ -428,16 +460,33 @@ describe('documentEffectService', () => {
     expect(dispatchCommand.mock.calls.some(call => call[0] === 'save.failed')).toBe(false)
   })
 
+  it('close-window effect 必须通过 closeHostController.continueWindowClose 落地，不能继续消费旧宿主字段', async () => {
+    const { service } = await createServiceContext()
+    const { closeHostController } = createEffectHostControllers()
+
+    await service.applyEffect({
+      effect: {
+        type: 'close-window',
+      },
+      closeHostController,
+    })
+
+    expect(closeHostController.continueWindowClose).toHaveBeenCalledTimes(1)
+  })
+
   it('execute-save 内嵌 watcher 重绑失败时，必须回流 watch.rebind-failed，不能把已成功写盘升级成副作用异常', async () => {
     const { service, fsModule } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({})
-    const externalWatchBridge = {
-      start: vi.fn().mockRejectedValue(new Error('watch bind failed')),
-    }
-    const getExternalWatchContext = vi.fn(() => ({
-      bindingToken: 7,
-      watchingPath: 'C:/docs/demo.md',
-    }))
+    const { externalWatchController } = createEffectHostControllers({
+      externalWatchController: {
+        start: vi.fn().mockRejectedValue(new Error('watch bind failed')),
+        getContext: vi.fn(() => ({
+          bindingToken: 7,
+          watchingPath: 'C:/docs/demo.md',
+          shouldRebindAfterSave: true,
+        })),
+      },
+    })
 
     fsModule.writeFile.mockResolvedValue(undefined)
     await expect(service.applyEffect({
@@ -452,9 +501,7 @@ describe('documentEffectService', () => {
         },
       },
       dispatchCommand,
-      shouldRebindExternalWatchAfterSave: () => true,
-      externalWatchBridge,
-      getExternalWatchContext,
+      externalWatchController,
     })).resolves.toBeNull()
 
     expect(dispatchCommand).toHaveBeenNthCalledWith(1, 'save.started', {
@@ -479,18 +526,20 @@ describe('documentEffectService', () => {
   it('execute-save 内嵌重绑成功时，也必须回流 watch.bound，避免会话残留假活跃 watcher 状态', async () => {
     const { service, fsModule } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({})
-    const externalWatchBridge = {
-      start: vi.fn().mockResolvedValue({
-        ok: true,
-        watchingPath: 'C:/docs/demo.md',
-        watchingDirectoryPath: 'C:/docs',
-      }),
-      markInternalSave: vi.fn(),
-    }
-    const getExternalWatchContext = vi.fn(() => ({
-      bindingToken: 8,
-      watchingPath: 'C:/docs/demo.md',
-    }))
+    const { externalWatchController } = createEffectHostControllers({
+      externalWatchController: {
+        start: vi.fn().mockResolvedValue({
+          ok: true,
+          watchingPath: 'C:/docs/demo.md',
+          watchingDirectoryPath: 'C:/docs',
+        }),
+        getContext: vi.fn(() => ({
+          bindingToken: 8,
+          watchingPath: 'C:/docs/demo.md',
+          shouldRebindAfterSave: true,
+        })),
+      },
+    })
 
     fsModule.writeFile.mockResolvedValue(undefined)
 
@@ -506,9 +555,7 @@ describe('documentEffectService', () => {
         },
       },
       dispatchCommand,
-      shouldRebindExternalWatchAfterSave: () => true,
-      externalWatchBridge,
-      getExternalWatchContext,
+      externalWatchController,
     })
 
     expect(dispatchCommand).toHaveBeenCalledWith('watch.bound', {
@@ -516,13 +563,13 @@ describe('documentEffectService', () => {
       watchingPath: 'C:/docs/demo.md',
       watchingDirectoryPath: 'C:/docs',
     })
-    expect(externalWatchBridge.markInternalSave).toHaveBeenCalledWith('# demo')
+    expect(externalWatchController.markInternalSave).toHaveBeenCalledWith('# demo')
     expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.rebind-failed')).toBe(false)
   })
 
   it('notify-watch-warning 必须回流统一消息出口，而不是被 applyEffect 静默吞掉', async () => {
     const { service } = await createServiceContext()
-    const showWindowMessage = vi.fn()
+    const { windowMessageController } = createEffectHostControllers()
 
     await service.applyEffect({
       effect: {
@@ -535,10 +582,10 @@ describe('documentEffectService', () => {
           code: 'EIO',
         },
       },
-      showWindowMessage,
+      windowMessageController,
     })
 
-    expect(showWindowMessage).toHaveBeenCalledWith({
+    expect(windowMessageController.publishWindowMessage).toHaveBeenCalledWith({
       type: 'warning',
       content: 'message.fileExternalChangeReadFailed',
     })
@@ -546,13 +593,11 @@ describe('documentEffectService', () => {
 
   it('notify-external-change 在系统通知可用时，必须弹出系统通知而不是退回窗口消息', async () => {
     const { service, notificationApi, showMock } = await createServiceContext()
-    const showWindowMessage = vi.fn()
+    const { windowMessageController } = createEffectHostControllers()
     const notificationInstance = {
       on: vi.fn(),
       show: vi.fn(),
     }
-    const restore = vi.fn()
-    const focus = vi.fn()
 
     notificationApi.isSupported.mockReturnValue(true)
     showMock.mockReturnValue(notificationInstance)
@@ -563,16 +608,7 @@ describe('documentEffectService', () => {
         mode: 'applied',
         documentPath: 'C:/docs/demo.md',
       },
-      winInfo: {
-        win: {
-          isDestroyed: () => false,
-          isMinimized: () => true,
-          restore,
-          show: vi.fn(),
-          focus,
-        },
-      },
-      showWindowMessage,
+      windowMessageController,
     })
 
     expect(showMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -581,12 +617,12 @@ describe('documentEffectService', () => {
     }))
     expect(notificationInstance.on).toHaveBeenCalledWith('click', expect.any(Function))
     expect(notificationInstance.show).toHaveBeenCalledTimes(1)
-    expect(showWindowMessage).not.toHaveBeenCalled()
+    expect(windowMessageController.publishWindowMessage).not.toHaveBeenCalled()
   })
 
   it('notify-external-change 在系统通知不可用时，必须退回统一窗口消息出口', async () => {
     const { service, notificationApi, showMock } = await createServiceContext()
-    const showWindowMessage = vi.fn()
+    const { windowMessageController } = createEffectHostControllers()
 
     notificationApi.isSupported.mockReturnValue(false)
 
@@ -596,11 +632,11 @@ describe('documentEffectService', () => {
         mode: 'applied',
         documentPath: 'C:/docs/demo.md',
       },
-      showWindowMessage,
+      windowMessageController,
     })
 
     expect(showMock).not.toHaveBeenCalled()
-    expect(showWindowMessage).toHaveBeenCalledWith({
+    expect(windowMessageController.publishWindowMessage).toHaveBeenCalledWith({
       type: 'info',
       content: 'message.fileExternalChangeAutoApplied',
     })
@@ -608,7 +644,7 @@ describe('documentEffectService', () => {
 
   it('notify-external-change(prompt) 在系统通知可用时，必须弹出“待处理”系统通知', async () => {
     const { service, notificationApi, showMock } = await createServiceContext()
-    const showWindowMessage = vi.fn()
+    const { windowMessageController } = createEffectHostControllers()
     const notificationInstance = {
       on: vi.fn(),
       show: vi.fn(),
@@ -623,15 +659,7 @@ describe('documentEffectService', () => {
         mode: 'prompt',
         documentPath: 'C:/docs/demo.md',
       },
-      winInfo: {
-        win: {
-          isDestroyed: () => false,
-          isMinimized: () => false,
-          show: vi.fn(),
-          focus: vi.fn(),
-        },
-      },
-      showWindowMessage,
+      windowMessageController,
     })
 
     expect(showMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -639,12 +667,12 @@ describe('documentEffectService', () => {
       body: expect.stringContaining('检测到文件被外部修改，请返回编辑器查看并处理。'),
     }))
     expect(notificationInstance.show).toHaveBeenCalledTimes(1)
-    expect(showWindowMessage).not.toHaveBeenCalled()
+    expect(windowMessageController.publishWindowMessage).not.toHaveBeenCalled()
   })
 
   it('notify-external-change(prompt) 在系统通知不可用时，必须退回本地化提示文案', async () => {
     const { service, notificationApi, showMock } = await createServiceContext()
-    const showWindowMessage = vi.fn()
+    const { windowMessageController } = createEffectHostControllers()
 
     notificationApi.isSupported.mockReturnValue(false)
 
@@ -654,11 +682,11 @@ describe('documentEffectService', () => {
         mode: 'prompt',
         documentPath: 'C:/docs/demo.md',
       },
-      showWindowMessage,
+      windowMessageController,
     })
 
     expect(showMock).not.toHaveBeenCalled()
-    expect(showWindowMessage).toHaveBeenCalledWith({
+    expect(windowMessageController.publishWindowMessage).toHaveBeenCalledWith({
       type: 'info',
       content: expect.stringContaining('检测到文件被外部修改，请返回编辑器查看并处理。'),
     })
@@ -666,7 +694,7 @@ describe('documentEffectService', () => {
 
   it('notify-external-change(missing) 在系统通知可用时，必须弹出带文件路径的缺失通知', async () => {
     const { service, notificationApi, showMock } = await createServiceContext()
-    const showWindowMessage = vi.fn()
+    const { windowMessageController } = createEffectHostControllers()
     const notificationInstance = {
       on: vi.fn(),
       show: vi.fn(),
@@ -681,15 +709,7 @@ describe('documentEffectService', () => {
         mode: 'missing',
         documentPath: 'C:/docs/demo.md',
       },
-      winInfo: {
-        win: {
-          isDestroyed: () => false,
-          isMinimized: () => false,
-          show: vi.fn(),
-          focus: vi.fn(),
-        },
-      },
-      showWindowMessage,
+      windowMessageController,
     })
 
     expect(showMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -697,12 +717,12 @@ describe('documentEffectService', () => {
       body: expect.stringContaining('路径：C:/docs/demo.md'),
     }))
     expect(notificationInstance.show).toHaveBeenCalledTimes(1)
-    expect(showWindowMessage).not.toHaveBeenCalled()
+    expect(windowMessageController.publishWindowMessage).not.toHaveBeenCalled()
   })
 
   it('notify-external-change(missing) 在系统通知不可用时，必须退回带文件路径的窗口消息', async () => {
     const { service, notificationApi, showMock } = await createServiceContext()
-    const showWindowMessage = vi.fn()
+    const { windowMessageController } = createEffectHostControllers()
 
     notificationApi.isSupported.mockReturnValue(false)
 
@@ -712,11 +732,11 @@ describe('documentEffectService', () => {
         mode: 'missing',
         documentPath: 'C:/docs/demo.md',
       },
-      showWindowMessage,
+      windowMessageController,
     })
 
     expect(showMock).not.toHaveBeenCalled()
-    expect(showWindowMessage).toHaveBeenCalledWith({
+    expect(windowMessageController.publishWindowMessage).toHaveBeenCalledWith({
       type: 'info',
       content: expect.stringContaining('路径：C:/docs/demo.md'),
     })
@@ -725,13 +745,15 @@ describe('documentEffectService', () => {
   it('rebind-watch 必须启动新的 watcher 绑定，并在成功后回流 watch.bound', async () => {
     const { service } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
-    const externalWatchBridge = {
-      start: vi.fn().mockResolvedValue({
-        ok: true,
-        watchingPath: 'C:/docs/demo.md',
-        watchingDirectoryPath: 'C:/docs',
-      }),
-    }
+    const { externalWatchController } = createEffectHostControllers({
+      externalWatchController: {
+        start: vi.fn().mockResolvedValue({
+          ok: true,
+          watchingPath: 'C:/docs/demo.md',
+          watchingDirectoryPath: 'C:/docs',
+        }),
+      },
+    })
 
     await service.applyEffect({
       effect: {
@@ -740,10 +762,10 @@ describe('documentEffectService', () => {
         watchingPath: 'C:/docs/demo.md',
       },
       dispatchCommand,
-      externalWatchBridge,
+      externalWatchController,
     })
 
-    expect(externalWatchBridge.start).toHaveBeenCalledWith({
+    expect(externalWatchController.start).toHaveBeenCalledWith({
       bindingToken: 2,
       watchingPath: 'C:/docs/demo.md',
     })
@@ -759,9 +781,11 @@ describe('documentEffectService', () => {
   it('rebind-watch 如果重新绑定失败，必须回流 watch.rebind-failed', async () => {
     const { service } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
-    const externalWatchBridge = {
-      start: vi.fn().mockRejectedValue(new Error('watch crashed')),
-    }
+    const { externalWatchController } = createEffectHostControllers({
+      externalWatchController: {
+        start: vi.fn().mockRejectedValue(new Error('watch crashed')),
+      },
+    })
 
     await service.applyEffect({
       effect: {
@@ -770,7 +794,7 @@ describe('documentEffectService', () => {
         watchingPath: 'C:/docs/demo.md',
       },
       dispatchCommand,
-      externalWatchBridge,
+      externalWatchController,
     })
 
     expect(dispatchCommand).toHaveBeenCalledWith('watch.rebind-failed', {
@@ -788,12 +812,14 @@ describe('documentEffectService', () => {
   it('rebind-watch 在 startExternalWatch 显式返回 ok=false 时，也必须回流 watch.rebind-failed', async () => {
     const { service } = await createServiceContext()
     const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
-    const externalWatchBridge = {
-      start: vi.fn().mockResolvedValue({
-        ok: false,
-        error: new Error('watch path missing'),
-      }),
-    }
+    const { externalWatchController } = createEffectHostControllers({
+      externalWatchController: {
+        start: vi.fn().mockResolvedValue({
+          ok: false,
+          error: new Error('watch path missing'),
+        }),
+      },
+    })
 
     await service.applyEffect({
       effect: {
@@ -802,7 +828,7 @@ describe('documentEffectService', () => {
         watchingPath: 'C:/docs/demo.md',
       },
       dispatchCommand,
-      externalWatchBridge,
+      externalWatchController,
     })
 
     expect(dispatchCommand).toHaveBeenCalledWith('watch.rebind-failed', {

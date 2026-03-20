@@ -719,6 +719,17 @@ async function continueWindowClose(winInfo) {
   return true
 }
 
+function requestForceClose(windowId) {
+  const winInfo = getWinInfo(windowId)
+  if (!winInfo || !isWindowAlive(winInfo.win)) {
+    return false
+  }
+
+  winInfo.forceClose = true
+  winInfo.win.close()
+  return true
+}
+
 function dispatchCommandStateOnly(winInfo, command, payload, options = {}) {
   if (!winInfo) {
     return null
@@ -806,13 +817,69 @@ function getExternalWatchContext(winInfo) {
   }
 }
 
+function focusWindow(winInfo) {
+  if (!isWindowAlive(winInfo?.win)) {
+    return false
+  }
+
+  if (typeof winInfo.win.isMinimized === 'function' && winInfo.win.isMinimized()) {
+    winInfo.win.restore?.()
+  }
+  winInfo.win.show?.()
+  winInfo.win.focus?.()
+  return true
+}
+
+function createCloseHostController(winInfo) {
+  return {
+    requestForceClose: () => requestForceClose(winInfo?.id || null),
+    continueWindowClose: () => continueWindowClose(winInfo),
+    finalizeWindowClose: () => finalizeWindowClose(winInfo, winInfo?.id),
+    getClosedManualRequestCompletions: () => {
+      return Array.isArray(winInfo?.lastClosedManualRequestCompletions)
+        ? [...winInfo.lastClosedManualRequestCompletions]
+        : []
+    },
+  }
+}
+
+function createExternalWatchController(winInfo) {
+  return {
+    start: (options = {}) => startExternalWatch(winInfo, options),
+    stop: () => stopExternalWatch(winInfo),
+    getContext: () => ({
+      ...getExternalWatchContext(winInfo),
+      shouldRebindAfterSave: shouldRebindExternalWatchAfterSave(winInfo),
+    }),
+    markInternalSave: content => getExternalWatchBridge(winInfo)?.markInternalSave?.(content),
+    settlePendingChange: versionHash => getExternalWatchBridge(winInfo)?.settlePendingChange?.(versionHash),
+    ignorePendingChange: () => getExternalWatchBridge(winInfo)?.ignorePendingChange?.(),
+  }
+}
+
+function createWindowMessageController(winInfo) {
+  return {
+    publishWindowMessage: (data) => {
+      if (isWindowAlive(winInfo?.win)) {
+        return publishWindowMessage(winInfo, data)
+      }
+      return null
+    },
+    publishSnapshotChanged: (snapshot) => {
+      if (winInfo?.id) {
+        return publishSnapshotChanged(winInfo, snapshot)
+      }
+      return null
+    },
+  }
+}
+
 function buildEffectContextForWindow(winInfo, { dispatchCommand }) {
   return {
-    winInfo,
     dispatchCommand,
     getSaveDialogTarget,
     getCopyDialogTarget,
-    continueWindowClose: () => continueWindowClose(winInfo),
+    closeHostController: createCloseHostController(winInfo),
     // 关闭确认态已经通过 snapshot.closePrompt 推送给 renderer，
     // 不再补发无消费者的 legacy `unsaved` 事件。
     showUnsavedPrompt: () => {},
@@ -821,14 +888,9 @@ function buildEffectContextForWindow(winInfo, { dispatchCommand }) {
         publishWindowMessage(winInfo, data)
       }
     },
-    showWindowMessage: (data) => {
-      if (isWindowAlive(winInfo?.win)) {
-        publishWindowMessage(winInfo, data)
-      }
-    },
-    shouldRebindExternalWatchAfterSave: () => shouldRebindExternalWatchAfterSave(winInfo),
-    getExternalWatchContext: () => getExternalWatchContext(winInfo),
-    externalWatchBridge: getExternalWatchBridge(winInfo),
+    externalWatchController: createExternalWatchController(winInfo),
+    windowMessageController: createWindowMessageController(winInfo),
+    focusWindow: () => focusWindow(winInfo),
   }
 }
 
@@ -1364,6 +1426,7 @@ Object.assign(windowLifecycleService, {
   updateTempContent,
   startExternalWatch,
   stopExternalWatch,
+  requestForceClose,
 })
 
 export default windowLifecycleService
