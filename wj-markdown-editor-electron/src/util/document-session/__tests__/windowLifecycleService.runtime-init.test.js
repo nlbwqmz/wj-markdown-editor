@@ -9,6 +9,7 @@ const {
   createSaveCoordinator,
   createWindowSessionBridge,
   getDocumentSessionRuntime,
+  initializeDocumentSessionRuntime,
   ipcMainHandle,
   ipcMainOn,
 } = vi.hoisted(() => {
@@ -53,6 +54,9 @@ const {
     createDocumentResourceService: vi.fn(() => resourceService),
     getDocumentSessionRuntime: vi.fn(() => {
       throw new Error('导入阶段不应访问 runtime 单例')
+    }),
+    initializeDocumentSessionRuntime: vi.fn(() => {
+      throw new Error('不应自举 runtime')
     }),
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
@@ -177,6 +181,7 @@ vi.mock('../windowSessionBridge.js', () => {
 vi.mock('../documentSessionRuntime.js', () => {
   return {
     getDocumentSessionRuntime,
+    initializeDocumentSessionRuntime,
   }
 })
 
@@ -281,6 +286,7 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     createWindowSessionBridge.mockClear()
     createDocumentResourceService.mockClear()
     getDocumentSessionRuntime.mockClear()
+    initializeDocumentSessionRuntime.mockClear()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
   })
@@ -316,5 +322,15 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     await import('../windowLifecycleService.js')
 
     expect(getDocumentSessionRuntime).not.toHaveBeenCalled()
+  })
+
+  it('未显式初始化 runtime 时，windowLifecycleService.createNew 必须直接失败，不能在内部自举 runtime', async () => {
+    getDocumentSessionRuntime.mockImplementation(() => {
+      throw new Error('document session runtime 尚未初始化')
+    })
+    const moduleNs = await import('../windowLifecycleService.js')
+
+    await expect(moduleNs.default.createNew(null)).rejects.toThrow('document session runtime 尚未初始化')
+    expect(initializeDocumentSessionRuntime).not.toHaveBeenCalled()
   })
 })

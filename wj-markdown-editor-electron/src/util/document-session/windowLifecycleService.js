@@ -18,11 +18,9 @@ import {
 } from './documentSessionFactory.js'
 import {
   getDocumentSessionRuntime,
-  initializeDocumentSessionRuntime,
   normalizeOpenCommandResult,
   openDocumentWindowWithRuntimePolicy,
 } from './documentSessionRuntime.js'
-import { createDocumentSessionRuntimeComposition } from './documentSessionRuntimeComposition.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 import { createExternalWatchBridge } from './externalWatchBridge.js'
 
@@ -139,29 +137,8 @@ export function getDocumentSessionRuntimeHostDeps() {
   return buildRuntimeHostDeps()
 }
 
-function initializeLifecycleRuntimeFallback() {
-  return initializeDocumentSessionRuntime({
-    ...createDocumentSessionRuntimeComposition({
-      registry: getWindowRegistry(),
-      getConfig: () => configUtil.getConfig(),
-      recentStore: recent,
-      sendToRenderer: (win, payload) => {
-        sendUtil.send(win, payload)
-      },
-      showItemInFolder: shell.showItemInFolder,
-    }),
-    ...buildRuntimeHostDeps(),
-  })
-}
-
 function ensureSessionRuntimeInitialized() {
-  try {
-    return getDocumentSessionRuntime()
-  } catch {
-    // 主入口会显式 initialize runtime；这里只给仍直接使用 lifecycle facade 的旧测试/链路保留惰性兜底，
-    // 避免把组合根迁移和后续命令收口改造耦合在同一轮里。
-    return initializeLifecycleRuntimeFallback()
-  }
+  return getDocumentSessionRuntime()
 }
 
 function deleteEditorWin(id) {

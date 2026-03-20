@@ -220,7 +220,40 @@ vi.mock('../../updateUtil.js', () => ({
   },
 }))
 
+const {
+  initializeDocumentSessionRuntime,
+  resetDocumentSessionRuntime,
+} = await import('../documentSessionRuntime.js')
+const {
+  createDocumentSessionRuntimeComposition,
+} = await import('../documentSessionRuntimeComposition.js')
+const {
+  createWindowRegistry,
+} = await import('../windowRegistry.js')
 const { default: winInfoUtil } = await import('../windowLifecycleService.js')
+
+function initializeRuntimeForWindowLifecycleTests() {
+  const registry = createWindowRegistry()
+  winInfoUtil.setWindowRegistry(registry)
+  initializeDocumentSessionRuntime({
+    ...createDocumentSessionRuntimeComposition({
+      registry,
+      getConfig: () => getConfigMock(),
+      recentStore: {
+        add: recentAddMock,
+        clear: vi.fn(),
+        remove: vi.fn(),
+        get: vi.fn(() => []),
+        setMax: vi.fn(),
+      },
+      sendToRenderer: (win, payload) => {
+        sendMock(win, payload)
+      },
+      showItemInFolder: showItemInFolderMock,
+    }),
+    ...winInfoUtil.getDocumentSessionRuntimeHostDeps(),
+  })
+}
 
 function expectDocumentContent(winInfo, content) {
   expect(winInfoUtil.getDocumentContext(winInfo).content).toBe(content)
@@ -277,6 +310,7 @@ async function emitWatchRestored(winInfo, diskContent, {
 
 describe('windowLifecycleService 生命周期 facade', () => {
   beforeEach(() => {
+    resetDocumentSessionRuntime()
     sendMock.mockReset()
     writeFileMock.mockReset()
     readFileMock.mockReset()
@@ -306,6 +340,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     browserWindowInstances.length = 0
     webContentsId = 1
     winInfoUtil.getAll().length = 0
+    initializeRuntimeForWindowLifecycleTests()
   })
 
   it('window.blur 触发自动保存时，必须复用统一保存管线且不发送成功提示', async () => {
