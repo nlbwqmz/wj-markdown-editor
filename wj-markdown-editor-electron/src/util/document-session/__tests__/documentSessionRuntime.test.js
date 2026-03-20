@@ -7,6 +7,20 @@ import {
   resetDocumentSessionRuntime,
 } from '../documentSessionRuntime.js'
 
+function createDeferred() {
+  let resolve
+  let reject
+  const promise = new Promise((resolveInner, rejectInner) => {
+    resolve = resolveInner
+    reject = rejectInner
+  })
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
 function createRuntimeContext() {
   const windowContextMap = new Map()
 
@@ -218,6 +232,101 @@ describe('documentSessionRuntime', () => {
       runtime,
     }))
     expect(commandRunner.run).toHaveBeenCalledTimes(3)
+  })
+
+  it('document.edit 作为 runtime UI 命令必须等待最终快照 ready 后再返回，随后 get-session-snapshot 也要读到同一 revision', async () => {
+    const dispatchDeferred = createDeferred()
+    let currentSnapshot = {
+      sessionId: 'session-6',
+      content: '# 原始内容',
+      saved: false,
+      revision: 0,
+    }
+    const effectService = {
+      executeCommand: vi.fn(async ({
+        command,
+        getSessionSnapshot,
+      }) => {
+        if (command === 'document.get-session-snapshot') {
+          return getSessionSnapshot()
+        }
+        return {
+          ok: true,
+        }
+      }),
+    }
+    const executeDocumentCommand = vi.fn(async ({
+      payload,
+    }) => {
+      await dispatchDeferred.promise
+      currentSnapshot = {
+        ...currentSnapshot,
+        content: payload.content,
+        revision: 1,
+      }
+      return {
+        snapshot: currentSnapshot,
+        effects: [],
+      }
+    })
+    const runtime = createDocumentSessionRuntime({
+      effectService,
+      executeDocumentCommand,
+      windowBridge: {
+        getSessionSnapshot: vi.fn(() => currentSnapshot),
+        publishMessage: vi.fn(),
+        publishRecentListChanged: vi.fn(recentList => recentList),
+      },
+      getWindowContext: vi.fn(windowId => ({
+        id: windowId,
+        win: {
+          id: windowId,
+          close: vi.fn(),
+        },
+      })),
+      getDocumentContext: vi.fn(() => ({
+        path: 'C:/docs/demo.md',
+        exists: true,
+        content: currentSnapshot.content,
+        saved: false,
+        fileName: 'demo.md',
+      })),
+    })
+
+    let editResolved = false
+    const editPromise = runtime.executeUiCommand(6, 'document.edit', {
+      content: '# 最终正文',
+    }).then((result) => {
+      editResolved = true
+      return result
+    })
+
+    await Promise.resolve()
+
+    expect(editResolved).toBe(false)
+    expect(runtime.getSessionSnapshot(6)).toEqual({
+      sessionId: 'session-6',
+      content: '# 原始内容',
+      saved: false,
+      revision: 0,
+    })
+
+    dispatchDeferred.resolve()
+    const editResult = await editPromise
+    const snapshot = await runtime.executeUiCommand(6, 'document.get-session-snapshot', null)
+
+    expect(editResult.snapshot.content).toBe('# 最终正文')
+    expect(editResult.snapshot.revision).toBe(1)
+    expect(snapshot.content).toBe('# 最终正文')
+    expect(snapshot.revision).toBe(1)
+    expect(executeDocumentCommand).toHaveBeenCalledWith(expect.objectContaining({
+      windowId: 6,
+      command: 'document.edit',
+      payload: {
+        content: '# 最终正文',
+      },
+      runtime,
+    }))
   })
 
   it('document.request-close 必须返回统一命令链路的结构化结果，且不能继续落到 effectService', async () => {

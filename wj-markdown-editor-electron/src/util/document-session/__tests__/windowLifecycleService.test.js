@@ -338,55 +338,6 @@ describe('windowLifecycleService 生命周期 facade', () => {
       && call[1]?.data?.type === 'success')).toBe(false)
   })
 
-  it('runtime 里的 document.edit 必须等待 dispatch 完成后再返回，随后 get-session-snapshot 才能读到最终 revision', async () => {
-    pathExistsMock.mockResolvedValue(true)
-    readFileMock.mockResolvedValue('# 原始内容')
-
-    await winInfoUtil.createNew('D:/demo.md')
-
-    const [winInfo] = winInfoUtil.getAll()
-    const lifecycleRuntime = winInfoUtil.initializeSessionRuntime()
-    const dispatchDeferred = createDeferred()
-    let editResolved = false
-    const runtime = {
-      dispatch: vi.fn(async (windowId, command, payload, options) => {
-        await dispatchDeferred.promise
-        return await winInfoUtil.executeCommand(winInfo, command, payload, options)
-      }),
-    }
-
-    const editPromise = lifecycleRuntime.executeDocumentCommand({
-      windowId: winInfo.id,
-      command: 'document.edit',
-      payload: {
-        content: '# 最终正文',
-      },
-      runtime,
-    }).then((result) => {
-      editResolved = true
-      return result
-    })
-
-    await Promise.resolve()
-
-    expect(editResolved).toBe(false)
-    expect(winInfoUtil.getDocumentContext(winInfo).content).toBe('# 原始内容')
-
-    dispatchDeferred.resolve()
-    const editResult = await editPromise
-    const snapshot = await winInfoUtil.executeCommand(winInfo, 'document.get-session-snapshot')
-
-    expect(runtime.dispatch).toHaveBeenCalledWith(winInfo.id, 'document.edit', {
-      content: '# 最终正文',
-    }, {
-      publishSnapshotChanged: 'always',
-    })
-    expect(editResult.snapshot.content).toBe('# 最终正文')
-    expect(editResult.snapshot.revision).toBe(1)
-    expect(snapshot.content).toBe('# 最终正文')
-    expect(snapshot.revision).toBe(1)
-  })
-
   it('关闭请求命中 autoSave=close 且已有有效路径时，应走统一保存管线并在成功后关闭窗口', async () => {
     const saveDeferred = createDeferred()
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startPage: 'editor' })
