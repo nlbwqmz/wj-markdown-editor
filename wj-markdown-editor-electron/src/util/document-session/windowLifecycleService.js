@@ -1031,16 +1031,7 @@ function getSessionSnapshot(winInfo) {
 }
 
 function resolveDocumentContextTarget(target) {
-  const windowInfo = getWinInfo(target)
-  if (windowInfo) {
-    return windowInfo
-  }
-
-  if (target && typeof target === 'object' && 'id' in target && 'win' in target) {
-    return target
-  }
-
-  return null
+  return getWinInfo(target) || getWinInfo(target?.win) || null
 }
 
 function getDocumentContext(target) {
