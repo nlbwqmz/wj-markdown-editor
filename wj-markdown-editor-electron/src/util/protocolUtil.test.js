@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import path from 'node:path'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * 路径安全验证函数（从 protocolUtil.js 提取用于测试）
@@ -180,7 +180,7 @@ describe('isSafePath - 路径安全验证', () => {
     })
   })
 
-  describe('Windows 特定测试', () => {
+  describe('windows 特定测试', () => {
     it('应该正确处理 Windows 路径分隔符', () => {
       const basePath = 'C:\\Users\\user\\docs'
       const resolvedPath = 'C:\\Users\\user\\docs\\images\\test.png'
@@ -200,7 +200,7 @@ describe('isSafePath - 路径安全验证', () => {
     })
   })
 
-  describe('Unix/Linux 特定测试', () => {
+  describe('unix/Linux 特定测试', () => {
     it('应该阻止访问 /etc 目录', () => {
       const basePath = '/home/user/docs'
       const resolvedPath = '/etc/shadow'
@@ -700,6 +700,168 @@ describe('parseRangeHeader - Range 请求解析', () => {
       expect(result.valid).toBe(true)
       expect(result.start).toBe(0)
       expect(result.end).toBe(1)
+    })
+  })
+})
+
+describe('protocolUtil 协议上下文回退', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.restoreAllMocks()
+  })
+
+  function createWjUrl(resourcePath) {
+    return `wj://${Buffer.from(resourcePath, 'utf8').toString('hex')}`
+  }
+
+  async function setupProtocolHeaderHook({
+    directWindowId = null,
+    parentWindowId = null,
+  } = {}) {
+    let beforeSendHeadersHandler = null
+    const requestWebContentsId = 401
+    const parentWindow = parentWindowId == null
+      ? null
+      : {
+          id: 41,
+          getParentWindow: () => null,
+        }
+    const requestWindow = {
+      id: 40,
+      getParentWindow: () => parentWindow,
+    }
+    const requestWebContents = {
+      id: requestWebContentsId,
+    }
+
+    vi.doMock('electron', () => ({
+      BrowserWindow: {
+        fromWebContents: vi.fn((target) => {
+          if (target === requestWebContents) {
+            return requestWindow
+          }
+          return null
+        }),
+      },
+      net: {
+        fetch: vi.fn(),
+      },
+      protocol: {
+        handle: vi.fn(),
+      },
+      session: {
+        defaultSession: {
+          webRequest: {
+            onBeforeSendHeaders: vi.fn((handler) => {
+              beforeSendHeadersHandler = handler
+            }),
+          },
+        },
+      },
+      webContents: {
+        fromId: vi.fn((id) => {
+          if (id === requestWebContentsId) {
+            return requestWebContents
+          }
+          return null
+        }),
+      },
+    }))
+    vi.doMock('./commonUtil.js', () => ({
+      default: {
+        decodeWjUrl: vi.fn((url) => {
+          return Buffer.from(url.replace(/^wj:\/\//, ''), 'hex').toString('utf8')
+        }),
+      },
+    }))
+    vi.doMock('./document-session/windowLifecycleService.js', () => ({
+      default: {
+        getByWebContentsId: vi.fn((id) => {
+          if (id !== requestWebContentsId || directWindowId == null) {
+            return null
+          }
+          return { id: directWindowId }
+        }),
+        getWinInfo: vi.fn((target) => {
+          if (target === parentWindow && parentWindowId != null) {
+            return { id: parentWindowId, win: parentWindow }
+          }
+          if (target === directWindowId || target === String(directWindowId)) {
+            return directWindowId == null
+              ? null
+              : { id: directWindowId, win: requestWindow }
+          }
+          if (target === parentWindowId || target === String(parentWindowId)) {
+            return parentWindowId == null
+              ? null
+              : { id: parentWindowId, win: parentWindow }
+          }
+          return null
+        }),
+        getDocumentContext: vi.fn(() => ({
+          path: 'D:/docs/demo.md',
+        })),
+      },
+    }))
+
+    const { default: protocolUtil } = await import('./protocolUtil.js')
+    protocolUtil.handleProtocol()
+
+    return {
+      beforeSendHeadersHandler,
+      requestWebContentsId,
+    }
+  }
+
+  it('resolveWindowIdForProtocolRequest 必须优先返回当前窗口 ID', async () => {
+    const { resolveWindowIdForProtocolRequest } = await import('./protocolRequestContextUtil.js')
+    const currentWindowId = 'current-window'
+
+    const result = resolveWindowIdForProtocolRequest({
+      webContentsId: 11,
+      getWindowIdByWebContentsId: id => id === 11 ? currentWindowId : null,
+      getParentWindowIdByWebContentsId: () => 'parent-window',
+    })
+
+    expect(result).toBe(currentWindowId)
+  })
+
+  it('未注册子窗口的协议请求必须回退到父窗口 ID 注入 X-Window-ID', async () => {
+    const parentWindowId = 'parent-window'
+    const { beforeSendHeadersHandler, requestWebContentsId } = await setupProtocolHeaderHook({
+      directWindowId: null,
+      parentWindowId,
+    })
+    const callback = vi.fn()
+
+    beforeSendHeadersHandler({
+      url: createWjUrl('./assets/demo.png'),
+      webContentsId: requestWebContentsId,
+      requestHeaders: {},
+    }, callback)
+
+    expect(callback).toHaveBeenCalledWith({
+      requestHeaders: {
+        'X-Window-ID': parentWindowId,
+      },
+    })
+  })
+
+  it('父窗口也缺失时，协议请求头不得注入伪造的 X-Window-ID', async () => {
+    const { beforeSendHeadersHandler, requestWebContentsId } = await setupProtocolHeaderHook({
+      directWindowId: null,
+      parentWindowId: null,
+    })
+    const callback = vi.fn()
+
+    beforeSendHeadersHandler({
+      url: createWjUrl('./assets/demo.png'),
+      webContentsId: requestWebContentsId,
+      requestHeaders: {},
+    }, callback)
+
+    expect(callback).toHaveBeenCalledWith({
+      requestHeaders: {},
     })
   })
 })

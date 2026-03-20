@@ -664,13 +664,14 @@ describe('ipcMainUtil save', () => {
     const { sender, win, sendToMainHandler, winInfoUtil } = await setupSaveHandler()
     runtimeExecuteUiCommand.mockResolvedValueOnce(false)
 
-    await sendToMainHandler({ sender }, {
+    const result = await sendToMainHandler({ sender }, {
       event: 'document.save',
       data: null,
     })
 
     expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.save', null)
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(result).toBe(false)
     expect(send).not.toHaveBeenCalledWith(win, {
       event: 'message',
       data: {
@@ -682,14 +683,22 @@ describe('ipcMainUtil save', () => {
 
   it('document.save-copy 直连入口必须直接命中新命令，避免 renderer 迁移后继续依赖 save-other', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupSaveHandler()
+    runtimeExecuteUiCommand.mockResolvedValueOnce({
+      ok: true,
+      reason: 'copy-triggered',
+    })
 
-    await sendToMainHandler({ sender }, {
+    const result = await sendToMainHandler({ sender }, {
       event: 'document.save-copy',
       data: null,
     })
 
     expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.save-copy', null)
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: true,
+      reason: 'copy-triggered',
+    })
   })
 })
 

@@ -416,9 +416,9 @@ describe('documentSessionRuntime', () => {
   it('document.save / save-copy / document.edit 这类状态推进命令必须经 runtime 回流到真实 dispatch 链路', async () => {
     const { runtime, executeDocumentCommand, commandRunner } = createRuntimeContext()
 
-    await runtime.executeUiCommand(4, 'document.save', null)
-    await runtime.executeUiCommand(4, 'document.save-copy', null)
-    await runtime.executeUiCommand(4, 'document.edit', {
+    const saveResult = await runtime.executeUiCommand(4, 'document.save', null)
+    const saveCopyResult = await runtime.executeUiCommand(4, 'document.save-copy', null)
+    const editResult = await runtime.executeUiCommand(4, 'document.edit', {
       content: '# 新内容',
     })
 
@@ -443,6 +443,27 @@ describe('documentSessionRuntime', () => {
       runtime,
     }))
     expect(commandRunner.run).toHaveBeenCalledTimes(3)
+    expect(saveResult).toEqual({
+      snapshot: {
+        sessionId: 'session-1',
+        content: '# 内容',
+      },
+      effects: [],
+    })
+    expect(saveCopyResult).toEqual({
+      snapshot: {
+        sessionId: 'session-1',
+        content: '# 内容',
+      },
+      effects: [],
+    })
+    expect(editResult).toEqual({
+      snapshot: {
+        sessionId: 'session-1',
+        content: '# 内容',
+      },
+      effects: [],
+    })
   })
 
   it('document.edit 作为 runtime UI 命令必须等待最终快照 ready 后再返回，随后 get-session-snapshot 也要读到同一 revision', async () => {
@@ -658,6 +679,52 @@ describe('documentSessionRuntime', () => {
     ])
     expect(effectService.executeCommand).not.toHaveBeenCalled()
     expect(executeResourceCommand).toHaveBeenCalledTimes(3)
+  })
+
+  it('document.resource.delete-local / resource.get-info 必须把结构化返回原样透传给调用方', async () => {
+    const { runtime, executeResourceCommand } = createRuntimeContext()
+    const deletePayload = {
+      resourceUrl: 'wj://2e2f6173736574732f64656c6574652e706e67',
+    }
+    const infoPayload = {
+      resourceUrl: 'wj://2e2f6173736574732f696e666f2e706e67',
+    }
+    const deleteResult = {
+      ok: true,
+      removed: true,
+      reason: 'deleted',
+      path: 'C:/docs/assets/delete.png',
+    }
+    const infoResult = {
+      ok: true,
+      reason: 'resolved',
+      decodedPath: './assets/info.png',
+      exists: true,
+      isDirectory: false,
+      isFile: true,
+      path: 'C:/docs/assets/info.png',
+    }
+    executeResourceCommand
+      .mockResolvedValueOnce(deleteResult)
+      .mockResolvedValueOnce(infoResult)
+
+    const deleted = await runtime.executeUiCommand(7, 'document.resource.delete-local', deletePayload)
+    const info = await runtime.executeUiCommand(7, 'resource.get-info', infoPayload)
+
+    expect(deleted).toEqual(deleteResult)
+    expect(info).toEqual(infoResult)
+    expect(executeResourceCommand).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      windowId: 7,
+      command: 'document.resource.delete-local',
+      payload: deletePayload,
+      runtime,
+    }))
+    expect(executeResourceCommand).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      windowId: 7,
+      command: 'resource.get-info',
+      payload: infoPayload,
+      runtime,
+    }))
   })
 
   it('resource.get-comparable-key 必须通过 runtime 的专用同步入口返回稳定 key，且不能继续混入 executeUiCommand 异步链路', () => {

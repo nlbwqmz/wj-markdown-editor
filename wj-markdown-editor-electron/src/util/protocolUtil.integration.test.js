@@ -1,11 +1,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+import { pathToFileURL } from 'node:url'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * 协议处理器集成测试
@@ -457,8 +454,6 @@ describe('协议处理器集成测试', () => {
 
     it('场景4: 视频文件的流式加载', async () => {
       const videoPath = path.join(TEST_FIXTURES_DIR, 'videos', 'test.mp4')
-      const stats = fs.statSync(videoPath)
-      const fileSize = stats.size
 
       // 模拟浏览器的 Range 请求序列
       const ranges = [
@@ -574,5 +569,196 @@ describe('协议处理器集成测试', () => {
 
       expect(fs.existsSync(testFile)).toBe(true)
     })
+  })
+})
+
+describe('protocolUtil 协议上下文继承集成', () => {
+  beforeAll(() => {
+    createTestFixtures()
+  })
+
+  beforeEach(() => {
+    vi.resetModules()
+    vi.restoreAllMocks()
+  })
+
+  afterAll(() => {
+    cleanupTestFixtures()
+  })
+
+  function createWjUrl(resourcePath) {
+    return `wj://${Buffer.from(resourcePath, 'utf8').toString('hex')}`
+  }
+
+  async function setupProtocolRuntime({
+    directWindowId = null,
+    parentWindowId = null,
+    documentPath = path.join(TEST_FIXTURES_DIR, 'docs', 'test.md'),
+  } = {}) {
+    let beforeSendHeadersHandler = null
+    let protocolHandler = null
+    const requestWebContentsId = 901
+    const parentWindow = parentWindowId == null
+      ? null
+      : {
+          id: 71,
+          getParentWindow: () => null,
+        }
+    const requestWindow = {
+      id: 70,
+      getParentWindow: () => parentWindow,
+    }
+    const requestWebContents = {
+      id: requestWebContentsId,
+    }
+    const netFetch = vi.fn(async () => new Response('fixture-response', { status: 200 }))
+
+    vi.doMock('electron', () => ({
+      BrowserWindow: {
+        fromWebContents: vi.fn((target) => {
+          if (target === requestWebContents) {
+            return requestWindow
+          }
+          return null
+        }),
+      },
+      net: {
+        fetch: netFetch,
+      },
+      protocol: {
+        handle: vi.fn((_scheme, handler) => {
+          protocolHandler = handler
+        }),
+      },
+      session: {
+        defaultSession: {
+          webRequest: {
+            onBeforeSendHeaders: vi.fn((handler) => {
+              beforeSendHeadersHandler = handler
+            }),
+          },
+        },
+      },
+      webContents: {
+        fromId: vi.fn((id) => {
+          if (id === requestWebContentsId) {
+            return requestWebContents
+          }
+          return null
+        }),
+      },
+    }))
+    vi.doMock('./commonUtil.js', () => ({
+      default: {
+        decodeWjUrl: vi.fn((url) => {
+          return Buffer.from(url.replace(/^wj:\/\//, ''), 'hex').toString('utf8')
+        }),
+      },
+    }))
+    vi.doMock('./document-session/windowLifecycleService.js', () => ({
+      default: {
+        getByWebContentsId: vi.fn((id) => {
+          if (id !== requestWebContentsId || directWindowId == null) {
+            return null
+          }
+          return { id: directWindowId }
+        }),
+        getWinInfo: vi.fn((target) => {
+          if (target === parentWindow && parentWindowId != null) {
+            return { id: parentWindowId, win: parentWindow }
+          }
+          if (target === directWindowId || target === String(directWindowId)) {
+            return directWindowId == null
+              ? null
+              : { id: directWindowId, win: requestWindow }
+          }
+          if (target === parentWindowId || target === String(parentWindowId)) {
+            return parentWindowId == null
+              ? null
+              : { id: parentWindowId, win: parentWindow }
+          }
+          return null
+        }),
+        getDocumentContext: vi.fn(() => ({
+          path: documentPath,
+        })),
+      },
+    }))
+
+    const { default: protocolUtil } = await import('./protocolUtil.js')
+    protocolUtil.handleProtocol()
+
+    return {
+      beforeSendHeadersHandler,
+      protocolHandler,
+      netFetch,
+      requestWebContentsId,
+    }
+  }
+
+  function collectRequestHeaders(beforeSendHeadersHandler, {
+    url,
+    webContentsId,
+  }) {
+    let nextRequestHeaders = null
+
+    beforeSendHeadersHandler({
+      url,
+      webContentsId,
+      requestHeaders: {},
+    }, ({ requestHeaders }) => {
+      nextRequestHeaders = requestHeaders
+    })
+
+    return nextRequestHeaders || {}
+  }
+
+  it('相对路径协议请求在当前窗口缺失时，必须继承父窗口文档上下文解析资源', async () => {
+    const parentWindowId = 'parent-window'
+    const documentPath = path.join(TEST_FIXTURES_DIR, 'docs', 'test.md')
+    const expectedPath = path.join(TEST_FIXTURES_DIR, 'images', 'test.png')
+    const { beforeSendHeadersHandler, protocolHandler, netFetch, requestWebContentsId } = await setupProtocolRuntime({
+      directWindowId: null,
+      parentWindowId,
+      documentPath,
+    })
+
+    const requestHeaders = collectRequestHeaders(beforeSendHeadersHandler, {
+      url: createWjUrl('../images/test.png'),
+      webContentsId: requestWebContentsId,
+    })
+    const protocolResponse = await protocolHandler({
+      url: createWjUrl('../images/test.png'),
+      headers: new Headers(requestHeaders),
+    })
+
+    expect(requestHeaders['X-Window-ID']).toBe(parentWindowId)
+    expect(netFetch).toHaveBeenCalledWith(pathToFileURL(expectedPath).toString())
+    expect(protocolResponse.status).toBe(200)
+  })
+
+  it('相对路径协议请求在没有任何文档上下文时，必须返回 404 no-document-context', async () => {
+    const { beforeSendHeadersHandler, protocolHandler, requestWebContentsId } = await setupProtocolRuntime({
+      directWindowId: null,
+      parentWindowId: null,
+    })
+
+    const requestHeaders = collectRequestHeaders(beforeSendHeadersHandler, {
+      url: createWjUrl('./assets/missing.png'),
+      webContentsId: requestWebContentsId,
+    })
+    const protocolResponse = await protocolHandler({
+      url: createWjUrl('./assets/missing.png'),
+      headers: new Headers(requestHeaders),
+    })
+    const responseBody = await protocolResponse.text()
+    const protocolResponseReason = protocolResponse.status === 404
+      && responseBody === 'Not Found: No document context for relative path'
+      ? 'no-document-context'
+      : null
+
+    expect(requestHeaders['X-Window-ID']).toBeUndefined()
+    expect(protocolResponse.status).toBe(404)
+    expect(protocolResponseReason).toBe('no-document-context')
   })
 })

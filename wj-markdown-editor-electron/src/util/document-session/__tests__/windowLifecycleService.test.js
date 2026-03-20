@@ -601,6 +601,35 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(winInfoUtil.getAll()).toHaveLength(1)
   })
 
+  it('关闭确认继续链路只有在既有 continue path 才允许 allowImmediateClose 置位', async () => {
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startPage: 'editor' })
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 未保存内容')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 未保存内容')
+    })
+
+    const closeEvent = winInfo.win.close()
+
+    expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
+    expect(winInfo.allowImmediateClose).toBe(false)
+
+    const originalClose = winInfo.win.close
+    winInfo.win.close = vi.fn()
+
+    await executeTestCommand(winInfo, 'document.confirm-force-close')
+
+    expect(winInfo.allowImmediateClose).toBe(true)
+    expect(winInfo.win.close).toHaveBeenCalledTimes(1)
+
+    winInfo.win.close = originalClose
+  })
+
   it('document.save 在草稿首存成功时，必须只走一次标准选路并正确写入会话路径', async () => {
     showSaveDialogSyncMock.mockReturnValueOnce('D:/draft.md')
 
@@ -611,17 +640,26 @@ describe('windowLifecycleService 生命周期 facade', () => {
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 草稿内容')
     })
+    sendMock.mockClear()
 
-    await executeTestCommand(winInfo, 'document.save')
+    const saveResult = await executeTestCommand(winInfo, 'document.save')
 
     expect(showSaveDialogSyncMock).toHaveBeenCalledTimes(1)
     expect(writeFileMock).toHaveBeenCalledTimes(1)
     expect(writeFileMock).toHaveBeenCalledWith('D:/draft.md', '# 草稿内容')
+    expect(saveResult).toBe(true)
     expect(winInfoUtil.getDocumentContext(winInfo).path).toBe('D:/draft.md')
     expectDocumentContent(winInfo, '# 草稿内容')
     const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
     expect(snapshot.content).toBe('# 草稿内容')
     expect(snapshot.saved).toBe(true)
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'success',
+        content: 'message.saveSuccessfully',
+      },
+    })
   })
 
   it('document.save 在真实写盘成功后必须返回 true，而不是 effects 执行前的旧快照结果', async () => {
@@ -1082,6 +1120,33 @@ describe('windowLifecycleService 生命周期 facade', () => {
       data: {
         type: 'warning',
         content: '另存为失败，副本路径不能与当前文档相同。',
+      },
+    })
+  })
+
+  it('document.save-copy 成功后，必须提示另存为成功且不改写当前会话路径', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    showSaveDialogSyncMock.mockReturnValueOnce('D:/copy.md')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    winInfoUtil.updateTempContent(winInfo, '# 副本内容')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 副本内容')
+    })
+    sendMock.mockClear()
+
+    await executeTestCommand(winInfo, 'document.save-copy')
+
+    expect(writeFileMock).toHaveBeenCalledWith('D:/copy.md', '# 副本内容')
+    expect(winInfoUtil.getDocumentContext(winInfo).path).toBe('D:/demo.md')
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'success',
+        content: 'message.saveAsSuccessfully',
       },
     })
   })
