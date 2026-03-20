@@ -493,7 +493,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(effectContext).not.toHaveProperty('getExternalWatchContext')
   })
 
-  it('requestForceClose 必须先标记 forceClose 再触发原生 close，保持 confirm-force-close 的关闭时序', async () => {
+  it('requestForceClose 必须只标记 forceClose 宿主状态，不负责触发原生 close', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -503,12 +503,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     expect(winInfoUtil.requestForceClose(winInfo.id)).toBe(true)
     expect(winInfo.forceClose).toBe(true)
-    expect(winInfo.win.closeEvents).toHaveLength(1)
-    expect(winInfo.win.closeEvents[0].preventDefault).not.toHaveBeenCalled()
-
-    await vi.waitFor(() => {
-      expect(winInfoUtil.getAll()).toHaveLength(0)
-    })
+    expect(winInfo.win.closeEvents).toHaveLength(0)
+    expect(winInfoUtil.getAll()).toHaveLength(1)
   })
 
   it('只读窗口查询接口必须只暴露窗口对象、窗口身份和文档上下文，不带 facade 宿主状态', async () => {

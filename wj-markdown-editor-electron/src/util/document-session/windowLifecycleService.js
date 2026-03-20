@@ -726,7 +726,6 @@ function requestForceClose(windowId) {
   }
 
   winInfo.forceClose = true
-  winInfo.win.close()
   return true
 }
 

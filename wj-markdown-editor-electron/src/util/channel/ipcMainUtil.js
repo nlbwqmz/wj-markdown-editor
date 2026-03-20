@@ -138,7 +138,8 @@ const handlerList = {
     winInfo.win.close()
   },
   'force-close': (winInfo) => {
-    return windowLifecycleService.requestForceClose(winInfo?.id || winInfo?.win?.id || null)
+    windowLifecycleService.requestForceClose(winInfo?.id || winInfo?.win?.id || null)
+    winInfo.win.close()
   },
   'document.open-in-folder': async (winInfo) => {
     const documentContext = windowLifecycleService.getDocumentContext(winInfo)

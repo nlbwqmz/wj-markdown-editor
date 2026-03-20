@@ -1447,7 +1447,7 @@ describe('ipcMainUtil command mapping', () => {
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
-  it('force-close 必须委托 windowLifecycleService.requestForceClose，不能在 IPC 层直接改写 facade 状态', async () => {
+  it('force-close 必须先委托 requestForceClose，再由 IPC 层触发 win.close，且不能透传 requestForceClose 返回值', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     const close = vi.fn()
     const winInfo = {
@@ -1459,15 +1459,18 @@ describe('ipcMainUtil command mapping', () => {
       win: { id: 1, close },
     }
     winInfoUtil.getWinInfo.mockImplementation(() => winInfo)
+    winInfoUtil.requestForceClose.mockReturnValueOnce(true)
 
-    await sendToMainHandler({ sender }, {
+    const result = await sendToMainHandler({ sender }, {
       event: 'force-close',
       data: null,
     })
 
     expect(winInfoUtil.requestForceClose).toHaveBeenCalledWith(1)
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(winInfoUtil.requestForceClose.mock.invocationCallOrder[0]).toBeLessThan(close.mock.invocationCallOrder[0])
+    expect(result).toBeUndefined()
     expect(winInfo.forceClose).toBe(false)
-    expect(close).not.toHaveBeenCalled()
     expect(runtimeExecuteUiCommand).not.toHaveBeenCalled()
   })
 
