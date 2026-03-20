@@ -2096,6 +2096,39 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
   })
 
+  it('窗口内相对本地资源链接成功打开时，传给底层资源解析的上下文必须保留 documentPath 基准目录', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    openLocalResourceInFolderMock.mockResolvedValue({
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: 'D:/assets/demo.png',
+    })
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    sendMock.mockClear()
+
+    const result = await winInfoUtil.handleLocalResourceLinkOpen(winInfo.win, winInfo.id, 'wj://2e2f6173736574732f64656d6f2e706e67')
+
+    expect(result).toEqual({
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: 'D:/assets/demo.png',
+    })
+    expect(openLocalResourceInFolderMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentPath: 'D:/demo.md',
+      }),
+      'wj://2e2f6173736574732f64656d6f2e706e67',
+      showItemInFolderMock,
+    )
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
   it('notifyRecentListChanged 只应在列表真实变化时广播 recent 刷新事件', async () => {
     await winInfoUtil.createNew(null)
     await winInfoUtil.createNew(null)

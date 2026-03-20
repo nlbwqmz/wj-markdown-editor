@@ -852,8 +852,12 @@ async function executeExternalResolutionCommandWithDispatcher(windowId, command,
 async function handleLocalResourceLinkOpen(win, windowId, resourceUrl) {
   const normalizedWindowId = normalizeWindowId(windowId)
   const targetWin = getWindowById(normalizedWindowId)
+  const documentContext = getDocumentContext(normalizedWindowId)
   const openResult = await resourceFileUtil.openLocalResourceInFolder(
-    getDocumentContext(normalizedWindowId),
+    {
+      ...documentContext,
+      documentPath: documentContext.path,
+    },
     resourceUrl,
     shell.showItemInFolder,
   )
