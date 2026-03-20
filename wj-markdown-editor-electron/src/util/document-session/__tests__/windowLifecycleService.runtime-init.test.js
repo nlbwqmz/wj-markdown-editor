@@ -8,6 +8,7 @@ const {
   createDocumentSessionStore,
   createSaveCoordinator,
   createWindowSessionBridge,
+  getDocumentSessionRuntime,
   ipcMainHandle,
   ipcMainOn,
 } = vi.hoisted(() => {
@@ -50,6 +51,9 @@ const {
     createDocumentEffectService: vi.fn(() => effectService),
     createWindowSessionBridge: vi.fn(() => windowBridge),
     createDocumentResourceService: vi.fn(() => resourceService),
+    getDocumentSessionRuntime: vi.fn(() => {
+      throw new Error('导入阶段不应访问 runtime 单例')
+    }),
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
   }
@@ -170,6 +174,12 @@ vi.mock('../windowSessionBridge.js', () => {
   }
 })
 
+vi.mock('../documentSessionRuntime.js', () => {
+  return {
+    getDocumentSessionRuntime,
+  }
+})
+
 vi.mock('../../fileUploadUtil.js', () => {
   return {
     default: {
@@ -270,6 +280,7 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     createDocumentEffectService.mockClear()
     createWindowSessionBridge.mockClear()
     createDocumentResourceService.mockClear()
+    getDocumentSessionRuntime.mockClear()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
   })
@@ -299,5 +310,11 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     expect(Object.keys(moduleNs)).not.toContain('initializeSessionRuntime')
     expect(winInfoUtil.initializeSessionRuntime).toBeUndefined()
     expect(Object.keys(winInfoUtil)).not.toContain('initializeSessionRuntime')
+  })
+
+  it('windowLifecycleService 导入阶段不得偷读 runtime 单例，避免把显式初始化重新变回隐式副作用', async () => {
+    await import('../windowLifecycleService.js')
+
+    expect(getDocumentSessionRuntime).not.toHaveBeenCalled()
   })
 })

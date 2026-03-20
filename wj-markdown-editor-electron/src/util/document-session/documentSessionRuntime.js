@@ -156,6 +156,7 @@ export function createDocumentSessionRuntime(deps = {}) {
   const getConfig = deps.getConfig || (() => ({}))
   const store = deps.store || createDocumentSessionStore()
   const saveCoordinator = deps.saveCoordinator || createSaveCoordinator()
+  const resourceService = deps.resourceService || null
   const commandService = deps.commandService || createDocumentCommandService({
     store,
     saveCoordinator,
@@ -324,6 +325,7 @@ export function createDocumentSessionRuntime(deps = {}) {
     commandService,
     effectService,
     windowBridge,
+    resourceService,
     dispatch,
     executeUiCommand,
     getSessionSnapshot,

@@ -1,11 +1,13 @@
-import { app, Menu, protocol } from 'electron'
+import { app, Menu, protocol, shell } from 'electron'
 import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
 import { handleSecondInstanceOpenRequest, handleStartupOpenRequest } from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
 import { isMarkdownFilePath } from './util/document-session/documentOpenTargetUtil.js'
 import { initializeDocumentSessionRuntime } from './util/document-session/documentSessionRuntime.js'
+import { createDocumentSessionRuntimeComposition } from './util/document-session/documentSessionRuntimeComposition.js'
 import windowLifecycleService from './util/document-session/windowLifecycleService.js'
+import { createWindowRegistry } from './util/document-session/windowRegistry.js'
 import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
 import updateUtil from './util/updateUtil.js'
@@ -65,6 +67,9 @@ function getOpenOnFilePath() {
 }
 
 let documentSessionRuntime = null
+const windowRegistry = createWindowRegistry()
+
+windowLifecycleService.setWindowRegistry(windowRegistry)
 
 function initializeAppDocumentSessionRuntime() {
   if (documentSessionRuntime) {
@@ -72,10 +77,16 @@ function initializeAppDocumentSessionRuntime() {
   }
 
   documentSessionRuntime = initializeDocumentSessionRuntime({
-    ...windowLifecycleService.initializeSessionRuntime(),
-    openDocumentWindow: async (targetPath, options = {}) => {
-      return await windowLifecycleService.createNew(targetPath, options.isRecent === true)
-    },
+    ...createDocumentSessionRuntimeComposition({
+      registry: windowRegistry,
+      getConfig: () => configUtil.getConfig(),
+      recentStore: recent,
+      sendToRenderer: (win, payload) => {
+        sendUtil.send(win, payload)
+      },
+      showItemInFolder: shell.showItemInFolder,
+    }),
+    ...windowLifecycleService.getDocumentSessionRuntimeHostDeps(),
   })
 
   return documentSessionRuntime

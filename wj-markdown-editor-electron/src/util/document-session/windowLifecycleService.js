@@ -10,24 +10,21 @@ import commonUtil from '../commonUtil.js'
 import fileWatchUtil from '../fileWatchUtil.js'
 import resourceFileUtil from '../resourceFileUtil.js'
 import updateUtil from '../updateUtil.js'
-import { createDocumentCommandService } from './documentCommandService.js'
-import { createDocumentEffectService } from './documentEffectService.js'
 import { resolveDocumentOpenPath } from './documentOpenTargetUtil.js'
-import { createDocumentResourceService } from './documentResourceService.js'
 import {
   createBoundFileSession,
   createDraftSession,
   createRecentMissingSession,
 } from './documentSessionFactory.js'
 import {
+  getDocumentSessionRuntime,
+  initializeDocumentSessionRuntime,
   normalizeOpenCommandResult,
   openDocumentWindowWithRuntimePolicy,
 } from './documentSessionRuntime.js'
-import { createDocumentSessionStore } from './documentSessionStore.js'
+import { createDocumentSessionRuntimeComposition } from './documentSessionRuntimeComposition.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 import { createExternalWatchBridge } from './externalWatchBridge.js'
-import { createSaveCoordinator } from './saveCoordinator.js'
-import { createWindowSessionBridge } from './windowSessionBridge.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -37,40 +34,134 @@ const MISSING_PATH_REASON = {
 }
 
 const winInfoList = []
-let sessionRuntimeServices = null
 
-function ensureSessionRuntimeInitialized() {
-  if (sessionRuntimeServices) {
-    return sessionRuntimeServices
-  }
-
-  const store = createDocumentSessionStore()
-  const saveCoordinator = createSaveCoordinator()
-  const commandService = createDocumentCommandService({ store, saveCoordinator, getConfig: () => configUtil.getConfig() })
-  const effectService = createDocumentEffectService({ recentStore: recent, getConfig: () => configUtil.getConfig() })
-  const windowBridge = createWindowSessionBridge({
-    store,
-    sendToRenderer: (win, payload) => {
-      sendUtil.send(win, payload)
+function createWinInfoWindowRegistryAdapter() {
+  return {
+    registerWindow({ win }) {
+      return win
     },
-    resolveWindowById: (windowId) => {
+    unregisterWindow() {
+      return true
+    },
+    bindSession({ sessionId }) {
+      return sessionId
+    },
+    getWindowById(windowId) {
       return winInfoList.find(item => item.id === windowId)?.win || null
     },
-    getAllWindows: () => winInfoList.map(item => item.win),
-  })
-  const resourceService = createDocumentResourceService({ store, showItemInFolder: shell.showItemInFolder })
-
-  // Task 3 要求 runtime 相关单例只能在显式初始化或首次真实使用时创建，
-  // 不能在模块导入阶段提前组装。
-  sessionRuntimeServices = {
-    store,
-    saveCoordinator,
-    commandService,
-    effectService,
-    windowBridge,
-    resourceService,
+    getAllWindows() {
+      return winInfoList.map(item => item.win)
+    },
   }
-  return sessionRuntimeServices
+}
+
+let activeWindowRegistry = createWinInfoWindowRegistryAdapter()
+
+export function setWindowRegistry(registry) {
+  activeWindowRegistry = registry || createWinInfoWindowRegistryAdapter()
+  return activeWindowRegistry
+}
+
+function getWindowRegistry() {
+  return activeWindowRegistry
+}
+
+function buildWindowContext(windowId) {
+  return getWinInfo(windowId)
+}
+
+function buildDocumentContext(windowId) {
+  return getDocumentContext(getWinInfo(windowId))
+}
+
+function buildRuntimeHostDeps() {
+  return {
+    getWindowContext: windowId => buildWindowContext(windowId),
+    getDocumentContext: windowId => buildDocumentContext(windowId),
+    buildRunnerEffectContext: ({ windowId, dispatchCommand }) => {
+      const winInfo = getWinInfo(windowId)
+      if (!winInfo) {
+        return {}
+      }
+      return buildEffectContextForWindow(winInfo, {
+        dispatchCommand,
+      })
+    },
+    executeDocumentCommand: async ({
+      windowId,
+      command,
+      payload,
+      runtime,
+    }) => {
+      const winInfo = getWinInfo(windowId)
+      if (!winInfo) {
+        return null
+      }
+
+      const dispatch = createRuntimeDispatchAdapter(windowId, runtime)
+
+      switch (command) {
+        case 'document.save':
+          return await executeDocumentSaveCommandWithDispatcher(winInfo, dispatch)
+
+        case 'document.save-copy':
+          return await executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch)
+
+        case 'document.external.apply':
+        case 'document.external.ignore':
+          return (await executeExternalResolutionCommandWithDispatcher(
+            winInfo,
+            command,
+            payload || {},
+            dispatch,
+          )).commandResult
+
+        case 'document.edit':
+          // route leave 需要把 document.edit 当成“session 已经推进到最终正文”的可等待屏障，
+          // 因此这里必须等待真实 dispatch 完成，并把最新快照直接返回给调用方。
+          return await updateTempContentWithDispatcher(winInfo, payload?.content, dispatch)
+
+        case 'document.cancel-close':
+        case 'document.confirm-force-close':
+          return await dispatch(command, payload)
+
+        default:
+          return await dispatch(command, payload)
+      }
+    },
+    openDocumentWindow: async (targetPath, options = {}) => {
+      return await createNew(targetPath, options.isRecent === true)
+    },
+  }
+}
+
+export function getDocumentSessionRuntimeHostDeps() {
+  return buildRuntimeHostDeps()
+}
+
+function initializeLifecycleRuntimeFallback() {
+  return initializeDocumentSessionRuntime({
+    ...createDocumentSessionRuntimeComposition({
+      registry: getWindowRegistry(),
+      getConfig: () => configUtil.getConfig(),
+      recentStore: recent,
+      sendToRenderer: (win, payload) => {
+        sendUtil.send(win, payload)
+      },
+      showItemInFolder: shell.showItemInFolder,
+    }),
+    ...buildRuntimeHostDeps(),
+  })
+}
+
+function ensureSessionRuntimeInitialized() {
+  try {
+    return getDocumentSessionRuntime()
+  } catch {
+    // 主入口会显式 initialize runtime；这里只给仍直接使用 lifecycle facade 的旧测试/链路保留惰性兜底，
+    // 避免把组合根迁移和后续命令收口改造耦合在同一轮里。
+    return initializeLifecycleRuntimeFallback()
+  }
 }
 
 function deleteEditorWin(id) {
@@ -78,6 +169,7 @@ function deleteEditorWin(id) {
   if (index < 0) {
     return false
   }
+  getWindowRegistry().unregisterWindow?.(id)
   winInfoList.splice(index, 1)
   return true
 }
@@ -225,6 +317,10 @@ function registerSessionForWindow(winInfo, session) {
   const { store } = ensureSessionRuntimeInitialized()
   store.createSession(session)
   store.bindWindowToSession({
+    windowId: winInfo.id,
+    sessionId: session.sessionId,
+  })
+  getWindowRegistry().bindSession?.({
     windowId: winInfo.id,
     sessionId: session.sessionId,
   })
@@ -899,81 +995,6 @@ async function executeCommand(winInfo, command, payload) {
   }
 }
 
-function initializeSessionRuntime() {
-  const {
-    store,
-    saveCoordinator,
-    commandService,
-    effectService,
-    windowBridge,
-    resourceService,
-  } = ensureSessionRuntimeInitialized()
-
-  // main.js 现在通过这个入口触发真正初始化，
-  // 从而把导入期副作用改成应用启动阶段的显式动作。
-  return {
-    store,
-    saveCoordinator,
-    commandService,
-    effectService,
-    windowBridge,
-    resourceService,
-    getWindowContext: windowId => getWinInfo(windowId),
-    getDocumentContext: windowId => getDocumentContext(getWinInfo(windowId)),
-    buildRunnerEffectContext: ({ windowId, dispatchCommand }) => {
-      const winInfo = getWinInfo(windowId)
-      if (!winInfo) {
-        return {}
-      }
-      return buildEffectContextForWindow(winInfo, {
-        dispatchCommand,
-      })
-    },
-    executeDocumentCommand: async ({
-      windowId,
-      command,
-      payload,
-      runtime,
-    }) => {
-      const winInfo = getWinInfo(windowId)
-      if (!winInfo) {
-        return null
-      }
-
-      const dispatch = createRuntimeDispatchAdapter(windowId, runtime)
-
-      switch (command) {
-        case 'document.save':
-          return await executeDocumentSaveCommandWithDispatcher(winInfo, dispatch)
-
-        case 'document.save-copy':
-          return await executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch)
-
-        case 'document.external.apply':
-        case 'document.external.ignore':
-          return (await executeExternalResolutionCommandWithDispatcher(
-            winInfo,
-            command,
-            payload || {},
-            dispatch,
-          )).commandResult
-
-        case 'document.edit':
-          // route leave 需要把 document.edit 当成“session 已经推进到最终正文”的可等待屏障，
-          // 因此这里必须等待真实 dispatch 完成，并把最新快照直接返回给调用方。
-          return await updateTempContentWithDispatcher(winInfo, payload?.content, dispatch)
-
-        case 'document.cancel-close':
-        case 'document.confirm-force-close':
-          return await dispatch(command, payload)
-
-        default:
-          return await dispatch(command, payload)
-      }
-    },
-  }
-}
-
 function notifyRecentListChanged(recentList) {
   const { windowBridge } = ensureSessionRuntimeInitialized()
   return windowBridge.publishRecentListChanged(recentList)
@@ -1025,6 +1046,10 @@ async function createNew(filePath, isRecent = false) {
     lastClosedManualRequestCompletions: [],
   }
   winInfoList.push(winInfo)
+  getWindowRegistry().registerWindow?.({
+    windowId: id,
+    win,
+  })
 
   const session = createInitialSession({
     sessionId: commonUtil.createId(),
@@ -1137,7 +1162,8 @@ export default {
   deleteEditorWin,
   createNew,
   openDocumentPath,
-  initializeSessionRuntime,
+  setWindowRegistry,
+  getDocumentSessionRuntimeHostDeps,
   notifyRecentListChanged,
   executeCommand,
   executeResourceCommand,

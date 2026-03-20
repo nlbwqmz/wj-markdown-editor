@@ -175,6 +175,123 @@ describe('documentSessionRuntime', () => {
     vi.clearAllMocks()
   })
 
+  it('runtime 组合根必须集中装配依赖，并允许 initializeDocumentSessionRuntime 直接复用这些实例', async () => {
+    vi.resetModules()
+    resetDocumentSessionRuntime()
+
+    const store = {
+      getSession: vi.fn(() => null),
+      getSessionByWindowId: vi.fn(() => null),
+    }
+    const saveCoordinator = {
+      consumeCopySaveCompletion: vi.fn(() => null),
+    }
+    const commandService = {
+      dispatch: vi.fn(() => ({
+        session: null,
+        snapshot: null,
+        effects: [],
+      })),
+    }
+    const effectService = {
+      applyEffect: vi.fn(),
+      executeCommand: vi.fn(),
+    }
+    const resourceService = {
+      openInFolder: vi.fn(),
+      deleteLocal: vi.fn(),
+      getInfo: vi.fn(),
+      getComparableKey: vi.fn(),
+    }
+    const registry = {
+      getWindowById: vi.fn(() => null),
+      getAllWindows: vi.fn(() => []),
+    }
+    const createDocumentSessionStore = vi.fn(() => store)
+    const createSaveCoordinator = vi.fn(() => saveCoordinator)
+    const createDocumentCommandService = vi.fn(() => commandService)
+    const createDocumentEffectService = vi.fn(() => effectService)
+    const createWindowSessionBridge = vi.fn(() => ({
+      getSessionSnapshot: vi.fn(() => null),
+      publishSnapshotChanged: vi.fn(),
+      publishMessage: vi.fn(),
+      publishRecentListChanged: vi.fn(recentList => recentList),
+    }))
+    const createDocumentResourceService = vi.fn(() => resourceService)
+
+    vi.doMock('../documentSessionStore.js', () => ({
+      createDocumentSessionStore,
+    }))
+    vi.doMock('../saveCoordinator.js', () => ({
+      createSaveCoordinator,
+    }))
+    vi.doMock('../documentCommandService.js', () => ({
+      createDocumentCommandService,
+    }))
+    vi.doMock('../documentEffectService.js', () => ({
+      createDocumentEffectService,
+    }))
+    vi.doMock('../windowSessionBridge.js', () => ({
+      createWindowSessionBridge,
+    }))
+    vi.doMock('../documentResourceService.js', () => ({
+      createDocumentResourceService,
+    }))
+
+    const { createDocumentSessionRuntimeComposition } = await import('../documentSessionRuntimeComposition.js')
+    const composition = createDocumentSessionRuntimeComposition({
+      registry,
+      getConfig: () => ({ language: 'zh-CN' }),
+      recentStore: {
+        add: vi.fn(),
+      },
+      sendToRenderer: vi.fn(),
+      showItemInFolder: vi.fn(),
+    })
+    const runtime = initializeDocumentSessionRuntime({
+      ...composition,
+      getWindowContext: () => null,
+      getDocumentContext: () => null,
+      buildRunnerEffectContext: () => ({}),
+      openDocumentWindow: vi.fn(),
+    })
+
+    expect(createDocumentSessionStore).toHaveBeenCalledTimes(1)
+    expect(createSaveCoordinator).toHaveBeenCalledTimes(1)
+    expect(createDocumentCommandService).toHaveBeenCalledWith({
+      store,
+      saveCoordinator,
+      getConfig: expect.any(Function),
+    })
+    expect(createDocumentEffectService).toHaveBeenCalledWith(expect.objectContaining({
+      recentStore: expect.objectContaining({
+        add: expect.any(Function),
+      }),
+      getConfig: expect.any(Function),
+    }))
+    expect(createWindowSessionBridge).toHaveBeenCalledWith({
+      store,
+      sendToRenderer: expect.any(Function),
+      resolveWindowById: expect.any(Function),
+      getAllWindows: expect.any(Function),
+    })
+    expect(createDocumentResourceService).toHaveBeenCalledWith({
+      store,
+      showItemInFolder: expect.any(Function),
+    })
+    expect(composition.store).toBe(store)
+    expect(composition.saveCoordinator).toBe(saveCoordinator)
+    expect(composition.commandService).toBe(commandService)
+    expect(composition.effectService).toBe(effectService)
+    expect(composition.resourceService).toBe(resourceService)
+    expect(runtime.store).toBe(store)
+    expect(runtime.saveCoordinator).toBe(saveCoordinator)
+    expect(runtime.commandService).toBe(commandService)
+    expect(runtime.effectService).toBe(effectService)
+    expect(runtime.resourceService).toBe(resourceService)
+    expect(runtime.windowBridge).toBe(composition.windowBridge)
+  })
+
   it('必须作为统一组合根暴露 dispatch / executeUiCommand / executeSyncQuery / getSessionSnapshot / getDocumentContext', () => {
     const { runtime } = createRuntimeContext()
 
