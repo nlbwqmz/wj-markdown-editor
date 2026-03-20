@@ -285,7 +285,7 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     expect(createDocumentResourceService).not.toHaveBeenCalled()
   })
 
-  it('windowLifecycleService 必须等显式调用 initializeSessionRuntime 后才创建 runtime 单例，且重复初始化保持幂等', async () => {
+  it('windowLifecycleService 不应再对外暴露 initializeSessionRuntime，避免主入口继续拼装 runtime 初始化依赖', async () => {
     const { default: winInfoUtil } = await import('../windowLifecycleService.js')
 
     expect(createDocumentSessionStore).not.toHaveBeenCalled()
@@ -294,29 +294,7 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     expect(createDocumentEffectService).not.toHaveBeenCalled()
     expect(createWindowSessionBridge).not.toHaveBeenCalled()
     expect(createDocumentResourceService).not.toHaveBeenCalled()
-
-    const firstRuntime = winInfoUtil.initializeSessionRuntime()
-    const secondRuntime = winInfoUtil.initializeSessionRuntime()
-
-    expect(createDocumentSessionStore).toHaveBeenCalledTimes(1)
-    expect(createSaveCoordinator).toHaveBeenCalledTimes(1)
-    expect(createDocumentCommandService).toHaveBeenCalledTimes(1)
-    expect(createDocumentEffectService).toHaveBeenCalledTimes(1)
-    expect(createWindowSessionBridge).toHaveBeenCalledTimes(1)
-    expect(createDocumentResourceService).toHaveBeenCalledTimes(1)
-    expect(createSaveCoordinator).toHaveBeenCalledWith()
-    expect(createDocumentCommandService).toHaveBeenCalledWith(expect.not.objectContaining({
-      now: expect.anything(),
-    }))
-    expect(createDocumentResourceService).toHaveBeenCalledWith(expect.not.objectContaining({
-      resourceUtil: expect.anything(),
-    }))
-    expect(firstRuntime.saveCoordinator).toBeDefined()
-    expect(secondRuntime.saveCoordinator).toBe(firstRuntime.saveCoordinator)
-    expect(secondRuntime.store).toBe(firstRuntime.store)
-    expect(secondRuntime.commandService).toBe(firstRuntime.commandService)
-    expect(secondRuntime.effectService).toBe(firstRuntime.effectService)
-    expect(secondRuntime.windowBridge).toBe(firstRuntime.windowBridge)
-    expect(secondRuntime.resourceService).toBe(firstRuntime.resourceService)
+    expect(winInfoUtil.initializeSessionRuntime).toBeUndefined()
+    expect(Object.keys(winInfoUtil)).not.toContain('initializeSessionRuntime')
   })
 })

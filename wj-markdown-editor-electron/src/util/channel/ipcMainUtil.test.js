@@ -13,6 +13,7 @@ const {
   ipcMainHandle,
   ipcMainOn,
   openLocalResourceInFolder,
+  runtimeExecuteSyncQuery,
   runtimeExecuteUiCommand,
   send,
   showItemInFolder,
@@ -30,6 +31,7 @@ const {
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
     openLocalResourceInFolder: vi.fn(),
+    runtimeExecuteSyncQuery: vi.fn(),
     runtimeExecuteUiCommand: vi.fn(),
     send: vi.fn(),
     showItemInFolder: vi.fn(),
@@ -227,6 +229,7 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
     browserWindowFromWebContents.mockReset()
     openLocalResourceInFolder.mockReset()
     getDocumentSessionRuntime.mockReset()
+    runtimeExecuteSyncQuery.mockReset()
     runtimeExecuteUiCommand.mockReset()
     send.mockReset()
     showItemInFolder.mockReset()
@@ -236,6 +239,7 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
       win: { id: 1 },
     }))
     getDocumentSessionRuntime.mockReturnValue({
+      executeSyncQuery: runtimeExecuteSyncQuery,
       executeUiCommand: runtimeExecuteUiCommand,
     })
   })
@@ -401,29 +405,28 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
     })
   })
 
-  it('新的 document.resource.open-in-folder 契约也必须走统一资源服务边界', async () => {
+  it('新的 document.resource.open-in-folder 契约也必须先经 runtime 统一命令入口，再由 runtime 决定资源边界', async () => {
     const { sender, sendToMainHandler } = await setupOpenFolderHandler()
-    executeResourceCommand.mockResolvedValue({
+    const openPayload = {
+      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    }
+    const openResult = {
       ok: true,
       opened: true,
       reason: 'opened',
       path: 'D:\\docs\\assets\\demo.png',
-    })
+    }
+    executeResourceCommand.mockResolvedValue(openResult)
+    runtimeExecuteUiCommand.mockResolvedValue(openResult)
 
-    await sendToMainHandler({ sender }, {
+    const result = await sendToMainHandler({ sender }, {
       event: 'document.resource.open-in-folder',
-      data: {
-        resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
-      },
+      data: openPayload,
     })
 
-    expect(executeResourceCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.resource.open-in-folder', {
-      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
-    })
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.resource.open-in-folder', openPayload)
+    expect(executeResourceCommand).not.toHaveBeenCalled()
+    expect(result).toEqual(openResult)
   })
 
   it('资源管理器打开失败时，应该通过 window.effect.message 向渲染进程发送明确失败提示，而不是静默吞掉', async () => {
@@ -471,9 +474,11 @@ describe('ipcMainUtil sync comparable key', () => {
     getDocumentSessionRuntime.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
+    runtimeExecuteSyncQuery.mockReset()
     runtimeExecuteUiCommand.mockReset()
     browserWindowFromWebContents.mockReset()
     getDocumentSessionRuntime.mockReturnValue({
+      executeSyncQuery: runtimeExecuteSyncQuery,
       executeUiCommand: runtimeExecuteUiCommand,
     })
   })
@@ -514,6 +519,7 @@ describe('ipcMainUtil sync comparable key', () => {
     const win = { id: 1 }
     browserWindowFromWebContents.mockReturnValue(win)
     executeResourceCommandSync.mockReturnValue('wj-local-file:d:/docs/demo.png')
+    runtimeExecuteSyncQuery.mockReturnValue('wj-local-file:d:/docs/demo.png')
 
     await import('./ipcMainUtil.js')
 
@@ -523,11 +529,8 @@ describe('ipcMainUtil sync comparable key', () => {
       data: './docs/demo.png?size=full',
     })
 
-    expect(executeResourceCommandSync).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'resource.get-comparable-key', './docs/demo.png?size=full')
+    expect(runtimeExecuteSyncQuery).toHaveBeenCalledWith(1, 'resource.get-comparable-key', './docs/demo.png?size=full')
+    expect(executeResourceCommandSync).not.toHaveBeenCalled()
     expect(event.returnValue).toBe('wj-local-file:d:/docs/demo.png')
   })
 
@@ -567,9 +570,11 @@ describe('ipcMainUtil save', () => {
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
+    runtimeExecuteSyncQuery.mockReset()
     runtimeExecuteUiCommand.mockReset()
     send.mockReset()
     getDocumentSessionRuntime.mockReturnValue({
+      executeSyncQuery: runtimeExecuteSyncQuery,
       executeUiCommand: runtimeExecuteUiCommand,
     })
   })
@@ -648,8 +653,10 @@ describe('ipcMainUtil command mapping', () => {
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
+    runtimeExecuteSyncQuery.mockReset()
     runtimeExecuteUiCommand.mockReset()
     getDocumentSessionRuntime.mockReturnValue({
+      executeSyncQuery: runtimeExecuteSyncQuery,
       executeUiCommand: runtimeExecuteUiCommand,
     })
   })

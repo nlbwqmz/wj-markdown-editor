@@ -67,6 +67,46 @@ function createRuntimeContext() {
   }) => {
     return await runtime.dispatch(windowId, command, payload)
   })
+  const executeResourceCommand = vi.fn(async ({
+    command,
+    payload,
+  }) => {
+    switch (command) {
+      case 'document.resource.open-in-folder':
+        return {
+          ok: true,
+          opened: true,
+          reason: 'opened',
+          path: payload?.resourceUrl || null,
+        }
+      case 'document.resource.delete-local':
+        return {
+          ok: true,
+          removed: true,
+          reason: 'deleted',
+          path: payload?.resourceUrl || null,
+        }
+      case 'resource.get-info':
+        return {
+          ok: true,
+          reason: 'resolved',
+          path: payload?.resourceUrl || null,
+        }
+      default:
+        return {
+          ok: true,
+        }
+    }
+  })
+  const executeSyncQuery = vi.fn(({
+    command,
+    payload,
+  }) => {
+    if (command === 'resource.get-comparable-key') {
+      return `comparable:${payload}`
+    }
+    return null
+  })
   const windowBridge = {
     getSessionSnapshot: vi.fn(windowId => ({
       sessionId: `session-${windowId}`,
@@ -94,6 +134,8 @@ function createRuntimeContext() {
     commandRunner,
     effectService,
     executeDocumentCommand,
+    executeResourceCommand,
+    executeSyncQuery,
     windowBridge,
     getWindowContext,
     getDocumentContext,
@@ -105,6 +147,8 @@ function createRuntimeContext() {
     commandRunner,
     effectService,
     executeDocumentCommand,
+    executeResourceCommand,
+    executeSyncQuery,
     windowBridge,
     getWindowContext,
     getDocumentContext,
@@ -122,6 +166,7 @@ describe('documentSessionRuntime', () => {
 
     expect(typeof runtime.dispatch).toBe('function')
     expect(typeof runtime.executeUiCommand).toBe('function')
+    expect(typeof runtime.executeSyncQuery).toBe('function')
     expect(typeof runtime.getSessionSnapshot).toBe('function')
     expect(typeof runtime.getDocumentContext).toBe('function')
     expect(typeof runtime.publishRecentListChanged).toBe('function')
@@ -175,6 +220,25 @@ describe('documentSessionRuntime', () => {
     expect(commandRunner.run).toHaveBeenCalledTimes(3)
   })
 
+  it('document.request-close 也必须经 runtime 回流到真实 dispatch 链路，不能继续散落在外围关窗适配器里', async () => {
+    const { runtime, executeDocumentCommand, commandRunner, effectService } = createRuntimeContext()
+
+    await runtime.executeUiCommand(4, 'document.request-close', null)
+
+    expect(executeDocumentCommand).toHaveBeenCalledWith(expect.objectContaining({
+      windowId: 4,
+      command: 'document.request-close',
+      payload: null,
+      runtime,
+    }))
+    expect(commandRunner.run).toHaveBeenCalledWith(expect.objectContaining({
+      windowId: 4,
+      command: 'document.request-close',
+      payload: null,
+    }))
+    expect(effectService.executeCommand).not.toHaveBeenCalled()
+  })
+
   it('document.cancel-close / confirm-force-close / external.apply / external.ignore 也必须经 runtime 进入统一命令链路', async () => {
     const { runtime, executeDocumentCommand } = createRuntimeContext()
 
@@ -211,6 +275,64 @@ describe('documentSessionRuntime', () => {
         version: 3,
       },
     }))
+  })
+
+  it('document.resource.open-in-folder / delete-local / resource.get-info 必须经 runtime 统一资源路由，不能继续回落到 effectService', async () => {
+    const {
+      runtime,
+      executeResourceCommand,
+      effectService,
+    } = createRuntimeContext()
+    const openPayload = {
+      resourceUrl: 'wj://2e2f6173736574732f64656d6f2e706e67',
+    }
+    const deletePayload = {
+      resourceUrl: 'wj://2e2f6173736574732f72656d6f76652e706e67',
+    }
+    const infoPayload = {
+      resourceUrl: 'wj://2e2f6173736574732f696e666f2e706e67',
+    }
+
+    await runtime.executeUiCommand(6, 'document.resource.open-in-folder', openPayload)
+    await runtime.executeUiCommand(6, 'document.resource.delete-local', deletePayload)
+    await runtime.executeUiCommand(6, 'resource.get-info', infoPayload)
+
+    expect(executeResourceCommand).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      windowId: 6,
+      command: 'document.resource.open-in-folder',
+      payload: openPayload,
+      runtime,
+    }))
+    expect(executeResourceCommand).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      windowId: 6,
+      command: 'document.resource.delete-local',
+      payload: deletePayload,
+      runtime,
+    }))
+    expect(executeResourceCommand).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      windowId: 6,
+      command: 'resource.get-info',
+      payload: infoPayload,
+      runtime,
+    }))
+    expect(effectService.executeCommand).not.toHaveBeenCalled()
+  })
+
+  it('resource.get-comparable-key 必须通过 runtime 的专用同步入口执行，不能继续混入 executeUiCommand 异步链路', () => {
+    const { runtime, executeSyncQuery, effectService } = createRuntimeContext()
+    const payload = './assets/demo.png?size=full'
+
+    const result = runtime.executeSyncQuery?.(7, 'resource.get-comparable-key', payload)
+
+    expect(typeof runtime.executeSyncQuery).toBe('function')
+    expect(executeSyncQuery).toHaveBeenCalledWith(expect.objectContaining({
+      windowId: 7,
+      command: 'resource.get-comparable-key',
+      payload,
+      runtime,
+    }))
+    expect(result).toBe(`comparable:${payload}`)
+    expect(effectService.executeCommand).not.toHaveBeenCalled()
   })
 
   it('document.open-path 必须由 runtime 组装打开结果，并在打开其他文档后关闭空白草稿源窗口', async () => {
