@@ -199,7 +199,7 @@ const handlerList = {
     return { name: 'wj-markdown-editor', version: app.getVersion() }
   },
   'check-update': async () => {
-    return await updateUtil.checkUpdate(windowLifecycleService.getAll())
+    return await updateUtil.checkUpdate(windowLifecycleService.listWindows())
   },
   'download-update': () => {
     updateUtil.downloadUpdate(aboutUtil.get())

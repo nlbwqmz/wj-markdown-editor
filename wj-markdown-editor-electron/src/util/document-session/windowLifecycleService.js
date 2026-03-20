@@ -332,12 +332,34 @@ function getAllWindowInfoFacades() {
   return getRegisteredWindowIdList().map(windowId => ensureWindowInfoFacade(windowId))
 }
 
+function getWindowById(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  return getOptionalWindowRegistry()?.getWindowById?.(normalizedWindowId) || null
+}
+
+function getWindowIdByWin(win) {
+  return findRegisteredWindowIdByWin(win)
+}
+
+function getWindowIdByWebContentsId(webContentsId) {
+  const win = (getOptionalWindowRegistry()?.getAllWindows?.() || []).find(item => item?.webContents?.id === webContentsId) || null
+  return win ? findRegisteredWindowIdByWin(win) : null
+}
+
+function listWindows() {
+  return getOptionalWindowRegistry()?.getAllWindows?.() || []
+}
+
 function buildWindowContext(windowId) {
   return getWinInfo(windowId)
 }
 
 function buildDocumentContext(windowId) {
-  return getDocumentContext(getWinInfo(windowId))
+  return getDocumentContext(windowId)
 }
 
 function buildRuntimeHostDeps() {
@@ -1008,7 +1030,21 @@ function getSessionSnapshot(winInfo) {
   return windowBridge.getSessionSnapshot(winInfo.id)
 }
 
-function getDocumentContext(winInfo) {
+function resolveDocumentContextTarget(target) {
+  const windowInfo = getWinInfo(target)
+  if (windowInfo) {
+    return windowInfo
+  }
+
+  if (target && typeof target === 'object' && 'id' in target && 'win' in target) {
+    return target
+  }
+
+  return null
+}
+
+function getDocumentContext(target) {
+  const winInfo = resolveDocumentContextTarget(target)
   const session = getSessionByWinInfo(winInfo)
   const snapshot = session ? deriveDocumentSnapshot(session) : null
 
@@ -1191,7 +1227,7 @@ async function createNew(filePath, isRecent = false) {
   win.once('ready-to-show', () => {
     win.show()
     setTimeout(() => {
-      updateUtil.checkUpdate(getAllWindowInfoFacades())
+      updateUtil.checkUpdate(listWindows())
     }, 30000)
   })
   win.on('unmaximize', () => {
@@ -1293,13 +1329,17 @@ Object.assign(windowLifecycleService, {
   createNew,
   configure: configureWindowLifecycleService,
   getDocumentSessionRuntimeHostDeps,
+  getWindowById,
+  getWindowIdByWin,
+  getWindowIdByWebContentsId,
+  listWindows,
   getWinInfo,
   getAll: () => {
     return getAllWindowInfoFacades()
   },
   getByWebContentsId: (webContentsId) => {
-    const win = (getOptionalWindowRegistry()?.getAllWindows?.() || []).find(item => item?.webContents?.id === webContentsId) || null
-    return win ? findByWin(win) : null
+    const windowId = getWindowIdByWebContentsId(webContentsId)
+    return windowId ? ensureWindowInfoFacade(windowId) : null
   },
   publishWindowMessage,
   getDocumentContext,

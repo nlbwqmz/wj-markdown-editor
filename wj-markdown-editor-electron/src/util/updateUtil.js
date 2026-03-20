@@ -12,18 +12,18 @@ let aboutWinTemp
 
 let newVersion
 
-function broadcastVersionMessage(winAllList, has) {
-  winAllList.forEach((winInfo) => {
-    sendUtil.send(winInfo.win, { event: 'has-new-version', data: has })
+function broadcastVersionMessage(windowList, has) {
+  windowList.forEach((win) => {
+    sendUtil.send(win, { event: 'has-new-version', data: has })
   })
 }
 
-async function checkUpdate(winAllList) {
+async function checkUpdate(windowList) {
   if (!app.isPackaged) {
     return null
   }
   if (newVersion) {
-    broadcastVersionMessage(winAllList, true)
+    broadcastVersionMessage(windowList, true)
     return { finish: true, success: true, version: newVersion }
   }
   return new Promise((resolve) => {
@@ -34,26 +34,26 @@ async function checkUpdate(winAllList) {
         if (res && res.updateInfo && res.updateInfo.version && semver.gt(res.updateInfo.version, app.getVersion())) {
           console.info(`New version ${res.updateInfo.version}`)
           newVersion = res.updateInfo.version
-          broadcastVersionMessage(winAllList, true)
+          broadcastVersionMessage(windowList, true)
           resolve({ finish: true, success: true, version: res.updateInfo.version })
         } else {
-          broadcastVersionMessage(winAllList, false)
+          broadcastVersionMessage(windowList, false)
           resolve({ finish: true, success: true, version: app.getVersion() })
         }
       }).catch((e) => {
         console.error('Check update error', e)
-        broadcastVersionMessage(winAllList, false)
+        broadcastVersionMessage(windowList, false)
         resolve({ finish: true, success: false })
       })
     }).catch((e) => {
       console.error('Check latest error', e.message)
-      broadcastVersionMessage(winAllList, false)
+      broadcastVersionMessage(windowList, false)
       resolve({ finish: true, success: false })
     })
   })
 }
 
-function initUpdater(getAllWinInfoFunc) {
+function initUpdater(getWindowList) {
   if (app.isPackaged) {
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = false
@@ -69,7 +69,7 @@ function initUpdater(getAllWinInfoFunc) {
       }
     })
     schedule.scheduleJob('0 0,10,20,30,40,50 * * * *', async () => {
-      await checkUpdate(getAllWinInfoFunc())
+      await checkUpdate(getWindowList())
     })
   }
 }

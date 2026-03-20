@@ -116,16 +116,16 @@ if (!lock) {
       }).then(() => {})
       return
     }
-    const activeWindow = windowLifecycleService.getAll()[0]
-    activeWindow?.win?.show()
+    const activeWindow = windowLifecycleService.listWindows()[0] || null
+    activeWindow?.show?.()
   })
   logUtil.init()
   app.whenReady().then(async () => {
     const runtime = initializeAppDocumentSessionRuntime()
     Menu.setApplicationMenu(null)
     await configUtil.initConfig((config) => {
-      windowLifecycleService.getAll().forEach((item) => {
-        sendUtil.send(item.win, { event: 'update-config', data: config })
+      windowLifecycleService.listWindows().forEach((win) => {
+        sendUtil.send(win, { event: 'update-config', data: config })
       })
       if (aboutUtil.get()) {
         sendUtil.send(aboutUtil.get(), { event: 'update-config', data: config })
@@ -179,6 +179,6 @@ if (!lock) {
       await windowLifecycleService.createNew(null)
     }
     screenshotsUtil.init()
-    updateUtil.initUpdater(() => windowLifecycleService.getAll())
+    updateUtil.initUpdater(() => windowLifecycleService.listWindows())
   })
 }

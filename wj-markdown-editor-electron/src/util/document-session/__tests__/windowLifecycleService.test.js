@@ -451,6 +451,31 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
   })
 
+  it('只读窗口查询接口必须只暴露窗口对象、窗口身份和文档上下文，不带 facade 宿主状态', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+    const windowId = winInfo.id
+    const win = winInfo.win
+
+    expect(winInfoUtil.getWindowById(windowId)).toBe(win)
+    expect(winInfoUtil.listWindows()).toEqual([win])
+    expect(winInfoUtil.getWindowIdByWin(win)).toBe(windowId)
+    expect(winInfoUtil.getWindowIdByWebContentsId(win.webContents.id)).toBe(windowId)
+    expect(winInfoUtil.getDocumentContext(windowId)).toEqual(expect.objectContaining({
+      path: 'D:/demo.md',
+    }))
+    expect(winInfoUtil.getWindowById(windowId)).not.toHaveProperty('sessionId')
+    expect(winInfoUtil.getWindowById(windowId)).not.toHaveProperty('forceClose')
+    expect(winInfoUtil.getWindowById(windowId)).not.toHaveProperty('externalWatch')
+    expect(winInfoUtil.getDocumentContext(windowId)).not.toHaveProperty('sessionId')
+    expect(winInfoUtil.getDocumentContext(windowId)).not.toHaveProperty('forceClose')
+    expect(winInfoUtil.getDocumentContext(windowId)).not.toHaveProperty('externalWatch')
+  })
+
   it('registry 已移除窗口映射后，lifecycle 查询必须立即视为窗口不存在，即使宿主状态尚未清理', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')

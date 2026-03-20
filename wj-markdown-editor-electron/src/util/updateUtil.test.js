@@ -83,8 +83,8 @@ describe('updateUtil', () => {
     })
 
     const result = await updateUtil.checkUpdate([
-      { win: firstWin },
-      { win: secondWin },
+      firstWin,
+      secondWin,
     ])
 
     expect(result).toEqual({
