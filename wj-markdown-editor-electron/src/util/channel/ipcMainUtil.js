@@ -15,12 +15,12 @@ import screenshotsUtil from '../win/screenshotsUtil.js'
 import settingUtil from '../win/settingUtil.js'
 import sendUtil from './sendUtil.js'
 
-function executeRuntimeUiCommand(winInfo, command, payload) {
-  return getDocumentSessionRuntime().executeUiCommand(winInfo?.id || winInfo?.win?.id || null, command, payload)
+function executeRuntimeUiCommand(windowContext, command, payload) {
+  return getDocumentSessionRuntime().executeUiCommand(windowContext?.windowId || null, command, payload)
 }
 
-function executeRuntimeSyncQuery(winInfo, command, payload) {
-  const windowId = winInfo?.id || winInfo?.win?.id || null
+function executeRuntimeSyncQuery(windowContext, command, payload) {
+  const windowId = windowContext?.windowId || null
   if (windowId == null) {
     // 兼容旧同步查询语义：窗口上下文缺失时平稳返回空值，
     // 让 renderer 继续回退到 rawPath，而不是把异常抛回同步 IPC 调用栈。
@@ -29,8 +29,37 @@ function executeRuntimeSyncQuery(winInfo, command, payload) {
   return getDocumentSessionRuntime().executeSyncQuery(windowId, command, payload)
 }
 
-function getCurrentDocumentPath(winInfo) {
-  return windowLifecycleService.getDocumentContext(winInfo)?.path || null
+function getCurrentDocumentPath(windowContext) {
+  return windowLifecycleService.getDocumentContext(windowContext?.windowId || null)?.path || null
+}
+
+function resolveWindowContextByBrowserWindow(win) {
+  const windowId = windowLifecycleService.getWindowIdByWin(win)
+  if (windowId) {
+    return {
+      windowId,
+      win: windowLifecycleService.getWindowById(windowId) || win,
+    }
+  }
+
+  const parentWin = win?.getParentWindow?.() || null
+  const parentWindowId = windowLifecycleService.getWindowIdByWin(parentWin)
+  if (parentWindowId) {
+    return {
+      windowId: parentWindowId,
+      win: windowLifecycleService.getWindowById(parentWindowId) || parentWin,
+    }
+  }
+
+  return {
+    windowId: null,
+    win: null,
+  }
+}
+
+function resolveWindowContextFromSender(sender) {
+  const win = BrowserWindow.fromWebContents(sender)
+  return resolveWindowContextByBrowserWindow(win)
 }
 
 function createWindowMessageNotifier(win) {
@@ -39,12 +68,12 @@ function createWindowMessageNotifier(win) {
   }
 }
 
-async function uploadImage(winInfo, data) {
+async function uploadImage(windowContext, data) {
   const config = configUtil.getConfig()
-  const documentPath = getCurrentDocumentPath(winInfo)
-  const notify = createWindowMessageNotifier(winInfo.win)
+  const documentPath = getCurrentDocumentPath(windowContext)
+  const notify = createWindowMessageNotifier(windowContext.win)
   if (!imgUtil.check({
-    win: winInfo.win,
+    win: windowContext.win,
     documentPath,
     data,
     config,
@@ -57,7 +86,7 @@ async function uploadImage(winInfo, data) {
     data.name += '.png'
   }
   return imgUtil.save({
-    win: winInfo.win,
+    win: windowContext.win,
     documentPath,
     data,
     config,
@@ -71,8 +100,8 @@ async function uploadImage(winInfo, data) {
  * 路径解析、query/hash 回退和未保存文档判定都必须交给 documentResourceService，
  * IPC 层只负责把结构化结果翻译成当前 renderer 已收口的 `window.effect.message` 契约。
  */
-async function handleResourceOpen(winInfo, data) {
-  const openResult = await executeRuntimeUiCommand(winInfo, 'document.resource.open-in-folder', data)
+async function handleResourceOpen(windowContext, data) {
+  const openResult = await executeRuntimeUiCommand(windowContext, 'document.resource.open-in-folder', data)
   if (!openResult) {
     return openResult
   }
@@ -80,7 +109,7 @@ async function handleResourceOpen(winInfo, data) {
   if (openResult.ok !== true) {
     const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
     if (messageKey) {
-      windowLifecycleService.publishWindowMessage(winInfo, {
+      windowLifecycleService.publishWindowMessage(windowContext.windowId, {
         type: 'warning',
         content: messageKey,
       })
@@ -89,7 +118,7 @@ async function handleResourceOpen(winInfo, data) {
   }
 
   if (openResult.opened !== true && openResult.reason === 'not-found') {
-    windowLifecycleService.publishWindowMessage(winInfo, {
+    windowLifecycleService.publishWindowMessage(windowContext.windowId, {
       type: 'warning',
       content: 'message.theFileDoesNotExist',
     })
@@ -101,18 +130,18 @@ const handlerList = {
   ...settingUtil.channel,
   ...aboutUtil.channel,
   ...guideUtil.channel,
-  'export-start': (winInfo, type) => {
+  'export-start': (windowContext, type) => {
     return exportUtil.createExportWin({
-      parentWindow: winInfo.win,
-      documentContext: windowLifecycleService.getDocumentContext(winInfo),
+      parentWindow: windowContext.win,
+      documentContext: windowLifecycleService.getDocumentContext(windowContext.windowId),
       type,
-      notify: createWindowMessageNotifier(winInfo.win),
+      notify: createWindowMessageNotifier(windowContext.win),
     })
   },
-  'export-end': (winInfo, data) => {
+  'export-end': (windowContext, data) => {
     return exportUtil.doExport({
       data,
-      notify: createWindowMessageNotifier(winInfo.win),
+      notify: createWindowMessageNotifier(windowContext.win),
     })
   },
   'open-dir-select': () => {
@@ -122,27 +151,27 @@ const handlerList = {
     })
     return dirList && dirList.length > 0 ? dirList[0] : undefined
   },
-  'minimize': (winInfo) => {
-    winInfo.win.minimize()
+  'minimize': (windowContext) => {
+    windowContext.win.minimize()
   },
-  'maximize': (winInfo) => {
-    winInfo.win.maximize()
+  'maximize': (windowContext) => {
+    windowContext.win.maximize()
   },
-  'restore': (winInfo) => {
-    winInfo.win.restore()
+  'restore': (windowContext) => {
+    windowContext.win.restore()
   },
-  'always-on-top': (winInfo, isAlwaysOnTop) => {
-    winInfo.win.setAlwaysOnTop(isAlwaysOnTop)
+  'always-on-top': (windowContext, isAlwaysOnTop) => {
+    windowContext.win.setAlwaysOnTop(isAlwaysOnTop)
   },
-  'close': (winInfo) => {
-    winInfo.win.close()
+  'close': (windowContext) => {
+    windowContext.win.close()
   },
-  'force-close': (winInfo) => {
-    windowLifecycleService.requestForceClose(winInfo?.id || winInfo?.win?.id || null)
-    winInfo.win.close()
+  'force-close': (windowContext) => {
+    windowLifecycleService.requestForceClose(windowContext.windowId)
+    windowContext.win.close()
   },
-  'document.open-in-folder': async (winInfo) => {
-    const documentContext = windowLifecycleService.getDocumentContext(winInfo)
+  'document.open-in-folder': async (windowContext) => {
+    const documentContext = windowLifecycleService.getDocumentContext(windowContext.windowId)
     if (!documentContext.path || !documentContext.exists) {
       return {
         ok: false,
@@ -159,52 +188,52 @@ const handlerList = {
       path: documentContext.path,
     }
   },
-  'document.resource.open-in-folder': async (winInfo, data) => await handleResourceOpen(winInfo, data),
+  'document.resource.open-in-folder': async (windowContext, data) => await handleResourceOpen(windowContext, data),
   // renderer 已经切到新的 session 命令名，这里只保留直连入口。
-  'document.save-copy': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.save-copy', null),
-  'document.save': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.save', null),
-  'document.get-session-snapshot': async (winInfo) => {
-    return await executeRuntimeUiCommand(winInfo, 'document.get-session-snapshot', null)
+  'document.save-copy': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save-copy', null),
+  'document.save': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save', null),
+  'document.get-session-snapshot': async (windowContext) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.get-session-snapshot', null)
   },
-  'document.edit': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.edit', data),
-  'document.cancel-close': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.cancel-close', null),
-  'document.confirm-force-close': async winInfo => await executeRuntimeUiCommand(winInfo, 'document.confirm-force-close', null),
-  'document.external.apply': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.external.apply', data),
-  'document.external.ignore': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.external.ignore', data),
+  'document.edit': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.edit', data),
+  'document.cancel-close': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.cancel-close', null),
+  'document.confirm-force-close': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.confirm-force-close', null),
+  'document.external.apply': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.external.apply', data),
+  'document.external.ignore': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.external.ignore', data),
   'create-new': () => {
     windowLifecycleService.createNew().then(() => {})
   },
-  'document.request-open-dialog': async (winInfo) => {
-    return await executeRuntimeUiCommand(winInfo, 'document.request-open-dialog', null)
+  'document.request-open-dialog': async (windowContext) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.request-open-dialog', null)
   },
-  'document.open-path': async (winInfo, data) => {
-    return await executeRuntimeUiCommand(winInfo, 'document.open-path', data)
+  'document.open-path': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.open-path', data)
   },
   'get-config': () => {
     return configUtil.getConfig()
   },
-  'upload-image': async (winInfo, data) => {
-    return await uploadImage(winInfo, data)
+  'upload-image': async (windowContext, data) => {
+    return await uploadImage(windowContext, data)
   },
-  'document.resource.delete-local': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'document.resource.delete-local', data),
-  'resource.get-info': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'resource.get-info', data),
-  'screenshot': (winInfo, data) => {
+  'document.resource.delete-local': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.resource.delete-local', data),
+  'resource.get-info': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'resource.get-info', data),
+  'screenshot': (windowContext, data) => {
     return new Promise((resolve) => {
       const startCapture = () => {
         return new Promise((resolveInner) => {
           screenshotsUtil.startCapture((base64) => {
-            uploadImage(winInfo, { mode: 'local', base64, name: 'image.png' }).then((res) => {
+            uploadImage(windowContext, { mode: 'local', base64, name: 'image.png' }).then((res) => {
               resolveInner(res)
             })
           }, () => {
             if (data.hide === true) {
-              winInfo.win.show()
+              windowContext.win.show()
             }
           })
         })
       }
       if (data.hide === true) {
-        winInfo.win.minimize()
+        windowContext.win.minimize()
         setTimeout(() => {
           startCapture().then((res) => {
             resolve(res)
@@ -248,16 +277,16 @@ const handlerList = {
   'execute-update': () => {
     updateUtil.executeUpdate()
   },
-  'recent.clear': async winInfo => await executeRuntimeUiCommand(winInfo, 'recent.clear', null),
-  'recent.remove': async (winInfo, data) => await executeRuntimeUiCommand(winInfo, 'recent.remove', data),
-  'recent.get-list': async winInfo => await executeRuntimeUiCommand(winInfo, 'recent.get-list', null),
-  'file-upload': (winInfo, filePath) => {
+  'recent.clear': async windowContext => await executeRuntimeUiCommand(windowContext, 'recent.clear', null),
+  'recent.remove': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'recent.remove', data),
+  'recent.get-list': async windowContext => await executeRuntimeUiCommand(windowContext, 'recent.get-list', null),
+  'file-upload': (windowContext, filePath) => {
     return fileUploadUtil.save({
-      win: winInfo.win,
-      documentPath: getCurrentDocumentPath(winInfo),
+      win: windowContext.win,
+      documentPath: getCurrentDocumentPath(windowContext),
       filePath,
       config: configUtil.getConfig(),
-      notify: createWindowMessageNotifier(winInfo.win),
+      notify: createWindowMessageNotifier(windowContext.win),
     })
   },
   'get-global-theme': () => {
@@ -266,33 +295,31 @@ const handlerList = {
 }
 
 const handlerListSync = {
-  'convert-to-absolute-path': (winInfo, filePath) => {
+  'convert-to-absolute-path': (windowContext, filePath) => {
     if (path.isAbsolute(filePath)) {
       return filePath
     }
-    const documentContext = windowLifecycleService.getDocumentContext(winInfo)
+    const documentContext = windowLifecycleService.getDocumentContext(windowContext.windowId)
     if (documentContext.path) {
       return path.resolve(path.dirname(documentContext.path), filePath)
     }
     return null
   },
-  'resource.get-comparable-key': (winInfo, rawPath) => {
-    return executeRuntimeSyncQuery(winInfo, 'resource.get-comparable-key', rawPath)
+  'resource.get-comparable-key': (windowContext, rawPath) => {
+    return executeRuntimeSyncQuery(windowContext, 'resource.get-comparable-key', rawPath)
   },
 }
 
 ipcMain.handle('sendToMain', async (event, json) => {
   if (handlerList[json.event]) {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    return await handlerList[json.event](windowLifecycleService.getWinInfo(win) || windowLifecycleService.getWinInfo(win.getParentWindow()), json.data)
+    return await handlerList[json.event](resolveWindowContextFromSender(event.sender), json.data)
   }
   return false
 })
 
 ipcMain.on('sendToMainSync', (event, json) => {
   if (handlerListSync[json.event]) {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    event.returnValue = handlerListSync[json.event](windowLifecycleService.getWinInfo(win) || windowLifecycleService.getWinInfo(win.getParentWindow()), json.data)
+    event.returnValue = handlerListSync[json.event](resolveWindowContextFromSender(event.sender), json.data)
     return
   }
   event.returnValue = null

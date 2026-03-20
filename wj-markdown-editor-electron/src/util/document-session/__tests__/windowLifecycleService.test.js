@@ -318,8 +318,35 @@ function publishRecentListChangedThroughRuntime(recentList) {
   return getDocumentSessionRuntime().publishRecentListChanged(recentList)
 }
 
-function expectDocumentContent(winInfo, content) {
-  expect(winInfoUtil.getDocumentContext(winInfo).content).toBe(content)
+function listWindowRefs() {
+  return winInfoUtil.listWindows().map((win) => {
+    const windowId = winInfoUtil.getWindowIdByWin(win)
+    return {
+      id: windowId,
+      win,
+    }
+  }).filter(windowRef => windowRef.id != null)
+}
+
+function getWindowRefById(windowId) {
+  const win = winInfoUtil.getWindowById(windowId)
+  if (!win) {
+    return null
+  }
+
+  return {
+    id: windowId,
+    win,
+  }
+}
+
+function getWindowRefByWebContentsId(webContentsId) {
+  const windowId = winInfoUtil.getWindowIdByWebContentsId(webContentsId)
+  return windowId ? getWindowRefById(windowId) : null
+}
+
+function expectDocumentContent(target, content) {
+  expect(winInfoUtil.getDocumentContext(getWindowId(target)).content).toBe(content)
 }
 
 function getCurrentWatchOptions() {
@@ -336,7 +363,7 @@ async function dispatchWatchFileChanged(winInfo, {
   const watchOptions = getCurrentWatchOptions()
   return await executeTestCommand(winInfo, 'watch.file-changed', {
     bindingToken: bindingToken ?? watchOptions?.bindingToken ?? null,
-    watchingPath: watchingPath ?? watchOptions?.filePath ?? winInfoUtil.getDocumentContext(winInfo).path ?? null,
+    watchingPath: watchingPath ?? watchOptions?.filePath ?? winInfoUtil.getDocumentContext(getWindowId(winInfo)).path ?? null,
     observedAt,
     diskContent,
     diskStat,
@@ -351,7 +378,7 @@ async function emitWatchMissing(winInfo, error = new Error('ENOENT'), {
   const watchOptions = getCurrentWatchOptions()
   return await watchOptions?.onMissing?.(error, {
     bindingToken: bindingToken ?? watchOptions?.bindingToken ?? null,
-    watchingPath: watchingPath ?? watchOptions?.filePath ?? winInfoUtil.getDocumentContext(winInfo).path ?? null,
+    watchingPath: watchingPath ?? watchOptions?.filePath ?? winInfoUtil.getDocumentContext(getWindowId(winInfo)).path ?? null,
     observedAt,
   })
 }
@@ -365,7 +392,7 @@ async function emitWatchRestored(winInfo, diskContent, {
   const watchOptions = getCurrentWatchOptions()
   return await watchOptions?.onRestored?.(diskContent, {
     bindingToken: bindingToken ?? watchOptions?.bindingToken ?? null,
-    watchingPath: watchingPath ?? watchOptions?.filePath ?? winInfoUtil.getDocumentContext(winInfo).path ?? null,
+    watchingPath: watchingPath ?? watchOptions?.filePath ?? winInfoUtil.getDocumentContext(getWindowId(winInfo)).path ?? null,
     observedAt,
     diskStat,
   })
@@ -373,7 +400,7 @@ async function emitWatchRestored(winInfo, diskContent, {
 
 describe('windowLifecycleService 生命周期 facade', () => {
   beforeEach(() => {
-    for (const winInfo of [...winInfoUtil.getAll()]) {
+    for (const winInfo of [...listWindowRefs()]) {
       winInfoUtil.deleteEditorWin(winInfo.id)
     }
     resetDocumentSessionRuntime()
@@ -409,46 +436,40 @@ describe('windowLifecycleService 生命周期 facade', () => {
     initializeRuntimeForWindowLifecycleTests()
   })
 
-  it('兼容 winInfo facade 必须让 sessionId 跟随 registry，且 sessionId setter 不得反向改写 registry，同时保留宿主状态可写能力', async () => {
+  it('公共 winInfo facade 导出必须删除，只保留显式 windowId 查询接口', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    const winInfoById = winInfoUtil.getWinInfo(winInfo.id)
-    const winInfoByWebContentsId = winInfoUtil.getByWebContentsId(winInfo.win.webContents.id)
+    const [winInfo] = listWindowRefs()
+    const winInfoById = getWindowRefById(winInfo.id)
+    const winInfoByWebContentsId = getWindowRefByWebContentsId(winInfo.win.webContents.id)
 
-    expect(winInfoUtil.getAll()).toHaveLength(1)
-    expect(winInfoById).toBe(winInfo)
-    expect(winInfoByWebContentsId).toBe(winInfo)
+    expect(listWindowRefs()).toHaveLength(1)
     expect(winInfoById).toMatchObject({
       id: winInfo.id,
       win: winInfo.win,
-      sessionId: winInfo.sessionId,
     })
-
-    lifecycleRegistry.bindSession({
-      windowId: winInfo.id,
-      sessionId: 'session-rebound',
-    })
-
-    expect(winInfo.sessionId).toBe('session-rebound')
-
-    winInfo.sessionId = 'session-shadow'
-
-    expect(lifecycleRegistry.getSessionIdByWindowId(winInfo.id)).toBe('session-rebound')
-    expect(winInfo.sessionId).toBe('session-rebound')
-
-    winInfo.forceClose = true
-    winInfo.externalWatch.pendingChange = {
-      versionHash: 'pending-hash',
-    }
-
-    expect(winInfoUtil.getWinInfo(winInfo.id).forceClose).toBe(true)
-    expect(winInfoUtil.getByWebContentsId(winInfo.win.webContents.id).externalWatch.pendingChange).toEqual({
-      versionHash: 'pending-hash',
-    })
+    expect(winInfoByWebContentsId).toEqual(winInfoById)
+    expect(winInfoUtil.getWindowById(winInfo.id)).toBe(winInfo.win)
+    expect(winInfoUtil.getWindowIdByWebContentsId(winInfo.win.webContents.id)).toBe(winInfo.id)
+    expect(winInfoUtil.getAllWindowInfoFacades).toBeUndefined()
+    expect(winInfoUtil.windowInfoFacadeMap).toBeUndefined()
+    expect(winInfoUtil.createWindowInfoFacade).toBeUndefined()
+    expect(winInfoUtil.ensureWindowInfoFacade).toBeUndefined()
+    expect(winInfoUtil.getWinInfo).toBeUndefined()
+    expect(winInfoUtil.getAll).toBeUndefined()
+    expect(winInfoUtil.getByWebContentsId).toBeUndefined()
+    expect(Object.keys(winInfoUtil)).not.toEqual(expect.arrayContaining([
+      'getAllWindowInfoFacades',
+      'windowInfoFacadeMap',
+      'createWindowInfoFacade',
+      'ensureWindowInfoFacade',
+      'getWinInfo',
+      'getAll',
+      'getByWebContentsId',
+    ]))
   })
 
   it('runtime host deps 构造 effectContext 时，必须只暴露显式 controller，不再暴露旧聚合宿主字段', async () => {
@@ -457,7 +478,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     const dispatchCommand = vi.fn()
     const hostDeps = winInfoUtil.getDocumentSessionRuntimeHostDeps()
     const effectContext = hostDeps.buildRunnerEffectContext({
@@ -493,18 +514,23 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(effectContext).not.toHaveProperty('getExternalWatchContext')
   })
 
-  it('requestForceClose 必须只标记 forceClose 宿主状态，不负责触发原生 close', async () => {
+  it('requestForceClose 必须先只标记强制关闭状态，真正 close 仍由宿主显式触发', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
 
     expect(winInfoUtil.requestForceClose(winInfo.id)).toBe(true)
-    expect(winInfo.forceClose).toBe(true)
     expect(winInfo.win.closeEvents).toHaveLength(0)
-    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(listWindowRefs()).toHaveLength(1)
+
+    const closeEvent = winInfo.win.close()
+    expect(closeEvent.preventDefault).not.toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(listWindowRefs()).toHaveLength(0)
+    })
   })
 
   it('只读窗口查询接口必须只暴露窗口对象、窗口身份和文档上下文，不带 facade 宿主状态', async () => {
@@ -513,7 +539,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     const windowId = winInfo.id
     const win = winInfo.win
 
@@ -538,7 +564,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     expect(winInfoUtil.getDocumentContext({ ...winInfo })).toEqual({
       path: null,
       exists: false,
@@ -554,7 +580,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
 
     expect(winInfoUtil.getDocumentContext({ win: winInfo.win })).toEqual({
       path: null,
@@ -571,11 +597,11 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
 
     lifecycleRegistry.unregisterWindow(winInfo.id)
 
-    expect(winInfoUtil.getDocumentContext(winInfo)).toEqual({
+    expect(winInfoUtil.getDocumentContext(winInfo.id)).toEqual({
       path: null,
       exists: false,
       content: '',
@@ -592,14 +618,13 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
 
     lifecycleRegistry.unregisterWindow(winInfo.id)
 
-    expect(winInfoUtil.getAll()).toHaveLength(0)
-    expect(winInfoUtil.getWinInfo(winInfo.id)).toBeNull()
-    expect(winInfoUtil.getWinInfo(winInfo.win)).toBeNull()
-    expect(winInfoUtil.getByWebContentsId(winInfo.win.webContents.id)).toBeNull()
+    expect(listWindowRefs()).toHaveLength(0)
+    expect(getWindowRefById(winInfo.id)).toBeNull()
+    expect(getWindowRefByWebContentsId(winInfo.win.webContents.id)).toBeNull()
 
     expect(winInfoUtil.deleteEditorWin(winInfo.id)).toBe(true)
   })
@@ -613,8 +638,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# blur 自动保存内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# blur 自动保存内容')
     winInfo.win.emit('blur')
 
     await vi.waitFor(() => {
@@ -643,8 +668,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 关闭前自动保存内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 关闭前自动保存内容')
 
     const closeEvent = winInfo.win.close()
 
@@ -653,13 +678,13 @@ describe('windowLifecycleService 生命周期 facade', () => {
       expect(writeFileMock).toHaveBeenCalledTimes(1)
       expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 关闭前自动保存内容')
     })
-    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(listWindowRefs()).toHaveLength(1)
 
     saveDeferred.resolve()
     await saveDeferred.promise
     await vi.waitFor(() => {
       expect(winInfo.win.closeEvents).toHaveLength(2)
-      expect(winInfoUtil.getAll()).toHaveLength(0)
+      expect(listWindowRefs()).toHaveLength(0)
     })
   })
 
@@ -670,16 +695,16 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     startWatchingMock.mockClear()
     stopWatchingMock.mockClear()
-    winInfoUtil.updateTempContent(winInfo, '# 关闭前自动保存内容')
+    winInfoUtil.updateTempContent(winInfo.id, '# 关闭前自动保存内容')
 
     const closeEvent = winInfo.win.close()
 
     expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => {
-      expect(winInfoUtil.getAll()).toHaveLength(0)
+      expect(listWindowRefs()).toHaveLength(0)
     })
     expect(stopWatchingMock).toHaveBeenCalled()
     expect(startWatchingMock).not.toHaveBeenCalled()
@@ -691,8 +716,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew(null)
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 草稿内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 草稿内容')
 
     const closeEvent = winInfo.win.close()
 
@@ -701,8 +726,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
       expect(showSaveDialogSyncMock).toHaveBeenCalledTimes(1)
     })
     expect(writeFileMock).not.toHaveBeenCalled()
-    expect(winInfoUtil.getAll()).toHaveLength(1)
-    expect(winInfoUtil.getDocumentContext(winInfo).path).toBeNull()
+    expect(listWindowRefs()).toHaveLength(1)
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBeNull()
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'unsaved')).toBe(false)
   })
 
@@ -713,8 +738,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 未保存内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 未保存内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 未保存内容')
     })
@@ -733,7 +758,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
         }),
       }),
     })
-    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(listWindowRefs()).toHaveLength(1)
   })
 
   it('关闭确认继续链路只有在既有 continue path 才允许 allowImmediateClose 置位', async () => {
@@ -743,8 +768,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 未保存内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 未保存内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 未保存内容')
     })
@@ -752,17 +777,20 @@ describe('windowLifecycleService 生命周期 facade', () => {
     const closeEvent = winInfo.win.close()
 
     expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
-    expect(winInfo.allowImmediateClose).toBe(false)
 
     const originalClose = winInfo.win.close
     winInfo.win.close = vi.fn()
 
     await executeTestCommand(winInfo, 'document.confirm-force-close')
 
-    expect(winInfo.allowImmediateClose).toBe(true)
     expect(winInfo.win.close).toHaveBeenCalledTimes(1)
 
     winInfo.win.close = originalClose
+    const immediateCloseEvent = winInfo.win.close()
+    expect(immediateCloseEvent.preventDefault).not.toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(listWindowRefs()).toHaveLength(0)
+    })
   })
 
   it('document.save 在草稿首存成功时，必须只走一次标准选路并正确写入会话路径', async () => {
@@ -770,8 +798,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew(null)
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 草稿内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 草稿内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 草稿内容')
     })
@@ -783,7 +811,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(writeFileMock).toHaveBeenCalledTimes(1)
     expect(writeFileMock).toHaveBeenCalledWith('D:/draft.md', '# 草稿内容')
     expect(saveResult).toBe(true)
-    expect(winInfoUtil.getDocumentContext(winInfo).path).toBe('D:/draft.md')
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/draft.md')
     expectDocumentContent(winInfo, '# 草稿内容')
     const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
     expect(snapshot.content).toBe('# 草稿内容')
@@ -803,8 +831,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 已保存的新内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 已保存的新内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 已保存的新内容')
     })
@@ -823,8 +851,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew(null)
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 草稿内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 草稿内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 草稿内容')
     })
@@ -833,7 +861,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     await expect(executeTestCommand(winInfo, 'document.save')).resolves.toBe(true)
 
     expect(writeFileMock).toHaveBeenCalledWith('D:/draft.md', '# 草稿内容')
-    expect(winInfoUtil.getDocumentContext(winInfo).path).toBe('D:/draft.md')
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/draft.md')
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'window.effect.message',
       data: {
@@ -859,8 +887,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# blur 自动保存内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# blur 自动保存内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# blur 自动保存内容')
     })
@@ -905,8 +933,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# close 自动保存内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# close 自动保存内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# close 自动保存内容')
     })
@@ -928,7 +956,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     const saveResult = await manualSavePromise
 
     expect(saveResult).toBe(true)
-    expect(winInfoUtil.getAll()).toHaveLength(0)
+    expect(listWindowRefs()).toHaveLength(0)
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'window.effect.message')).toBe(false)
   })
 
@@ -944,8 +972,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 第一版内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 第一版内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 第一版内容')
     })
@@ -962,7 +990,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     firstSaveDeferred.resolve()
     await firstSaveDeferred.promise
 
-    winInfoUtil.updateTempContent(winInfo, '# 第二版内容')
+    winInfoUtil.updateTempContent(winInfo.id, '# 第二版内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 第二版内容')
     })
@@ -999,8 +1027,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 尚未落盘的内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 尚未落盘的内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 尚未落盘的内容')
     })
@@ -1055,8 +1083,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地编辑内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地编辑内容')
     })
@@ -1107,8 +1135,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 本地保存版本')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地保存版本')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地保存版本')
     })
@@ -1162,8 +1190,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 待保存的新内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 待保存的新内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 待保存的新内容')
     })
@@ -1205,8 +1233,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew(null)
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 待保存内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 待保存内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 待保存内容')
     })
@@ -1238,7 +1266,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     sendMock.mockClear()
 
     await executeTestCommand(winInfo, 'document.save-copy')
@@ -1266,8 +1294,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 副本内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 副本内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 副本内容')
     })
@@ -1290,7 +1318,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
       ],
     }))
     expect(copySaveResult.copySaveRequestId).toBe(copySaveResult.effects[0].requestId)
-    expect(winInfoUtil.getDocumentContext(winInfo).path).toBe('D:/demo.md')
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/demo.md')
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'window.effect.message',
       data: {
@@ -1308,7 +1336,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     sendMock.mockClear()
 
     await executeTestCommand(winInfo, 'document.save-copy')
@@ -1335,7 +1363,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     sendMock.mockClear()
 
     const result = await executeTestCommand(winInfo, 'dialog.open-target-selected', {
@@ -1354,8 +1382,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
         content: 'message.onlyMarkdownFilesCanBeOpened',
       },
     })
-    expect(winInfoUtil.getAll()).toHaveLength(1)
-    expect(winInfoUtil.getDocumentContext(winInfo).path).toBe('D:/demo.md')
+    expect(listWindowRefs()).toHaveLength(1)
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/demo.md')
   })
 
   it('watch.file-missing 只能通过 snapshot 推送最新 exists=false 与 saved=false，不能再发送 legacy file-missing / file-is-saved', async () => {
@@ -1364,7 +1392,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     sendMock.mockClear()
 
     await emitWatchMissing(winInfo)
@@ -1392,15 +1420,17 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfo.externalWatch.recentInternalSaves = [{
+    const [winInfo] = listWindowRefs()
+    const watchState = getCurrentWatchOptions()?.state
+
+    watchState.recentInternalSaves = [{
       versionHash: 'same-hash',
       savedAt: Date.now(),
     }]
-    winInfo.externalWatch.lastInternalSaveAt = Date.now()
-    winInfo.externalWatch.lastInternalSavedVersion = 'same-hash'
-    winInfo.externalWatch.lastHandledVersionHash = 'same-hash'
-    winInfo.externalWatch.pendingChange = {
+    watchState.lastInternalSaveAt = Date.now()
+    watchState.lastInternalSavedVersion = 'same-hash'
+    watchState.lastHandledVersionHash = 'same-hash'
+    watchState.pendingChange = {
       version: 'pending-1',
       versionHash: 'same-hash',
       content: '# 原始内容',
@@ -1408,11 +1438,11 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await emitWatchMissing(winInfo)
 
-    expect(winInfo.externalWatch.recentInternalSaves).toEqual([])
-    expect(winInfo.externalWatch.lastInternalSaveAt).toBe(0)
-    expect(winInfo.externalWatch.lastInternalSavedVersion).toBeNull()
-    expect(winInfo.externalWatch.lastHandledVersionHash).toBeNull()
-    expect(winInfo.externalWatch.pendingChange).toBeNull()
+    expect(watchState.recentInternalSaves).toEqual([])
+    expect(watchState.lastInternalSaveAt).toBe(0)
+    expect(watchState.lastInternalSavedVersion).toBeNull()
+    expect(watchState.lastHandledVersionHash).toBeNull()
+    expect(watchState.pendingChange).toBeNull()
   })
 
   it('watch.file-changed 在 strategy=apply 时，只能通过 snapshot 收敛，不应再发送 file-content-reloaded / file-is-saved', async () => {
@@ -1427,8 +1457,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地编辑内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地编辑内容')
     })
@@ -1470,8 +1500,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地编辑内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地编辑内容')
     })
@@ -1515,8 +1545,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地编辑内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地编辑内容')
     })
@@ -1549,8 +1579,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地编辑内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地编辑内容')
     })
@@ -1590,8 +1620,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地编辑内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地编辑内容')
     })
@@ -1634,8 +1664,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地编辑内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地编辑内容')
     })
@@ -1700,8 +1730,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地编辑内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地编辑内容')
     })
@@ -1711,7 +1741,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
       observedAt: 1700000005001,
     })
 
-    winInfoUtil.updateTempContent(winInfo, '# 外部新内容')
+    winInfoUtil.updateTempContent(winInfo.id, '# 外部新内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 外部新内容')
     })
@@ -1732,9 +1762,9 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     const watchOptions = startWatchingMock.mock.calls[0][0]
-    winInfoUtil.updateTempContent(winInfo, '# 本地编辑内容')
+    winInfoUtil.updateTempContent(winInfo.id, '# 本地编辑内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 本地编辑内容')
     })
@@ -1764,7 +1794,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     const watchOptions = startWatchingMock.mock.calls[0][0]
 
     // 先用一条当前 token 的有效事件把 event floor 推到更高水位，
@@ -1797,7 +1827,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     const watchOptions = startWatchingMock.mock.calls[0][0]
 
     await emitWatchMissing(winInfo, new Error('ENOENT'), {
@@ -1823,9 +1853,9 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
 
-    winInfoUtil.updateTempContent(winInfo, '# 恢复后的磁盘内容')
+    winInfoUtil.updateTempContent(winInfo.id, '# 恢复后的磁盘内容')
     await vi.waitFor(() => {
       expectDocumentContent(winInfo, '# 恢复后的磁盘内容')
     })
@@ -1852,16 +1882,17 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     const sameHash = 'same-hash'
+    const watchState = getCurrentWatchOptions()?.state
 
-    winInfo.externalWatch.recentInternalSaves = [{
+    watchState.recentInternalSaves = [{
       versionHash: sameHash,
       savedAt: Date.now(),
     }]
-    winInfo.externalWatch.lastInternalSaveAt = Date.now()
-    winInfo.externalWatch.lastInternalSavedVersion = sameHash
-    winInfo.externalWatch.lastHandledVersionHash = sameHash
+    watchState.lastInternalSaveAt = Date.now()
+    watchState.lastInternalSavedVersion = sameHash
+    watchState.lastHandledVersionHash = sameHash
 
     await emitWatchMissing(winInfo, new Error('ENOENT'), {
       observedAt: 1700000005001,
@@ -1882,7 +1913,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
 
     await emitWatchMissing(winInfo, new Error('ENOENT'), {
       observedAt: 1700000005001,
@@ -1909,7 +1940,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     const watchOptions = startWatchingMock.mock.calls[0][0]
     sendMock.mockClear()
 
@@ -1948,16 +1979,16 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
-    winInfoUtil.updateTempContent(winInfo, '# 尚未保存内容')
-    winInfo.forceClose = true
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 尚未保存内容')
+    expect(winInfoUtil.requestForceClose(winInfo.id)).toBe(true)
 
     const closeEvent = winInfo.win.close()
 
     expect(closeEvent.preventDefault).not.toHaveBeenCalled()
     expect(writeFileMock).not.toHaveBeenCalled()
     await vi.waitFor(() => {
-      expect(winInfoUtil.getAll()).toHaveLength(0)
+      expect(listWindowRefs()).toHaveLength(0)
     })
   })
 
@@ -1968,18 +1999,18 @@ describe('windowLifecycleService 生命周期 facade', () => {
     await winInfoUtil.createNew('D:/first.md')
     await winInfoUtil.createNew('D:/second.md')
 
-    const [firstWinInfo, secondWinInfo] = winInfoUtil.getAll()
+    const [firstWinInfo, secondWinInfo] = listWindowRefs()
     recentAddMock.mockClear()
 
     secondWinInfo.win.close()
     await vi.waitFor(() => {
-      expect(winInfoUtil.getAll()).toHaveLength(1)
+      expect(listWindowRefs()).toHaveLength(1)
     })
     expect(recentAddMock).toHaveBeenNthCalledWith(1, 'D:/second.md')
 
     firstWinInfo.win.close()
     await vi.waitFor(() => {
-      expect(winInfoUtil.getAll()).toHaveLength(0)
+      expect(listWindowRefs()).toHaveLength(0)
     })
     expect(recentAddMock).toHaveBeenNthCalledWith(2, 'D:/first.md')
   })
@@ -1992,7 +2023,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     recentAddMock.mockClear()
     recentAddMock.mockReturnValueOnce(closeRecentDeferred.promise)
 
@@ -2000,7 +2031,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
     await Promise.resolve()
-    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(listWindowRefs()).toHaveLength(1)
     expect(appExitMock).not.toHaveBeenCalled()
     expect(recentAddMock).toHaveBeenCalledWith('D:/demo.md')
 
@@ -2008,7 +2039,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     await closeRecentDeferred.promise
 
     await vi.waitFor(() => {
-      expect(winInfoUtil.getAll()).toHaveLength(0)
+      expect(listWindowRefs()).toHaveLength(0)
     })
     expect(appExitMock).toHaveBeenCalledTimes(1)
   })
@@ -2019,7 +2050,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     recentAddMock.mockClear()
     recentAddMock.mockRejectedValueOnce(new Error('recent write failed'))
 
@@ -2027,7 +2058,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => {
-      expect(winInfoUtil.getAll()).toHaveLength(0)
+      expect(listWindowRefs()).toHaveLength(0)
     })
     expect(recentAddMock).toHaveBeenCalledWith('D:/demo.md')
     expect(appExitMock).toHaveBeenCalledTimes(1)
@@ -2045,10 +2076,10 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew('D:/demo.md')
 
-    const [winInfo] = winInfoUtil.getAll()
+    const [winInfo] = listWindowRefs()
     sendMock.mockClear()
 
-    const result = await winInfoUtil.handleLocalResourceLinkOpen(winInfo.win, winInfo, 'wj://2e2f6173736574732f64656d6f2e706e67')
+    const result = await winInfoUtil.handleLocalResourceLinkOpen(winInfo.win, winInfo.id, 'wj://2e2f6173736574732f64656d6f2e706e67')
 
     expect(result).toEqual({
       ok: false,
@@ -2102,7 +2133,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
       reason: 'open-target-missing',
       path: 'D:/missing.md',
     })
-    expect(winInfoUtil.getAll()).toHaveLength(0)
+    expect(listWindowRefs()).toHaveLength(0)
   })
 
   it('显式路径打开入口如果收到相对路径和 baseDir，必须先解析为稳定绝对路径再打开文档', async () => {
@@ -2131,9 +2162,9 @@ describe('windowLifecycleService 生命周期 facade', () => {
       reason: 'opened',
       path: absolutePath,
     }))
-    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(listWindowRefs()).toHaveLength(1)
     expect(browserWindowInstances).toHaveLength(1)
-    expect(winInfoUtil.getDocumentContext(winInfoUtil.getAll()[0]).path).toBe(absolutePath)
+    expect(winInfoUtil.getDocumentContext(listWindowRefs()[0].id).path).toBe(absolutePath)
   })
 
   it('同一文档如果先以相对路径建窗，再以绝对路径打开，也必须复用已有窗口，避免重复开窗', async () => {
@@ -2152,10 +2183,10 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     await winInfoUtil.createNew(relativePath)
 
-    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(listWindowRefs()).toHaveLength(1)
     expect(browserWindowInstances).toHaveLength(1)
-    const [winInfo] = winInfoUtil.getAll()
-    expect(winInfoUtil.getDocumentContext(winInfo).path).toBe(absolutePath)
+    const [winInfo] = listWindowRefs()
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe(absolutePath)
 
     const openResult = await openDocumentPathThroughRuntime(absolutePath, {
       trigger: 'user',
@@ -2166,7 +2197,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
       reason: 'opened',
       path: absolutePath,
     }))
-    expect(winInfoUtil.getAll()).toHaveLength(1)
+    expect(listWindowRefs()).toHaveLength(1)
     expect(browserWindowInstances).toHaveLength(1)
   })
 
@@ -2186,7 +2217,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
       path: 'D:/folder.md',
     })
     expect(readFileMock).not.toHaveBeenCalled()
-    expect(winInfoUtil.getAll()).toHaveLength(0)
+    expect(listWindowRefs()).toHaveLength(0)
   })
 })
 it('document.save 已收口到统一命令入口后，不应继续对外暴露 save facade', () => {

@@ -12,8 +12,10 @@ const {
   exportDoExport,
   fileUploadSave,
   getDocumentSessionRuntime,
-  getWinInfoMock,
+  getDocumentContextMock,
   getLocalResourceComparableKey,
+  getWindowByIdMock,
+  getWindowIdByWinMock,
   imgCheckCallSnapshots,
   imgUtilCheck,
   imgSaveCallSnapshots,
@@ -21,12 +23,35 @@ const {
   ipcMainHandle,
   ipcMainOn,
   openLocalResourceInFolder,
+  registerWindowContext,
   requestForceClose,
+  resetWindowContext,
   runtimeExecuteSyncQuery,
   runtimeExecuteUiCommand,
+  setDocumentContext,
   send,
   showItemInFolder,
 } = vi.hoisted(() => {
+  const windowByIdMap = new Map()
+  const windowIdByWinMap = new Map()
+  const documentContextByWindowIdMap = new Map()
+  const defaultDocumentContext = {
+    path: 'D:\\docs\\note.md',
+    exists: true,
+    content: '# 导出内容',
+  }
+  const emptyDocumentContext = {
+    path: null,
+    exists: false,
+    content: '',
+    saved: false,
+    fileName: 'Unnamed',
+  }
+
+  function normalizeWindowId(windowId) {
+    return windowId == null ? null : String(windowId)
+  }
+
   return {
     appGetVersion: vi.fn(() => '2.15.0'),
     browserWindowFromWebContents: vi.fn(),
@@ -39,8 +64,22 @@ const {
     exportDoExport: vi.fn(),
     fileUploadSave: vi.fn(),
     getDocumentSessionRuntime: vi.fn(),
-    getWinInfoMock: vi.fn(),
+    getDocumentContextMock: vi.fn((windowId) => {
+      const normalizedWindowId = normalizeWindowId(windowId)
+      if (normalizedWindowId == null) {
+        return {
+          ...emptyDocumentContext,
+        }
+      }
+      const documentContext = documentContextByWindowIdMap.get(normalizedWindowId)
+      return {
+        ...defaultDocumentContext,
+        ...(documentContext || {}),
+      }
+    }),
     getLocalResourceComparableKey: vi.fn(),
+    getWindowByIdMock: vi.fn(windowId => windowByIdMap.get(normalizeWindowId(windowId)) || null),
+    getWindowIdByWinMock: vi.fn(win => windowIdByWinMap.get(win) || null),
     imgCheckCallSnapshots: [],
     imgUtilCheck: vi.fn(),
     imgSaveCallSnapshots: [],
@@ -48,9 +87,42 @@ const {
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
     openLocalResourceInFolder: vi.fn(),
+    registerWindowContext: vi.fn(({ windowId, win, documentContext } = {}) => {
+      const normalizedWindowId = normalizeWindowId(windowId)
+      if (!normalizedWindowId || !win) {
+        return
+      }
+      windowByIdMap.set(normalizedWindowId, win)
+      windowIdByWinMap.set(win, windowId)
+      if (documentContext) {
+        documentContextByWindowIdMap.set(normalizedWindowId, {
+          ...defaultDocumentContext,
+          ...documentContext,
+        })
+      } else if (!documentContextByWindowIdMap.has(normalizedWindowId)) {
+        documentContextByWindowIdMap.set(normalizedWindowId, {
+          ...defaultDocumentContext,
+        })
+      }
+    }),
     requestForceClose: vi.fn(),
+    resetWindowContext: vi.fn(() => {
+      windowByIdMap.clear()
+      windowIdByWinMap.clear()
+      documentContextByWindowIdMap.clear()
+    }),
     runtimeExecuteSyncQuery: vi.fn(),
     runtimeExecuteUiCommand: vi.fn(),
+    setDocumentContext: vi.fn((windowId, documentContext) => {
+      const normalizedWindowId = normalizeWindowId(windowId)
+      if (!normalizedWindowId) {
+        return
+      }
+      documentContextByWindowIdMap.set(normalizedWindowId, {
+        ...defaultDocumentContext,
+        ...documentContext,
+      })
+    }),
     send: vi.fn(),
     showItemInFolder: vi.fn(),
   }
@@ -199,24 +271,26 @@ vi.mock('../win/settingUtil.js', () => {
 vi.mock('../document-session/windowLifecycleService.js', () => {
   return {
     default: {
-      getWinInfo: getWinInfoMock,
-      getAll: vi.fn(() => []),
       createNew: vi.fn(),
       executeCommand: vi.fn(),
       executeResourceCommand,
       executeResourceCommandSync,
+      getDocumentContext: getDocumentContextMock,
+      getWindowById: getWindowByIdMock,
+      getWindowIdByWin: getWindowIdByWinMock,
+      listWindows: vi.fn(() => []),
       requestForceClose,
-      publishWindowMessage: vi.fn((winInfo, data) => {
-        send(winInfo.win, {
+      publishWindowMessage: vi.fn((windowId, data) => {
+        const win = getWindowByIdMock(windowId)
+        if (!win) {
+          return null
+        }
+        send(win, {
           event: 'window.effect.message',
           data,
         })
+        return null
       }),
-      getDocumentContext: vi.fn(target => ({
-        path: typeof target === 'object' ? target?.path || null : 'D:\\docs\\note.md',
-        exists: typeof target === 'object' ? target?.exists === true : true,
-        content: typeof target === 'object' && typeof target?.tempContent === 'string' ? target.tempContent : '',
-      })),
       updateTempContent: vi.fn(),
     },
   }
@@ -247,18 +321,24 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
     exportCreateExportWin.mockReset()
     exportDoExport.mockReset()
     fileUploadSave.mockReset()
-    getWinInfoMock.mockReset()
+    getDocumentContextMock.mockClear()
     getLocalResourceComparableKey.mockReset()
+    getWindowByIdMock.mockClear()
+    getWindowIdByWinMock.mockClear()
     imgUtilCheck.mockReset()
     imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
     openLocalResourceInFolder.mockReset()
+    resetWindowContext.mockClear()
+    resetWindowContext()
     requestForceClose.mockReset()
+    registerWindowContext.mockClear()
     getDocumentSessionRuntime.mockReset()
     runtimeExecuteSyncQuery.mockReset()
     runtimeExecuteUiCommand.mockReset()
+    setDocumentContext.mockClear()
     send.mockReset()
     showItemInFolder.mockReset()
     configGetConfig.mockReturnValue({ theme: { global: 'light' } })
@@ -280,13 +360,6 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
       })
       return undefined
     })
-    getWinInfoMock.mockImplementation(() => ({
-      id: 1,
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      tempContent: '# 导出内容',
-      win: { id: 1 },
-    }))
     getDocumentSessionRuntime.mockReturnValue({
       executeSyncQuery: runtimeExecuteSyncQuery,
       executeUiCommand: runtimeExecuteUiCommand,
@@ -302,8 +375,15 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
     })
 
     const sender = { id: 9527 }
-    const win = { id: 1 }
+    const win = {
+      id: 1,
+      getParentWindow: () => null,
+    }
     browserWindowFromWebContents.mockReturnValue(win)
+    registerWindowContext({
+      windowId: 1,
+      win,
+    })
 
     await import('./ipcMainUtil.js')
 
@@ -453,10 +533,9 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
 
   it('document.open-in-folder 在当前文档未保存时，必须返回结构化失败结果，由 renderer 自行提示', async () => {
     const { sender, sendToMainHandler } = await setupOpenFolderHandler()
-    getWinInfoMock.mockReturnValueOnce({
+    setDocumentContext(1, {
       path: null,
       exists: false,
-      win: { id: 2 },
     })
 
     const result = await sendToMainHandler({ sender }, {
@@ -543,9 +622,16 @@ describe('ipcMainUtil sync comparable key', () => {
     exportCreateExportWin.mockReset()
     exportDoExport.mockReset()
     fileUploadSave.mockReset()
+    getDocumentContextMock.mockClear()
     getLocalResourceComparableKey.mockReset()
     getDocumentSessionRuntime.mockReset()
+    getWindowByIdMock.mockClear()
+    getWindowIdByWinMock.mockClear()
+    registerWindowContext.mockClear()
     requestForceClose.mockReset()
+    resetWindowContext.mockClear()
+    resetWindowContext()
+    setDocumentContext.mockClear()
     imgUtilCheck.mockReset()
     imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
@@ -613,6 +699,10 @@ describe('ipcMainUtil sync comparable key', () => {
     const sender = { id: 9527 }
     const win = { id: 1 }
     browserWindowFromWebContents.mockReturnValue(win)
+    registerWindowContext({
+      windowId: 1,
+      win,
+    })
     executeResourceCommandSync.mockReturnValue('wj-local-file:d:/docs/demo.png')
     runtimeExecuteSyncQuery.mockReturnValue('wj-local-file:d:/docs/demo.png')
 
@@ -643,7 +733,6 @@ describe('ipcMainUtil sync comparable key', () => {
       getParentWindow: () => null,
     }
     browserWindowFromWebContents.mockReturnValue(orphanWin)
-    getWinInfoMock.mockReturnValue(null)
 
     await import('./ipcMainUtil.js')
 
@@ -695,8 +784,15 @@ describe('ipcMainUtil save', () => {
     exportCreateExportWin.mockReset()
     exportDoExport.mockReset()
     fileUploadSave.mockReset()
+    getDocumentContextMock.mockClear()
     getDocumentSessionRuntime.mockReset()
+    getWindowByIdMock.mockClear()
+    getWindowIdByWinMock.mockClear()
+    registerWindowContext.mockClear()
     requestForceClose.mockReset()
+    resetWindowContext.mockClear()
+    resetWindowContext()
+    setDocumentContext.mockClear()
     imgUtilCheck.mockReset()
     imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
@@ -741,20 +837,16 @@ describe('ipcMainUtil save', () => {
     const sender = { id: 9527 }
     const win = { id: 1 }
     browserWindowFromWebContents.mockReturnValue(win)
+    registerWindowContext({
+      windowId: 1,
+      win,
+    })
 
     await import('./ipcMainUtil.js')
     const { default: winInfoUtil } = await import('../document-session/windowLifecycleService.js')
-    winInfoUtil.getWinInfo.mockReset()
     winInfoUtil.executeCommand.mockReset()
     winInfoUtil.requestForceClose.mockReset()
     winInfoUtil.updateTempContent.mockReset()
-    winInfoUtil.getWinInfo.mockImplementation(() => ({
-      id: 1,
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      tempContent: '# 导出内容',
-      win: { id: 1 },
-    }))
 
     return {
       sender,
@@ -817,9 +909,15 @@ describe('ipcMainUtil 工具模块参数组装', () => {
     exportCreateExportWin.mockReset()
     exportDoExport.mockReset()
     fileUploadSave.mockReset()
+    getDocumentContextMock.mockClear()
     getDocumentSessionRuntime.mockReset()
-    getWinInfoMock.mockReset()
+    getWindowByIdMock.mockClear()
+    getWindowIdByWinMock.mockClear()
+    registerWindowContext.mockClear()
     requestForceClose.mockReset()
+    resetWindowContext.mockClear()
+    resetWindowContext()
+    setDocumentContext.mockClear()
     imgUtilCheck.mockReset()
     imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
@@ -847,13 +945,6 @@ describe('ipcMainUtil 工具模块参数组装', () => {
       })
       return undefined
     })
-    getWinInfoMock.mockImplementation(() => ({
-      id: 1,
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      tempContent: '# 导出内容',
-      win: { id: 1 },
-    }))
     getDocumentSessionRuntime.mockReturnValue({
       executeSyncQuery: runtimeExecuteSyncQuery,
       executeUiCommand: runtimeExecuteUiCommand,
@@ -871,6 +962,10 @@ describe('ipcMainUtil 工具模块参数组装', () => {
     const sender = { id: 9527 }
     const win = { id: 1 }
     browserWindowFromWebContents.mockReturnValue(win)
+    registerWindowContext({
+      windowId: 1,
+      win,
+    })
 
     await import('./ipcMainUtil.js')
 
@@ -1065,8 +1160,15 @@ describe('ipcMainUtil command mapping', () => {
     exportCreateExportWin.mockReset()
     exportDoExport.mockReset()
     fileUploadSave.mockReset()
+    getDocumentContextMock.mockClear()
     getDocumentSessionRuntime.mockReset()
+    getWindowByIdMock.mockClear()
+    getWindowIdByWinMock.mockClear()
+    registerWindowContext.mockClear()
     requestForceClose.mockReset()
+    resetWindowContext.mockClear()
+    resetWindowContext()
+    setDocumentContext.mockClear()
     imgUtilCheck.mockReset()
     imgUtilSave.mockReset()
     ipcMainHandle.mockReset()
@@ -1110,19 +1212,15 @@ describe('ipcMainUtil command mapping', () => {
     const sender = { id: 9527 }
     const win = { id: 1 }
     browserWindowFromWebContents.mockReturnValue(win)
+    registerWindowContext({
+      windowId: 1,
+      win,
+    })
 
     await import('./ipcMainUtil.js')
     const { default: winInfoUtil } = await import('../document-session/windowLifecycleService.js')
-    winInfoUtil.getWinInfo.mockReset()
     winInfoUtil.executeCommand.mockReset()
     winInfoUtil.updateTempContent.mockReset()
-    winInfoUtil.getWinInfo.mockImplementation(() => ({
-      id: 1,
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      tempContent: '# 导出内容',
-      win: { id: 1 },
-    }))
 
     return {
       sender,
@@ -1279,22 +1377,12 @@ describe('ipcMainUtil command mapping', () => {
       getParentWindow: () => parentWin,
     }
     browserWindowFromWebContents.mockReturnValue(childWin)
+    registerWindowContext({
+      windowId: 1,
+      win: parentWin,
+    })
 
     await import('./ipcMainUtil.js')
-    const { default: winInfoUtil } = await import('../document-session/windowLifecycleService.js')
-    winInfoUtil.getWinInfo.mockImplementation((targetWin) => {
-      if (targetWin?.id === 2) {
-        return null
-      }
-      if (targetWin?.id === 1) {
-        return {
-          path: 'D:\\docs\\note.md',
-          exists: true,
-          win: parentWin,
-        }
-      }
-      return null
-    })
     const snapshot = {
       sessionId: 'session-export-parent',
       content: '# 导出内容',
@@ -1450,15 +1538,11 @@ describe('ipcMainUtil command mapping', () => {
   it('force-close 必须先委托 requestForceClose，再由 IPC 层触发 win.close，且不能透传 requestForceClose 返回值', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     const close = vi.fn()
-    const winInfo = {
-      id: 1,
-      forceClose: false,
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      tempContent: '# 导出内容',
-      win: { id: 1, close },
-    }
-    winInfoUtil.getWinInfo.mockImplementation(() => winInfo)
+    const win = { id: 1, close }
+    registerWindowContext({
+      windowId: 1,
+      win,
+    })
     winInfoUtil.requestForceClose.mockReturnValueOnce(true)
 
     const result = await sendToMainHandler({ sender }, {
@@ -1470,7 +1554,6 @@ describe('ipcMainUtil command mapping', () => {
     expect(close).toHaveBeenCalledTimes(1)
     expect(winInfoUtil.requestForceClose.mock.invocationCallOrder[0]).toBeLessThan(close.mock.invocationCallOrder[0])
     expect(result).toBeUndefined()
-    expect(winInfo.forceClose).toBe(false)
     expect(runtimeExecuteUiCommand).not.toHaveBeenCalled()
   })
 

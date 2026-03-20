@@ -730,7 +730,15 @@ describe('protocolUtil 协议上下文回退', () => {
     }
     const hostStateStore = {
       getWindowState: vi.fn(() => null),
-      findWindowStateByWin: vi.fn(() => null),
+      findWindowStateByWin: vi.fn((targetWin) => {
+        if (targetWin === parentWindow) {
+          return {
+            windowId: parentWindowId,
+            win: parentWindow,
+          }
+        }
+        return null
+      }),
       updateWindowState: vi.fn(),
       unregisterWindowState: vi.fn(),
       registerWindowState: vi.fn(),
@@ -859,7 +867,6 @@ describe('protocolUtil 协议上下文回退', () => {
     windowLifecycleService.configure({
       registry,
     })
-    windowLifecycleService.getWinInfo(parentWindowId)
 
     return {
       childWebContentsId,
@@ -942,24 +949,8 @@ describe('protocolUtil 协议上下文回退', () => {
         }
         return parentWindowId
       }),
-      getWinInfo: vi.fn((target) => {
-        if (target === parentWindow && parentWindowId != null) {
-          return { id: parentWindowId, win: parentWindow }
-        }
-        if (target === directWindowId || target === String(directWindowId)) {
-          return directWindowId == null
-            ? null
-            : { id: directWindowId, win: requestWindow }
-        }
-        if (target === parentWindowId || target === String(parentWindowId)) {
-          return parentWindowId == null
-            ? null
-            : { id: parentWindowId, win: parentWindow }
-        }
-        return null
-      }),
-      getDocumentContext: vi.fn(() => ({
-        path: 'D:/docs/demo.md',
+      getDocumentContext: vi.fn(windowId => ({
+        path: windowId == null ? null : 'D:/docs/demo.md',
       })),
     }
     vi.doMock('./document-session/windowLifecycleService.js', () => ({

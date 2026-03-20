@@ -668,24 +668,8 @@ describe('protocolUtil 协议上下文继承集成', () => {
         }
         return parentWindowId
       }),
-      getWinInfo: vi.fn((target) => {
-        if (target === parentWindow && parentWindowId != null) {
-          return { id: parentWindowId, win: parentWindow }
-        }
-        if (target === directWindowId || target === String(directWindowId)) {
-          return directWindowId == null
-            ? null
-            : { id: directWindowId, win: requestWindow }
-        }
-        if (target === parentWindowId || target === String(parentWindowId)) {
-          return parentWindowId == null
-            ? null
-            : { id: parentWindowId, win: parentWindow }
-        }
-        return null
-      }),
-      getDocumentContext: vi.fn(() => ({
-        path: documentPath,
+      getDocumentContext: vi.fn(windowId => ({
+        path: windowId == null ? null : documentPath,
       })),
     }
     vi.doMock('./document-session/windowLifecycleService.js', () => ({

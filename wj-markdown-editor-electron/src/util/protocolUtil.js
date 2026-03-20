@@ -200,14 +200,12 @@ export default {
             resolvedPath = decodedUrl
           } else {
             const windowId = request.headers.get('X-Window-ID')
-            const winInfo = windowLifecycleService.getWinInfo(windowId)
-            const documentContext = winInfo ? windowLifecycleService.getDocumentContext(winInfo) : null
+            const documentContext = windowLifecycleService.getDocumentContext(windowId)
 
             if (!documentContext?.path) {
               console.warn('[Protocol] Cannot resolve relative path without window context:', {
                 decodedPath: decodedUrl,
                 windowId,
-                hasWinInfo: !!winInfo,
                 hasPath: Boolean(documentContext?.path),
               })
               return new Response('Not Found: No document context for relative path', { status: 404 })

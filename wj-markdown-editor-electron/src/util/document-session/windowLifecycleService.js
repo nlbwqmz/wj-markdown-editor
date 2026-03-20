@@ -41,7 +41,6 @@ const REQUIRED_WINDOW_REGISTRY_METHODS = [
 
 let activeWindowRegistry = null
 const hostStateStore = createWindowHostStateStore()
-const windowInfoFacadeMap = new Map()
 const windowLifecycleService = {}
 
 function assertWindowRegistryContract(registry) {
@@ -109,15 +108,33 @@ function getRegistryWindow(windowId) {
   return getOptionalWindowRegistry()?.getWindowById?.(normalizedWindowId) || null
 }
 
+function getHostWindowState(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  return hostStateStore.getWindowState(normalizedWindowId)
+}
+
+function updateHostWindowState(windowId, updater) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  return hostStateStore.updateWindowState(normalizedWindowId, updater)
+}
+
 function getRegisteredWindowIdList() {
   const registry = getOptionalWindowRegistry()
   if (!registry) {
     return []
   }
 
-  return [...windowInfoFacadeMap.keys()].filter((windowId) => {
-    return registry.getWindowById?.(windowId)
-  })
+  return hostStateStore.getAllWindowStates()
+    .map(windowState => normalizeWindowId(windowState.windowId))
+    .filter(windowId => windowId && registry.getWindowById?.(windowId))
 }
 
 function findRegisteredWindowIdByWin(win) {
@@ -128,17 +145,6 @@ function findRegisteredWindowIdByWin(win) {
   const registry = getOptionalWindowRegistry()
   if (!registry) {
     return null
-  }
-
-  const registeredWins = registry.getAllWindows?.() || []
-  if (!registeredWins.includes(win)) {
-    return null
-  }
-
-  for (const windowId of getRegisteredWindowIdList()) {
-    if (registry.getWindowById?.(windowId) === win) {
-      return windowId
-    }
   }
 
   const windowState = hostStateStore.findWindowStateByWin(win)
@@ -157,179 +163,6 @@ function findRegisteredWindowIdBySessionId(sessionId) {
   return getRegisteredWindowIdList().find((windowId) => {
     return getRegistrySessionId(windowId) === sessionId
   }) || null
-}
-
-function syncDetachedWindowInfoSnapshot(windowId) {
-  const normalizedWindowId = normalizeWindowId(windowId)
-  if (!normalizedWindowId) {
-    return null
-  }
-
-  return windowInfoFacadeMap.get(normalizedWindowId)?.syncSnapshot?.() || null
-}
-
-function createWindowInfoFacade(windowId) {
-  const normalizedWindowId = normalizeWindowId(windowId)
-  const detachedSnapshot = {
-    id: normalizedWindowId,
-    win: null,
-    sessionId: null,
-    externalWatch: null,
-    externalWatchBridge: null,
-    allowImmediateClose: false,
-    forceClose: false,
-    lastClosedManualRequestCompletions: [],
-  }
-
-  function syncSnapshot() {
-    const registeredWin = getRegistryWindow(normalizedWindowId)
-    if (registeredWin) {
-      detachedSnapshot.win = registeredWin
-    }
-
-    const liveState = hostStateStore.getWindowState(normalizedWindowId)
-    if (liveState) {
-      detachedSnapshot.externalWatch = liveState.externalWatch || null
-      detachedSnapshot.externalWatchBridge = liveState.externalWatchBridge || null
-      detachedSnapshot.allowImmediateClose = liveState.allowImmediateClose === true
-      detachedSnapshot.forceClose = liveState.forceClose === true
-      detachedSnapshot.lastClosedManualRequestCompletions = Array.isArray(liveState.lastClosedManualRequestCompletions)
-        ? liveState.lastClosedManualRequestCompletions
-        : []
-    }
-
-    const sessionId = getRegistrySessionId(normalizedWindowId)
-    if (sessionId != null) {
-      detachedSnapshot.sessionId = sessionId
-    }
-
-    return detachedSnapshot
-  }
-
-  function readHostValue(key, defaultValue = null) {
-    const liveState = hostStateStore.getWindowState(normalizedWindowId)
-    if (liveState) {
-      const value = liveState[key]
-      detachedSnapshot[key] = value === undefined ? defaultValue : value
-      return detachedSnapshot[key]
-    }
-
-    if (!(key in detachedSnapshot)) {
-      detachedSnapshot[key] = defaultValue
-    }
-    return detachedSnapshot[key]
-  }
-
-  function writeHostValue(key, value) {
-    detachedSnapshot[key] = value
-    hostStateStore.updateWindowState(normalizedWindowId, (liveState) => {
-      liveState[key] = value
-    })
-  }
-
-  const facade = {}
-  Object.defineProperties(facade, {
-    id: {
-      enumerable: true,
-      get() {
-        return normalizedWindowId
-      },
-    },
-    win: {
-      enumerable: true,
-      get() {
-        const registeredWin = getRegistryWindow(normalizedWindowId)
-        if (registeredWin) {
-          detachedSnapshot.win = registeredWin
-        }
-        return detachedSnapshot.win
-      },
-      set(value) {
-        writeHostValue('win', value)
-      },
-    },
-    sessionId: {
-      enumerable: true,
-      get() {
-        const sessionId = getRegistrySessionId(normalizedWindowId)
-        if (sessionId != null) {
-          detachedSnapshot.sessionId = sessionId
-        }
-        return sessionId ?? detachedSnapshot.sessionId ?? null
-      },
-      set(value) {
-        detachedSnapshot.sessionId = value ?? null
-      },
-    },
-    externalWatch: {
-      enumerable: true,
-      get() {
-        return readHostValue('externalWatch', null)
-      },
-      set(value) {
-        writeHostValue('externalWatch', value)
-      },
-    },
-    externalWatchBridge: {
-      enumerable: true,
-      get() {
-        return readHostValue('externalWatchBridge', null)
-      },
-      set(value) {
-        writeHostValue('externalWatchBridge', value)
-      },
-    },
-    allowImmediateClose: {
-      enumerable: true,
-      get() {
-        return readHostValue('allowImmediateClose', false) === true
-      },
-      set(value) {
-        writeHostValue('allowImmediateClose', value === true)
-      },
-    },
-    forceClose: {
-      enumerable: true,
-      get() {
-        return readHostValue('forceClose', false) === true
-      },
-      set(value) {
-        writeHostValue('forceClose', value === true)
-      },
-    },
-    lastClosedManualRequestCompletions: {
-      enumerable: true,
-      get() {
-        return readHostValue('lastClosedManualRequestCompletions', [])
-      },
-      set(value) {
-        writeHostValue('lastClosedManualRequestCompletions', Array.isArray(value) ? value : [])
-      },
-    },
-  })
-
-  syncSnapshot()
-  return {
-    facade,
-    syncSnapshot,
-  }
-}
-
-function ensureWindowInfoFacade(windowId) {
-  const normalizedWindowId = normalizeWindowId(windowId)
-  if (!normalizedWindowId) {
-    return null
-  }
-
-  if (!windowInfoFacadeMap.has(normalizedWindowId)) {
-    windowInfoFacadeMap.set(normalizedWindowId, createWindowInfoFacade(normalizedWindowId))
-  }
-
-  return windowInfoFacadeMap.get(normalizedWindowId)?.facade || null
-}
-
-function getAllWindowInfoFacades() {
-  return getRegisteredWindowIdList().map(windowId => ensureWindowInfoFacade(windowId))
 }
 
 function getWindowById(windowId) {
@@ -369,7 +202,7 @@ function listWindows() {
 }
 
 function buildWindowContext(windowId) {
-  return getWinInfo(windowId)
+  return createWindowContext(windowId)
 }
 
 function buildDocumentContext(windowId) {
@@ -381,11 +214,10 @@ function buildRuntimeHostDeps() {
     getWindowContext: windowId => buildWindowContext(windowId),
     getDocumentContext: windowId => buildDocumentContext(windowId),
     buildRunnerEffectContext: ({ windowId, dispatchCommand }) => {
-      const winInfo = getWinInfo(windowId)
-      if (!winInfo) {
+      if (!getWindowById(windowId)) {
         return {}
       }
-      return buildEffectContextForWindow(winInfo, {
+      return buildEffectContextForWindow(windowId, {
         dispatchCommand,
       })
     },
@@ -395,8 +227,7 @@ function buildRuntimeHostDeps() {
       payload,
       runtime,
     }) => {
-      const winInfo = getWinInfo(windowId)
-      if (!winInfo) {
+      if (!getWindowById(windowId)) {
         return null
       }
 
@@ -404,15 +235,15 @@ function buildRuntimeHostDeps() {
 
       switch (command) {
         case 'document.save':
-          return executeDocumentSaveCommandWithDispatcher(winInfo, dispatch)
+          return executeDocumentSaveCommandWithDispatcher(windowId, dispatch)
 
         case 'document.save-copy':
-          return executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch)
+          return executeDocumentCopySaveCommandWithDispatcher(windowId, dispatch)
 
         case 'document.external.apply':
         case 'document.external.ignore':
           return executeExternalResolutionCommandWithDispatcher(
-            winInfo,
+            windowId,
             command,
             payload || {},
             dispatch,
@@ -421,12 +252,12 @@ function buildRuntimeHostDeps() {
         case 'document.edit':
           // route leave 需要把 document.edit 当成“session 已经推进到最终正文”的可等待屏障，
           // 因此这里必须等待真实 dispatch 完成，并把最新快照直接返回给调用方。
-          return updateTempContentWithDispatcher(winInfo, payload?.content, dispatch)
+          return updateTempContentWithDispatcher(windowId, payload?.content, dispatch)
 
         case 'document.request-close':
           // BrowserWindow close 事件需要先拿到结构化 effects，再决定 preventDefault 与执行时机；
           // 因此这里不能像普通 UI 命令那样直接跑完整 effect 链。
-          return dispatchCommandStateOnly(winInfo, command, payload)
+          return dispatchCommandStateOnly(windowId, command, payload)
 
         case 'document.cancel-close':
           return dispatch(command, payload)
@@ -434,8 +265,8 @@ function buildRuntimeHostDeps() {
         case 'document.confirm-force-close':
           // 旧 force-close 宿主入口会先打 host flag 再触发原生 close；
           // 此时 close 事件仍需保留既有 preventDefault / finalize 语义，先只推进状态不落地 effect。
-          if (winInfo.forceClose === true) {
-            return dispatchCommandStateOnly(winInfo, command, payload)
+          if (isForceCloseRequested(windowId)) {
+            return dispatchCommandStateOnly(windowId, command, payload)
           }
           return dispatch(command, payload)
 
@@ -470,10 +301,8 @@ function deleteEditorWin(id) {
     return false
   }
 
-  syncDetachedWindowInfoSnapshot(normalizedWindowId)
   getWindowRegistry().unregisterWindow?.(normalizedWindowId)
   hostStateStore.unregisterWindowState(normalizedWindowId)
-  windowInfoFacadeMap.delete(normalizedWindowId)
   return true
 }
 
@@ -483,22 +312,72 @@ function checkWinList() {
   }
 }
 
-function findByWin(win) {
-  const windowId = findRegisteredWindowIdByWin(win)
-  return windowId ? ensureWindowInfoFacade(windowId) : null
-}
-
-function getWinInfo(target) {
-  const normalizedWindowId = normalizeWindowId(target)
-  if (normalizedWindowId) {
-    if (!getRegistryWindow(normalizedWindowId)) {
-      return null
-    }
-    return ensureWindowInfoFacade(normalizedWindowId)
+function createWindowContext(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const win = normalizedWindowId ? getRegistryWindow(normalizedWindowId) : null
+  if (!normalizedWindowId || !win) {
+    return null
   }
 
-  const windowId = findRegisteredWindowIdByWin(target)
-  return windowId ? ensureWindowInfoFacade(windowId) : null
+  return {
+    id: normalizedWindowId,
+    win,
+  }
+}
+
+function getExternalWatchState(windowId) {
+  return getHostWindowState(windowId)?.externalWatch || null
+}
+
+function ensureExternalWatchState(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  const windowState = getHostWindowState(normalizedWindowId)
+  if (!windowState) {
+    return null
+  }
+
+  if (!windowState.externalWatch) {
+    windowState.externalWatch = createExternalWatchState()
+  }
+
+  return windowState.externalWatch
+}
+
+function isAllowImmediateClose(windowId) {
+  return getHostWindowState(windowId)?.allowImmediateClose === true
+}
+
+function setAllowImmediateClose(windowId, allowImmediateClose) {
+  updateHostWindowState(windowId, (windowState) => {
+    windowState.allowImmediateClose = allowImmediateClose === true
+  })
+}
+
+function isForceCloseRequested(windowId) {
+  return getHostWindowState(windowId)?.forceClose === true
+}
+
+function setForceCloseRequested(windowId, forceClose) {
+  updateHostWindowState(windowId, (windowState) => {
+    windowState.forceClose = forceClose === true
+  })
+}
+
+function getClosedManualRequestCompletions(windowId) {
+  const completionList = getHostWindowState(windowId)?.lastClosedManualRequestCompletions
+  return Array.isArray(completionList) ? [...completionList] : []
+}
+
+function setClosedManualRequestCompletions(windowId, completionList) {
+  updateHostWindowState(windowId, (windowState) => {
+    windowState.lastClosedManualRequestCompletions = Array.isArray(completionList)
+      ? [...completionList]
+      : []
+  })
 }
 
 function isWindowAlive(win) {
@@ -509,29 +388,37 @@ function createExternalWatchState() {
   return fileWatchUtil.createWatchState()
 }
 
-function getExternalWatchBridge(winInfo) {
-  if (!winInfo) {
+function getExternalWatchBridge(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
     return null
   }
 
-  if (winInfo.externalWatchBridge) {
-    return winInfo.externalWatchBridge
+  const windowState = getHostWindowState(normalizedWindowId)
+  if (!windowState) {
+    return null
   }
 
-  if (!winInfo.externalWatch) {
-    winInfo.externalWatch = createExternalWatchState()
+  if (windowState.externalWatchBridge) {
+    return windowState.externalWatchBridge
   }
 
-  winInfo.externalWatchBridge = createExternalWatchBridge({
+  const externalWatchState = ensureExternalWatchState(normalizedWindowId)
+  if (!externalWatchState) {
+    return null
+  }
+
+  const externalWatchBridge = createExternalWatchBridge({
     watch,
-    watchState: winInfo.externalWatch,
+    watchState: externalWatchState,
     dispatchCommand: (command, payload, options = {}) => {
-      return dispatchCommand(winInfo, command, payload, options)
+      return dispatchCommand(normalizedWindowId, command, payload, options)
     },
-    getCurrentBindingToken: () => getCurrentWatchBindingToken(winInfo),
-    getCurrentObservedFloor: () => getCurrentWatchObservedFloor(winInfo),
+    getCurrentBindingToken: () => getCurrentWatchBindingToken(normalizedWindowId),
+    getCurrentObservedFloor: () => getCurrentWatchObservedFloor(normalizedWindowId),
   })
-  return winInfo.externalWatchBridge
+  windowState.externalWatchBridge = externalWatchBridge
+  return externalWatchBridge
 }
 
 function appendMarkdownExtension(targetPath) {
@@ -545,33 +432,38 @@ function appendMarkdownExtension(targetPath) {
   return targetPath
 }
 
-function getSessionByWinInfo(winInfo) {
-  if (!winInfo) {
+function getSessionByWindowId(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
     return null
   }
+
   const { store } = ensureSessionRuntimeInitialized()
-  return store.getSession(winInfo.sessionId)
-    || store.getSessionByWindowId(winInfo.id)
+  const sessionId = getRegistrySessionId(normalizedWindowId)
+  return (sessionId ? store.getSession(sessionId) : null)
+    || store.getSessionByWindowId(normalizedWindowId)
 }
 
-function publishSnapshotChanged(winInfo, snapshot) {
-  if (!winInfo?.id) {
+function publishSnapshotChanged(windowId, snapshot) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
     return null
   }
   const { windowBridge } = ensureSessionRuntimeInitialized()
   return windowBridge.publishSnapshotChanged({
-    windowId: winInfo.id,
+    windowId: normalizedWindowId,
     snapshot,
   })
 }
 
-function publishWindowMessage(winInfo, data) {
-  if (!winInfo?.id || !data) {
+function publishWindowMessage(windowId, data) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId || !data) {
     return null
   }
   const { windowBridge } = ensureSessionRuntimeInitialized()
   return windowBridge.publishMessage({
-    windowId: winInfo.id,
+    windowId: normalizedWindowId,
     data,
   })
 }
@@ -580,12 +472,15 @@ function getSnapshotSignature(snapshot) {
   return JSON.stringify(snapshot || null)
 }
 
-function syncWinInfoFromSession(winInfo, session) {
-  if (!winInfo || !session) {
+function syncWindowStateFromSession(windowId, session) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId || !session) {
     return
   }
 
-  winInfo.forceClose = session.closeRuntime.forceClose
+  updateHostWindowState(normalizedWindowId, (windowState) => {
+    windowState.forceClose = session.closeRuntime.forceClose === true
+  })
 }
 
 function createInitialSession({
@@ -623,48 +518,53 @@ function createInitialSession({
   return draftSession
 }
 
-function registerSessionForWindow(winInfo, session) {
+function registerSessionForWindow(windowId, session) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return
+  }
   const { store } = ensureSessionRuntimeInitialized()
   store.createSession(session)
   store.bindWindowToSession({
-    windowId: winInfo.id,
+    windowId: normalizedWindowId,
     sessionId: session.sessionId,
   })
   getWindowRegistry().bindSession?.({
-    windowId: winInfo.id,
+    windowId: normalizedWindowId,
     sessionId: session.sessionId,
   })
-  syncWinInfoFromSession(winInfo, session)
-  publishSnapshotChanged(winInfo)
+  syncWindowStateFromSession(normalizedWindowId, session)
+  publishSnapshotChanged(normalizedWindowId)
 }
 
-function stopExternalWatch(winInfo) {
-  if (!winInfo) {
+function stopExternalWatch(windowId) {
+  if (!normalizeWindowId(windowId)) {
     return true
   }
-  return getExternalWatchBridge(winInfo)?.stop?.() ?? true
+  return getExternalWatchBridge(windowId)?.stop?.() ?? true
 }
 
-function getCurrentWatchBindingToken(winInfo) {
-  const session = getSessionByWinInfo(winInfo)
+function getCurrentWatchBindingToken(windowId) {
+  const session = getSessionByWindowId(windowId)
   return Number.isFinite(session?.watchRuntime?.bindingToken)
     ? session.watchRuntime.bindingToken
     : null
 }
 
-function getCurrentWatchObservedFloor(winInfo) {
-  const session = getSessionByWinInfo(winInfo)
+function getCurrentWatchObservedFloor(windowId) {
+  const session = getSessionByWindowId(windowId)
   return Number.isFinite(session?.watchRuntime?.eventFloorObservedAt)
     ? session.watchRuntime.eventFloorObservedAt
     : 0
 }
 
-function startExternalWatch(winInfo, options = {}) {
-  const session = getSessionByWinInfo(winInfo)
+function startExternalWatch(windowId, options = {}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const session = getSessionByWindowId(normalizedWindowId)
   const requestedPath = typeof options?.watchingPath === 'string' && options.watchingPath.trim() !== ''
     ? options.watchingPath
     : session?.watchRuntime?.watchingPath || session?.documentSource?.path || null
-  return getExternalWatchBridge(winInfo)?.start?.({
+  return getExternalWatchBridge(normalizedWindowId)?.start?.({
     ...options,
     watchingPath: requestedPath,
   }) || {
@@ -675,22 +575,26 @@ function startExternalWatch(winInfo, options = {}) {
   }
 }
 
-function finalizeWindowClose(winInfo, id) {
-  const closingSession = getSessionByWinInfo(winInfo)
-  winInfo.lastClosedManualRequestCompletions = Array.isArray(closingSession?.saveRuntime?.completedManualRequests)
-    ? [...closingSession.saveRuntime.completedManualRequests]
-    : []
-  stopExternalWatch(winInfo)
-  if (winInfo?.sessionId) {
+function finalizeWindowClose(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const closingSession = getSessionByWindowId(normalizedWindowId)
+  setClosedManualRequestCompletions(
+    normalizedWindowId,
+    Array.isArray(closingSession?.saveRuntime?.completedManualRequests)
+      ? closingSession.saveRuntime.completedManualRequests
+      : [],
+  )
+  stopExternalWatch(normalizedWindowId)
+  if (closingSession?.sessionId) {
     const { store } = ensureSessionRuntimeInitialized()
-    store.destroySession(winInfo.sessionId)
+    store.destroySession(closingSession.sessionId)
   }
-  deleteEditorWin(id)
+  deleteEditorWin(normalizedWindowId)
   checkWinList()
 }
 
-async function refreshRecentOrderBeforeClose(winInfo) {
-  const documentPath = getSessionByWinInfo(winInfo)?.documentSource?.path || null
+async function refreshRecentOrderBeforeClose(windowId) {
+  const documentPath = getSessionByWindowId(windowId)?.documentSource?.path || null
   if (!documentPath) {
     return false
   }
@@ -704,51 +608,56 @@ async function refreshRecentOrderBeforeClose(winInfo) {
   }
 }
 
-async function continueWindowClose(winInfo) {
-  if (!isWindowAlive(winInfo?.win)) {
+async function continueWindowClose(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const win = getWindowById(normalizedWindowId)
+  if (!isWindowAlive(win)) {
     return false
   }
 
-  await refreshRecentOrderBeforeClose(winInfo)
-  if (!isWindowAlive(winInfo?.win) || findByWin(winInfo.win) !== winInfo) {
+  await refreshRecentOrderBeforeClose(normalizedWindowId)
+  const liveWin = getWindowById(normalizedWindowId)
+  if (!isWindowAlive(liveWin) || findRegisteredWindowIdByWin(liveWin) !== normalizedWindowId) {
     return false
   }
 
-  winInfo.allowImmediateClose = true
-  winInfo.win.close()
+  setAllowImmediateClose(normalizedWindowId, true)
+  liveWin.close()
   return true
 }
 
 function requestForceClose(windowId) {
-  const winInfo = getWinInfo(windowId)
-  if (!winInfo || !isWindowAlive(winInfo.win)) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const win = getWindowById(normalizedWindowId)
+  if (!normalizedWindowId || !isWindowAlive(win)) {
     return false
   }
 
-  winInfo.forceClose = true
+  setForceCloseRequested(normalizedWindowId, true)
   return true
 }
 
-function dispatchCommandStateOnly(winInfo, command, payload, options = {}) {
-  if (!winInfo) {
+function dispatchCommandStateOnly(windowId, command, payload, options = {}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
     return null
   }
 
   const { commandService } = ensureSessionRuntimeInitialized()
   const publishSnapshotMode = options.publishSnapshotChanged || 'always'
   const previousSnapshot = publishSnapshotMode === 'if-changed'
-    ? getSessionSnapshot(winInfo)
+    ? getSessionSnapshot(normalizedWindowId)
     : null
   const result = commandService.dispatch({
-    windowId: winInfo.id,
+    windowId: normalizedWindowId,
     command,
     payload,
   })
-  syncWinInfoFromSession(winInfo, result.session)
-  const nextSnapshot = result?.snapshot || getSessionSnapshot(winInfo)
+  syncWindowStateFromSession(normalizedWindowId, result.session)
+  const nextSnapshot = result?.snapshot || getSessionSnapshot(normalizedWindowId)
   if (publishSnapshotMode === 'always'
     || getSnapshotSignature(previousSnapshot) !== getSnapshotSignature(nextSnapshot)) {
-    publishSnapshotChanged(winInfo, nextSnapshot)
+    publishSnapshotChanged(normalizedWindowId, nextSnapshot)
   }
   return result
 }
@@ -773,30 +682,33 @@ function getCopyDialogTarget() {
   return appendMarkdownExtension(selectedPath)
 }
 
-async function dispatchCommand(winInfo, command, payload, options = {}) {
-  const result = dispatchCommandStateOnly(winInfo, command, payload, options)
+async function dispatchCommand(windowId, command, payload, options = {}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const result = dispatchCommandStateOnly(normalizedWindowId, command, payload, options)
   if (!result) {
     return null
   }
-  await applyEffects(winInfo, result.effects)
+  await applyEffects(normalizedWindowId, result.effects)
   return result
 }
 
-function shouldRebindExternalWatchAfterSave(winInfo) {
-  if (!winInfo?.win || !isWindowAlive(winInfo.win)) {
+function shouldRebindExternalWatchAfterSave(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const win = getWindowById(normalizedWindowId)
+  if (!isWindowAlive(win)) {
     return false
   }
 
-  if (findByWin(winInfo.win) !== winInfo) {
+  if (findRegisteredWindowIdByWin(win) !== normalizedWindowId) {
     return false
   }
 
-  const session = getSessionByWinInfo(winInfo)
+  const session = getSessionByWindowId(normalizedWindowId)
   return Boolean(session?.documentSource?.path)
 }
 
-function getExternalWatchContext(winInfo) {
-  const session = getSessionByWinInfo(winInfo)
+function getExternalWatchContext(windowId) {
+  const session = getSessionByWindowId(windowId)
   if (!session) {
     return {
       bindingToken: null,
@@ -816,87 +728,84 @@ function getExternalWatchContext(winInfo) {
   }
 }
 
-function focusWindow(winInfo) {
-  if (!isWindowAlive(winInfo?.win)) {
+function focusWindow(windowId) {
+  const win = getWindowById(windowId)
+  if (!isWindowAlive(win)) {
     return false
   }
 
-  if (typeof winInfo.win.isMinimized === 'function' && winInfo.win.isMinimized()) {
-    winInfo.win.restore?.()
+  if (typeof win.isMinimized === 'function' && win.isMinimized()) {
+    win.restore?.()
   }
-  winInfo.win.show?.()
-  winInfo.win.focus?.()
+  win.show?.()
+  win.focus?.()
   return true
 }
 
-function createCloseHostController(winInfo) {
+function createCloseHostController(windowId) {
   return {
-    requestForceClose: () => requestForceClose(winInfo?.id || null),
-    continueWindowClose: () => continueWindowClose(winInfo),
-    finalizeWindowClose: () => finalizeWindowClose(winInfo, winInfo?.id),
-    getClosedManualRequestCompletions: () => {
-      return Array.isArray(winInfo?.lastClosedManualRequestCompletions)
-        ? [...winInfo.lastClosedManualRequestCompletions]
-        : []
-    },
+    requestForceClose: () => requestForceClose(windowId),
+    continueWindowClose: () => continueWindowClose(windowId),
+    finalizeWindowClose: () => finalizeWindowClose(windowId),
+    getClosedManualRequestCompletions: () => getClosedManualRequestCompletions(windowId),
   }
 }
 
-function createExternalWatchController(winInfo) {
+function createExternalWatchController(windowId) {
   return {
-    start: (options = {}) => startExternalWatch(winInfo, options),
-    stop: () => stopExternalWatch(winInfo),
+    start: (options = {}) => startExternalWatch(windowId, options),
+    stop: () => stopExternalWatch(windowId),
     getContext: () => ({
-      ...getExternalWatchContext(winInfo),
-      shouldRebindAfterSave: shouldRebindExternalWatchAfterSave(winInfo),
+      ...getExternalWatchContext(windowId),
+      shouldRebindAfterSave: shouldRebindExternalWatchAfterSave(windowId),
     }),
-    markInternalSave: content => getExternalWatchBridge(winInfo)?.markInternalSave?.(content),
-    settlePendingChange: versionHash => getExternalWatchBridge(winInfo)?.settlePendingChange?.(versionHash),
-    ignorePendingChange: () => getExternalWatchBridge(winInfo)?.ignorePendingChange?.(),
+    markInternalSave: content => getExternalWatchBridge(windowId)?.markInternalSave?.(content),
+    settlePendingChange: versionHash => getExternalWatchBridge(windowId)?.settlePendingChange?.(versionHash),
+    ignorePendingChange: () => getExternalWatchBridge(windowId)?.ignorePendingChange?.(),
   }
 }
 
-function createWindowMessageController(winInfo) {
+function createWindowMessageController(windowId) {
   return {
     publishWindowMessage: (data) => {
-      if (isWindowAlive(winInfo?.win)) {
-        return publishWindowMessage(winInfo, data)
+      if (isWindowAlive(getWindowById(windowId))) {
+        return publishWindowMessage(windowId, data)
       }
       return null
     },
     publishSnapshotChanged: (snapshot) => {
-      if (winInfo?.id) {
-        return publishSnapshotChanged(winInfo, snapshot)
+      if (normalizeWindowId(windowId)) {
+        return publishSnapshotChanged(windowId, snapshot)
       }
       return null
     },
   }
 }
 
-function buildEffectContextForWindow(winInfo, { dispatchCommand }) {
+function buildEffectContextForWindow(windowId, { dispatchCommand }) {
   return {
     dispatchCommand,
     getSaveDialogTarget,
     getCopyDialogTarget,
-    closeHostController: createCloseHostController(winInfo),
+    closeHostController: createCloseHostController(windowId),
     // 关闭确认态已经通过 snapshot.closePrompt 推送给 renderer，
     // 不再补发无消费者的 legacy `unsaved` 事件。
     showUnsavedPrompt: () => {},
     showSaveFailedMessage: (data) => {
-      if (isWindowAlive(winInfo?.win)) {
-        publishWindowMessage(winInfo, data)
+      if (isWindowAlive(getWindowById(windowId))) {
+        publishWindowMessage(windowId, data)
       }
     },
-    externalWatchController: createExternalWatchController(winInfo),
-    windowMessageController: createWindowMessageController(winInfo),
-    focusWindow: () => focusWindow(winInfo),
+    externalWatchController: createExternalWatchController(windowId),
+    windowMessageController: createWindowMessageController(windowId),
+    focusWindow: () => focusWindow(windowId),
   }
 }
 
-async function applyEffects(winInfo, effects = []) {
+async function applyEffects(windowId, effects = []) {
   const { effectService } = ensureSessionRuntimeInitialized()
-  const effectContext = buildEffectContextForWindow(winInfo, {
-    dispatchCommand: (command, payload) => dispatchCommand(winInfo, command, payload),
+  const effectContext = buildEffectContextForWindow(windowId, {
+    dispatchCommand: (command, payload) => dispatchCommand(windowId, command, payload),
   })
 
   for (const effect of effects) {
@@ -907,12 +816,12 @@ async function applyEffects(winInfo, effects = []) {
   }
 }
 
-function getPendingPromptVersion(winInfo) {
-  return getSessionByWinInfo(winInfo)?.externalRuntime?.pendingExternalChange?.version ?? null
+function getPendingPromptVersion(windowId) {
+  return getSessionByWindowId(windowId)?.externalRuntime?.pendingExternalChange?.version ?? null
 }
 
-async function executeExternalResolutionCommandWithDispatcher(winInfo, command, payload = {}, dispatch) {
-  const beforePendingVersion = getPendingPromptVersion(winInfo)
+async function executeExternalResolutionCommandWithDispatcher(windowId, command, payload = {}, dispatch) {
+  const beforePendingVersion = getPendingPromptVersion(windowId)
   const result = await dispatch(command, payload)
   const afterPendingVersion = result?.session?.externalRuntime?.pendingExternalChange?.version ?? null
   const expectedVersion = payload?.version ?? beforePendingVersion
@@ -923,13 +832,13 @@ async function executeExternalResolutionCommandWithDispatcher(winInfo, command, 
   const isApplied = handledPending && resolutionResult === 'applied'
   const isIgnored = handledPending && resolutionResult === 'ignored'
 
-  if (isApplied && winInfo?.externalWatch) {
+  if (isApplied && getExternalWatchState(windowId)) {
     const settledVersionHash = result?.session?.diskSnapshot?.versionHash
-      || winInfo.externalWatch.pendingChange?.versionHash
+      || getExternalWatchState(windowId)?.pendingChange?.versionHash
       || null
-    getExternalWatchBridge(winInfo)?.settlePendingChange?.(settledVersionHash)
-  } else if (isIgnored && winInfo?.externalWatch) {
-    getExternalWatchBridge(winInfo)?.ignorePendingChange?.()
+    getExternalWatchBridge(windowId)?.settlePendingChange?.(settledVersionHash)
+  } else if (isIgnored && getExternalWatchState(windowId)) {
+    getExternalWatchBridge(windowId)?.ignorePendingChange?.()
   }
 
   return {
@@ -940,16 +849,18 @@ async function executeExternalResolutionCommandWithDispatcher(winInfo, command, 
   }
 }
 
-async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
-  const openResult = await getDocumentSessionRuntime().executeUiCommand(
-    winInfo?.id || null,
-    'document.resource.open-in-folder',
+async function handleLocalResourceLinkOpen(win, windowId, resourceUrl) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const targetWin = getWindowById(normalizedWindowId)
+  const openResult = await resourceFileUtil.openLocalResourceInFolder(
+    getDocumentContext(normalizedWindowId),
     resourceUrl,
+    shell.showItemInFolder,
   )
   if (openResult.ok !== true) {
     const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
-    if (messageKey && winInfo?.win) {
-      publishWindowMessage(winInfo, {
+    if (messageKey && targetWin) {
+      publishWindowMessage(normalizedWindowId, {
         type: 'warning',
         content: messageKey,
       })
@@ -959,8 +870,8 @@ async function handleLocalResourceLinkOpen(win, winInfo, resourceUrl) {
 
   if (openResult.opened !== true) {
     const messageKey = resourceFileUtil.getLocalResourceFailureMessageKey(openResult.reason)
-    if (messageKey && winInfo?.win) {
-      publishWindowMessage(winInfo, {
+    if (messageKey && targetWin) {
+      publishWindowMessage(normalizedWindowId, {
         type: 'warning',
         content: messageKey,
       })
@@ -995,8 +906,9 @@ function getCopySaveFailureMessage({ reason, error }) {
   return `另存为失败。${errorDetail}`
 }
 
-async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
-  const session = getSessionByWinInfo(winInfo)
+async function executeDocumentSaveCommandWithDispatcher(windowId, dispatch) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const session = getSessionByWindowId(normalizedWindowId)
   const hadDocumentPath = Boolean(session?.documentSource?.path)
   const saveInvokedDuringClose = session?.closeRuntime?.intent === 'close'
 
@@ -1009,14 +921,14 @@ async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
   if (manualRequestId) {
     // Ctrl+S 的返回值必须只绑定这次 manual request 自己，
     // 不能再因为“系统里后来又起了新的 auto-save”而被拖着继续等待。
-    requestCompletion = await waitForManualSaveRequestCompletion(winInfo, manualRequestId)
+    requestCompletion = await waitForManualSaveRequestCompletion(normalizedWindowId, manualRequestId)
   }
 
-  let finalSession = requestCompletion?.session || getSessionByWinInfo(winInfo)
+  let finalSession = requestCompletion?.session || getSessionByWindowId(normalizedWindowId)
   if (!manualRequestId && finalSession?.saveRuntime?.inFlightJobId) {
     // 兜底逻辑只给“旧运行态里还没 manualRequestId”的异常场景使用，
     // 正常路径必须走 request-id 精确等待。
-    finalSession = await waitForSaveRuntimeToSettle(winInfo)
+    finalSession = await waitForSaveRuntimeToSettle(normalizedWindowId)
   }
 
   const completedRequest = requestCompletion?.completion || findCompletedManualRequest(finalSession, manualRequestId)
@@ -1028,7 +940,7 @@ async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
       : Boolean(finalSession?.documentSource?.path && finalSnapshot?.saved)
   if (saved) {
     if (!saveInvokedDuringClose) {
-      publishWindowMessage(winInfo, {
+      publishWindowMessage(normalizedWindowId, {
         type: 'success',
         content: 'message.saveSuccessfully',
       })
@@ -1040,7 +952,7 @@ async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
   // 如果首存写盘失败，真实错误提示已经在 save.failed 链路里发出，
   // 这里再补 cancelSave 会把磁盘错误误导成用户取消。
   if (!hadDocumentPath && completedRequest?.status === 'cancelled') {
-    publishWindowMessage(winInfo, {
+    publishWindowMessage(normalizedWindowId, {
       type: 'warning',
       content: 'message.cancelSave',
     })
@@ -1049,15 +961,16 @@ async function executeDocumentSaveCommandWithDispatcher(winInfo, dispatch) {
   return false
 }
 
-async function executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch) {
+async function executeDocumentCopySaveCommandWithDispatcher(windowId, dispatch) {
+  const normalizedWindowId = normalizeWindowId(windowId)
   const result = await dispatch('document.save-copy')
-  const finalSession = getSessionByWinInfo(winInfo)
+  const finalSession = getSessionByWindowId(normalizedWindowId)
   const copySaveCompletion = consumeCopySaveRequestCompletion(finalSession, result?.copySaveRequestId)
 
   // compat facade 必须按“当前这一次 save-copy request 自己的 completion”来裁决提示。
   // 否则多个 save-copy 请求交错时，旧 job 的结果就会覆盖新请求，造成成功/失败串线。
   if (copySaveCompletion?.status === 'failed') {
-    publishWindowMessage(winInfo, {
+    publishWindowMessage(normalizedWindowId, {
       type: copySaveCompletion.failureReason === 'same-path' ? 'warning' : 'error',
       content: getCopySaveFailureMessage({
         reason: copySaveCompletion.failureReason,
@@ -1068,12 +981,12 @@ async function executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch) {
   }
 
   if (copySaveCompletion?.status === 'succeeded') {
-    publishWindowMessage(winInfo, {
+    publishWindowMessage(normalizedWindowId, {
       type: 'success',
       content: 'message.saveAsSuccessfully',
     })
   } else if (copySaveCompletion?.status === 'cancelled') {
-    publishWindowMessage(winInfo, {
+    publishWindowMessage(normalizedWindowId, {
       type: 'warning',
       content: 'message.cancelSaveAs',
     })
@@ -1081,7 +994,7 @@ async function executeDocumentCopySaveCommandWithDispatcher(winInfo, dispatch) {
   return result
 }
 
-function updateTempContentWithDispatcher(winInfo, content, dispatch) {
+function updateTempContentWithDispatcher(windowId, content, dispatch) {
   // 编辑更新直接进入统一命令流，
   // Electron 侧其他模块如需读取最新正文，必须回到 session getter，而不是继续依赖旧镜像字段。
   return dispatch('document.edit', {
@@ -1089,39 +1002,40 @@ function updateTempContentWithDispatcher(winInfo, content, dispatch) {
   })
 }
 
-function updateTempContent(winInfo, content) {
+function updateTempContent(windowId, content) {
   return updateTempContentWithDispatcher(
-    winInfo,
+    windowId,
     content,
-    (command, payload, options = {}) => dispatchCommand(winInfo, command, payload, options),
+    (command, payload, options = {}) => dispatchCommand(windowId, command, payload, options),
   )
 }
 
-function getSessionSnapshot(winInfo) {
-  if (!winInfo?.id) {
+function getSessionSnapshot(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
     return null
   }
   const { windowBridge } = ensureSessionRuntimeInitialized()
-  return windowBridge.getSessionSnapshot(winInfo.id)
+  return windowBridge.getSessionSnapshot(normalizedWindowId)
 }
 
-function resolveDocumentContextTarget(target) {
-  const normalizedWindowId = normalizeWindowId(target)
-  if (normalizedWindowId) {
-    return getWinInfo(normalizedWindowId)
+function createEmptyDocumentContext() {
+  return {
+    path: null,
+    exists: false,
+    content: '',
+    saved: false,
+    fileName: 'Unnamed',
   }
-
-  if (!target || typeof target !== 'object') {
-    return null
-  }
-
-  const liveWinInfo = getWinInfo(target?.win)
-  return target === liveWinInfo ? liveWinInfo : null
 }
 
-function getDocumentContext(target) {
-  const winInfo = resolveDocumentContextTarget(target)
-  const session = getSessionByWinInfo(winInfo)
+function getDocumentContext(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId || !getWindowById(normalizedWindowId)) {
+    return createEmptyDocumentContext()
+  }
+
+  const session = getSessionByWindowId(normalizedWindowId)
   const snapshot = session ? deriveDocumentSnapshot(session) : null
 
   return {
@@ -1141,14 +1055,14 @@ function createRuntimeDispatchAdapter(windowId, runtime) {
   })
 }
 
-async function waitForSaveRuntimeToSettle(winInfo, {
+async function waitForSaveRuntimeToSettle(windowId, {
   timeoutMs = 10000,
   pollIntervalMs = 10,
 } = {}) {
   const deadline = Date.now() + timeoutMs
 
   while (Date.now() <= deadline) {
-    const session = getSessionByWinInfo(winInfo)
+    const session = getSessionByWindowId(windowId)
     const saveRuntime = session?.saveRuntime || {}
     const saveStillRunning = Boolean(saveRuntime.inFlightJobId)
       || saveRuntime.status === 'queued'
@@ -1161,7 +1075,7 @@ async function waitForSaveRuntimeToSettle(winInfo, {
     await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
   }
 
-  return getSessionByWinInfo(winInfo)
+  return getSessionByWindowId(windowId)
 }
 
 function findCompletedManualRequest(session, requestId) {
@@ -1188,7 +1102,7 @@ function consumeCopySaveRequestCompletion(session, requestId) {
   })
 }
 
-async function waitForManualSaveRequestCompletion(winInfo, requestId, {
+async function waitForManualSaveRequestCompletion(windowId, requestId, {
   timeoutMs = null,
   pollIntervalMs = 10,
 } = {}) {
@@ -1199,11 +1113,11 @@ async function waitForManualSaveRequestCompletion(winInfo, requestId, {
       break
     }
 
-    const session = getSessionByWinInfo(winInfo)
+    const session = getSessionByWindowId(windowId)
     if (!session) {
       const cachedCompletion = findCompletedManualRequest({
         saveRuntime: {
-          completedManualRequests: winInfo?.lastClosedManualRequestCompletions || [],
+          completedManualRequests: getClosedManualRequestCompletions(windowId),
         },
       }, requestId)
       return {
@@ -1224,7 +1138,7 @@ async function waitForManualSaveRequestCompletion(winInfo, requestId, {
   }
 
   return {
-    session: getSessionByWinInfo(winInfo),
+    session: getSessionByWindowId(windowId),
     completion: null,
   }
 }
@@ -1239,12 +1153,10 @@ async function createNew(filePath, isRecent = false) {
     const existedSession = store.findSessionByComparablePath(normalizedFilePath)
     if (existedSession) {
       const existedWindowId = findRegisteredWindowIdBySessionId(existedSession.sessionId)
-      const existedWinInfo = existedWindowId
-        ? ensureWindowInfoFacade(existedWindowId)
-        : null
-      if (existedWinInfo?.win) {
-        existedWinInfo.win.show()
-        return existedWinInfo
+      const existedWin = existedWindowId ? getWindowById(existedWindowId) : null
+      if (existedWin) {
+        existedWin.show()
+        return createWindowContext(existedWindowId)
       }
     }
   }
@@ -1285,7 +1197,6 @@ async function createNew(filePath, isRecent = false) {
       lastClosedManualRequestCompletions: [],
     },
   })
-  const winInfo = ensureWindowInfoFacade(id)
 
   const session = createInitialSession({
     sessionId: commonUtil.createId(),
@@ -1294,10 +1205,10 @@ async function createNew(filePath, isRecent = false) {
     content,
     isRecent,
   })
-  registerSessionForWindow(winInfo, session)
+  registerSessionForWindow(id, session)
 
   if (exists) {
-    startExternalWatch(winInfo)
+    startExternalWatch(id)
   }
 
   win.once('ready-to-show', () => {
@@ -1320,56 +1231,55 @@ async function createNew(filePath, isRecent = false) {
     if (url.match('^http')) {
       shell.openExternal(url).then(() => {})
     } else if (url.match('^wj://')) {
-      const currentWinInfo = getWinInfo(id)
-      handleLocalResourceLinkOpen(win, currentWinInfo, url).then(() => {}).catch(() => {})
+      handleLocalResourceLinkOpen(win, id, url).then(() => {}).catch(() => {})
     }
     return { action: 'deny' }
   })
 
   win.on('close', (e) => {
-    const currentWinInfo = findByWin(win)
-    if (!currentWinInfo) {
+    const currentWindowId = findRegisteredWindowIdByWin(win)
+    if (!currentWindowId) {
       return
     }
 
-    if (currentWinInfo.allowImmediateClose === true) {
-      currentWinInfo.allowImmediateClose = false
-      finalizeWindowClose(currentWinInfo, id)
+    if (isAllowImmediateClose(currentWindowId)) {
+      setAllowImmediateClose(currentWindowId, false)
+      finalizeWindowClose(currentWindowId)
       return
     }
 
-    const command = currentWinInfo.forceClose === true
+    const command = isForceCloseRequested(currentWindowId)
       ? 'document.confirm-force-close'
       : 'document.request-close'
     const runtime = getDocumentSessionRuntime()
     const handleCloseCommandResult = (result) => {
       const effectList = Array.isArray(result?.effects) ? result.effects : []
 
-      if (currentWinInfo.forceClose === true
+      if (isForceCloseRequested(currentWindowId)
         && effectList.length === 1
         && effectList[0]?.type === 'close-window') {
-        finalizeWindowClose(currentWinInfo, id)
+        finalizeWindowClose(currentWindowId)
         return
       }
 
       if (shouldHoldWindowClose(effectList)) {
-        applyEffects(currentWinInfo, effectList).then(() => {}).catch(() => {})
+        applyEffects(currentWindowId, effectList).then(() => {}).catch(() => {})
         return
       }
 
       if (effectList.length > 0) {
-        applyEffects(currentWinInfo, effectList).then(() => {}).catch(() => {})
+        applyEffects(currentWindowId, effectList).then(() => {}).catch(() => {})
         return
       }
 
-      continueWindowClose(currentWinInfo).then(() => {}).catch(() => {})
+      continueWindowClose(currentWindowId).then(() => {}).catch(() => {})
     }
 
-    if (currentWinInfo.forceClose !== true) {
+    if (!isForceCloseRequested(currentWindowId)) {
       e.preventDefault()
     }
 
-    const closeCommandResult = runtime.executeUiCommand(currentWinInfo.id, command, null)
+    const closeCommandResult = runtime.executeUiCommand(currentWindowId, command, null)
     if (closeCommandResult && typeof closeCommandResult.then === 'function') {
       closeCommandResult
         .then(handleCloseCommandResult)
@@ -1378,15 +1288,15 @@ async function createNew(filePath, isRecent = false) {
       handleCloseCommandResult(closeCommandResult)
     }
 
-    if (currentWinInfo.forceClose === true) {
+    if (isForceCloseRequested(currentWindowId)) {
       return
     }
     return false
   })
 
   win.on('blur', () => {
-    const currentWinInfo = findByWin(win)
-    dispatchCommand(currentWinInfo, 'window.blur').then(() => {}).catch(() => {})
+    const currentWindowId = findRegisteredWindowIdByWin(win)
+    dispatchCommand(currentWindowId, 'window.blur').then(() => {}).catch(() => {})
   })
 
   if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
@@ -1397,7 +1307,7 @@ async function createNew(filePath, isRecent = false) {
     win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: content ? configUtil.getConfig().startPage : 'editor' }).then(() => {})
   }
 
-  return winInfo
+  return createWindowContext(id)
 }
 
 Object.assign(windowLifecycleService, {
@@ -1410,14 +1320,6 @@ Object.assign(windowLifecycleService, {
   getWindowIdByWebContentsId,
   getParentWindowIdByWebContentsId,
   listWindows,
-  getWinInfo,
-  getAll: () => {
-    return getAllWindowInfoFacades()
-  },
-  getByWebContentsId: (webContentsId) => {
-    const windowId = getWindowIdByWebContentsId(webContentsId)
-    return windowId ? ensureWindowInfoFacade(windowId) : null
-  },
   publishWindowMessage,
   getDocumentContext,
   getSessionSnapshot,

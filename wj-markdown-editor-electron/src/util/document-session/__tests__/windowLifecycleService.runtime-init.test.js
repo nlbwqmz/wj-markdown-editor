@@ -329,6 +329,26 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     expect(Object.keys(winInfoUtil)).not.toContain('initializeSessionRuntime')
   })
 
+  it('windowLifecycleService 必须删除旧 winInfo facade 导出，避免主进程消费者继续走隐式上下文', async () => {
+    const moduleNs = await import('../windowLifecycleService.js')
+    const winInfoUtil = moduleNs.default
+
+    expect(moduleNs.getAllWindowInfoFacades).toBeUndefined()
+    expect(moduleNs.windowInfoFacadeMap).toBeUndefined()
+    expect(moduleNs.createWindowInfoFacade).toBeUndefined()
+    expect(moduleNs.ensureWindowInfoFacade).toBeUndefined()
+    expect(moduleNs.getWinInfo).toBeUndefined()
+    expect(moduleNs.getAll).toBeUndefined()
+    expect(moduleNs.getByWebContentsId).toBeUndefined()
+    expect(winInfoUtil.getAllWindowInfoFacades).toBeUndefined()
+    expect(winInfoUtil.windowInfoFacadeMap).toBeUndefined()
+    expect(winInfoUtil.createWindowInfoFacade).toBeUndefined()
+    expect(winInfoUtil.ensureWindowInfoFacade).toBeUndefined()
+    expect(winInfoUtil.getWinInfo).toBeUndefined()
+    expect(winInfoUtil.getAll).toBeUndefined()
+    expect(winInfoUtil.getByWebContentsId).toBeUndefined()
+  })
+
   it('windowLifecycleService 导入阶段不得偷读 runtime 单例，避免把显式初始化重新变回隐式副作用', async () => {
     await import('../windowLifecycleService.js')
 
