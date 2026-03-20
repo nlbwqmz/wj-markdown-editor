@@ -180,7 +180,7 @@ describe('isSafePath - 路径安全验证', () => {
     })
   })
 
-  describe('windows 特定测试', () => {
+  describe('Windows 特定测试', () => {
     it('应该正确处理 Windows 路径分隔符', () => {
       const basePath = 'C:\\Users\\user\\docs'
       const resolvedPath = 'C:\\Users\\user\\docs\\images\\test.png'
@@ -200,7 +200,7 @@ describe('isSafePath - 路径安全验证', () => {
     })
   })
 
-  describe('unix/Linux 特定测试', () => {
+  describe('Unix/Linux 特定测试', () => {
     it('应该阻止访问 /etc 目录', () => {
       const basePath = '/home/user/docs'
       const resolvedPath = '/etc/shadow'
