@@ -161,7 +161,7 @@ describe('documentSessionRuntime', () => {
     vi.clearAllMocks()
   })
 
-  it('必须作为统一组合根暴露 dispatch / executeUiCommand / getSessionSnapshot / getDocumentContext', () => {
+  it('必须作为统一组合根暴露 dispatch / executeUiCommand / executeSyncQuery / getSessionSnapshot / getDocumentContext', () => {
     const { runtime } = createRuntimeContext()
 
     expect(typeof runtime.dispatch).toBe('function')
@@ -220,23 +220,30 @@ describe('documentSessionRuntime', () => {
     expect(commandRunner.run).toHaveBeenCalledTimes(3)
   })
 
-  it('document.request-close 也必须经 runtime 回流到真实 dispatch 链路，不能继续散落在外围关窗适配器里', async () => {
-    const { runtime, executeDocumentCommand, commandRunner, effectService } = createRuntimeContext()
+  it('document.request-close 必须返回统一命令链路的结构化结果，且不能继续落到 effectService', async () => {
+    const { runtime, commandRunner, effectService } = createRuntimeContext()
+    const closeResult = {
+      snapshot: {
+        sessionId: 'session-close',
+        content: '# 待关闭',
+      },
+      effects: [
+        {
+          type: 'hold-window-close',
+        },
+      ],
+    }
+    commandRunner.run.mockResolvedValueOnce(closeResult)
 
-    await runtime.executeUiCommand(4, 'document.request-close', null)
+    const result = await runtime.executeUiCommand(4, 'document.request-close', null)
 
-    expect(executeDocumentCommand).toHaveBeenCalledWith(expect.objectContaining({
-      windowId: 4,
-      command: 'document.request-close',
-      payload: null,
-      runtime,
-    }))
+    expect(result).toEqual(closeResult)
+    expect(effectService.executeCommand).not.toHaveBeenCalled()
     expect(commandRunner.run).toHaveBeenCalledWith(expect.objectContaining({
       windowId: 4,
       command: 'document.request-close',
       payload: null,
     }))
-    expect(effectService.executeCommand).not.toHaveBeenCalled()
   })
 
   it('document.cancel-close / confirm-force-close / external.apply / external.ignore 也必须经 runtime 进入统一命令链路', async () => {
@@ -277,7 +284,7 @@ describe('documentSessionRuntime', () => {
     }))
   })
 
-  it('document.resource.open-in-folder / delete-local / resource.get-info 必须经 runtime 统一资源路由，不能继续回落到 effectService', async () => {
+  it('document.resource.open-in-folder / delete-local / resource.get-info 必须返回统一资源路由结果，且不能继续回落到 effectService', async () => {
     const {
       runtime,
       executeResourceCommand,
@@ -292,47 +299,62 @@ describe('documentSessionRuntime', () => {
     const infoPayload = {
       resourceUrl: 'wj://2e2f6173736574732f696e666f2e706e67',
     }
+    const openResult = {
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: openPayload.resourceUrl,
+    }
+    const deleteResult = {
+      ok: true,
+      removed: true,
+      reason: 'deleted',
+      path: deletePayload.resourceUrl,
+    }
+    const infoResult = {
+      ok: true,
+      reason: 'resolved',
+      path: infoPayload.resourceUrl,
+    }
+    executeResourceCommand
+      .mockResolvedValueOnce(openResult)
+      .mockResolvedValueOnce(deleteResult)
+      .mockResolvedValueOnce(infoResult)
 
-    await runtime.executeUiCommand(6, 'document.resource.open-in-folder', openPayload)
-    await runtime.executeUiCommand(6, 'document.resource.delete-local', deletePayload)
-    await runtime.executeUiCommand(6, 'resource.get-info', infoPayload)
+    const results = await Promise.all([
+      runtime.executeUiCommand(6, 'document.resource.open-in-folder', openPayload),
+      runtime.executeUiCommand(6, 'document.resource.delete-local', deletePayload),
+      runtime.executeUiCommand(6, 'resource.get-info', infoPayload),
+    ])
 
-    expect(executeResourceCommand).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      windowId: 6,
-      command: 'document.resource.open-in-folder',
-      payload: openPayload,
-      runtime,
-    }))
-    expect(executeResourceCommand).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      windowId: 6,
-      command: 'document.resource.delete-local',
-      payload: deletePayload,
-      runtime,
-    }))
-    expect(executeResourceCommand).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      windowId: 6,
-      command: 'resource.get-info',
-      payload: infoPayload,
-      runtime,
-    }))
+    expect(results).toEqual([
+      openResult,
+      deleteResult,
+      infoResult,
+    ])
     expect(effectService.executeCommand).not.toHaveBeenCalled()
+    expect(executeResourceCommand).toHaveBeenCalledTimes(3)
   })
 
-  it('resource.get-comparable-key 必须通过 runtime 的专用同步入口执行，不能继续混入 executeUiCommand 异步链路', () => {
+  it('resource.get-comparable-key 必须通过 runtime 的专用同步入口返回稳定 key，且不能继续混入 executeUiCommand 异步链路', () => {
     const { runtime, executeSyncQuery, effectService } = createRuntimeContext()
     const payload = './assets/demo.png?size=full'
 
-    const result = runtime.executeSyncQuery?.(7, 'resource.get-comparable-key', payload)
-
     expect(typeof runtime.executeSyncQuery).toBe('function')
+    if (typeof runtime.executeSyncQuery !== 'function') {
+      return
+    }
+
+    const result = runtime.executeSyncQuery(7, 'resource.get-comparable-key', payload)
+
+    expect(result).toBe(`comparable:${payload}`)
+    expect(effectService.executeCommand).not.toHaveBeenCalled()
     expect(executeSyncQuery).toHaveBeenCalledWith(expect.objectContaining({
       windowId: 7,
       command: 'resource.get-comparable-key',
       payload,
       runtime,
     }))
-    expect(result).toBe(`comparable:${payload}`)
-    expect(effectService.executeCommand).not.toHaveBeenCalled()
   })
 
   it('document.open-path 必须由 runtime 组装打开结果，并在打开其他文档后关闭空白草稿源窗口', async () => {

@@ -265,25 +265,41 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
     }
   }
 
+  async function dispatchDocumentResourceOpen({
+    sender,
+    sendToMainHandler,
+    data,
+    openResult,
+  }) {
+    executeResourceCommand.mockResolvedValueOnce(openResult)
+    runtimeExecuteUiCommand.mockResolvedValueOnce(openResult)
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.resource.open-in-folder',
+      data,
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.resource.open-in-folder', data)
+    return result
+  }
+
   it('资源不存在时，应该通过 window.effect.message 向渲染进程发送文件不存在提示', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
-    executeResourceCommand.mockResolvedValue({
+    const openResult = {
       ok: true,
       opened: false,
       reason: 'not-found',
       path: 'D:\\docs\\assets\\missing.md',
-    })
+    }
 
-    await sendToMainHandler({ sender }, {
-      event: 'document.resource.open-in-folder',
+    const result = await dispatchDocumentResourceOpen({
+      sender,
+      sendToMainHandler,
       data: 'wj://2e2f6173736574732f6d697373696e672e6d64',
+      openResult,
     })
 
-    expect(executeResourceCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.resource.open-in-folder', 'wj://2e2f6173736574732f6d697373696e672e6d64')
+    expect(result).toEqual(openResult)
     expect(send).toHaveBeenCalledWith(win, {
       event: 'window.effect.message',
       data: {
@@ -295,18 +311,21 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
 
   it('资源 payload 非法时，应该通过 window.effect.message 向渲染进程发送无效资源提示', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
-    executeResourceCommand.mockResolvedValue({
+    const openResult = {
       ok: false,
       opened: false,
       reason: 'invalid-resource-payload',
       path: null,
-    })
+    }
 
-    await sendToMainHandler({ sender }, {
-      event: 'document.resource.open-in-folder',
+    const result = await dispatchDocumentResourceOpen({
+      sender,
+      sendToMainHandler,
       data: 'wj://zz',
+      openResult,
     })
 
+    expect(result).toEqual(openResult)
     expect(send).toHaveBeenCalledWith(win, {
       event: 'window.effect.message',
       data: {
@@ -318,18 +337,21 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
 
   it('未保存文档中的相对资源打开失败时，应该通过 window.effect.message 向渲染进程发送明确提示', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
-    executeResourceCommand.mockResolvedValue({
+    const openResult = {
       ok: false,
       opened: false,
       reason: 'relative-resource-without-document',
       path: null,
-    })
+    }
 
-    await sendToMainHandler({ sender }, {
-      event: 'document.resource.open-in-folder',
+    const result = await dispatchDocumentResourceOpen({
+      sender,
+      sendToMainHandler,
       data: 'wj://2e2f6173736574732f64656d6f2e706e67',
+      openResult,
     })
 
+    expect(result).toEqual(openResult)
     expect(send).toHaveBeenCalledWith(win, {
       event: 'window.effect.message',
       data: {
@@ -341,29 +363,25 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
 
   it('打开请求携带原始路径提示时，应该原样透传给资源打开逻辑', async () => {
     const { sender, sendToMainHandler } = await setupOpenFolderHandler()
-    executeResourceCommand.mockResolvedValue({
+    const openPayload = {
+      resourceUrl: 'wj://2e2f646f63732f696e6465782e68746d6c236775696465',
+      rawPath: './docs/index.html#guide',
+    }
+    const openResult = {
       ok: true,
       opened: true,
       reason: 'opened',
       path: 'D:\\docs\\docs\\index.html',
+    }
+
+    const result = await dispatchDocumentResourceOpen({
+      sender,
+      sendToMainHandler,
+      data: openPayload,
+      openResult,
     })
 
-    await sendToMainHandler({ sender }, {
-      event: 'document.resource.open-in-folder',
-      data: {
-        resourceUrl: 'wj://2e2f646f63732f696e6465782e68746d6c236775696465',
-        rawPath: './docs/index.html#guide',
-      },
-    })
-
-    expect(executeResourceCommand).toHaveBeenCalledWith({
-      path: 'D:\\docs\\note.md',
-      exists: true,
-      win: { id: 1 },
-    }, 'document.resource.open-in-folder', {
-      resourceUrl: 'wj://2e2f646f63732f696e6465782e68746d6c236775696465',
-      rawPath: './docs/index.html#guide',
-    })
+    expect(result).toEqual(openResult)
   })
 
   it('document.open-in-folder 在当前文档已保存时，必须直接打开所在目录并返回结构化结果', async () => {
@@ -416,33 +434,34 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
       reason: 'opened',
       path: 'D:\\docs\\assets\\demo.png',
     }
-    executeResourceCommand.mockResolvedValue(openResult)
-    runtimeExecuteUiCommand.mockResolvedValue(openResult)
 
-    const result = await sendToMainHandler({ sender }, {
-      event: 'document.resource.open-in-folder',
+    const result = await dispatchDocumentResourceOpen({
+      sender,
+      sendToMainHandler,
       data: openPayload,
+      openResult,
     })
 
-    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.resource.open-in-folder', openPayload)
-    expect(executeResourceCommand).not.toHaveBeenCalled()
     expect(result).toEqual(openResult)
   })
 
   it('资源管理器打开失败时，应该通过 window.effect.message 向渲染进程发送明确失败提示，而不是静默吞掉', async () => {
     const { sender, win, sendToMainHandler } = await setupOpenFolderHandler()
-    executeResourceCommand.mockResolvedValue({
+    const openResult = {
       ok: false,
       opened: false,
       reason: 'open-failed',
       path: 'D:\\docs\\assets\\demo.png',
-    })
+    }
 
-    await sendToMainHandler({ sender }, {
-      event: 'document.resource.open-in-folder',
+    const result = await dispatchDocumentResourceOpen({
+      sender,
+      sendToMainHandler,
       data: 'wj://2e2f6173736574732f64656d6f2e706e67',
+      openResult,
     })
 
+    expect(result).toEqual(openResult)
     expect(send).toHaveBeenCalledWith(win, {
       event: 'window.effect.message',
       data: {

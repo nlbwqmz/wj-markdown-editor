@@ -286,7 +286,8 @@ describe('windowLifecycleService runtime 初始化时机', () => {
   })
 
   it('windowLifecycleService 不应再对外暴露 initializeSessionRuntime，避免主入口继续拼装 runtime 初始化依赖', async () => {
-    const { default: winInfoUtil } = await import('../windowLifecycleService.js')
+    const moduleNs = await import('../windowLifecycleService.js')
+    const winInfoUtil = moduleNs.default
 
     expect(createDocumentSessionStore).not.toHaveBeenCalled()
     expect(createSaveCoordinator).not.toHaveBeenCalled()
@@ -294,6 +295,8 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     expect(createDocumentEffectService).not.toHaveBeenCalled()
     expect(createWindowSessionBridge).not.toHaveBeenCalled()
     expect(createDocumentResourceService).not.toHaveBeenCalled()
+    expect(moduleNs.initializeSessionRuntime).toBeUndefined()
+    expect(Object.keys(moduleNs)).not.toContain('initializeSessionRuntime')
     expect(winInfoUtil.initializeSessionRuntime).toBeUndefined()
     expect(Object.keys(winInfoUtil)).not.toContain('initializeSessionRuntime')
   })
