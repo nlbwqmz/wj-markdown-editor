@@ -19,7 +19,13 @@ function executeRuntimeUiCommand(winInfo, command, payload) {
 }
 
 function executeRuntimeSyncQuery(winInfo, command, payload) {
-  return getDocumentSessionRuntime().executeSyncQuery(winInfo?.id || winInfo?.win?.id || null, command, payload)
+  const windowId = winInfo?.id || winInfo?.win?.id || null
+  if (windowId == null) {
+    // 兼容旧同步查询语义：窗口上下文缺失时平稳返回空值，
+    // 让 renderer 继续回退到 rawPath，而不是把异常抛回同步 IPC 调用栈。
+    return null
+  }
+  return getDocumentSessionRuntime().executeSyncQuery(windowId, command, payload)
 }
 
 async function uploadImage(winInfo, data) {

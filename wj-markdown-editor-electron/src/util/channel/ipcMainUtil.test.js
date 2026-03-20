@@ -554,6 +554,36 @@ describe('ipcMainUtil sync comparable key', () => {
     expect(event.returnValue).toBe('wj-local-file:d:/docs/demo.png')
   })
 
+  it('sender 无法映射到窗口时，resource.get-comparable-key 必须平稳返回 null，供 renderer 继续回退到 rawPath', async () => {
+    let sendToMainSyncHandler
+    ipcMainOn.mockImplementation((channel, handler) => {
+      if (channel === 'sendToMainSync') {
+        sendToMainSyncHandler = handler
+      }
+    })
+
+    const sender = { id: 9527 }
+    const orphanWin = {
+      id: 404,
+      getParentWindow: () => null,
+    }
+    browserWindowFromWebContents.mockReturnValue(orphanWin)
+    getWinInfoMock.mockReturnValue(null)
+
+    await import('./ipcMainUtil.js')
+
+    const event = { sender, returnValue: 'initial' }
+
+    expect(() => {
+      sendToMainSyncHandler(event, {
+        event: 'resource.get-comparable-key',
+        data: './docs/demo.png?size=full',
+      })
+    }).not.toThrow()
+    expect(runtimeExecuteSyncQuery).not.toHaveBeenCalled()
+    expect(event.returnValue).toBeNull()
+  })
+
   it('resource.get-comparable-key 不应继续暴露在异步 sendToMain 通道', async () => {
     let sendToMainHandler
     ipcMainHandle.mockImplementation((channel, handler) => {
