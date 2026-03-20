@@ -1031,7 +1031,17 @@ function getSessionSnapshot(winInfo) {
 }
 
 function resolveDocumentContextTarget(target) {
-  return getWinInfo(target) || getWinInfo(target?.win) || null
+  const normalizedWindowId = normalizeWindowId(target)
+  if (normalizedWindowId) {
+    return getWinInfo(normalizedWindowId)
+  }
+
+  if (!target || typeof target !== 'object') {
+    return null
+  }
+
+  const liveWinInfo = getWinInfo(target?.win)
+  return target === liveWinInfo ? liveWinInfo : null
 }
 
 function getDocumentContext(target) {

@@ -476,29 +476,46 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(winInfoUtil.getDocumentContext(windowId)).not.toHaveProperty('externalWatch')
   })
 
-  it('getDocumentContext 兼容层必须回到 live identity，不能让 facade-like POJO 或已脱离 registry 的旧对象绕过 registry', async () => {
+  it('getDocumentContext 不能让展开后的 facade clone 通过 live win 回溯到真实上下文', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
     await winInfoUtil.createNew('D:/demo.md')
 
     const [winInfo] = winInfoUtil.getAll()
-    const facadeLikePojo = {
-      id: winInfo.id,
-      win: {
-        webContents: {
-          id: winInfo.win.webContents.id,
-        },
-      },
-    }
-
-    expect(winInfoUtil.getDocumentContext(facadeLikePojo)).toEqual({
+    expect(winInfoUtil.getDocumentContext({ ...winInfo })).toEqual({
       path: null,
       exists: false,
       content: '',
       saved: false,
       fileName: 'Unnamed',
     })
+  })
+
+  it('getDocumentContext 不能让仅包一层 live win 的 wrapper 回溯到真实上下文', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
+
+    expect(winInfoUtil.getDocumentContext({ win: winInfo.win })).toEqual({
+      path: null,
+      exists: false,
+      content: '',
+      saved: false,
+      fileName: 'Unnamed',
+    })
+  })
+
+  it('getDocumentContext 兼容层必须回到 live identity，已脱离 registry 的旧对象不能继续绕过 registry', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = winInfoUtil.getAll()
 
     lifecycleRegistry.unregisterWindow(winInfo.id)
 
