@@ -1,6 +1,7 @@
 import { StateEffect, StateField } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
 import { computed, nextTick, ref } from 'vue'
+import { findPreviewElementByLine } from '../../../util/editor/previewLayoutIndexUtil.js'
 
 /**
  * 编辑区与预览区联动高亮
@@ -12,7 +13,7 @@ export function useAssociationHighlight({
   previewController,
   associationHighlight,
   themeRef,
-  findPreviewElement,
+  previewLayoutIndex,
 }) {
   const linkedHighlightState = ref(null)
   let activePreviewHighlightElement = null
@@ -196,6 +197,19 @@ export function useAssociationHighlight({
     return previewController.value === true && !!previewRef.value
   }
 
+  function findPreviewMatchByLine(lineNumber, maxLineNumber) {
+    const result = findPreviewElementByLine({
+      previewLayoutIndex,
+      rootElement: previewRef.value,
+      lineNumber,
+      maxLineNumber,
+    })
+    return {
+      ...result,
+      element: result.entry?.element ?? null,
+    }
+  }
+
   function syncPreviewLinkedHighlightByLine(lineNumber) {
     const view = editorViewRef.value
     if (!view || !isPreviewPanelActive()) {
@@ -203,7 +217,7 @@ export function useAssociationHighlight({
       return
     }
     const normalizedLineNumber = normalizeLineNumber(lineNumber)
-    const previewElement = findPreviewElement(view.state.doc.lines, normalizedLineNumber, true)
+    const previewElement = findPreviewMatchByLine(normalizedLineNumber, view.state.doc.lines)
     if (!previewElement.found || !previewElement.element) {
       clearAllLinkedHighlight()
       return
@@ -232,7 +246,7 @@ export function useAssociationHighlight({
       clearLinkedHighlightDisplay()
       return
     }
-    const previewElement = findPreviewElement(view.state.doc.lines, normalizedPreferLine, true)
+    const previewElement = findPreviewMatchByLine(normalizedPreferLine, view.state.doc.lines)
     if (!previewElement.found || !previewElement.element) {
       clearAllLinkedHighlight()
       return

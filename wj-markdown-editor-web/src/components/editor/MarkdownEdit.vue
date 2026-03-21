@@ -16,8 +16,10 @@ import { useViewScrollAnchor } from '@/components/editor/composables/useViewScro
 import EditorSearchBar from '@/components/editor/EditorSearchBar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import ImageNetworkModal from '@/components/editor/ImageNetworkModal.vue'
+import { createMarkdownEditPreviewLayoutIndexWiring } from '@/components/editor/markdownEditPreviewLayoutIndexWiring.js'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
+import { createPreviewRefreshCoordinator } from '@/components/editor/previewRefreshCoordinator.js'
 import { useCommonStore } from '@/stores/counter.js'
 import {
   resolvePendingContentUpdateMeta,
@@ -433,37 +435,49 @@ const {
 } = useAssetInsert({ editorViewRef: editorView })
 
 const {
-  findPreviewElement,
-  jumpToTargetLine,
-  syncEditorToPreview,
-  syncPreviewToEditor,
-  bindEvents,
-  unbindEvents,
-  clearScrollTimer,
-} = usePreviewSync({
-  editorViewRef: editorView,
+  rebuildPreviewLayoutIndex,
+  previewSync: {
+    jumpToTargetLine,
+    syncEditorToPreview,
+    syncPreviewToEditor,
+    bindEvents,
+    unbindEvents,
+    clearScrollTimer,
+  },
+  associationHighlight: {
+    linkedSourceHighlightField,
+    linkedHighlightThemeStyle,
+    cancelScheduledCursorHighlight,
+    clearAllLinkedHighlight,
+    clearLinkedHighlightDisplay,
+    highlightByEditorCursor,
+    onPreviewAreaClick,
+    restorePreviewLinkedHighlight,
+  },
+} = createMarkdownEditPreviewLayoutIndexWiring({
   previewRef,
-  scrolling,
-  editorScrollTop,
-  restoreStateRef: restoreState,
+  usePreviewSync,
+  previewSyncOptions: {
+    editorViewRef: editorView,
+    previewRef,
+    scrolling,
+    editorScrollTop,
+    restoreStateRef: restoreState,
+  },
+  useAssociationHighlight,
+  associationHighlightOptions: {
+    editorViewRef: editorView,
+    previewRef,
+    previewController,
+    associationHighlight: associationHighlightEnabled,
+    themeRef,
+  },
 })
 
-const {
-  linkedSourceHighlightField,
-  linkedHighlightThemeStyle,
-  cancelScheduledCursorHighlight,
-  clearAllLinkedHighlight,
-  clearLinkedHighlightDisplay,
-  highlightByEditorCursor,
-  onPreviewAreaClick,
+const { onRefreshComplete } = createPreviewRefreshCoordinator({
+  rebuildPreviewLayoutIndex,
   restorePreviewLinkedHighlight,
-} = useAssociationHighlight({
-  editorViewRef: editorView,
-  previewRef,
-  previewController,
-  associationHighlight: associationHighlightEnabled,
-  themeRef,
-  findPreviewElement,
+  closePreviewSearchBar,
 })
 
 const {
@@ -642,11 +656,6 @@ function onAssetContextmenu(assetInfo) {
 
 function onAssetOpen(assetInfo) {
   emits('assetOpen', assetInfo)
-}
-
-function onPreviewRefreshComplete() {
-  restorePreviewLinkedHighlight()
-  closePreviewSearchBar()
 }
 
 async function onInsertNetworkImage() {
@@ -880,7 +889,7 @@ defineExpose({
       <div
         v-if="previewController"
         ref="previewRef"
-        class="wj-scrollbar allow-search h-full p-2"
+        class="allow-search wj-scrollbar h-full p-2"
         :style="previewContainerStyle"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"
@@ -892,7 +901,7 @@ defineExpose({
           :preview-theme="previewTheme"
           :preview-scroll-container="() => previewRef"
           :watermark="watermark"
-          @refresh-complete="onPreviewRefreshComplete"
+          @refresh-complete="onRefreshComplete"
           @anchor-change="onAnchorChange"
           @asset-contextmenu="onAssetContextmenu"
           @asset-open="onAssetOpen"

@@ -1,4 +1,8 @@
 import { message } from 'ant-design-vue'
+import {
+  findPreviewElementAtScrollTop,
+  findPreviewElementByLine,
+} from '../../../util/editor/previewLayoutIndexUtil.js'
 
 /**
  * 编辑区与预览区滚动同步
@@ -9,6 +13,7 @@ export function usePreviewSync({
   previewRef,
   scrolling,
   editorScrollTop,
+  previewLayoutIndex,
   restoreStateRef,
 }) {
   const SCROLL_IDLE_MS = 160
@@ -19,45 +24,23 @@ export function usePreviewSync({
     return editorViewRef.value
   }
 
-  function getPreviewElementDepth(element) {
-    let depth = 0
-    let current = element
-    while (current && current !== previewRef.value) {
-      depth++
-      current = current.parentElement
-    }
-    return depth
-  }
-
-  // 查找匹配行号的元素
+  // 统一复用共享 helper，索引命中时直接返回，失效时自动回退 legacy DOM 查找。
   function findPreviewElement(maxLineNumber, lineNumber, first) {
-    if (!previewRef.value) {
+    const rootElement = previewRef.value
+    if (!rootElement) {
       return { element: null, found: false }
     }
-    const elements = previewRef.value.querySelectorAll('[data-line-start]')
-    const waiting = []
-    for (const element of elements) {
-      const start = +element.dataset.lineStart
-      const end = +element.dataset.lineEnd || start
-      if (lineNumber >= start && lineNumber <= end) {
-        waiting.push({ element, start, end, depth: getPreviewElementDepth(element) })
-      }
-    }
-    if (waiting.length === 0) {
-      if (lineNumber < maxLineNumber) {
-        return findPreviewElement(maxLineNumber, lineNumber + 1, false)
-      } else {
-        return { element: null, found: false }
-      }
-    }
-    waiting.sort((a, b) => {
-      const spanCompare = (a.end - a.start) - (b.end - b.start)
-      if (spanCompare !== 0) {
-        return spanCompare
-      }
-      return b.depth - a.depth
+    const result = findPreviewElementByLine({
+      previewLayoutIndex,
+      rootElement,
+      lineNumber,
+      maxLineNumber,
     })
-    return { element: waiting[0].element, found: first }
+    return {
+      ...result,
+      element: result.entry?.element ?? null,
+      found: first === false ? false : result.found,
+    }
   }
 
   function scheduleAnimationFrame(callback) {
@@ -289,16 +272,16 @@ export function usePreviewSync({
   }
 
   function findElementAtPreviewScroll(scrollTop) {
-    const elements = Array.from(previewRef.value.querySelectorAll('[data-line-start]'))
-    let target = elements[0]
-    for (const element of elements) {
-      if (getElementToTopDistance(element, previewRef.value) <= scrollTop) {
-        target = element
-      } else {
-        break
-      }
+    const rootElement = previewRef.value
+    if (!rootElement) {
+      return null
     }
-    return target
+    const result = findPreviewElementAtScrollTop({
+      previewLayoutIndex,
+      rootElement,
+      scrollTop,
+    })
+    return result.entry?.element ?? null
   }
 
   function syncPreviewToEditor() {
