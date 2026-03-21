@@ -70,17 +70,26 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Create or update Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare-version.outputs.version }}
-          name: ${{ needs.prepare-version.outputs.version }}
-          body_path: ${{ needs.prepare-version.outputs.release_notes_path }}
-          target_commitish: ${{ github.sha }}
-          draft: false
-          prerelease: false
-          overwrite_files: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-version.outputs.version }}
+          RELEASE_NOTES_PATH: ${{ needs.prepare-version.outputs.release_notes_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TAG" \
+              --notes-file "$RELEASE_NOTES_PATH" \
+              --draft=false \
+              --prerelease=false
+          else
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TAG" \
+              --notes-file "$RELEASE_NOTES_PATH" \
+              --target "$GITHUB_SHA"
+          fi
 
   release-windows:
     needs:
@@ -135,17 +144,20 @@ jobs:
           }
 
       - name: Upload Windows assets to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare-version.outputs.version }}
-          overwrite_files: true
-          files: |
-            wj-markdown-editor-electron/electron-build/latest.yml
-            wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.exe
-            wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.exe.blockmap
-            wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.zip
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-version.outputs.version }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(
+            Get-ChildItem 'wj-markdown-editor-electron/electron-build/latest.yml' | Select-Object -ExpandProperty FullName
+            Get-ChildItem 'wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.exe' | Select-Object -ExpandProperty FullName
+            Get-ChildItem 'wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.exe.blockmap' | Select-Object -ExpandProperty FullName
+            Get-ChildItem 'wj-markdown-editor-electron/electron-build/wj-markdown-editor-win32-x64-*.zip' | Select-Object -ExpandProperty FullName
+          )
+
+          gh release upload $env:RELEASE_TAG @files --clobber
 
   release-linux:
     needs:
@@ -204,13 +216,15 @@ jobs:
           check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.rpm"
 
       - name: Upload Linux assets to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare-version.outputs.version }}
-          overwrite_files: true
-          files: |
-            wj-markdown-editor-electron/electron-build/latest-linux.yml
-            wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-amd64-*.deb
-            wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.rpm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh release upload "$RELEASE_TAG" \
+            wj-markdown-editor-electron/electron-build/latest-linux.yml \
+            wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-amd64-*.deb \
+            wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.rpm \
+            --clobber
