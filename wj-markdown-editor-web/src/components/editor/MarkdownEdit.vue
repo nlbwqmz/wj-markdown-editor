@@ -36,6 +36,7 @@ import {
 } from '@/util/editor/viewScrollAnchorSessionUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
+import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
 import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
 
 const props = defineProps({
@@ -125,30 +126,15 @@ const viewScrollAnchorStore = createViewScrollAnchorSessionStore()
 
 const BOTTOM_GAP = '40vh'
 const EDITOR_EMIT_DEBOUNCE_MS = 160
-let previewSearchTargetActive = false
 let viewRestoreRequestToken = 0
 
 function getPreviewSearchTargetElements() {
   return collectSearchTargetElements(editorContainer.value)
 }
-
-const previewSearchTargetProvider = () => getPreviewSearchTargetElements()
-
-function activatePreviewSearchTarget() {
-  if (previewSearchTargetActive === true) {
-    return
-  }
-  previewSearchTargetActive = true
-  previewSearchBarController.registerTargetProvider(previewSearchTargetProvider)
-}
-
-function deactivatePreviewSearchTarget() {
-  if (previewSearchTargetActive === false) {
-    return
-  }
-  previewSearchTargetActive = false
-  previewSearchBarController.unregisterTargetProvider(previewSearchTargetProvider)
-}
+const previewSearchTargetBridge = createSearchTargetBridge({
+  controller: previewSearchBarController,
+  getTargetElements: () => getPreviewSearchTargetElements(),
+})
 
 function onEditorSearchBarClose() {
   store.editorSearchBarVisible = false
@@ -804,7 +790,7 @@ watch(() => [menuVisible.value, previewVisible.value], () => {
 
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
-  activatePreviewSearchTarget()
+  previewSearchTargetBridge.activate()
   splitInstance = Split({
     columnGutters: [{ track: 1, element: gutterRef.value }],
     minSize: 200,
@@ -851,21 +837,21 @@ onMounted(() => {
 })
 
 onActivated(() => {
-  activatePreviewSearchTarget()
+  previewSearchTargetBridge.activate()
   closePreviewSearchBar()
 })
 
 onDeactivated(() => {
   cancelPendingViewScrollRestore()
   closePreviewSearchBar()
-  deactivatePreviewSearchTarget()
+  previewSearchTargetBridge.deactivate()
 })
 
 onBeforeUnmount(() => {
   modelSyncScheduler.cancel()
   cancelPendingViewScrollRestore()
   closePreviewSearchBar()
-  deactivatePreviewSearchTarget()
+  previewSearchTargetBridge.deactivate({ preserveCleanupTarget: false })
   cancelScheduledCursorHighlight()
   clearAllLinkedHighlight()
   unbindEvents()

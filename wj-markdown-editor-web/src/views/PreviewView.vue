@@ -34,6 +34,7 @@ import {
 import { createViewScrollAnchorSessionStore } from '@/util/editor/viewScrollAnchorSessionUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
+import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
 import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
 
 const router = useRouter()
@@ -52,7 +53,6 @@ const config = ref({})
 const ready = ref(false)
 // 预览页自己的滚动恢复只依赖当前视图实例内的局部缓存，不和编辑页共用 store。
 const previewPageAnchorStore = createViewScrollAnchorSessionStore()
-let previewSearchTargetActive = false
 let pendingRestoreOnActivation = false
 const watermark = ref()
 const currentScrollSnapshot = ref({
@@ -71,24 +71,10 @@ const previewSessionSnapshotController = createRendererSessionSnapshotController
 function getPreviewSearchTargetElements() {
   return collectSearchTargetElements(previewContainer.value)
 }
-
-const previewSearchTargetProvider = () => getPreviewSearchTargetElements()
-
-function activatePreviewSearchTarget() {
-  if (previewSearchTargetActive === true) {
-    return
-  }
-  previewSearchTargetActive = true
-  previewSearchBarController.registerTargetProvider(previewSearchTargetProvider)
-}
-
-function deactivatePreviewSearchTarget() {
-  if (previewSearchTargetActive === false) {
-    return
-  }
-  previewSearchTargetActive = false
-  previewSearchBarController.unregisterTargetProvider(previewSearchTargetProvider)
-}
+const previewSearchTargetBridge = createSearchTargetBridge({
+  controller: previewSearchBarController,
+  getTargetElements: () => getPreviewSearchTargetElements(),
+})
 
 function closePreviewSearchBar() {
   closeSearchBarIfVisible({
@@ -380,7 +366,7 @@ watch(() => store.config, (newValue) => {
 
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
-  activatePreviewSearchTarget()
+  previewSearchTargetBridge.activate()
   previewSessionSnapshotController.activate()
   documentSessionSnapshotSubscription.activate()
   if (shouldBootstrapSessionSnapshotOnMounted({
@@ -394,7 +380,7 @@ onBeforeUnmount(() => {
   previewSessionSnapshotController.dispose()
   documentSessionSnapshotSubscription.dispose()
   closePreviewSearchBar()
-  deactivatePreviewSearchTarget()
+  previewSearchTargetBridge.deactivate({ preserveCleanupTarget: false })
 })
 
 watch(() => menuVisible.value, (newValue) => {
@@ -422,7 +408,7 @@ onActivated(async () => {
   pendingRestoreOnActivation = true
   previewSessionSnapshotController.activate()
   documentSessionSnapshotSubscription.activate()
-  activatePreviewSearchTarget()
+  previewSearchTargetBridge.activate()
   closePreviewSearchBar()
   const activationAction = resolveRendererSessionActivationAction({
     hasAppliedSnapshot: previewSessionSnapshotController.hasAppliedSnapshot?.() === true,
@@ -448,7 +434,7 @@ onDeactivated(() => {
   previewSessionSnapshotController.deactivate()
   documentSessionSnapshotSubscription.deactivate()
   closePreviewSearchBar()
-  deactivatePreviewSearchTarget()
+  previewSearchTargetBridge.deactivate()
 })
 
 onBeforeRouteLeave(() => {
