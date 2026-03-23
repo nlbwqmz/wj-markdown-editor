@@ -24,7 +24,7 @@
 
 ### 2.1 目标
 
-- 保留现有配置文件路径：`Documents/wj-markdown-editor/config.json`
+- 保留现有配置文件路径语义：打包版继续使用 `Documents/wj-markdown-editor/config.json`，开发环境继续使用 `app.getAppPath()/config.json`
 - 保留现有 IPC 契约与调用方式
 - 保留旧配置自动兼容能力
 - 严格将改动范围限制在 Electron 配置模块，不改变其他功能的可观察行为
@@ -117,8 +117,8 @@ wj-markdown-editor-electron/src/data/
 
 统一定义：
 
-- 配置文件目录
-- 配置文件路径
+- 开发环境配置目录与配置文件路径
+- 打包环境配置目录与配置文件路径
 - 配置版本号
 - 默认文件名
 
@@ -175,6 +175,8 @@ Schema 只负责“是否合法”，不负责“怎么修”。
 - 更新局部字段
 - 持久化成功后再广播
 - 输出结构化错误
+
+其中 `configSnapshotUtil.js` 只作为共享工具模块存在，不单独承担业务层语义。
 
 ## 7. 初始化流程
 
@@ -241,6 +243,17 @@ Schema 只负责“是否合法”，不负责“怎么修”。
 - `reason` 供主进程和测试断言使用
 - `messageKey` 供前端国际化展示使用
 
+当前 IPC 返回结构建议统一为：
+
+- 成功：`{ ok: true, data?: <payload> }`
+- 失败：`{ ok: false, reason: '<stable-reason>', messageKey?: '<i18n-key>' }`
+
+对于以下配置相关 IPC，应统一遵循该结构：
+
+- `user-update-config`
+- `user-update-theme-global`
+- `user-update-language`
+
 ### 10.2 前端展示原则
 
 只有“用户需要感知或需要决策”的错误才进入前端提示，例如：
@@ -278,6 +291,8 @@ Electron 主进程不得直接返回中文提示文本。
 继续通过 `configUtil.getConfig()`、`setConfig()`、`setThemeGlobal()`、`setLanguage()` 提供能力。
 
 如需增加失败提示，只在返回结构上增强，不改事件名。
+
+其中 `recentMax` 的跨模块副作用保持现状，仍由现有调用方在配置更新成功后继续触发 `recent.setMax(...)`；本次不把该副作用并入配置层事务语义。
 
 ### 11.3 Renderer 设置页
 
