@@ -3,6 +3,30 @@ import defaultConfig from '../../defaultConfig.js'
 import { repairConfig } from '../configRepairUtil.js'
 
 describe('configRepairUtil', () => {
+  it('缺失字段必须从 defaultConfig 补齐', () => {
+    const repaired = repairConfig({
+      theme: {
+        preview: 'github',
+      },
+    }, defaultConfig)
+
+    expect(repaired.menuVisible).toBe(defaultConfig.menuVisible)
+    expect(repaired.theme.global).toBe(defaultConfig.theme.global)
+  })
+
+  it('默认配置中不存在的旧字段必须被裁掉', () => {
+    const repaired = repairConfig({
+      legacyField: 'deprecated',
+      theme: {
+        ...defaultConfig.theme,
+        legacyPreviewOption: true,
+      },
+    }, defaultConfig)
+
+    expect('legacyField' in repaired).toBe(false)
+    expect('legacyPreviewOption' in repaired.theme).toBe(false)
+  })
+
   it('必须删除不存在的快捷键并补齐缺失项', () => {
     const repaired = repairConfig({
       shortcutKeyList: [{ id: 'unknown', index: 999 }],
