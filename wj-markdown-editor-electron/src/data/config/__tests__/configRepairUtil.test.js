@@ -36,6 +36,20 @@ describe('configRepairUtil', () => {
     expect(repaired.shortcutKeyList.some(item => item.id === 'save')).toBe(true)
   })
 
+  it('残缺快捷键项按 id 补全时必须使用同 id 的默认字段', () => {
+    const repaired = repairConfig({
+      shortcutKeyList: [{ id: 'save', index: 999 }],
+    }, defaultConfig)
+
+    const saveShortcutKey = repaired.shortcutKeyList.find(item => item.id === 'save')
+    const defaultSaveShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'save')
+
+    expect(saveShortcutKey).toBeDefined()
+    expect(saveShortcutKey.name).toBe(defaultSaveShortcutKey.name)
+    expect(saveShortcutKey.keymap).toBe(defaultSaveShortcutKey.keymap)
+    expect(saveShortcutKey.type).toBe(defaultSaveShortcutKey.type)
+  })
+
   it('旧 preview 主题 github-light 必须修正为 github', () => {
     const repaired = repairConfig({
       theme: {

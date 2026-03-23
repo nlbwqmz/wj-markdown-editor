@@ -49,36 +49,44 @@ function mergeAndPrune(target, desc) {
 }
 
 function repairShortcutKeyList(shortcutKeyList, defaultShortcutKeyList) {
-  const repairedShortcutKeyList = Array.isArray(shortcutKeyList) ? [...shortcutKeyList] : []
+  const rawShortcutKeyList = Array.isArray(shortcutKeyList) ? shortcutKeyList : []
 
-  // 删除默认配置中不存在的快捷键，避免旧版本残留项继续污染配置。
-  const filteredShortcutKeyList = repairedShortcutKeyList
-    .filter(item => defaultShortcutKeyList.some(temp => temp.id === item.id))
+  // 快捷键项必须按 id 对齐默认值重建，避免数组按下标合并导致字段串位。
+  const repairedShortcutKeyList = rawShortcutKeyList
+    .map((item) => {
+      const defaultShortcutKey = defaultShortcutKeyList.find(temp => temp.id === item.id)
+      if (!defaultShortcutKey) {
+        return null
+      }
+
+      return mergeAndPrune(item, defaultShortcutKey)
+    })
+    .filter(item => item !== null)
 
   // 补齐新版本新增的快捷键，保持配置列表完整。
   defaultShortcutKeyList.forEach((item) => {
-    if (filteredShortcutKeyList.some(temp => temp.id === item.id) === false) {
-      filteredShortcutKeyList.push(cloneConfigValue(item))
+    if (repairedShortcutKeyList.some(temp => temp.id === item.id) === false) {
+      repairedShortcutKeyList.push(cloneConfigValue(item))
     }
   })
 
   // 统一回填默认顺序，沿用当前兼容修复行为。
-  filteredShortcutKeyList.forEach((item) => {
+  repairedShortcutKeyList.forEach((item) => {
     const defaultShortcutKey = defaultShortcutKeyList.find(temp => temp.id === item.id)
     if (defaultShortcutKey) {
       item.index = defaultShortcutKey.index
     }
   })
 
-  filteredShortcutKeyList.sort((a, b) => a.index - b.index)
+  repairedShortcutKeyList.sort((a, b) => a.index - b.index)
 
-  return filteredShortcutKeyList
+  return repairedShortcutKeyList
 }
 
 export function repairConfig(rawConfig = {}, defaultConfig) {
   const merged = mergeAndPrune(rawConfig, defaultConfig)
 
-  merged.shortcutKeyList = repairShortcutKeyList(merged.shortcutKeyList, defaultConfig.shortcutKeyList)
+  merged.shortcutKeyList = repairShortcutKeyList(rawConfig.shortcutKeyList, defaultConfig.shortcutKeyList)
 
   // 历史 preview 主题名 github-light 已废弃，这里统一迁移到 github。
   if (merged.theme.preview === 'github-light') {
