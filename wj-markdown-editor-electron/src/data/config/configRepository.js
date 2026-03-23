@@ -31,11 +31,18 @@ export function createConfigRepository({
       try {
         return JSON.parse(rawText)
       }
-      catch (error) {
-        await this.backupCorruptedConfig(rawText)
-
+      catch (parseFailure) {
         const parseError = new Error('CONFIG_PARSE_FAILED')
-        parseError.cause = error
+        parseError.cause = parseFailure
+
+        try {
+          parseError.backupPath = await this.backupCorruptedConfig(rawText)
+        }
+        catch (backupError) {
+          // 备份失败只作为附加诊断信息，不能覆盖统一的解析失败错误边界。
+          parseError.backupError = backupError
+        }
+
         throw parseError
       }
     },
@@ -50,11 +57,6 @@ export function createConfigRepository({
         configDir,
         `config.corrupted.${Date.now()}.json`,
       )
-
-      if (await fs.pathExists(configPath)) {
-        await fs.copyFile(configPath, backupPath)
-        return backupPath
-      }
 
       await fs.writeFile(backupPath, rawText, 'utf8')
       return backupPath
