@@ -133,6 +133,10 @@ export function createConfigService(deps) {
       return getCurrentConfigOrDefault()
     },
     async setConfig(nextPartial) {
+      if (!isPlainObject(nextPartial)) {
+        return createInvalidConfigResult()
+      }
+
       let nextConfig = null
 
       try {

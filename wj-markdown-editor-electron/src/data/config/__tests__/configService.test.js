@@ -137,4 +137,26 @@ describe('configService', () => {
     expect(service.getConfig().language).toBe(defaultConfig.language)
     expect(callback).not.toHaveBeenCalled()
   })
+
+  it('setConfig 根级 patch 不是 plain object 时必须直接拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig('oops')).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig()).toEqual(defaultConfig)
+    expect(callback).not.toHaveBeenCalled()
+  })
 })
