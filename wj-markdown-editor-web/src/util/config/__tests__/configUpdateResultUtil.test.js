@@ -53,3 +53,25 @@ test('配置更新成功结果不应返回失败文案 key', () => {
   )
   assert.equal(getConfigUpdateFailureMessageKey(null), null)
 })
+
+test('配置更新提交通道首次接收初始化配置时不应视为用户修改', () => {
+  assert.ok(configUpdateResultUtilModule, '缺少配置更新结果映射工具')
+
+  const { createConfigUpdateSubmissionGuard } = configUpdateResultUtilModule
+  const guard = createConfigUpdateSubmissionGuard()
+
+  assert.equal(guard.shouldSubmitConfigUpdate(), false)
+  assert.equal(guard.shouldSubmitConfigUpdate(), true)
+})
+
+test('配置更新提交通道标记外部镜像同步后应只忽略下一次提交', () => {
+  assert.ok(configUpdateResultUtilModule, '缺少配置更新结果映射工具')
+
+  const { createConfigUpdateSubmissionGuard } = configUpdateResultUtilModule
+  const guard = createConfigUpdateSubmissionGuard()
+
+  assert.equal(guard.shouldSubmitConfigUpdate(), false)
+  guard.markNextSyncIgnored()
+  assert.equal(guard.shouldSubmitConfigUpdate(), false)
+  assert.equal(guard.shouldSubmitConfigUpdate(), true)
+})

@@ -8,7 +8,7 @@ import OtherLayout from '@/components/layout/OtherLayout.vue'
 import TypographerDescription from '@/components/TypographerDescription.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
-import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
+import { createConfigUpdateSubmissionGuard, getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import constant from '@/util/constant.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
@@ -74,6 +74,7 @@ const externalFileChangeStrategyOptionList = computed(() => [
 
 const codeThemeList = constant.codeThemeList
 const previewThemeList = constant.previewThemeList
+const configUpdateSubmissionGuard = createConfigUpdateSubmissionGuard()
 
 function refreshSystemFontList() {
   if (document.visibilityState === 'visible') {
@@ -108,6 +109,10 @@ function closePreviewSearchBar() {
 }
 
 watch(() => config.value, (newValue) => {
+  if (!newValue || !configUpdateSubmissionGuard.shouldSubmitConfigUpdate()) {
+    return
+  }
+
   const nextConfig = JSON.parse(JSON.stringify(newValue))
 
   channelUtil.send({ event: 'user-update-config', data: nextConfig })
@@ -156,13 +161,23 @@ watch(() => store.config.language, async () => {
 }, { immediate: true })
 
 watch(() => store.config.theme.global, (newValue) => {
+  if (!config.value) {
+    return
+  }
+
   if (newValue !== config.value.theme.global) {
+    configUpdateSubmissionGuard.markNextSyncIgnored()
     config.value.theme.global = newValue
   }
 })
 
 watch(() => store.config.language, (newValue) => {
+  if (!config.value) {
+    return
+  }
+
   if (newValue !== config.value.language) {
+    configUpdateSubmissionGuard.markNextSyncIgnored()
     config.value.language = newValue
   }
 })

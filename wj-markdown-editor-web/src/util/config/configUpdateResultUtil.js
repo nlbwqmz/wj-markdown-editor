@@ -4,3 +4,21 @@
 export function getConfigUpdateFailureMessageKey(result) {
   return result?.ok === false ? result.messageKey || 'message.configWriteFailed' : null
 }
+
+export function createConfigUpdateSubmissionGuard() {
+  let shouldIgnoreNextSync = true
+
+  return {
+    markNextSyncIgnored() {
+      shouldIgnoreNextSync = true
+    },
+    shouldSubmitConfigUpdate() {
+      if (shouldIgnoreNextSync) {
+        shouldIgnoreNextSync = false
+        return false
+      }
+
+      return true
+    },
+  }
+}
