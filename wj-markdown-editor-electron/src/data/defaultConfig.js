@@ -1,4 +1,5 @@
 export default {
+  configVersion: 1,
   // 1：无操作（只有网络图片支持） 2: 保存到绝对路径 3：保存到 ./%{filename} 文件夹 4：保存到相对路径 5: 上传到图床
   imgLocal: '4',
   imgNetwork: '4',
