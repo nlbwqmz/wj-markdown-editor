@@ -126,6 +126,28 @@ async function handleResourceOpen(windowContext, data) {
   return openResult
 }
 
+/**
+ * 配置类更新 IPC 统一透传结构化结果。
+ *
+ * 配置写入成功后的派生副作用如果失败，只记录日志，不回滚已经成功的配置写入。
+ */
+async function executeConfigUpdate(updateAction, afterSuccess) {
+  const result = await updateAction()
+  if (result?.ok !== true) {
+    return result
+  }
+
+  if (typeof afterSuccess === 'function') {
+    try {
+      await afterSuccess()
+    } catch (error) {
+      console.error('[ipcMainUtil] post-config side effect failed:', error)
+    }
+  }
+
+  return { ok: true }
+}
+
 const handlerList = {
   ...settingUtil.channel,
   ...aboutUtil.channel,
@@ -246,15 +268,17 @@ const handlerList = {
       }
     })
   },
-  'user-update-config': async (winInfo, data) => {
-    await configUtil.setConfig(data)
-    await recent.setMax(data.recentMax)
+  'user-update-config': async (_windowContext, data) => {
+    return await executeConfigUpdate(
+      async () => await configUtil.setConfig(data),
+      async () => await recent.setMax(data.recentMax),
+    )
   },
-  'user-update-theme-global': async (winInfo, data) => {
-    await configUtil.setThemeGlobal(data)
+  'user-update-theme-global': async (_windowContext, data) => {
+    return await executeConfigUpdate(async () => await configUtil.setThemeGlobal(data))
   },
-  'user-update-language': async (winInfo, data) => {
-    await configUtil.setLanguage(data)
+  'user-update-language': async (_windowContext, data) => {
+    return await executeConfigUpdate(async () => await configUtil.setLanguage(data))
   },
   'app-info': () => {
     return { name: 'wj-markdown-editor', version: app.getVersion() }

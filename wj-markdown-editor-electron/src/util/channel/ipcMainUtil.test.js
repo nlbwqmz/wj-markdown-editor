@@ -1,9 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   appGetVersion,
   browserWindowFromWebContents,
   configGetConfig,
+  configGetDefaultConfig,
+  configSetConfig,
+  configSetLanguage,
+  configSetThemeGlobal,
   dialogShowOpenDialogSync,
   dialogShowSaveDialogSync,
   executeResourceCommand,
@@ -23,6 +27,7 @@ const {
   ipcMainHandle,
   ipcMainOn,
   openLocalResourceInFolder,
+  recentSetMax,
   registerWindowContext,
   requestForceClose,
   resetWindowContext,
@@ -56,6 +61,10 @@ const {
     appGetVersion: vi.fn(() => '2.15.0'),
     browserWindowFromWebContents: vi.fn(),
     configGetConfig: vi.fn(),
+    configGetDefaultConfig: vi.fn(() => ({})),
+    configSetConfig: vi.fn(),
+    configSetLanguage: vi.fn(),
+    configSetThemeGlobal: vi.fn(),
     dialogShowOpenDialogSync: vi.fn(),
     dialogShowSaveDialogSync: vi.fn(),
     executeResourceCommand: vi.fn(),
@@ -87,6 +96,7 @@ const {
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
     openLocalResourceInFolder: vi.fn(),
+    recentSetMax: vi.fn(),
     registerWindowContext: vi.fn(({ windowId, win, documentContext } = {}) => {
       const normalizedWindowId = normalizeWindowId(windowId)
       if (!normalizedWindowId || !win) {
@@ -163,10 +173,10 @@ vi.mock('../../data/configUtil.js', () => {
   return {
     default: {
       getConfig: configGetConfig,
-      getDefaultConfig: vi.fn(() => ({})),
-      setConfig: vi.fn(),
-      setThemeGlobal: vi.fn(),
-      setLanguage: vi.fn(),
+      getDefaultConfig: configGetDefaultConfig,
+      setConfig: configSetConfig,
+      setThemeGlobal: configSetThemeGlobal,
+      setLanguage: configSetLanguage,
     },
   }
 })
@@ -178,7 +188,7 @@ vi.mock('../../data/recent.js', () => {
       clear: vi.fn(),
       remove: vi.fn(),
       get: vi.fn(() => []),
-      setMax: vi.fn(),
+      setMax: recentSetMax,
     },
   }
 })
@@ -1610,5 +1620,198 @@ describe('ipcMainUtil command mapping', () => {
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(winInfoUtil.executeResourceCommand).not.toHaveBeenCalled()
     expect(winInfoUtil.updateTempContent).not.toHaveBeenCalled()
+  })
+})
+
+describe('ipcMainUtil 配置更新契约', () => {
+  let consoleErrorSpy
+
+  beforeEach(() => {
+    vi.resetModules()
+    browserWindowFromWebContents.mockReset()
+    configGetConfig.mockReset()
+    configGetDefaultConfig.mockReset()
+    configSetConfig.mockReset()
+    configSetLanguage.mockReset()
+    configSetThemeGlobal.mockReset()
+    getDocumentSessionRuntime.mockReset()
+    getWindowByIdMock.mockClear()
+    getWindowIdByWinMock.mockClear()
+    ipcMainHandle.mockReset()
+    ipcMainOn.mockReset()
+    recentSetMax.mockReset()
+    registerWindowContext.mockClear()
+    resetWindowContext.mockClear()
+    resetWindowContext()
+    runtimeExecuteSyncQuery.mockReset()
+    runtimeExecuteUiCommand.mockReset()
+    browserWindowFromWebContents.mockReset()
+    configGetConfig.mockReturnValue({ theme: { global: 'light' } })
+    configGetDefaultConfig.mockReturnValue({
+      theme: { global: 'dark' },
+      recentMax: 12,
+    })
+    getDocumentSessionRuntime.mockReturnValue({
+      executeSyncQuery: runtimeExecuteSyncQuery,
+      executeUiCommand: runtimeExecuteUiCommand,
+    })
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleErrorSpy?.mockRestore()
+  })
+
+  async function setupConfigHandler() {
+    let sendToMainHandler
+    ipcMainHandle.mockImplementation((channel, handler) => {
+      if (channel === 'sendToMain') {
+        sendToMainHandler = handler
+      }
+    })
+
+    const sender = { id: 9527 }
+    const win = { id: 1 }
+    browserWindowFromWebContents.mockReturnValue(win)
+    registerWindowContext({
+      windowId: 1,
+      win,
+    })
+
+    await import('./ipcMainUtil.js')
+
+    return {
+      sender,
+      sendToMainHandler,
+    }
+  }
+
+  async function dispatch(event, payload) {
+    const { sender, sendToMainHandler } = await setupConfigHandler()
+    return await sendToMainHandler({ sender }, {
+      event,
+      data: payload,
+    })
+  }
+
+  it('user-update-config 在配置写盘失败时必须返回 messageKey，而不是直接抛出中文提示', async () => {
+    const payload = {
+      recentMax: 7,
+      theme: { global: 'dark' },
+    }
+    configSetConfig.mockResolvedValueOnce({
+      ok: false,
+      reason: 'config-write-failed',
+      messageKey: 'message.configWriteFailed',
+    })
+
+    await expect(dispatch('user-update-config', payload)).resolves.toEqual({
+      ok: false,
+      reason: 'config-write-failed',
+      messageKey: 'message.configWriteFailed',
+    })
+  })
+
+  it('user-update-config 在配置写盘失败时不得继续触发 recent.setMax', async () => {
+    const payload = {
+      recentMax: 9,
+    }
+    configSetConfig.mockResolvedValueOnce({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    await dispatch('user-update-config', payload)
+
+    expect(recentSetMax).not.toHaveBeenCalled()
+  })
+
+  it('user-update-config 在配置写盘成功时必须返回结构化成功结果，并在成功后更新 recent.setMax', async () => {
+    const payload = {
+      recentMax: 15,
+      startupPage: 'editor',
+    }
+    configSetConfig.mockResolvedValueOnce({ ok: true })
+    recentSetMax.mockResolvedValueOnce(undefined)
+
+    await expect(dispatch('user-update-config', payload)).resolves.toEqual({ ok: true })
+    expect(configSetConfig).toHaveBeenCalledWith(payload)
+    expect(recentSetMax).toHaveBeenCalledWith(15)
+  })
+
+  it('user-update-config 在 recent.setMax 失败时不能回滚已成功的配置写入', async () => {
+    const payload = {
+      recentMax: 11,
+    }
+    configSetConfig.mockResolvedValueOnce({ ok: true })
+    recentSetMax.mockRejectedValueOnce(new Error('recent-set-max-failed'))
+
+    await expect(dispatch('user-update-config', payload)).resolves.toEqual({ ok: true })
+    expect(configSetConfig).toHaveBeenCalledWith(payload)
+    expect(recentSetMax).toHaveBeenCalledWith(11)
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[ipcMainUtil] post-config side effect failed:', expect.any(Error))
+  })
+
+  it('user-update-theme-global 在配置写盘失败时必须透传结构化结果', async () => {
+    configSetThemeGlobal.mockResolvedValueOnce({
+      ok: false,
+      reason: 'config-write-failed',
+      messageKey: 'message.configWriteFailed',
+    })
+
+    await expect(dispatch('user-update-theme-global', 'dark')).resolves.toEqual({
+      ok: false,
+      reason: 'config-write-failed',
+      messageKey: 'message.configWriteFailed',
+    })
+  })
+
+  it('user-update-theme-global 在配置写盘成功时必须返回结构化成功结果', async () => {
+    configSetThemeGlobal.mockResolvedValueOnce({ ok: true })
+
+    await expect(dispatch('user-update-theme-global', 'light')).resolves.toEqual({ ok: true })
+    expect(configSetThemeGlobal).toHaveBeenCalledWith('light')
+  })
+
+  it('user-update-language 在配置写盘失败时必须透传结构化结果', async () => {
+    configSetLanguage.mockResolvedValueOnce({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    await expect(dispatch('user-update-language', 'zh-CN')).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+  })
+
+  it('user-update-language 在配置写盘成功时必须返回结构化成功结果', async () => {
+    configSetLanguage.mockResolvedValueOnce({ ok: true })
+
+    await expect(dispatch('user-update-language', 'en-US')).resolves.toEqual({ ok: true })
+    expect(configSetLanguage).toHaveBeenCalledWith('en-US')
+  })
+
+  it('get-config 读取型 IPC 必须继续返回原始 payload，而不是包装成 { ok, data }', async () => {
+    const config = {
+      recentMax: 18,
+      theme: { global: 'light' },
+    }
+    configGetConfig.mockReturnValueOnce(config)
+
+    await expect(dispatch('get-config', null)).resolves.toBe(config)
+  })
+
+  it('get-default-config 读取型 IPC 必须继续返回原始 payload，而不是包装成 { ok, data }', async () => {
+    const defaultConfig = {
+      recentMax: 20,
+      theme: { global: 'dark' },
+    }
+    configGetDefaultConfig.mockReturnValueOnce(defaultConfig)
+
+    await expect(dispatch('get-default-config', null)).resolves.toBe(defaultConfig)
   })
 })
