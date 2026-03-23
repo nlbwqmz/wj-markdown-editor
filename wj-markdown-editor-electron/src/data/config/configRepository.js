@@ -1,0 +1,63 @@
+import path from 'node:path'
+import fsExtra from 'fs-extra'
+import writeFileAtomicDefault from 'write-file-atomic'
+import { configFileName, resolveConfigDir } from './configConstants.js'
+
+export function createConfigRepository({
+  app,
+  fs = fsExtra,
+  writeFileAtomic = writeFileAtomicDefault,
+}) {
+  const configDir = resolveConfigDir(app)
+  const configPath = path.join(configDir, configFileName)
+
+  return {
+    getConfigDir() {
+      return configDir
+    },
+    getConfigPath() {
+      return configPath
+    },
+    async ensureConfigDir() {
+      // 确保配置目录存在，供首次写入和损坏备份复用。
+      await fs.ensureDir(configDir)
+    },
+    async readConfigText() {
+      return fs.readFile(configPath, 'utf8')
+    },
+    async readParsedConfig() {
+      const rawText = await this.readConfigText()
+
+      try {
+        return JSON.parse(rawText)
+      }
+      catch (error) {
+        await this.backupCorruptedConfig(rawText)
+
+        const parseError = new Error('CONFIG_PARSE_FAILED')
+        parseError.cause = error
+        throw parseError
+      }
+    },
+    async writeConfigText(text) {
+      await this.ensureConfigDir()
+      await writeFileAtomic(configPath, text, { encoding: 'utf8' })
+    },
+    async backupCorruptedConfig(rawText) {
+      await this.ensureConfigDir()
+
+      const backupPath = path.join(
+        configDir,
+        `config.corrupted.${Date.now()}.json`,
+      )
+
+      if (await fs.pathExists(configPath)) {
+        await fs.copyFile(configPath, backupPath)
+        return backupPath
+      }
+
+      await fs.writeFile(backupPath, rawText, 'utf8')
+      return backupPath
+    },
+  }
+}
