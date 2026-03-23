@@ -8,6 +8,7 @@ import OtherLayout from '@/components/layout/OtherLayout.vue'
 import TypographerDescription from '@/components/TypographerDescription.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import constant from '@/util/constant.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
@@ -107,7 +108,18 @@ function closePreviewSearchBar() {
 }
 
 watch(() => config.value, (newValue) => {
-  channelUtil.send({ event: 'user-update-config', data: JSON.parse(JSON.stringify(newValue)) })
+  const nextConfig = JSON.parse(JSON.stringify(newValue))
+
+  channelUtil.send({ event: 'user-update-config', data: nextConfig })
+    .then((result) => {
+      const messageKey = getConfigUpdateFailureMessageKey(result)
+      if (messageKey) {
+        message.warning(t(messageKey))
+      }
+    })
+    .catch(() => {
+      message.warning(t('message.configWriteFailed'))
+    })
   closePreviewSearchBar()
 }, { deep: true })
 

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import log from '@/assets/img/logo.png'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { createLayoutTopOpenFolderAction } from './layoutTopOpenFolderAction.js'
 
 const store = useCommonStore()
@@ -43,14 +44,32 @@ function alwaysOnTop(flag) {
   channelUtil.send({ event: 'always-on-top', data: flag })
 }
 
-function switchThemes() {
-  channelUtil.send({ event: 'user-update-theme-global', data: theme.value === 'light' ? 'dark' : 'light' })
+async function switchThemes() {
+  try {
+    const result = await channelUtil.send({ event: 'user-update-theme-global', data: theme.value === 'light' ? 'dark' : 'light' })
+    const messageKey = getConfigUpdateFailureMessageKey(result)
+    if (messageKey) {
+      message.warning(t(messageKey))
+    }
+  }
+  catch {
+    message.warning(t('message.configWriteFailed'))
+  }
 }
 
 const language = computed(() => store.config.language)
 
-function switchLanguage(lang) {
-  channelUtil.send({ event: 'user-update-language', data: lang })
+async function switchLanguage(lang) {
+  try {
+    const result = await channelUtil.send({ event: 'user-update-language', data: lang })
+    const messageKey = getConfigUpdateFailureMessageKey(result)
+    if (messageKey) {
+      message.warning(t(messageKey))
+    }
+  }
+  catch {
+    message.warning(t('message.configWriteFailed'))
+  }
 }
 
 const appInfo = ref({ name: 'wj-markdown-editor', version: '' })
