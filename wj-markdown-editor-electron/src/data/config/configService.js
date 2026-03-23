@@ -44,6 +44,32 @@ function mergeConfigPatch(target, patch) {
   return merged
 }
 
+function isPatchPreserved(patchValue, configValue) {
+  if (isPlainObject(patchValue)) {
+    if (!isPlainObject(configValue)) {
+      return false
+    }
+
+    for (const key in patchValue) {
+      if (!(key in configValue) || isPatchPreserved(patchValue[key], configValue[key]) === false) {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  if (Array.isArray(patchValue)) {
+    if (!Array.isArray(configValue) || patchValue.length !== configValue.length) {
+      return false
+    }
+
+    return patchValue.every((item, index) => isPatchPreserved(item, configValue[index]))
+  }
+
+  return Object.is(patchValue, configValue)
+}
+
 export function createConfigService(deps) {
   const {
     defaultConfig,
@@ -59,6 +85,18 @@ export function createConfigService(deps) {
 
   function normalizeConfig(rawConfig) {
     const repairedConfig = repairConfig(rawConfig, defaultConfig)
+    validateConfigShape(repairedConfig)
+    return repairedConfig
+  }
+
+  function normalizeUpdatedConfig(nextPartial) {
+    const repairedConfig = repairConfig(mergeConfigPatch(getCurrentConfigOrDefault(), nextPartial), defaultConfig)
+
+    // 运行期更新仍然保持显式校验语义，禁止用 repair 悄悄改写调用方提交的值。
+    if (isPatchPreserved(nextPartial, repairedConfig) === false) {
+      throw new Error('配置更新包含非法值')
+    }
+
     validateConfigShape(repairedConfig)
     return repairedConfig
   }
@@ -140,7 +178,7 @@ export function createConfigService(deps) {
       let nextConfig = null
 
       try {
-        nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), nextPartial))
+        nextConfig = normalizeUpdatedConfig(nextPartial)
       }
       catch {
         return createInvalidConfigResult()
@@ -152,11 +190,11 @@ export function createConfigService(deps) {
       let nextConfig = null
 
       try {
-        nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
+        nextConfig = normalizeUpdatedConfig({
           theme: {
             global: theme,
           },
-        }))
+        })
       }
       catch {
         return createInvalidConfigResult()
@@ -168,9 +206,9 @@ export function createConfigService(deps) {
       let nextConfig = null
 
       try {
-        nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
+        nextConfig = normalizeUpdatedConfig({
           language,
-        }))
+        })
       }
       catch {
         return createInvalidConfigResult()

@@ -2,6 +2,16 @@ function cloneConfigValue(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+const configEnumOptions = {
+  imgMode: ['1', '2', '3', '4', '5'],
+  fileMode: ['2', '3', '4'],
+  autoSave: ['blur', 'close'],
+  startPage: ['editor', 'preview'],
+  language: ['zh-CN', 'en-US'],
+  externalFileChangeStrategy: ['apply', 'prompt'],
+  themeGlobal: ['light', 'dark'],
+}
+
 function mergeAndPrune(target, desc) {
   // 描述值不是对象时，保留已有值，维持历史兼容语义。
   if (typeof desc !== 'object' || desc === null) {
@@ -83,15 +93,89 @@ function repairShortcutKeyList(shortcutKeyList, defaultShortcutKeyList) {
   return repairedShortcutKeyList
 }
 
+function repairEnumValue(value, defaultValue, allowedValues) {
+  if (allowedValues.includes(value)) {
+    return value
+  }
+
+  return defaultValue
+}
+
+function repairStringValue(value, defaultValue) {
+  return typeof value === 'string' ? value : defaultValue
+}
+
+function repairBooleanValue(value, defaultValue) {
+  return typeof value === 'boolean' ? value : defaultValue
+}
+
+function repairNumberValue(value, defaultValue, { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY } = {}) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return defaultValue
+  }
+
+  return Math.min(Math.max(value, min), max)
+}
+
+function repairAutoSave(autoSave, defaultAutoSave) {
+  if (!Array.isArray(autoSave)) {
+    return cloneConfigValue(defaultAutoSave)
+  }
+
+  const repaired = []
+  const seen = new Set()
+
+  autoSave.forEach((item) => {
+    if (configEnumOptions.autoSave.includes(item) && seen.has(item) === false) {
+      repaired.push(item)
+      seen.add(item)
+    }
+  })
+
+  return repaired
+}
+
+function normalizeConfigFields(config, defaultConfig) {
+  // 配置版本始终跟随当前版本，避免旧版本号残留导致 schema 失败。
+  config.configVersion = defaultConfig.configVersion
+
+  config.imgLocal = repairEnumValue(config.imgLocal, defaultConfig.imgLocal, configEnumOptions.imgMode)
+  config.imgNetwork = repairEnumValue(config.imgNetwork, defaultConfig.imgNetwork, configEnumOptions.imgMode)
+  config.fileMode = repairEnumValue(config.fileMode, defaultConfig.fileMode, configEnumOptions.fileMode)
+  config.startPage = repairEnumValue(config.startPage, defaultConfig.startPage, configEnumOptions.startPage)
+  config.language = repairEnumValue(config.language, defaultConfig.language, configEnumOptions.language)
+  config.externalFileChangeStrategy = repairEnumValue(
+    config.externalFileChangeStrategy,
+    defaultConfig.externalFileChangeStrategy,
+    configEnumOptions.externalFileChangeStrategy,
+  )
+  config.recentMax = repairNumberValue(config.recentMax, defaultConfig.recentMax, { min: 0, max: 50 })
+  config.autoSave = repairAutoSave(config.autoSave, defaultConfig.autoSave)
+
+  // theme.preview 的 github-light 迁移先于类型修复，避免历史值被直接覆盖成默认主题。
+  if (config.theme.preview === 'github-light') {
+    config.theme.preview = 'github'
+  }
+
+  config.theme.global = repairEnumValue(config.theme.global, defaultConfig.theme.global, configEnumOptions.themeGlobal)
+  config.theme.code = repairStringValue(config.theme.code, defaultConfig.theme.code)
+  config.theme.preview = repairStringValue(config.theme.preview, defaultConfig.theme.preview)
+
+  config.imgAbsolutePath = repairStringValue(config.imgAbsolutePath, defaultConfig.imgAbsolutePath)
+  config.imgRelativePath = repairStringValue(config.imgRelativePath, defaultConfig.imgRelativePath)
+  config.fileAbsolutePath = repairStringValue(config.fileAbsolutePath, defaultConfig.fileAbsolutePath)
+  config.fileRelativePath = repairStringValue(config.fileRelativePath, defaultConfig.fileRelativePath)
+  config.menuVisible = repairBooleanValue(config.menuVisible, defaultConfig.menuVisible)
+  config.previewWidth = repairNumberValue(config.previewWidth, defaultConfig.previewWidth)
+  config.fontSize = repairNumberValue(config.fontSize, defaultConfig.fontSize)
+  config.openRecent = repairBooleanValue(config.openRecent, defaultConfig.openRecent)
+
+  return config
+}
+
 export function repairConfig(rawConfig = {}, defaultConfig) {
   const merged = mergeAndPrune(rawConfig, defaultConfig)
 
   merged.shortcutKeyList = repairShortcutKeyList(rawConfig.shortcutKeyList, defaultConfig.shortcutKeyList)
-
-  // 历史 preview 主题名 github-light 已废弃，这里统一迁移到 github。
-  if (merged.theme.preview === 'github-light') {
-    merged.theme.preview = 'github'
-  }
-
-  return merged
+  return normalizeConfigFields(merged, defaultConfig)
 }
