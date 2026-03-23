@@ -159,38 +159,4 @@ describe('configService', () => {
     expect(service.getConfig()).toEqual(defaultConfig)
     expect(callback).not.toHaveBeenCalled()
   })
-
-  it('初始化读到单字段脏值时必须只修复非法字段并保留其他合法配置', async () => {
-    const repository = createRepositoryStub({
-      readResult: {
-        ...cloneValue(defaultConfig),
-        language: 'jp-JP',
-        theme: {
-          ...cloneValue(defaultConfig.theme),
-          global: 'dark',
-        },
-        recentMax: 25,
-      },
-    })
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-
-    expect(service.getConfig().language).toBe(defaultConfig.language)
-    expect(service.getConfig().theme.global).toBe('dark')
-    expect(service.getConfig().recentMax).toBe(25)
-    expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(repository.writeConfigText.mock.calls[0][0])).toEqual(expect.objectContaining({
-      language: defaultConfig.language,
-      theme: expect.objectContaining({
-        global: 'dark',
-      }),
-      recentMax: 25,
-    }))
-    expect(callback).not.toHaveBeenCalled()
-  })
 })

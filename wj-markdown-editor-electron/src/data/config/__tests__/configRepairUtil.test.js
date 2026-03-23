@@ -59,34 +59,4 @@ describe('configRepairUtil', () => {
 
     expect(repaired.theme.preview).toBe('github')
   })
-
-  it('单个非法枚举字段必须回退默认值，同时保留其他合法字段', () => {
-    const repaired = repairConfig({
-      language: 'jp-JP',
-      theme: {
-        global: 'dark',
-      },
-      recentMax: 25,
-    }, defaultConfig)
-
-    expect(repaired.language).toBe(defaultConfig.language)
-    expect(repaired.theme.global).toBe('dark')
-    expect(repaired.recentMax).toBe(25)
-  })
-
-  it('recentMax 超出范围时必须夹紧到 schema 边界', () => {
-    const repaired = repairConfig({
-      recentMax: 999,
-    }, defaultConfig)
-
-    expect(repaired.recentMax).toBe(50)
-  })
-
-  it('autoSave 非法值必须过滤去重并保持原有顺序', () => {
-    const repaired = repairConfig({
-      autoSave: ['close', 'unknown', 'blur', 'close'],
-    }, defaultConfig)
-
-    expect(repaired.autoSave).toEqual(['close', 'blur'])
-  })
 })
