@@ -1,4 +1,5 @@
 import { repairConfig } from './configRepairUtil.js'
+import { validateConfigShape } from './configSchema.js'
 import { cloneConfig } from './configSnapshotUtil.js'
 
 function createWriteFailedResult() {
@@ -7,6 +8,40 @@ function createWriteFailedResult() {
     reason: 'config-write-failed',
     messageKey: 'message.configWriteFailed',
   }
+}
+
+function createInvalidConfigResult() {
+  return {
+    ok: false,
+    reason: 'config-invalid',
+    messageKey: 'message.configInvalid',
+  }
+}
+
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function mergeConfigPatch(target, patch) {
+  if (!isPlainObject(target) || !isPlainObject(patch)) {
+    return cloneConfig(patch)
+  }
+
+  const merged = { ...target }
+
+  for (const key in patch) {
+    const nextValue = patch[key]
+    const currentValue = merged[key]
+
+    if (isPlainObject(currentValue) && isPlainObject(nextValue)) {
+      merged[key] = mergeConfigPatch(currentValue, nextValue)
+      continue
+    }
+
+    merged[key] = cloneConfig(nextValue)
+  }
+
+  return merged
 }
 
 export function createConfigService(deps) {
@@ -20,6 +55,12 @@ export function createConfigService(deps) {
 
   function getCurrentConfigOrDefault() {
     return currentConfig ? cloneConfig(currentConfig) : cloneConfig(defaultConfig)
+  }
+
+  function normalizeConfig(rawConfig) {
+    const repairedConfig = repairConfig(rawConfig, defaultConfig)
+    validateConfigShape(repairedConfig)
+    return repairedConfig
   }
 
   async function persistConfig(nextConfig) {
@@ -59,15 +100,25 @@ export function createConfigService(deps) {
         shouldRewriteConfig = true
       }
 
-      const repairedConfig = repairConfig(rawConfig, defaultConfig)
-      const repairedText = JSON.stringify(repairedConfig)
+      let normalizedConfig = null
+
+      try {
+        normalizedConfig = normalizeConfig(rawConfig)
+      }
+      catch {
+        // 初始化阶段如果修复后仍不合法，继续回退到默认配置保证 service 内存态始终可用。
+        normalizedConfig = normalizeConfig(cloneConfig(defaultConfig))
+        shouldRewriteConfig = true
+      }
+
+      const repairedText = JSON.stringify(normalizedConfig)
 
       if (!shouldRewriteConfig) {
         // 只有修复结果与原始配置不一致时才执行规范化回写。
         shouldRewriteConfig = JSON.stringify(rawConfig) !== repairedText
       }
 
-      currentConfig = cloneConfig(repairedConfig)
+      currentConfig = cloneConfig(normalizedConfig)
 
       if (shouldRewriteConfig) {
         try {
@@ -82,22 +133,45 @@ export function createConfigService(deps) {
       return getCurrentConfigOrDefault()
     },
     async setConfig(nextPartial) {
-      const nextConfig = getCurrentConfigOrDefault()
+      let nextConfig = null
 
-      for (const key in nextPartial) {
-        nextConfig[key] = nextPartial[key]
+      try {
+        nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), nextPartial))
+      }
+      catch {
+        return createInvalidConfigResult()
       }
 
       return persistConfig(nextConfig)
     },
     async setThemeGlobal(theme) {
-      const nextConfig = getCurrentConfigOrDefault()
-      nextConfig.theme.global = theme
+      let nextConfig = null
+
+      try {
+        nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
+          theme: {
+            global: theme,
+          },
+        }))
+      }
+      catch {
+        return createInvalidConfigResult()
+      }
+
       return persistConfig(nextConfig)
     },
     async setLanguage(language) {
-      const nextConfig = getCurrentConfigOrDefault()
-      nextConfig.language = language
+      let nextConfig = null
+
+      try {
+        nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
+          language,
+        }))
+      }
+      catch {
+        return createInvalidConfigResult()
+      }
+
       return persistConfig(nextConfig)
     },
   }

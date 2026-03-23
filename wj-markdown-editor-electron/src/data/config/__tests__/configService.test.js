@@ -75,4 +75,66 @@ describe('configService', () => {
     expect(callback).not.toHaveBeenCalled()
     expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
   })
+
+  it('setConfig 传入局部 theme 时必须先 repair 成完整合法配置再持久化', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    const result = await service.setConfig({
+      theme: {
+        global: 'dark',
+      },
+    })
+
+    expect(result.ok).toBe(true)
+
+    const persistedConfig = JSON.parse(repository.writeConfigText.mock.calls[0][0])
+    expect(persistedConfig.theme).toEqual({
+      global: 'dark',
+      code: defaultConfig.theme.code,
+      preview: defaultConfig.theme.preview,
+    })
+    expect(service.getConfig().theme).toEqual({
+      global: 'dark',
+      code: defaultConfig.theme.code,
+      preview: defaultConfig.theme.preview,
+    })
+    expect(callback).toHaveBeenCalledTimes(1)
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({
+      theme: {
+        global: 'dark',
+        code: defaultConfig.theme.code,
+        preview: defaultConfig.theme.preview,
+      },
+    }))
+  })
+
+  it('非法 language 不得返回成功或写盘，也不能推进内存态和广播', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setLanguage('jp')).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().language).toBe(defaultConfig.language)
+    expect(callback).not.toHaveBeenCalled()
+  })
 })
