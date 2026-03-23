@@ -33,6 +33,36 @@ export function applySelectableStringField(draftConfig, fieldName, nextValue) {
 }
 
 /**
+ * 把 recentMax 输入值规范成设置页允许的整数区间，避免把空值或非法值写入配置草稿。
+ *
+ * 规则：
+ * - 空值、非数字统一回填为 0
+ * - 小于 0 的值回填为 0
+ * - 大于 50 的值回填为 50
+ * - 小数统一截断为整数
+ *
+ * @param {unknown} value
+ * @returns {number} 返回 0 到 50 的整数。
+ */
+export function normalizeRecentMaxInputValue(value) {
+  const normalizedNumber = Number(value)
+  if (Number.isNaN(normalizedNumber)) {
+    return 0
+  }
+
+  const normalizedInteger = Math.trunc(normalizedNumber)
+  if (normalizedInteger < 0) {
+    return 0
+  }
+
+  if (normalizedInteger > 50) {
+    return 50
+  }
+
+  return normalizedInteger
+}
+
+/**
  * 配置保存返回结构化失败结果时，回滚本地草稿并忽略下一次同步提交。
  *
  * @param {{

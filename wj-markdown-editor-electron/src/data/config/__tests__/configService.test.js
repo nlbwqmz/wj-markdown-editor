@@ -188,17 +188,11 @@ describe('configService', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
-  it('setConfigWithRecentMax 在 config 写盘失败时必须恢复 recent 快照，且内存态与广播都不能前移', async () => {
+  it('setConfigWithRecentMax 在 config 写盘失败时不得推进 recent 上限，且内存态与广播都不能前移', async () => {
     const repository = createRepositoryStub()
     repository.writeConfigText.mockRejectedValueOnce(new Error('config-write-failed'))
     const callback = vi.fn()
-    const recentSnapshot = {
-      recent: ['D:/docs/one.md', 'D:/docs/two.md'],
-      maxSize: 12,
-    }
-    const recentStore = createRecentStoreStub({
-      createStateSnapshot: vi.fn(() => cloneValue(recentSnapshot)),
-    })
+    const recentStore = createRecentStoreStub()
     const service = createConfigService({
       defaultConfig,
       repository,
@@ -217,25 +211,17 @@ describe('configService', () => {
       messageKey: 'message.configWriteFailed',
     })
 
-    expect(recentStore.createStateSnapshot).toHaveBeenCalledTimes(1)
-    expect(recentStore.setMax).toHaveBeenCalledWith(7, { notify: false })
+    expect(recentStore.setMax).not.toHaveBeenCalled()
     expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
-    expect(recentStore.restoreState).toHaveBeenCalledTimes(1)
-    expect(recentStore.restoreState).toHaveBeenCalledWith(recentSnapshot)
-    expect(recentStore.restoreState.mock.invocationCallOrder[0]).toBeGreaterThan(repository.writeConfigText.mock.invocationCallOrder[0])
     expect(service.getConfig()).toEqual(previousConfig)
     expect(callback).not.toHaveBeenCalled()
+    expect(recentStore.notifyCurrentState).not.toHaveBeenCalled()
   })
 
-  it('setConfigWithRecentMax 必须在 config 成功前禁止 recent 广播，并在全部成功后再显式通知 recent', async () => {
+  it('setConfigWithRecentMax 成功时只更新配置与 recent 上限，不立即广播 recent 列表', async () => {
     const repository = createRepositoryStub()
     const callback = vi.fn()
-    const recentStore = createRecentStoreStub({
-      createStateSnapshot: vi.fn(() => ({
-        recent: ['D:/docs/one.md'],
-        maxSize: 8,
-      })),
-    })
+    const recentStore = createRecentStoreStub()
     const service = createConfigService({
       defaultConfig,
       repository,
@@ -256,70 +242,16 @@ describe('configService', () => {
     })
 
     expect(recentStore.setMax).toHaveBeenCalledWith(6, { notify: false })
-    expect(recentStore.notifyCurrentState).toHaveBeenCalledTimes(1)
+    expect(recentStore.notifyCurrentState).not.toHaveBeenCalled()
     expect(callback).toHaveBeenCalledTimes(1)
-    expect(recentStore.notifyCurrentState.mock.invocationCallOrder[0]).toBeGreaterThan(callback.mock.invocationCallOrder[0])
   })
 
-  it('setConfigWithRecentMax 在 config 写盘失败时必须等待 recent.restoreState 完成后再返回', async () => {
+  it('setConfigWithRecentMax 在 recent.setMax 抛错时仍必须保留配置成功结果，只记录错误日志', async () => {
     const repository = createRepositoryStub()
-    repository.writeConfigText.mockRejectedValueOnce(new Error('config-write-failed'))
     const callback = vi.fn()
-
-    let resolveRestore
-    const restoreState = vi.fn(() => new Promise((resolve) => {
-      resolveRestore = resolve
-    }))
     const recentStore = createRecentStoreStub({
-      createStateSnapshot: vi.fn(() => ({
-        recent: ['D:/docs/one.md'],
-        maxSize: 8,
-      })),
-      restoreState,
-    })
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    let settled = false
-    const resultPromise = service.setConfigWithRecentMax({
-      recentMax: 6,
-    }, recentStore).then((result) => {
-      settled = true
-      return result
-    })
-
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    expect(restoreState).toHaveBeenCalledTimes(1)
-    expect(settled).toBe(false)
-
-    resolveRestore()
-
-    await expect(resultPromise).resolves.toEqual({
-      ok: false,
-      reason: 'config-write-failed',
-      messageKey: 'message.configWriteFailed',
-    })
-    expect(settled).toBe(true)
-  })
-
-  it('setConfigWithRecentMax 在 recent rollback 失败时必须记录错误日志，并保持结构化失败结果', async () => {
-    const repository = createRepositoryStub()
-    repository.writeConfigText.mockRejectedValueOnce(new Error('config-write-failed'))
-    const callback = vi.fn()
-    const rollbackError = new Error('rollback-write-failed')
-    const recentStore = createRecentStoreStub({
-      createStateSnapshot: vi.fn(() => ({
-        recent: ['D:/docs/one.md'],
-        maxSize: 8,
-      })),
-      restoreState: vi.fn(async () => {
-        throw rollbackError
+      setMax: vi.fn(async () => {
+        throw new Error('recent-set-max-failed')
       }),
     })
     const service = createConfigService({
@@ -331,27 +263,37 @@ describe('configService', () => {
     repository.writeConfigText.mockClear()
 
     await expect(service.setConfigWithRecentMax({
-      recentMax: 6,
+      recentMax: 4,
+      language: 'en-US',
     }, recentStore)).resolves.toEqual({
-      ok: false,
-      reason: 'config-write-failed',
-      messageKey: 'message.configWriteFailed',
+      ok: true,
+      config: expect.objectContaining({
+        recentMax: 4,
+        language: 'en-US',
+      }),
     })
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith('[configService] recent rollback failed:', rollbackError)
-    expect(callback).not.toHaveBeenCalled()
-    expect(recentStore.notifyCurrentState).not.toHaveBeenCalled()
+    expect(service.getConfig()).toEqual(expect.objectContaining({
+      recentMax: 4,
+      language: 'en-US',
+    }))
+    expect(callback).toHaveBeenCalledTimes(1)
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({
+      recentMax: 4,
+      language: 'en-US',
+    }))
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[configService] recentStore.setMax failed after config persisted:',
+      expect.any(Error),
+    )
   })
 
-  it('两个 setConfigWithRecentMax 并发交错时，失败事务不能把后续成功事务的 recent 结果回滚掉', async () => {
-    let writeCount = 0
+  it('setConfigWithRecentMax 挂起时并发 setThemeGlobal，较晚成功的主题写入不能被旧配置快照覆盖', async () => {
     let resolveFirstWrite
     const repository = {
       readParsedConfig: vi.fn(async () => cloneValue(defaultConfig)),
       writeConfigText: vi.fn(() => {
-        const writeIndex = writeCount
-        writeCount += 1
-        if (writeIndex === 0) {
+        if (!resolveFirstWrite) {
           return new Promise((resolve, reject) => {
             resolveFirstWrite = { resolve, reject }
           })
@@ -361,33 +303,7 @@ describe('configService', () => {
       }),
     }
     const callback = vi.fn()
-    let recentState = {
-      recent: ['D:/docs/original.md'],
-      maxSize: defaultConfig.recentMax,
-    }
-    const recentNotifications = []
-    let recentQueue = Promise.resolve()
-    const recentStore = {
-      transaction: vi.fn(async (task) => {
-        const runTask = recentQueue.then(() => task({
-          createStateSnapshot: () => cloneValue(recentState),
-          notifyCurrentState: () => {
-            recentNotifications.push(cloneValue(recentState))
-          },
-          restoreState: async (snapshot) => {
-            recentState = cloneValue(snapshot)
-          },
-          setMax: async (max) => {
-            recentState = {
-              recent: recentState.recent.slice(0, max),
-              maxSize: max,
-            }
-          },
-        }))
-        recentQueue = runTask.catch(() => {})
-        return await runTask
-      }),
-    }
+    const recentStore = createRecentStoreStub()
     const service = createConfigService({
       defaultConfig,
       repository,
@@ -403,71 +319,6 @@ describe('configService', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
 
     const secondUpdatePromise = service.setConfigWithRecentMax({
-      recentMax: 0,
-      language: 'zh-CN',
-    }, recentStore)
-
-    resolveFirstWrite.reject(new Error('first-config-write-failed'))
-
-    await expect(firstUpdatePromise).resolves.toEqual({
-      ok: false,
-      reason: 'config-write-failed',
-      messageKey: 'message.configWriteFailed',
-    })
-    await expect(secondUpdatePromise).resolves.toEqual({
-      ok: true,
-      config: expect.objectContaining({
-        recentMax: 0,
-        language: 'zh-CN',
-      }),
-    })
-
-    expect(service.getConfig()).toEqual(expect.objectContaining({
-      recentMax: 0,
-      language: 'zh-CN',
-    }))
-    expect(recentState).toEqual({
-      recent: [],
-      maxSize: 0,
-    })
-    expect(recentNotifications).toEqual([
-      {
-        recent: [],
-        maxSize: 0,
-      },
-    ])
-  })
-
-  it('setConfigWithRecentMax 挂起时并发 setThemeGlobal，较晚成功的主题写入不能被旧配置快照覆盖', async () => {
-    let resolveRecentTransaction
-    const recentStore = {
-      transaction: vi.fn(async (task) => {
-        await new Promise((resolve) => {
-          resolveRecentTransaction = resolve
-        })
-        return await task({
-          createStateSnapshot: vi.fn(() => ({
-            recent: ['D:/docs/original.md'],
-            maxSize: defaultConfig.recentMax,
-          })),
-          notifyCurrentState: vi.fn(),
-          restoreState: vi.fn(async () => undefined),
-          setMax: vi.fn(async () => undefined),
-        })
-      }),
-    }
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-    callback.mockClear()
-
-    const recentUpdatePromise = service.setConfigWithRecentMax({
       recentMax: 3,
       language: 'en-US',
     }, recentStore)
@@ -476,9 +327,16 @@ describe('configService', () => {
 
     const themeUpdatePromise = service.setThemeGlobal('dark')
 
-    resolveRecentTransaction()
+    resolveFirstWrite.resolve()
 
-    await expect(recentUpdatePromise).resolves.toEqual({
+    await expect(firstUpdatePromise).resolves.toEqual({
+      ok: true,
+      config: expect.objectContaining({
+        recentMax: 1,
+        language: 'en-US',
+      }),
+    })
+    await expect(secondUpdatePromise).resolves.toEqual({
       ok: true,
       config: expect.objectContaining({
         recentMax: 3,

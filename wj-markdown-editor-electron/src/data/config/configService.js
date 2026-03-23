@@ -113,6 +113,20 @@ export function createConfigService(deps) {
     }
   }
 
+  async function syncRecentMaxBestEffort(recentStore, nextRecentMax) {
+    if (typeof recentStore?.setMax !== 'function') {
+      return
+    }
+
+    try {
+      // recentMax 这里只是运行期上限同步，失败不能回滚已经成功提交的配置状态。
+      await recentStore.setMax(nextRecentMax, { notify: false })
+    }
+    catch (error) {
+      console.error('[configService] recentStore.setMax failed after config persisted:', error)
+    }
+  }
+
   async function setConfigWithRecentMax(nextPartial, recentStore) {
     return await runConfigUpdate(async () => {
       const buildResult = buildNextConfig(nextPartial)
@@ -121,44 +135,15 @@ export function createConfigService(deps) {
       }
 
       const nextConfig = buildResult.nextConfig
-      return await recentStore.transaction(async (recentTransaction) => {
-        const recentSnapshot = recentTransaction.createStateSnapshot()
+      const persistResult = await persistConfig(nextConfig)
+      if (persistResult.ok === false) {
+        return persistResult
+      }
 
-        try {
-          await recentTransaction.setMax(nextConfig.recentMax, { notify: false })
-        }
-        catch {
-          return createWriteFailedResult()
-        }
+      // recentMax 更新后只同步运行期上限，不在这里裁剪 recent 列表或广播 recent 变化。
+      await syncRecentMaxBestEffort(recentStore, nextConfig.recentMax)
 
-        try {
-          await repository.writeConfigText(JSON.stringify(nextConfig))
-        }
-        catch {
-          try {
-            // 配置写盘失败时恢复 recent 快照，避免 recent 状态单独前移。
-            await recentTransaction.restoreState(recentSnapshot)
-          }
-          catch (error) {
-            // recent 快照恢复失败时至少保留诊断信息；内存配置与广播保持不变。
-            console.error('[configService] recent rollback failed:', error)
-          }
-          return createWriteFailedResult()
-        }
-
-        currentConfig = cloneConfig(nextConfig)
-
-        if (updateCallback) {
-          updateCallback(cloneConfig(currentConfig))
-        }
-
-        recentTransaction.notifyCurrentState()
-
-        return {
-          ok: true,
-          config: cloneConfig(currentConfig),
-        }
-      })
+      return persistResult
     })
   }
 

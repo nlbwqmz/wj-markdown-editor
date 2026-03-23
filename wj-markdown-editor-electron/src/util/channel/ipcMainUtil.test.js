@@ -1746,7 +1746,7 @@ describe('ipcMainUtil 配置更新契约', () => {
     expect(recentSetMax).not.toHaveBeenCalled()
   })
 
-  it('user-update-config 在 recent.setMax 失败时必须透传整体失败结果，且 IPC 不再吞异常伪造成功', async () => {
+  it('user-update-config 在配置服务返回结构化失败时必须透传整体失败结果，且 IPC 不再吞异常伪造成功', async () => {
     const payload = {
       recentMax: 11,
     }

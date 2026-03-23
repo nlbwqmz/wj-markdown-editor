@@ -18,18 +18,21 @@ function requireSettingConfigDraftUtil() {
     applySelectableStringField,
     cloneConfigDraft,
     createTransportConfigUpdateFailureRecovery,
+    normalizeRecentMaxInputValue,
     resolveConfigUpdateFailureRecovery,
   } = settingConfigDraftUtilModule
 
   assert.equal(typeof applySelectableStringField, 'function')
   assert.equal(typeof cloneConfigDraft, 'function')
   assert.equal(typeof createTransportConfigUpdateFailureRecovery, 'function')
+  assert.equal(typeof normalizeRecentMaxInputValue, 'function')
   assert.equal(typeof resolveConfigUpdateFailureRecovery, 'function')
 
   return {
     applySelectableStringField,
     cloneConfigDraft,
     createTransportConfigUpdateFailureRecovery,
+    normalizeRecentMaxInputValue,
     resolveConfigUpdateFailureRecovery,
   }
 }
@@ -150,4 +153,17 @@ test('配置提交成功时不应触发草稿回滚', () => {
 
   assert.equal(recovery, null)
   assert.equal(submissionGuard.markNextSyncIgnoredCalled, 0)
+})
+
+test('recentMax 输入值必须被规范为 0 到 50 的整数', () => {
+  const { normalizeRecentMaxInputValue } = requireSettingConfigDraftUtil()
+
+  assert.equal(normalizeRecentMaxInputValue(null), 0)
+  assert.equal(normalizeRecentMaxInputValue(undefined), 0)
+  assert.equal(normalizeRecentMaxInputValue(Number.NaN), 0)
+  assert.equal(normalizeRecentMaxInputValue(-1), 0)
+  assert.equal(normalizeRecentMaxInputValue(0), 0)
+  assert.equal(normalizeRecentMaxInputValue(7.9), 7)
+  assert.equal(normalizeRecentMaxInputValue(12), 12)
+  assert.equal(normalizeRecentMaxInputValue(51), 50)
 })

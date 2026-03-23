@@ -126,7 +126,7 @@ describe('recent 数据存储', () => {
     )
   })
 
-  it('setMax 写盘失败时，recent 的内存列表与 maxSize 都不能前移', async () => {
+  it('initRecent 读取到超出上限的 recent 时，必须在启动阶段收敛并回写', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue(JSON.stringify([
       'D:/docs/one.md',
@@ -135,61 +135,7 @@ describe('recent 数据存储', () => {
     ]))
 
     const { default: recent } = await import('./recent.js')
-    await recent.initRecent(3, vi.fn())
-    writeFileMock.mockClear()
-    writeFileMock.mockRejectedValueOnce(new Error('disk full'))
-
-    await expect(recent.setMax(1)).rejects.toThrow('disk full')
-    expect(recent.get()).toEqual([
-      {
-        name: 'one.md',
-        path: 'D:/docs/one.md',
-      },
-      {
-        name: 'two.md',
-        path: 'D:/docs/two.md',
-      },
-      {
-        name: 'three.md',
-        path: 'D:/docs/three.md',
-      },
-    ])
-
-    writeFileMock.mockResolvedValue(undefined)
-    await recent.add('D:/docs/four.md')
-
-    expect(recent.get()).toEqual([
-      {
-        name: 'four.md',
-        path: 'D:/docs/four.md',
-      },
-      {
-        name: 'one.md',
-        path: 'D:/docs/one.md',
-      },
-      {
-        name: 'two.md',
-        path: 'D:/docs/two.md',
-      },
-    ])
-  })
-
-  it('setMax 在 callback 抛错时仍应视为成功，recent 状态已提交且只记录日志', async () => {
-    pathExistsMock.mockResolvedValue(true)
-    readFileMock.mockResolvedValue(JSON.stringify([
-      'D:/docs/one.md',
-      'D:/docs/two.md',
-      'D:/docs/three.md',
-    ]))
-    const callback = vi.fn(() => {
-      throw new Error('callback-failed')
-    })
-
-    const { default: recent } = await import('./recent.js')
-    await recent.initRecent(3, callback)
-    writeFileMock.mockClear()
-
-    await expect(recent.setMax(1)).resolves.toBeUndefined()
+    await recent.initRecent(1, vi.fn())
 
     expect(recent.get()).toEqual([
       {
@@ -204,10 +150,9 @@ describe('recent 数据存储', () => {
       ]),
       'utf-8',
     )
-    expect(consoleErrorSpy).toHaveBeenCalledWith('[recent] callback failed:', expect.any(Error))
   })
 
-  it('setMax 在 notify=false 的事务路径下提交成功时，不应调用 callback', async () => {
+  it('setMax 成功时只更新运行期上限，不立即修改 recent 列表、磁盘或 callback', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue(JSON.stringify([
       'D:/docs/one.md',
@@ -221,15 +166,57 @@ describe('recent 数据存储', () => {
     writeFileMock.mockClear()
     callback.mockClear()
 
-    await expect(recent.setMax(1, { notify: false })).resolves.toBeUndefined()
+    await expect(recent.setMax(1)).resolves.toBeUndefined()
 
     expect(recent.get()).toEqual([
       {
         name: 'one.md',
         path: 'D:/docs/one.md',
       },
+      {
+        name: 'two.md',
+        path: 'D:/docs/two.md',
+      },
+      {
+        name: 'three.md',
+        path: 'D:/docs/three.md',
+      },
     ])
+    expect(writeFileMock).not.toHaveBeenCalled()
     expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setMax 更新上限后，下一次 add 必须按新上限统一收敛', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue(JSON.stringify([
+      'D:/docs/one.md',
+      'D:/docs/two.md',
+      'D:/docs/three.md',
+    ]))
+    const callback = vi.fn()
+
+    const { default: recent } = await import('./recent.js')
+    await recent.initRecent(3, callback)
+    await recent.setMax(1, { notify: false })
+    writeFileMock.mockClear()
+    callback.mockClear()
+
+    await recent.add('D:/docs/four.md')
+
+    expect(recent.get()).toEqual([
+      {
+        name: 'four.md',
+        path: 'D:/docs/four.md',
+      },
+    ])
+    expect(writeFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/[\\/]recent\.json$/),
+      JSON.stringify([
+        'D:/docs/four.md',
+      ]),
+      'utf-8',
+    )
+    expect(callback).toHaveBeenCalledTimes(1)
   })
 
   it('notifyCurrentState 必须显式广播当前 recent 列表', async () => {
@@ -273,7 +260,7 @@ describe('recent 数据存储', () => {
     writeFileMock.mockClear()
 
     const snapshot = recent.createStateSnapshot()
-    await recent.setMax(1)
+    await recent.add('D:/docs/four.md')
     callback.mockClear()
     writeFileMock.mockClear()
 
@@ -317,7 +304,7 @@ describe('recent 数据存储', () => {
     await recent.initRecent(3, vi.fn())
 
     const snapshot = recent.createStateSnapshot()
-    await recent.setMax(1, { notify: false })
+    await recent.add('D:/docs/four.md')
     writeFileMock.mockClear()
     writeFileMock.mockRejectedValueOnce(new Error('restore-write-failed'))
 

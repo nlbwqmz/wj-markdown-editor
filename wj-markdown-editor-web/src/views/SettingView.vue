@@ -13,6 +13,7 @@ import {
   applySelectableStringField,
   cloneConfigDraft,
   createTransportConfigUpdateFailureRecovery,
+  normalizeRecentMaxInputValue,
   resolveConfigUpdateFailureRecovery,
 } from '@/util/config/settingConfigDraftUtil.js'
 import constant from '@/util/constant.js'
@@ -262,6 +263,17 @@ async function openFileDirSelect() {
   applySelectableStringField(config.value, 'fileAbsolutePath', nextSelectedPath)
 }
 
+/**
+ * recentMax 输入框使用受控更新，避免把清空产生的 null 写进配置草稿。
+ */
+function onRecentMaxUpdate(nextValue) {
+  if (!config.value) {
+    return
+  }
+
+  config.value.recentMax = normalizeRecentMaxInputValue(nextValue)
+}
+
 function settingMinimize() {
   channelUtil.send({ event: 'setting-minimize' })
 }
@@ -353,7 +365,16 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.general.recentHistoryCount')">
-            <a-input-number v-model:value="config.recentMax" :min="0" :max="50" class="w-full" :controls="false" />
+            <a-input-number
+              :value="config.recentMax"
+              :min="0"
+              :max="50"
+              :precision="0"
+              :step="1"
+              class="w-full"
+              :controls="false"
+              @update:value="onRecentMaxUpdate"
+            />
           </a-descriptions-item>
           <a-descriptions-item>
             <template #label>

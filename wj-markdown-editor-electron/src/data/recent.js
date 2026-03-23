@@ -53,6 +53,23 @@ function normalizeRecentList(recentList) {
   }, [])
 }
 
+function resolveRecentMaxSize(max, fallback) {
+  if (typeof max !== 'number' || Number.isNaN(max)) {
+    return fallback
+  }
+
+  return max >= 0 ? max : fallback
+}
+
+function trimRecentListToMax(recentList, max) {
+  const normalizedRecent = normalizeRecentList(recentList)
+  if (max <= 0) {
+    return []
+  }
+
+  return normalizedRecent.slice(0, max)
+}
+
 function parseRecent() {
   return recent.map((item) => {
     return {
@@ -76,17 +93,19 @@ function notifyCallbackSafely() {
 }
 
 async function initRecent(max, callbackFunction) {
-  maxSize = max || 10
+  maxSize = resolveRecentMaxSize(max, 10)
   callback = callbackFunction
   try {
     await fs.ensureDir(documentsPath)
     if (await fs.pathExists(recentPath)) {
       const recentContent = JSON.parse(await fs.readFile(recentPath, 'utf-8'))
-      recent = normalizeRecentList(recentContent)
-      if (JSON.stringify(recentContent) !== JSON.stringify(recent)) {
-        await fs.writeFile(recentPath, JSON.stringify(recent), 'utf-8')
+      const normalizedRecent = trimRecentListToMax(recentContent, maxSize)
+      recent = normalizedRecent
+      if (JSON.stringify(recentContent) !== JSON.stringify(normalizedRecent)) {
+        await fs.writeFile(recentPath, JSON.stringify(normalizedRecent), 'utf-8')
       }
     } else {
+      recent = []
       await fs.writeFile(recentPath, JSON.stringify([]), 'utf-8')
     }
   } catch {
@@ -125,16 +144,13 @@ async function clearInternal({ notify = true } = {}) {
 async function addInternal(filePath, { notify = true } = {}) {
   const normalizedFilePath = normalizeRecentPath(filePath)
   const comparableKey = getRecentComparableKey(normalizedFilePath)
-  if (!maxSize || maxSize <= 0 || !normalizedFilePath || !comparableKey) {
+  if (!normalizedFilePath || !comparableKey) {
     return
   }
 
   const nextRecent = recent.filter(item => getRecentComparableKey(item) !== comparableKey)
   nextRecent.unshift(normalizedFilePath)
-  const normalizedRecent = normalizeRecentList(nextRecent)
-  if (normalizedRecent.length > maxSize) {
-    normalizedRecent.pop()
-  }
+  const normalizedRecent = trimRecentListToMax(nextRecent, maxSize)
 
   await fs.writeFile(recentPath, JSON.stringify(normalizedRecent), 'utf-8')
   recent = normalizedRecent
@@ -162,20 +178,11 @@ async function removeInternal(filePath, { notify = true } = {}) {
 }
 
 async function setMaxInternal(max, { notify = true } = {}) {
-  const nextMaxSize = max || 0
-  const nextRecent = normalizeRecentList(recent)
-  while (nextRecent.length > nextMaxSize && nextRecent.length !== 0) {
-    nextRecent.pop()
-  }
+  // recentMax 更新时只同步运行期上限；列表收敛延迟到下次启动或后续 recent 真实更新时处理。
+  maxSize = resolveRecentMaxSize(max, 0)
 
-  // setMax 失败时不能让 recent 的内存态先于持久化态前移。
-  await fs.writeFile(recentPath, JSON.stringify(nextRecent), 'utf-8')
-
-  maxSize = nextMaxSize
-  recent = nextRecent
-  if (notify) {
-    notifyCallbackSafely()
-  }
+  // 兼容旧接口签名，notify 参数保留但这里不广播，因为 recent 列表本身未发生变化。
+  void notify
 }
 
 async function restoreStateInternal(snapshot, { notify = false } = {}) {
@@ -184,7 +191,7 @@ async function restoreStateInternal(snapshot, { notify = false } = {}) {
   }
 
   const restoredRecent = normalizeRecentList(snapshot.recent)
-  const restoredMaxSize = snapshot.maxSize || 0
+  const restoredMaxSize = resolveRecentMaxSize(snapshot.maxSize, 0)
 
   recent = restoredRecent
   maxSize = restoredMaxSize
