@@ -52,15 +52,44 @@ export function createConfigService(deps) {
 
   let currentConfig = null
   let updateCallback = null
+  let configUpdateQueue = Promise.resolve()
 
   function getCurrentConfigOrDefault() {
     return currentConfig ? cloneConfig(currentConfig) : cloneConfig(defaultConfig)
+  }
+
+  function runConfigUpdate(task) {
+    const nextTask = configUpdateQueue.then(task, task)
+    configUpdateQueue = nextTask.catch(() => {})
+    return nextTask
   }
 
   function normalizeConfig(rawConfig) {
     const repairedConfig = repairConfig(rawConfig, defaultConfig)
     validateConfigShape(repairedConfig)
     return repairedConfig
+  }
+
+  function buildNextConfig(nextPartial) {
+    if (!isPlainObject(nextPartial)) {
+      return {
+        ok: false,
+        result: createInvalidConfigResult(),
+      }
+    }
+
+    try {
+      return {
+        ok: true,
+        nextConfig: normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), nextPartial)),
+      }
+    }
+    catch {
+      return {
+        ok: false,
+        result: createInvalidConfigResult(),
+      }
+    }
   }
 
   async function persistConfig(nextConfig) {
@@ -82,6 +111,55 @@ export function createConfigService(deps) {
       ok: true,
       config: cloneConfig(currentConfig),
     }
+  }
+
+  async function setConfigWithRecentMax(nextPartial, recentStore) {
+    return await runConfigUpdate(async () => {
+      const buildResult = buildNextConfig(nextPartial)
+      if (!buildResult.ok) {
+        return buildResult.result
+      }
+
+      const nextConfig = buildResult.nextConfig
+      return await recentStore.transaction(async (recentTransaction) => {
+        const recentSnapshot = recentTransaction.createStateSnapshot()
+
+        try {
+          await recentTransaction.setMax(nextConfig.recentMax, { notify: false })
+        }
+        catch {
+          return createWriteFailedResult()
+        }
+
+        try {
+          await repository.writeConfigText(JSON.stringify(nextConfig))
+        }
+        catch {
+          try {
+            // 配置写盘失败时恢复 recent 快照，避免 recent 状态单独前移。
+            await recentTransaction.restoreState(recentSnapshot)
+          }
+          catch (error) {
+            // recent 快照恢复失败时至少保留诊断信息；内存配置与广播保持不变。
+            console.error('[configService] recent rollback failed:', error)
+          }
+          return createWriteFailedResult()
+        }
+
+        currentConfig = cloneConfig(nextConfig)
+
+        if (updateCallback) {
+          updateCallback(cloneConfig(currentConfig))
+        }
+
+        recentTransaction.notifyCurrentState()
+
+        return {
+          ok: true,
+          config: cloneConfig(currentConfig),
+        }
+      })
+    })
   }
 
   return {
@@ -133,50 +211,49 @@ export function createConfigService(deps) {
       return getCurrentConfigOrDefault()
     },
     async setConfig(nextPartial) {
-      if (!isPlainObject(nextPartial)) {
-        return createInvalidConfigResult()
-      }
+      return await runConfigUpdate(async () => {
+        const buildResult = buildNextConfig(nextPartial)
+        if (!buildResult.ok) {
+          return buildResult.result
+        }
 
-      let nextConfig = null
-
-      try {
-        nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), nextPartial))
-      }
-      catch {
-        return createInvalidConfigResult()
-      }
-
-      return persistConfig(nextConfig)
+        return await persistConfig(buildResult.nextConfig)
+      })
     },
+    setConfigWithRecentMax,
     async setThemeGlobal(theme) {
-      let nextConfig = null
+      return await runConfigUpdate(async () => {
+        let nextConfig = null
 
-      try {
-        nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
-          theme: {
-            global: theme,
-          },
-        }))
-      }
-      catch {
-        return createInvalidConfigResult()
-      }
+        try {
+          nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
+            theme: {
+              global: theme,
+            },
+          }))
+        }
+        catch {
+          return createInvalidConfigResult()
+        }
 
-      return persistConfig(nextConfig)
+        return await persistConfig(nextConfig)
+      })
     },
     async setLanguage(language) {
-      let nextConfig = null
+      return await runConfigUpdate(async () => {
+        let nextConfig = null
 
-      try {
-        nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
-          language,
-        }))
-      }
-      catch {
-        return createInvalidConfigResult()
-      }
+        try {
+          nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
+            language,
+          }))
+        }
+        catch {
+          return createInvalidConfigResult()
+        }
 
-      return persistConfig(nextConfig)
+        return await persistConfig(nextConfig)
+      })
     },
   }
 }

@@ -6,13 +6,15 @@ import { toComparableDocumentPath } from '../util/document-session/documentOpenT
 let recent = []
 let maxSize = 10
 let callback = null
+let exclusiveQueue = Promise.resolve()
 
 const documentsPath = app.isPackaged ? path.resolve(app.getPath('documents'), 'wj-markdown-editor') : app.getAppPath()
 const recentPath = path.resolve(documentsPath, 'recent.json')
 
-async function write() {
-  await fs.writeFile(recentPath, JSON.stringify(recent), 'utf-8')
-  callback && callback(parseRecent())
+function runExclusive(task) {
+  const nextTask = exclusiveQueue.then(task, task)
+  exclusiveQueue = nextTask.catch(() => {})
+  return nextTask
 }
 
 function normalizeRecentPath(filePath) {
@@ -60,6 +62,19 @@ function parseRecent() {
   })
 }
 
+function notifyCallbackSafely() {
+  if (!callback) {
+    return
+  }
+
+  try {
+    callback(parseRecent())
+  }
+  catch (error) {
+    console.error('[recent] callback failed:', error)
+  }
+}
+
 async function initRecent(max, callbackFunction) {
   maxSize = max || 10
   callback = callbackFunction
@@ -81,36 +96,123 @@ async function initRecent(max, callbackFunction) {
 }
 
 async function clear() {
-  recent = []
-  await write()
+  await runExclusive(async () => {
+    await clearInternal()
+  })
 }
 
 async function add(filePath) {
+  await runExclusive(async () => {
+    await addInternal(filePath)
+  })
+}
+
+async function remove(filePath) {
+  await runExclusive(async () => {
+    await removeInternal(filePath)
+  })
+}
+
+async function clearInternal({ notify = true } = {}) {
+  const nextRecent = []
+  await fs.writeFile(recentPath, JSON.stringify(nextRecent), 'utf-8')
+  recent = nextRecent
+  if (notify) {
+    notifyCallbackSafely()
+  }
+}
+
+async function addInternal(filePath, { notify = true } = {}) {
   const normalizedFilePath = normalizeRecentPath(filePath)
   const comparableKey = getRecentComparableKey(normalizedFilePath)
   if (!maxSize || maxSize <= 0 || !normalizedFilePath || !comparableKey) {
     return
   }
 
-  recent = recent.filter(item => getRecentComparableKey(item) !== comparableKey)
-  recent.unshift(normalizedFilePath)
-  recent = normalizeRecentList(recent)
-  if (recent.length > maxSize) {
-    recent.pop()
+  const nextRecent = recent.filter(item => getRecentComparableKey(item) !== comparableKey)
+  nextRecent.unshift(normalizedFilePath)
+  const normalizedRecent = normalizeRecentList(nextRecent)
+  if (normalizedRecent.length > maxSize) {
+    normalizedRecent.pop()
   }
-  await write()
+
+  await fs.writeFile(recentPath, JSON.stringify(normalizedRecent), 'utf-8')
+  recent = normalizedRecent
+  if (notify) {
+    notifyCallbackSafely()
+  }
 }
 
-async function remove(filePath) {
+async function removeInternal(filePath, { notify = true } = {}) {
   const comparableKey = getRecentComparableKey(filePath)
   if (!comparableKey) {
     return
   }
 
   const nextRecent = recent.filter(item => getRecentComparableKey(item) !== comparableKey)
-  if (nextRecent.length !== recent.length) {
-    recent = nextRecent
-    await write()
+  if (nextRecent.length === recent.length) {
+    return
+  }
+
+  await fs.writeFile(recentPath, JSON.stringify(nextRecent), 'utf-8')
+  recent = nextRecent
+  if (notify) {
+    notifyCallbackSafely()
+  }
+}
+
+async function setMaxInternal(max, { notify = true } = {}) {
+  const nextMaxSize = max || 0
+  const nextRecent = normalizeRecentList(recent)
+  while (nextRecent.length > nextMaxSize && nextRecent.length !== 0) {
+    nextRecent.pop()
+  }
+
+  // setMax 失败时不能让 recent 的内存态先于持久化态前移。
+  await fs.writeFile(recentPath, JSON.stringify(nextRecent), 'utf-8')
+
+  maxSize = nextMaxSize
+  recent = nextRecent
+  if (notify) {
+    notifyCallbackSafely()
+  }
+}
+
+async function restoreStateInternal(snapshot, { notify = false } = {}) {
+  if (!snapshot || !Array.isArray(snapshot.recent)) {
+    return
+  }
+
+  const restoredRecent = normalizeRecentList(snapshot.recent)
+  const restoredMaxSize = snapshot.maxSize || 0
+
+  recent = restoredRecent
+  maxSize = restoredMaxSize
+
+  await fs.writeFile(recentPath, JSON.stringify(restoredRecent), 'utf-8')
+
+  if (notify) {
+    notifyCallbackSafely()
+  }
+}
+
+function createTransactionApi() {
+  return {
+    createStateSnapshot: () => {
+      return {
+        recent: [...recent],
+        maxSize,
+      }
+    },
+    notifyCurrentState: () => {
+      notifyCallbackSafely()
+    },
+    restoreState: async (snapshot, options) => {
+      await restoreStateInternal(snapshot, options)
+    },
+    setMax: async (max, options) => {
+      await setMaxInternal(max, options)
+    },
   }
 }
 
@@ -120,12 +222,29 @@ export default {
   add,
   remove,
   get: () => parseRecent(),
-  setMax: async (max) => {
-    maxSize = max || 0
-    recent = normalizeRecentList(recent)
-    while (recent.length > maxSize && recent.length !== 0) {
-      recent.pop()
+  runExclusive,
+  transaction: async (task) => {
+    return await runExclusive(async () => {
+      return await task(createTransactionApi())
+    })
+  },
+  notifyCurrentState: () => {
+    notifyCallbackSafely()
+  },
+  createStateSnapshot: () => {
+    return {
+      recent: [...recent],
+      maxSize,
     }
-    await write()
+  },
+  restoreState: async (snapshot, { notify = false } = {}) => {
+    await runExclusive(async () => {
+      await restoreStateInternal(snapshot, { notify })
+    })
+  },
+  setMax: async (max, { notify = true } = {}) => {
+    await runExclusive(async () => {
+      await setMaxInternal(max, { notify })
+    })
   },
 }

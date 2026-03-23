@@ -8,7 +8,13 @@ import OtherLayout from '@/components/layout/OtherLayout.vue'
 import TypographerDescription from '@/components/TypographerDescription.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
-import { createConfigUpdateSubmissionGuard, getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
+import { createConfigUpdateSubmissionGuard } from '@/util/config/configUpdateResultUtil.js'
+import {
+  applySelectableStringField,
+  cloneConfigDraft,
+  createTransportConfigUpdateFailureRecovery,
+  resolveConfigUpdateFailureRecovery,
+} from '@/util/config/settingConfigDraftUtil.js'
 import constant from '@/util/constant.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
@@ -113,17 +119,27 @@ watch(() => config.value, (newValue) => {
     return
   }
 
-  const nextConfig = JSON.parse(JSON.stringify(newValue))
+  const nextConfig = cloneConfigDraft(newValue)
 
   channelUtil.send({ event: 'user-update-config', data: nextConfig })
     .then((result) => {
-      const messageKey = getConfigUpdateFailureMessageKey(result)
-      if (messageKey) {
-        message.warning(t(messageKey))
+      const failureRecovery = resolveConfigUpdateFailureRecovery({
+        result,
+        storeConfig: store.config,
+        submissionGuard: configUpdateSubmissionGuard,
+      })
+      if (failureRecovery) {
+        config.value = failureRecovery.nextConfig
+        message.warning(t(failureRecovery.messageKey))
       }
     })
     .catch(() => {
-      message.warning(t('message.configWriteFailed'))
+      const failureRecovery = createTransportConfigUpdateFailureRecovery({
+        storeConfig: store.config,
+        submissionGuard: configUpdateSubmissionGuard,
+      })
+      config.value = failureRecovery.nextConfig
+      message.warning(t(failureRecovery.messageKey))
     })
   closePreviewSearchBar()
 }, { deep: true })
@@ -138,7 +154,7 @@ const showImgRelativePath = computed(() => {
   return config.value.imgLocal === '4' || config.value.imgNetwork === '4'
 })
 onMounted(async () => {
-  config.value = await channelUtil.send({ event: 'get-config' })
+  config.value = cloneConfigDraft(await channelUtil.send({ event: 'get-config' }))
   refreshSystemFontList()
   window.addEventListener('visibilitychange', refreshSystemFontList)
   await nextTick()
@@ -236,12 +252,14 @@ function onShortcutKeyFocus(e, shortcutKey) {
  * 选择图片绝对路径
  */
 async function openDirSelect() {
-  config.value.imgAbsolutePath = await channelUtil.send({ event: 'open-dir-select' })
+  const nextSelectedPath = await channelUtil.send({ event: 'open-dir-select' })
+  applySelectableStringField(config.value, 'imgAbsolutePath', nextSelectedPath)
 }
 
 // 选择文件绝对路径
 async function openFileDirSelect() {
-  config.value.fileAbsolutePath = await channelUtil.send({ event: 'open-dir-select' })
+  const nextSelectedPath = await channelUtil.send({ event: 'open-dir-select' })
+  applySelectableStringField(config.value, 'fileAbsolutePath', nextSelectedPath)
 }
 
 function settingMinimize() {
@@ -259,7 +277,7 @@ function reset() {
     cancelText: t('cancelText'),
     centered: true,
     onOk: async () => {
-      config.value = await channelUtil.send({ event: 'get-default-config' })
+      config.value = cloneConfigDraft(await channelUtil.send({ event: 'get-default-config' }))
       return true
     },
   })

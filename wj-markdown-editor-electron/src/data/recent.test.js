@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   appGetAppPath,
@@ -42,6 +42,8 @@ vi.mock('fs-extra', () => {
 })
 
 describe('recent 数据存储', () => {
+  let consoleErrorSpy
+
   beforeEach(() => {
     vi.resetModules()
     ensureDirMock.mockReset()
@@ -52,6 +54,11 @@ describe('recent 数据存储', () => {
     pathExistsMock.mockResolvedValue(false)
     readFileMock.mockResolvedValue('[]')
     writeFileMock.mockResolvedValue(undefined)
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleErrorSpy?.mockRestore()
   })
 
   it('initRecent 读取到历史重复项时，必须在内存与落盘层都完成去重', async () => {
@@ -117,5 +124,217 @@ describe('recent 数据存储', () => {
       ]),
       'utf-8',
     )
+  })
+
+  it('setMax 写盘失败时，recent 的内存列表与 maxSize 都不能前移', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue(JSON.stringify([
+      'D:/docs/one.md',
+      'D:/docs/two.md',
+      'D:/docs/three.md',
+    ]))
+
+    const { default: recent } = await import('./recent.js')
+    await recent.initRecent(3, vi.fn())
+    writeFileMock.mockClear()
+    writeFileMock.mockRejectedValueOnce(new Error('disk full'))
+
+    await expect(recent.setMax(1)).rejects.toThrow('disk full')
+    expect(recent.get()).toEqual([
+      {
+        name: 'one.md',
+        path: 'D:/docs/one.md',
+      },
+      {
+        name: 'two.md',
+        path: 'D:/docs/two.md',
+      },
+      {
+        name: 'three.md',
+        path: 'D:/docs/three.md',
+      },
+    ])
+
+    writeFileMock.mockResolvedValue(undefined)
+    await recent.add('D:/docs/four.md')
+
+    expect(recent.get()).toEqual([
+      {
+        name: 'four.md',
+        path: 'D:/docs/four.md',
+      },
+      {
+        name: 'one.md',
+        path: 'D:/docs/one.md',
+      },
+      {
+        name: 'two.md',
+        path: 'D:/docs/two.md',
+      },
+    ])
+  })
+
+  it('setMax 在 callback 抛错时仍应视为成功，recent 状态已提交且只记录日志', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue(JSON.stringify([
+      'D:/docs/one.md',
+      'D:/docs/two.md',
+      'D:/docs/three.md',
+    ]))
+    const callback = vi.fn(() => {
+      throw new Error('callback-failed')
+    })
+
+    const { default: recent } = await import('./recent.js')
+    await recent.initRecent(3, callback)
+    writeFileMock.mockClear()
+
+    await expect(recent.setMax(1)).resolves.toBeUndefined()
+
+    expect(recent.get()).toEqual([
+      {
+        name: 'one.md',
+        path: 'D:/docs/one.md',
+      },
+    ])
+    expect(writeFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/[\\/]recent\.json$/),
+      JSON.stringify([
+        'D:/docs/one.md',
+      ]),
+      'utf-8',
+    )
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[recent] callback failed:', expect.any(Error))
+  })
+
+  it('setMax 在 notify=false 的事务路径下提交成功时，不应调用 callback', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue(JSON.stringify([
+      'D:/docs/one.md',
+      'D:/docs/two.md',
+      'D:/docs/three.md',
+    ]))
+    const callback = vi.fn()
+
+    const { default: recent } = await import('./recent.js')
+    await recent.initRecent(3, callback)
+    writeFileMock.mockClear()
+    callback.mockClear()
+
+    await expect(recent.setMax(1, { notify: false })).resolves.toBeUndefined()
+
+    expect(recent.get()).toEqual([
+      {
+        name: 'one.md',
+        path: 'D:/docs/one.md',
+      },
+    ])
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('notifyCurrentState 必须显式广播当前 recent 列表', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue(JSON.stringify([
+      'D:/docs/one.md',
+      'D:/docs/two.md',
+    ]))
+    const callback = vi.fn()
+
+    const { default: recent } = await import('./recent.js')
+    await recent.initRecent(3, callback)
+    callback.mockClear()
+
+    recent.notifyCurrentState()
+
+    expect(callback).toHaveBeenCalledTimes(1)
+    expect(callback).toHaveBeenCalledWith([
+      {
+        name: 'one.md',
+        path: 'D:/docs/one.md',
+      },
+      {
+        name: 'two.md',
+        path: 'D:/docs/two.md',
+      },
+    ])
+  })
+
+  it('restoreState 必须把 recent 的内存与磁盘都恢复到快照，且不能触发 callback', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue(JSON.stringify([
+      'D:/docs/one.md',
+      'D:/docs/two.md',
+      'D:/docs/three.md',
+    ]))
+    const callback = vi.fn()
+
+    const { default: recent } = await import('./recent.js')
+    await recent.initRecent(3, callback)
+    writeFileMock.mockClear()
+
+    const snapshot = recent.createStateSnapshot()
+    await recent.setMax(1)
+    callback.mockClear()
+    writeFileMock.mockClear()
+
+    await expect(recent.restoreState(snapshot)).resolves.toBeUndefined()
+
+    expect(recent.get()).toEqual([
+      {
+        name: 'one.md',
+        path: 'D:/docs/one.md',
+      },
+      {
+        name: 'two.md',
+        path: 'D:/docs/two.md',
+      },
+      {
+        name: 'three.md',
+        path: 'D:/docs/three.md',
+      },
+    ])
+    expect(writeFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/[\\/]recent\.json$/),
+      JSON.stringify([
+        'D:/docs/one.md',
+        'D:/docs/two.md',
+        'D:/docs/three.md',
+      ]),
+      'utf-8',
+    )
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('restoreState 写盘失败时，仍必须恢复内存快照并把错误抛给上层', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue(JSON.stringify([
+      'D:/docs/one.md',
+      'D:/docs/two.md',
+      'D:/docs/three.md',
+    ]))
+
+    const { default: recent } = await import('./recent.js')
+    await recent.initRecent(3, vi.fn())
+
+    const snapshot = recent.createStateSnapshot()
+    await recent.setMax(1, { notify: false })
+    writeFileMock.mockClear()
+    writeFileMock.mockRejectedValueOnce(new Error('restore-write-failed'))
+
+    await expect(recent.restoreState(snapshot)).rejects.toThrow('restore-write-failed')
+    expect(recent.get()).toEqual([
+      {
+        name: 'one.md',
+        path: 'D:/docs/one.md',
+      },
+      {
+        name: 'two.md',
+        path: 'D:/docs/two.md',
+      },
+      {
+        name: 'three.md',
+        path: 'D:/docs/three.md',
+      },
+    ])
   })
 })

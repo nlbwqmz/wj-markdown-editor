@@ -128,21 +128,11 @@ async function handleResourceOpen(windowContext, data) {
 
 /**
  * 配置类更新 IPC 统一透传结构化结果。
- *
- * 配置写入成功后的派生副作用如果失败，只记录日志，不回滚已经成功的配置写入。
  */
-async function executeConfigUpdate(updateAction, afterSuccess) {
+async function executeConfigUpdate(updateAction) {
   const result = await updateAction()
   if (result?.ok !== true) {
     return result
-  }
-
-  if (typeof afterSuccess === 'function') {
-    try {
-      await afterSuccess()
-    } catch (error) {
-      console.error('[ipcMainUtil] post-config side effect failed:', error)
-    }
   }
 
   return { ok: true }
@@ -269,10 +259,7 @@ const handlerList = {
     })
   },
   'user-update-config': async (_windowContext, data) => {
-    return await executeConfigUpdate(
-      async () => await configUtil.setConfig(data),
-      async () => await recent.setMax(data.recentMax),
-    )
+    return await executeConfigUpdate(async () => await configUtil.setConfigWithRecentMax(data, recent))
   },
   'user-update-theme-global': async (_windowContext, data) => {
     return await executeConfigUpdate(async () => await configUtil.setThemeGlobal(data))

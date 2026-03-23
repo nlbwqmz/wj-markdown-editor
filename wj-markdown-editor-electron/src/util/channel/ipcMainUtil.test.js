@@ -6,6 +6,7 @@ const {
   configGetConfig,
   configGetDefaultConfig,
   configSetConfig,
+  configSetConfigWithRecentMax,
   configSetLanguage,
   configSetThemeGlobal,
   dialogShowOpenDialogSync,
@@ -63,6 +64,7 @@ const {
     configGetConfig: vi.fn(),
     configGetDefaultConfig: vi.fn(() => ({})),
     configSetConfig: vi.fn(),
+    configSetConfigWithRecentMax: vi.fn(),
     configSetLanguage: vi.fn(),
     configSetThemeGlobal: vi.fn(),
     dialogShowOpenDialogSync: vi.fn(),
@@ -175,6 +177,7 @@ vi.mock('../../data/configUtil.js', () => {
       getConfig: configGetConfig,
       getDefaultConfig: configGetDefaultConfig,
       setConfig: configSetConfig,
+      setConfigWithRecentMax: configSetConfigWithRecentMax,
       setThemeGlobal: configSetThemeGlobal,
       setLanguage: configSetLanguage,
     },
@@ -1632,6 +1635,7 @@ describe('ipcMainUtil 配置更新契约', () => {
     configGetConfig.mockReset()
     configGetDefaultConfig.mockReset()
     configSetConfig.mockReset()
+    configSetConfigWithRecentMax.mockReset()
     configSetLanguage.mockReset()
     configSetThemeGlobal.mockReset()
     getDocumentSessionRuntime.mockReset()
@@ -1699,7 +1703,7 @@ describe('ipcMainUtil 配置更新契约', () => {
       recentMax: 7,
       theme: { global: 'dark' },
     }
-    configSetConfig.mockResolvedValueOnce({
+    configSetConfigWithRecentMax.mockResolvedValueOnce({
       ok: false,
       reason: 'config-write-failed',
       messageKey: 'message.configWriteFailed',
@@ -1716,7 +1720,7 @@ describe('ipcMainUtil 配置更新契约', () => {
     const payload = {
       recentMax: 9,
     }
-    configSetConfig.mockResolvedValueOnce({
+    configSetConfigWithRecentMax.mockResolvedValueOnce({
       ok: false,
       reason: 'config-invalid',
       messageKey: 'message.configInvalid',
@@ -1727,30 +1731,42 @@ describe('ipcMainUtil 配置更新契约', () => {
     expect(recentSetMax).not.toHaveBeenCalled()
   })
 
-  it('user-update-config 在配置写盘成功时必须返回结构化成功结果，并在成功后更新 recent.setMax', async () => {
+  it('user-update-config 在配置服务整体成功时必须返回结构化成功结果，且 IPC 不再单独调用 recent.setMax', async () => {
     const payload = {
       recentMax: 15,
       startupPage: 'editor',
     }
-    configSetConfig.mockResolvedValueOnce({ ok: true })
-    recentSetMax.mockResolvedValueOnce(undefined)
+    configSetConfigWithRecentMax.mockResolvedValueOnce({ ok: true })
 
     await expect(dispatch('user-update-config', payload)).resolves.toEqual({ ok: true })
-    expect(configSetConfig).toHaveBeenCalledWith(payload)
-    expect(recentSetMax).toHaveBeenCalledWith(15)
+    expect(configSetConfigWithRecentMax).toHaveBeenCalledWith(payload, expect.objectContaining({
+      setMax: recentSetMax,
+    }))
+    expect(configSetConfig).not.toHaveBeenCalled()
+    expect(recentSetMax).not.toHaveBeenCalled()
   })
 
-  it('user-update-config 在 recent.setMax 失败时不能回滚已成功的配置写入', async () => {
+  it('user-update-config 在 recent.setMax 失败时必须透传整体失败结果，且 IPC 不再吞异常伪造成功', async () => {
     const payload = {
       recentMax: 11,
     }
-    configSetConfig.mockResolvedValueOnce({ ok: true })
-    recentSetMax.mockRejectedValueOnce(new Error('recent-set-max-failed'))
+    configSetConfigWithRecentMax.mockResolvedValueOnce({
+      ok: false,
+      reason: 'config-write-failed',
+      messageKey: 'message.configWriteFailed',
+    })
 
-    await expect(dispatch('user-update-config', payload)).resolves.toEqual({ ok: true })
-    expect(configSetConfig).toHaveBeenCalledWith(payload)
-    expect(recentSetMax).toHaveBeenCalledWith(11)
-    expect(consoleErrorSpy).toHaveBeenCalledWith('[ipcMainUtil] post-config side effect failed:', expect.any(Error))
+    await expect(dispatch('user-update-config', payload)).resolves.toEqual({
+      ok: false,
+      reason: 'config-write-failed',
+      messageKey: 'message.configWriteFailed',
+    })
+    expect(configSetConfigWithRecentMax).toHaveBeenCalledWith(payload, expect.objectContaining({
+      setMax: recentSetMax,
+    }))
+    expect(configSetConfig).not.toHaveBeenCalled()
+    expect(recentSetMax).not.toHaveBeenCalled()
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
   })
 
   it('user-update-theme-global 在配置写盘失败时必须透传结构化结果', async () => {

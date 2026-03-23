@@ -17,6 +17,7 @@ export default {
     return configService.getConfig()
   },
   setConfig: data => configService.setConfig(data),
+  setConfigWithRecentMax: (data, recentStore) => configService.setConfigWithRecentMax(data, recentStore),
   setThemeGlobal: data => configService.setThemeGlobal(data),
   setLanguage: data => configService.setLanguage(data),
   getDefaultConfig: () => {
