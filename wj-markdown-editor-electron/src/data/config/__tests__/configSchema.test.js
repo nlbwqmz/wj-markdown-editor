@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import defaultConfig from '../../defaultConfig.js'
+import { configVersion } from '../configConstants.js'
 import { validateConfigShape } from '../configSchema.js'
 
 describe('configSchema', () => {
   it('当前 defaultConfig 必须通过完整配置校验', () => {
     expect(() => validateConfigShape(defaultConfig)).not.toThrow()
+  })
+
+  it('configVersion 必须接纳当前配置版本', () => {
+    const validConfig = {
+      ...defaultConfig,
+      configVersion,
+    }
+
+    expect(() => validateConfigShape(validConfig)).not.toThrow()
   })
 
   it('顶层缺失必需字段时必须校验失败', () => {

@@ -1,4 +1,5 @@
 import Ajv from 'ajv'
+import { configVersion } from './configConstants.js'
 
 const fontFamilySchema = {
   type: 'object',
@@ -182,6 +183,7 @@ export const configSchema = {
   type: 'object',
   additionalProperties: false,
   required: [
+    'configVersion',
     'imgLocal',
     'imgNetwork',
     'imgAbsolutePath',
@@ -209,6 +211,7 @@ export const configSchema = {
     'imageBed',
   ],
   properties: {
+    configVersion: { const: configVersion },
     imgLocal: { enum: ['1', '2', '3', '4', '5'] },
     imgNetwork: { enum: ['1', '2', '3', '4', '5'] },
     imgAbsolutePath: { type: 'string' },
