@@ -509,6 +509,30 @@ describe('configService', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
+  it('setConfig 的 recentMax 为小数时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      recentMax: 1.5,
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().recentMax).toBe(defaultConfig.recentMax)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
   it('setConfig 的非法 theme.global 必须严格拒绝，且不能写盘或推进状态', async () => {
     const repository = createRepositoryStub()
     const callback = vi.fn()

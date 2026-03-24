@@ -54,11 +54,12 @@ function normalizeRecentList(recentList) {
 }
 
 function resolveRecentMaxSize(max, fallback) {
-  if (typeof max !== 'number' || Number.isNaN(max)) {
+  if (typeof max !== 'number' || Number.isFinite(max) === false) {
     return fallback
   }
 
-  return max >= 0 ? max : fallback
+  const normalizedMax = Math.floor(max)
+  return normalizedMax >= 0 ? normalizedMax : fallback
 }
 
 function trimRecentListToMax(recentList, max) {

@@ -29,6 +29,15 @@ function clampNumber(value, schema) {
   return nextValue
 }
 
+function normalizeNumericValue(value, schema) {
+  const clampedValue = clampNumber(value, schema)
+  if (schema.type === 'integer') {
+    return Math.floor(clampedValue)
+  }
+
+  return clampedValue
+}
+
 function sanitizeScalar(value, defaultValue, schema) {
   if (Object.prototype.hasOwnProperty.call(schema, 'const')) {
     return value === schema.const ? value : cloneValue(defaultValue)
@@ -46,12 +55,12 @@ function sanitizeScalar(value, defaultValue, schema) {
     return typeof value === 'boolean' ? value : cloneValue(defaultValue)
   }
 
-  if (schema.type === 'number') {
+  if (schema.type === 'number' || schema.type === 'integer') {
     if (typeof value !== 'number' || Number.isFinite(value) === false) {
       return cloneValue(defaultValue)
     }
 
-    return clampNumber(value, schema)
+    return normalizeNumericValue(value, schema)
   }
 
   return cloneValue(defaultValue)

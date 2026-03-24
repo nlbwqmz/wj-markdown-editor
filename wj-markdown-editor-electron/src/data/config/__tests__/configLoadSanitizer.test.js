@@ -139,6 +139,16 @@ describe('configLoadSanitizer', () => {
     expect(sanitized.recentMax).toBe(50)
   })
 
+  it('recentMax 为小数时必须向下取整为整数，且清洗结果仍可通过 schema', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      recentMax: 1.5,
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.recentMax).toBe(1)
+    expect(() => validateConfigShape(sanitized)).not.toThrow()
+  })
+
   it('非法主题枚举值必须回退到默认值', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),

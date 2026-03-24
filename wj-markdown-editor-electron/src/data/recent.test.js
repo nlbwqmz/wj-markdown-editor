@@ -152,6 +152,33 @@ describe('recent 数据存储', () => {
     )
   })
 
+  it('initRecent 接收小数上限时，必须把运行期 maxSize 归一化为向下取整后的整数', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue(JSON.stringify([
+      'D:/docs/one.md',
+      'D:/docs/two.md',
+    ]))
+    const callback = vi.fn()
+
+    const { default: recent } = await import('./recent.js')
+    await recent.initRecent(0.5, callback)
+    writeFileMock.mockClear()
+    callback.mockClear()
+
+    expect(recent.createStateSnapshot().maxSize).toBe(0)
+
+    await recent.add('D:/docs/three.md')
+
+    expect(recent.get()).toEqual([])
+    expect(writeFileMock).toHaveBeenCalledWith(
+      expect.stringMatching(/[\\/]recent\.json$/),
+      JSON.stringify([]),
+      'utf-8',
+    )
+    expect(callback).toHaveBeenCalledTimes(1)
+    expect(callback).toHaveBeenCalledWith([])
+  })
+
   it('setMax 成功时只更新运行期上限，不立即修改 recent 列表、磁盘或 callback', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue(JSON.stringify([

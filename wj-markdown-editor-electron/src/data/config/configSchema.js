@@ -229,7 +229,7 @@ export const configSchema = {
     fontFamily: fontFamilySchema,
     startPage: { enum: ['editor', 'preview'] },
     openRecent: { type: 'boolean' },
-    recentMax: { type: 'number', minimum: 0, maximum: 50 },
+    recentMax: { type: 'integer', minimum: 0, maximum: 50 },
     language: { enum: ['zh-CN', 'en-US'] },
     externalFileChangeStrategy: { enum: ['apply', 'prompt'] },
     markdown: markdownSchema,
