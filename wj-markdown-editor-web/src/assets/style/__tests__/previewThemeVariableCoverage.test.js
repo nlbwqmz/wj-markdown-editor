@@ -127,6 +127,22 @@ function assertDarkThemeBranchPreservesInlineCodeSeparation(source, selector) {
   })
 }
 
+test('基础层相邻段落节奏应通过 margin-top 变量表达，避免污染 blockquote 多段间距', () => {
+  const contractSource = readSource('../preview-theme/preview-theme-contract.scss')
+  const baseSource = readSource('../preview-theme/preview-theme-base.scss')
+
+  assert.match(
+    contractSource,
+    /--wj-preview-adjacent-paragraph-margin-top:\s*var\(--wj-preview-space-none\);/u,
+  )
+  assert.equal(contractSource.includes('--wj-preview-adjacent-paragraph-padding-top'), false)
+  assert.match(
+    baseSource,
+    /:where\(p \+ p\)\s*\{[\s\S]*?margin-top:\s*var\(--wj-preview-adjacent-paragraph-margin-top\);[\s\S]*?\}/u,
+  )
+  assert.equal(baseSource.includes('padding-top: var(--wj-preview-adjacent-paragraph-margin-top);'), false)
+})
+
 test('juejin 主题应在主题根块声明统一变量入口', () => {
   const source = readSource('../preview-theme/theme/juejin.scss')
 
@@ -363,5 +379,429 @@ test('dark 分支语义断言必须识别嵌套的 pre 或 code 选择器覆盖'
   assert.throws(
     () => assertDarkThemeBranchUsesVariableOverridesOnly(mutatedSource, '.preview-theme-markdown-here'),
     /dark 分支存在非变量声明/u,
+  )
+})
+
+test('smart-blue 主题应在主题根块声明统一变量入口', () => {
+  const source = readSource('../preview-theme/theme/smart-blue.scss')
+
+  assertThemeRootVariableEntry(source, '.preview-theme-smart-blue', [
+    '--wj-preview-text-color',
+    '--wj-preview-font-size',
+    '--wj-preview-line-height',
+    '--wj-preview-adjacent-paragraph-margin-top',
+    '--wj-preview-paragraph-margin',
+    '--wj-preview-heading-color',
+    '--wj-preview-h3-font-size',
+    '--wj-preview-list-margin',
+    '--wj-preview-list-padding-inline-start',
+    '--wj-preview-list-text-color',
+    '--wj-preview-list-item-margin-bottom',
+    '--wj-preview-unordered-list-style',
+    '--wj-preview-link-color',
+    '--wj-preview-link-border-bottom',
+    '--wj-preview-strong-color',
+    '--wj-preview-blockquote-background-color',
+    '--wj-preview-blockquote-border-color',
+    '--wj-preview-blockquote-text-color',
+    '--wj-preview-blockquote-paragraph-margin',
+    '--wj-preview-blockquote-first-child-margin-top',
+    '--wj-preview-blockquote-last-child-margin-bottom',
+    '--wj-preview-inline-code-background-color',
+    '--wj-preview-inline-code-text-color',
+    '--wj-preview-code-block-background-color',
+    '--wj-preview-code-block-text-color',
+    '--wj-preview-table-cell-border',
+    '--wj-preview-table-row-border-top',
+    '--wj-preview-table-row-even-background-color',
+  ])
+})
+
+test('smart-blue 主题只保留标题人格与 kbd 特例选择器', () => {
+  const source = readSource('../preview-theme/theme/smart-blue.scss')
+
+  assert.equal(source.includes('.preview-theme-smart-blue p + p'), false)
+  assert.equal(source.includes('.preview-theme-smart-blue h3'), false)
+  assert.equal(source.includes('.preview-theme-smart-blue ol'), false)
+  assert.equal(source.includes('.preview-theme-smart-blue ul'), false)
+  assert.equal(source.includes('.preview-theme-smart-blue li'), false)
+  assert.equal(source.includes('.preview-theme-smart-blue table tr'), false)
+
+  assert.equal(source.includes('.preview-theme-smart-blue h1'), true)
+  assert.equal(source.includes('.preview-theme-smart-blue h2'), true)
+  assert.equal(source.includes('.preview-theme-smart-blue kbd'), true)
+})
+
+test('mk-cute 主题应在主题根块声明统一变量入口', () => {
+  const source = readSource('../preview-theme/theme/mk-cute.scss')
+
+  assertThemeRootVariableEntry(source, '.preview-theme-mk-cute', [
+    '--wj-preview-text-color',
+    '--wj-preview-font-size',
+    '--wj-preview-line-height',
+    '--wj-preview-paragraph-margin',
+    '--wj-preview-heading-color',
+    '--wj-preview-link-color',
+    '--wj-preview-link-hover-color',
+    '--wj-preview-link-border-bottom',
+    '--wj-preview-inline-code-background-color',
+    '--wj-preview-inline-code-text-color',
+    '--wj-preview-code-block-background-color',
+    '--wj-preview-list-padding-inline-start',
+    '--wj-preview-list-item-margin-bottom',
+    '--wj-preview-list-nested-margin-top',
+    '--wj-preview-ordered-list-item-padding-inline-start',
+    '--wj-preview-blockquote-background-color',
+    '--wj-preview-blockquote-border-color',
+    '--wj-preview-blockquote-text-color',
+    '--wj-preview-blockquote-paragraph-margin',
+    '--wj-preview-blockquote-first-child-margin-top',
+    '--wj-preview-blockquote-last-child-margin-bottom',
+    '--wj-preview-table-border-color',
+    '--wj-preview-table-header-background-color',
+    '--wj-preview-table-row-even-background-color',
+    '--wj-preview-task-list-style',
+  ])
+})
+
+test('cyanosis 主题应在主题根块声明统一变量入口', () => {
+  const source = readSource('../preview-theme/theme/cyanosis.scss')
+
+  assertThemeRootVariableEntry(source, '.preview-theme-cyanosis', [
+    '--wj-preview-text-color',
+    '--wj-preview-font-size',
+    '--wj-preview-line-height',
+    '--wj-preview-heading-color',
+    '--wj-preview-strong-color',
+    '--wj-preview-emphasis-color',
+    '--wj-preview-link-color',
+    '--wj-preview-link-hover-color',
+    '--wj-preview-inline-code-background-color',
+    '--wj-preview-inline-code-text-color',
+    '--wj-preview-code-block-background-color',
+    '--wj-preview-blockquote-background-color',
+    '--wj-preview-blockquote-border-color',
+    '--wj-preview-blockquote-text-color',
+    '--wj-preview-blockquote-paragraph-margin',
+    '--wj-preview-blockquote-first-child-margin-top',
+    '--wj-preview-blockquote-last-child-margin-bottom',
+    '--wj-preview-ordered-list-item-padding-inline-start',
+    '--wj-preview-table-border-color',
+    '--wj-preview-table-header-background-color',
+    '--wj-preview-table-header-text-color',
+    '--wj-preview-table-row-even-background-color',
+    '--wj-preview-task-list-style',
+  ])
+})
+
+test('scrolls 主题应在主题根块声明统一变量入口', () => {
+  const source = readSource('../preview-theme/theme/scrolls.scss')
+
+  assertThemeRootVariableEntry(source, '.preview-theme-scrolls', [
+    '--wj-preview-text-color',
+    '--wj-preview-font-size',
+    '--wj-preview-line-height',
+    '--wj-preview-heading-color',
+    '--wj-preview-emphasis-color',
+    '--wj-preview-link-color',
+    '--wj-preview-link-hover-color',
+    '--wj-preview-inline-code-background-color',
+    '--wj-preview-inline-code-text-color',
+    '--wj-preview-code-block-background-color',
+    '--wj-preview-list-padding-inline-start',
+    '--wj-preview-list-item-margin-bottom',
+    '--wj-preview-ordered-list-item-padding-inline-start',
+    '--wj-preview-blockquote-background-color',
+    '--wj-preview-blockquote-border-color',
+    '--wj-preview-blockquote-text-color',
+    '--wj-preview-blockquote-paragraph-margin',
+    '--wj-preview-blockquote-first-child-margin-top',
+    '--wj-preview-blockquote-last-child-margin-bottom',
+    '--wj-preview-table-border-color',
+    '--wj-preview-table-header-background-color',
+    '--wj-preview-task-list-style',
+  ])
+})
+
+test('smart-blue 主题应通过首末段变量恢复单段引用块节奏', () => {
+  const source = readSource('../preview-theme/theme/smart-blue.scss')
+
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-smart-blue',
+    '--wj-preview-blockquote-paragraph-margin',
+    '10px 0',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-smart-blue',
+    '--wj-preview-blockquote-first-child-margin-top',
+    '10px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-smart-blue',
+    '--wj-preview-blockquote-last-child-margin-bottom',
+    '10px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-smart-blue',
+    '--wj-preview-adjacent-paragraph-margin-top',
+    '16px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-smart-blue',
+    '--wj-preview-list-item-margin-bottom',
+    '0',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-smart-blue',
+    '--wj-preview-list-padding-inline-start',
+    '40px',
+  )
+})
+
+test('mk-cute 主题应通过首末段变量恢复单段引用块节奏', () => {
+  const source = readSource('../preview-theme/theme/mk-cute.scss')
+
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-blockquote-paragraph-margin',
+    '22px 0',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-blockquote-first-child-margin-top',
+    '22px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-blockquote-last-child-margin-bottom',
+    '22px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-list-padding-inline-start',
+    '28px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-list-item-margin-bottom',
+    '0',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-list-nested-margin-top',
+    '3px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-ordered-list-item-padding-inline-start',
+    '6px',
+  )
+})
+
+test('cyanosis 主题应通过首末段变量恢复单段引用块节奏', () => {
+  const source = readSource('../preview-theme/theme/cyanosis.scss')
+
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-blockquote-paragraph-margin',
+    '10px 0',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-blockquote-first-child-margin-top',
+    '10px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-blockquote-last-child-margin-bottom',
+    '10px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-ordered-list-item-padding-inline-start',
+    '6px',
+  )
+})
+
+test('scrolls 主题应通过首末段变量恢复单段引用块节奏', () => {
+  const source = readSource('../preview-theme/theme/scrolls.scss')
+
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-blockquote-paragraph-margin',
+    '10px 0',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-blockquote-first-child-margin-top',
+    '10px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-blockquote-last-child-margin-bottom',
+    '10px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-list-padding-inline-start',
+    '28px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-list-item-margin-bottom',
+    '0',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-ordered-list-item-padding-inline-start',
+    '6px',
+  )
+})
+
+test('smart-blue 主题 dark 分支应只通过变量覆盖运行时 token', () => {
+  const source = readSource('../preview-theme/theme/smart-blue.scss')
+
+  assertDarkThemeBranchUsesVariableOverridesOnly(source, '.preview-theme-smart-blue')
+  assertDarkThemeBranchHasRequiredVariables(source, '.preview-theme-smart-blue', [
+    '--wj-preview-text-color',
+  ])
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-smart-blue',
+    '--wj-preview-text-color',
+    'var\\(--wj-markdown-text-primary\\)',
+  )
+})
+
+test('mk-cute 主题 dark 分支应只通过变量覆盖运行时 token', () => {
+  const source = readSource('../preview-theme/theme/mk-cute.scss')
+
+  assertDarkThemeBranchUsesVariableOverridesOnly(source, '.preview-theme-mk-cute')
+  assertDarkThemeBranchHasRequiredVariables(source, '.preview-theme-mk-cute', [
+    '--wj-preview-text-color',
+    '--wj-preview-inline-code-background-color',
+    '--wj-preview-code-block-background-color',
+  ])
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-text-color',
+    '#36ace1',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-inline-code-background-color',
+    'rgb\\(30, 34, 42\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-code-block-background-color',
+    'rgb\\(30, 34, 42\\)',
+  )
+})
+
+test('cyanosis 主题 dark 分支应只通过变量覆盖运行时 token', () => {
+  const source = readSource('../preview-theme/theme/cyanosis.scss')
+
+  assertDarkThemeBranchUsesVariableOverridesOnly(source, '.preview-theme-cyanosis')
+  assertDarkThemeBranchHasRequiredVariables(source, '.preview-theme-cyanosis', [
+    '--wj-preview-text-color',
+    '--wj-preview-heading-color',
+    '--wj-preview-strong-color',
+    '--wj-preview-link-color',
+    '--wj-preview-inline-code-background-color',
+    '--wj-preview-code-block-background-color',
+  ])
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-text-color',
+    '#cacaca',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-heading-color',
+    '#ddd',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-strong-color',
+    '#fe9900',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-link-color',
+    '#ffb648',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-inline-code-background-color',
+    '#ffcb7b',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-cyanosis',
+    '--wj-preview-code-block-background-color',
+    'rgba\\(255, 227, 185, 0\\.5\\)',
+  )
+})
+
+test('scrolls 主题 dark 分支应只通过变量覆盖运行时 token', () => {
+  const source = readSource('../preview-theme/theme/scrolls.scss')
+
+  assertDarkThemeBranchUsesVariableOverridesOnly(source, '.preview-theme-scrolls')
+  assertDarkThemeBranchHasRequiredVariables(source, '.preview-theme-scrolls', [
+    '--wj-preview-text-color',
+  ])
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-text-color',
+    'var\\(--wj-markdown-text-primary\\)',
+  )
+})
+
+test('mk-cute 主题应保留旋转标题图标特例', () => {
+  const source = readSource('../preview-theme/theme/mk-cute.scss')
+
+  assert.match(source, /@keyframes\s+mk-cute-spin/u)
+  assert.match(source, /animation:\s*mk-cute-spin/u)
+})
+
+test('scrolls 主题应保留 mermaid 代码块居中覆盖', () => {
+  const source = readSource('../preview-theme/theme/scrolls.scss')
+
+  assert.match(
+    source,
+    /pre\.mermaid,\s*pre\.mermaid-cache\s*\{[\s\S]*?text-align:\s*center;/u,
   )
 })

@@ -1,566 +1,396 @@
 .preview-theme-cyanosis {
-  $monospace-font: Menlo, Monaco, Consolas, 'Courier New', monospace;
-  $line-space: 16px;
-  $id: '--cyanosis';
+  --wj-preview-cyanosis-base-color: #353535;
+  --wj-preview-cyanosis-title-color: #005bb7;
+  --wj-preview-cyanosis-strong-color: #2196f3;
+  --wj-preview-cyanosis-em-color: #4fc3f7;
+  --wj-preview-cyanosis-del-color: #ccc;
+  --wj-preview-cyanosis-link-color: #3da8f5;
+  --wj-preview-cyanosis-link-hover-color: #007fff;
+  --wj-preview-cyanosis-border-color: #bedcff;
+  --wj-preview-cyanosis-border-color-secondary: #ececec;
+  --wj-preview-cyanosis-background-color: #fff;
+  --wj-preview-cyanosis-blockquote-color: #8c8c8c;
+  --wj-preview-cyanosis-blockquote-background-color: #f0fdff;
+  --wj-preview-cyanosis-code-color: #c2185b;
+  --wj-preview-cyanosis-code-background-color: #fff4f4;
+  --wj-preview-cyanosis-code-block-background-color: #f8f8f8;
+  --wj-preview-cyanosis-table-border-color: #c3e0fd;
+  --wj-preview-cyanosis-table-header-background-color: #dff0ff;
+  --wj-preview-cyanosis-table-header-text-color: #005bb7;
+  --wj-preview-cyanosis-table-row-even-background-color: #f7fbff;
+  --wj-preview-cyanosis-table-row-hover-background-color: #e0edf7;
+  --wj-preview-cyanosis-selection-title-color: #005bb7;
+  --wj-preview-cyanosis-selection-title-background-color: rgba(175, 207, 247, 0.25);
+  --wj-preview-cyanosis-selection-text-color: #c80000;
+  --wj-preview-cyanosis-selection-background-color: rgba(175, 207, 247, 0.25);
+  --wj-preview-cyanosis-selection-delete-color: #999;
+  --wj-preview-cyanosis-selection-element-background-color: #e8ebec;
+  --wj-preview-cyanosis-selection-code-background-color: #ffeaeb;
+  --wj-preview-cyanosis-selection-pre-background-color: rgba(160, 200, 255, 0.25);
 
-  $l-baseColor: #353535;
-  $l-titleColor: #005bb7;
-  $l-strongColor: #2196f3;
-  $l-emColor: #4fc3f7;
-  $l-delColor: #ccc;
-  $l-linkColor: #3da8f5;
-  $l-linkhColor: #007fff;
-  $l-borderColor: #bedcff;
-  $l-borderColor2: #ececec;
-  $l-bgColor: #fff;
-  $l-blockquoteColor: #8c8c8c;
-  $l-blockquoteBgColor: #f0fdff;
-  $l-codeColor: #c2185b;
-  $l-codeBgColor: #fff4f4;
-  $l-codePreColor: #f8f8f8;
-  $l-tableBorderColor: #c3e0fd;
-  $l-tableThColor: #dff0ff;
-  $l-tableThtColor: $l-titleColor;
-  $l-tableTrNcColor: #f7fbff;
-  $l-tableTrhColor: #e0edf7;
-  $l-selectionTextColor: #c80000;
-  $l-selectionBgColor: rgba(175, 207, 247, 0.25);
-  $l-selectionTitleColor: $l-titleColor;
-  $l-selectionTitlebgColor: $l-selectionBgColor;
-  $l-selectionDelColor: #999;
-  $l-selectionElBgColor: #e8ebec;
-  $l-selectionCodeBgColor: #ffeaeb;
-  $l-selectionPreCodeBgColor: rgba(160, 200, 255, 0.25);
+  --wj-preview-text-color: var(--wj-preview-cyanosis-base-color);
+  --wj-preview-font-weight: 400;
+  --wj-preview-font-size: 14px;
+  --wj-preview-line-height: 1.75;
+  --wj-preview-word-break: break-word;
+  --wj-preview-overflow-x: hidden;
 
-  $d-baseColor: #cacaca;
-  $d-titleColor: #ddd;
-  $d-strongColor: #fe9900;
-  $d-emColor: #ffd28e;
-  $d-delColor: #ccc;
-  $d-linkColor: #ffb648;
-  $d-linkhColor: $d-strongColor;
-  $d-borderColor: #ffe3ba;
-  $d-borderColor2: #ffcb7b;
-  $d-bgColor: #2f2f2f;
-  $d-blockquoteColor: #c7c7c7;
-  $d-blockquoteBgColor: rgba(255, 199, 116, 0.1);
-  $d-codeColor: #000;
-  $d-codeBgColor: $d-borderColor2;
-  $d-codePreColor: rgba(255, 227, 185, 0.5);
-  $d-tableBorderColor: $d-strongColor;
-  $d-tableThColor: $d-linkColor;
-  $d-tableThtColor: $d-codeColor;
-  $d-tableTrNcColor: #6d5736;
-  $d-tableTrhColor: #947443;
-  $d-selectionTextColor: #00c888;
-  $d-selectionBgColor: rgba(175, 207, 247, 0.25);
-  $d-selectionTitleColor: $d-codeColor;
-  $d-selectionTitlebgColor: $d-strongColor;
-  $d-selectionDelColor: #999;
-  $d-selectionElBgColor: $d-codeColor;
-  $d-selectionCodeBgColor: $d-borderColor2;
-  $d-selectionPreCodeBgColor: rgba(160, 200, 255, 0.25);
+  --wj-preview-heading-color: var(--wj-preview-cyanosis-title-color);
+  --wj-preview-heading-line-height: 1.5;
+  --wj-preview-h1-font-size: 30px;
+  --wj-preview-h2-font-size: 24px;
+  --wj-preview-h3-font-size: 20px;
+  --wj-preview-h4-font-size: 16px;
+  --wj-preview-h5-font-size: 14px;
+  --wj-preview-h6-font-size: 12px;
 
-  @mixin LightAndDark($isDark: false) {
-    #{$id}-base-color: if(sass($isDark): $d-baseColor; else: $l-baseColor);
-    #{$id}-title-color: if(sass($isDark): $d-titleColor; else: $l-titleColor);
-    #{$id}-strong-color: if(sass($isDark): $d-strongColor; else: $l-strongColor);
-    #{$id}-em-color: if(sass($isDark): $d-emColor; else: $l-emColor);
-    #{$id}-del-color: if(sass($isDark): $d-delColor; else: $l-delColor);
-    #{$id}-link-color: if(sass($isDark): $d-linkColor; else: $l-linkColor);
-    #{$id}-linkh-color: if(sass($isDark): $d-linkhColor; else: $l-linkhColor);
-    #{$id}-border-color: if(sass($isDark): $d-borderColor; else: $l-borderColor);
-    #{$id}-border-color-2: if(sass($isDark): $d-borderColor2; else: $l-borderColor2);
-    #{$id}-bg-color: if(sass($isDark): $d-bgColor; else: $l-bgColor);
-    #{$id}-blockquote-color: if(sass($isDark): $d-blockquoteColor; else: $l-blockquoteColor);
-    #{$id}-blockquote-bg-color: if(sass($isDark): $d-blockquoteBgColor; else: $l-blockquoteBgColor);
-    #{$id}-code-color: if(sass($isDark): $d-codeColor; else: $l-codeColor);
-    #{$id}-code-bg-color: if(sass($isDark): $d-codeBgColor; else: $l-codeBgColor);
-    #{$id}-code-pre-color: if(sass($isDark): $d-codePreColor; else: $l-codePreColor);
-    #{$id}-table-border-color: if(sass($isDark): $d-tableBorderColor; else: $l-tableBorderColor);
-    #{$id}-table-th-color: if(sass($isDark): $d-tableThColor; else: $l-tableThColor);
-    #{$id}-table-tht-color: if(sass($isDark): $d-tableThtColor; else: $l-tableThtColor);
-    #{$id}-table-tr-nc-color: if(sass($isDark): $d-tableTrNcColor; else: $l-tableTrNcColor);
-    #{$id}-table-trh-color: if(sass($isDark): $d-tableTrhColor; else: $l-tableTrhColor);
-    #{$id}-slct-title-color: if(sass($isDark): $d-selectionTitleColor; else: $l-selectionTitleColor);
-    #{$id}-slct-titlebg-color: if(sass($isDark): $d-selectionTitlebgColor; else: $l-selectionTitlebgColor);
-    #{$id}-slct-text-color: if(sass($isDark): $d-selectionTextColor; else: $l-selectionTextColor);
-    #{$id}-slct-bg-color: if(sass($isDark): $d-selectionBgColor; else: $l-selectionBgColor);
-    #{$id}-slct-del-color: if(sass($isDark): $d-selectionDelColor; else: $l-selectionDelColor);
-    #{$id}-slct-elbg-color: if(sass($isDark): $d-selectionElBgColor; else: $l-selectionElBgColor);
-    #{$id}-slct-codebg-color: if(sass($isDark): $d-selectionCodeBgColor; else: $l-selectionCodeBgColor);
-    #{$id}-slct-prebg-color: if(sass($isDark): $d-selectionPreCodeBgColor; else: $l-selectionPreCodeBgColor);
+  --wj-preview-paragraph-margin: 16px 0;
+
+  --wj-preview-link-color: var(--wj-preview-cyanosis-link-color);
+  --wj-preview-link-hover-color: var(--wj-preview-cyanosis-link-hover-color);
+  --wj-preview-link-text-decoration: none;
+  --wj-preview-link-hover-text-decoration: none;
+  --wj-preview-link-border-bottom: 1px solid var(--wj-preview-cyanosis-border-color);
+  --wj-preview-link-hover-border-bottom: 1px solid var(--wj-preview-link-hover-color);
+
+  --wj-preview-strong-color: var(--wj-preview-cyanosis-strong-color);
+  --wj-preview-emphasis-color: var(--wj-preview-cyanosis-em-color);
+
+  --wj-preview-blockquote-margin: 22px 0;
+  --wj-preview-blockquote-padding: 1px 20px;
+  --wj-preview-blockquote-text-color: var(--wj-preview-cyanosis-blockquote-color);
+  --wj-preview-blockquote-background-color: var(--wj-preview-cyanosis-blockquote-background-color);
+  --wj-preview-blockquote-border-color: var(--wj-preview-cyanosis-strong-color);
+  --wj-preview-blockquote-paragraph-margin: 10px 0;
+  --wj-preview-blockquote-first-child-margin-top: 10px;
+  --wj-preview-blockquote-last-child-margin-bottom: 10px;
+
+  --wj-preview-inline-code-font-size: 0.9em;
+  --wj-preview-inline-code-padding: 0.065em 0.4em;
+  --wj-preview-inline-code-border-radius: 2px;
+  --wj-preview-inline-code-text-color: var(--wj-preview-cyanosis-code-color);
+  --wj-preview-inline-code-background-color: var(--wj-preview-cyanosis-code-background-color);
+
+  --wj-preview-pre-position: relative;
+  --wj-preview-code-line-height: 1.75;
+  --wj-preview-code-block-font-size: 14px;
+  --wj-preview-code-block-padding: 1.2rem;
+  --wj-preview-code-block-border-radius: 0;
+  --wj-preview-code-block-background-color: var(--wj-preview-cyanosis-code-block-background-color);
+  --wj-preview-code-block-content-background-color: inherit;
+  --wj-preview-code-block-text-color: #333;
+
+  --wj-preview-table-display: inline-block;
+  --wj-preview-table-width: auto;
+  --wj-preview-table-max-width: 100%;
+  --wj-preview-table-overflow-x: auto;
+  --wj-preview-table-font-size: 14px;
+  --wj-preview-table-border: 1px solid var(--wj-preview-cyanosis-table-border-color);
+  --wj-preview-table-border-color: var(--wj-preview-cyanosis-table-border-color);
+  --wj-preview-table-header-background-color: var(--wj-preview-cyanosis-table-header-background-color);
+  --wj-preview-table-header-text-color: var(--wj-preview-cyanosis-table-header-text-color);
+  --wj-preview-table-header-text-align: left;
+  --wj-preview-table-row-even-background-color: var(--wj-preview-cyanosis-table-row-even-background-color);
+  --wj-preview-table-cell-padding: 12px 8px;
+  --wj-preview-table-cell-border: 1px solid var(--wj-preview-table-border-color);
+  --wj-preview-table-cell-line-height: 24px;
+  --wj-preview-table-cell-min-width: 120px;
+
+  --wj-preview-list-padding-inline-start: 28px;
+  --wj-preview-list-item-margin-bottom: 0;
+  --wj-preview-list-nested-margin-top: 4px;
+  --wj-preview-ordered-list-item-padding-inline-start: 6px;
+  --wj-preview-task-list-padding-inline-start: 14px;
+  --wj-preview-task-list-style: none;
+
+  transition: color 0.35s;
+}
+
+:root[theme='dark'] {
+  .preview-theme-cyanosis {
+    --wj-preview-cyanosis-base-color: #cacaca;
+    --wj-preview-cyanosis-title-color: #ddd;
+    --wj-preview-cyanosis-strong-color: #fe9900;
+    --wj-preview-cyanosis-em-color: #ffd28e;
+    --wj-preview-cyanosis-del-color: #ccc;
+    --wj-preview-cyanosis-link-color: #ffb648;
+    --wj-preview-cyanosis-link-hover-color: #fe9900;
+    --wj-preview-cyanosis-border-color: #ffe3ba;
+    --wj-preview-cyanosis-border-color-secondary: #ffcb7b;
+    --wj-preview-cyanosis-background-color: #2f2f2f;
+    --wj-preview-cyanosis-blockquote-color: #c7c7c7;
+    --wj-preview-cyanosis-blockquote-background-color: rgba(255, 199, 116, 0.1);
+    --wj-preview-cyanosis-code-color: #000;
+    --wj-preview-cyanosis-code-background-color: #ffcb7b;
+    --wj-preview-cyanosis-code-block-background-color: rgba(255, 227, 185, 0.5);
+    --wj-preview-cyanosis-table-border-color: #fe9900;
+    --wj-preview-cyanosis-table-header-background-color: #ffb648;
+    --wj-preview-cyanosis-table-header-text-color: #000;
+    --wj-preview-cyanosis-table-row-even-background-color: #6d5736;
+    --wj-preview-cyanosis-table-row-hover-background-color: #947443;
+    --wj-preview-cyanosis-selection-title-color: #000;
+    --wj-preview-cyanosis-selection-title-background-color: #fe9900;
+    --wj-preview-cyanosis-selection-text-color: #00c888;
+    --wj-preview-cyanosis-selection-background-color: rgba(175, 207, 247, 0.25);
+    --wj-preview-cyanosis-selection-delete-color: #999;
+    --wj-preview-cyanosis-selection-element-background-color: #000;
+    --wj-preview-cyanosis-selection-code-background-color: #ffcb7b;
+    --wj-preview-cyanosis-selection-pre-background-color: rgba(160, 200, 255, 0.25);
+
+    --wj-preview-text-color: #cacaca;
+    --wj-preview-heading-color: #ddd;
+    --wj-preview-strong-color: #fe9900;
+    --wj-preview-emphasis-color: #ffd28e;
+    --wj-preview-link-color: #ffb648;
+    --wj-preview-link-hover-color: #fe9900;
+    --wj-preview-link-border-bottom: 1px solid #ffe3ba;
+    --wj-preview-link-hover-border-bottom: 1px solid #fe9900;
+    --wj-preview-blockquote-text-color: #c7c7c7;
+    --wj-preview-blockquote-background-color: rgba(255, 199, 116, 0.1);
+    --wj-preview-blockquote-border-color: #fe9900;
+    --wj-preview-inline-code-text-color: #000;
+    --wj-preview-inline-code-background-color: #ffcb7b;
+    --wj-preview-code-block-background-color: rgba(255, 227, 185, 0.5);
+    --wj-preview-table-border: 1px solid #fe9900;
+    --wj-preview-table-border-color: #fe9900;
+    --wj-preview-table-header-background-color: #ffb648;
+    --wj-preview-table-header-text-color: #000;
+    --wj-preview-table-row-even-background-color: #6d5736;
+  }
+}
+
+/* 保留 cyanosis 的标题标点、链接动效、details 与 selection 皮肤。 */
+.preview-theme-cyanosis h1 {
+  margin-top: 36px;
+  margin-bottom: 10px;
+  transition: color 0.35s;
+}
+
+.preview-theme-cyanosis h2 {
+  position: relative;
+  padding: 0 10px 10px;
+  margin-top: 36px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--wj-preview-cyanosis-border-color-secondary);
+  transition: color 0.35s;
+}
+
+.preview-theme-cyanosis h2::before {
+  position: absolute;
+  top: -6px;
+  left: -14px;
+  content: '「';
+}
+
+.preview-theme-cyanosis h2::after {
+  position: relative;
+  top: 6px;
+  content: '」';
+}
+
+.preview-theme-cyanosis h3 {
+  position: relative;
+  padding-left: 6px;
+  margin-top: 30px;
+  margin-bottom: 10px;
+  transition: color 0.35s;
+}
+
+.preview-theme-cyanosis h3::before {
+  padding-right: 6px;
+  color: var(--wj-preview-cyanosis-strong-color);
+  content: '»';
+}
+
+.preview-theme-cyanosis h4 {
+  padding-left: 6px;
+  margin-top: 24px;
+  margin-bottom: 10px;
+  transition: color 0.35s;
+}
+
+.preview-theme-cyanosis h5 {
+  padding-left: 6px;
+  margin-top: 18px;
+  margin-bottom: 10px;
+  transition: color 0.35s;
+}
+
+.preview-theme-cyanosis h6 {
+  padding-left: 6px;
+  margin-top: 12px;
+  margin-bottom: 10px;
+  transition: color 0.35s;
+}
+
+.preview-theme-cyanosis hr {
+  position: relative;
+  width: 98%;
+  height: 1px;
+  margin-top: 32px;
+  margin-bottom: 32px;
+  overflow: visible;
+  background-image: linear-gradient(
+    90deg,
+    var(--wj-preview-link-color),
+    rgba(255, 0, 0, 0.3),
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 0, 0, 0.3),
+    var(--wj-preview-link-color)
+  );
+  border-width: 0;
+}
+
+.preview-theme-cyanosis pre > code::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.preview-theme-cyanosis pre > code::-webkit-scrollbar-track {
+  background-color: var(--wj-preview-cyanosis-border-color);
+}
+
+.preview-theme-cyanosis pre > code::-webkit-scrollbar-thumb {
+  background-color: var(--wj-preview-cyanosis-strong-color);
+  border-radius: 10px;
+}
+
+.preview-theme-cyanosis a {
+  position: relative;
+}
+
+.preview-theme-cyanosis a::after {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  opacity: 0;
+  content: '';
+  border-bottom: 1px solid var(--wj-preview-cyanosis-border-color);
+  transition:
+    top 0.3s,
+    opacity 0.3s;
+  transform: translate3d(0, 0, 0);
+}
+
+.preview-theme-cyanosis a:hover::after {
+  top: 0;
+  opacity: 1;
+  border-bottom-color: var(--wj-preview-link-hover-color);
+}
+
+.preview-theme-cyanosis table tr:hover {
+  background-color: var(--wj-preview-cyanosis-table-row-hover-background-color);
+}
+
+.preview-theme-cyanosis blockquote {
+  transition: color 0.35s;
+}
+
+.preview-theme-cyanosis blockquote::after {
+  display: block;
+  content: '';
+}
+
+.preview-theme-cyanosis blockquote > :where(b, strong) {
+  color: var(--wj-preview-strong-color);
+}
+
+.preview-theme-cyanosis del {
+  color: var(--wj-preview-cyanosis-del-color);
+}
+
+.preview-theme-cyanosis details > summary {
+  font-size: 20px;
+  font-weight: bolder;
+  outline: none;
+}
+
+.preview-theme-cyanosis details > p {
+  padding: 10px 20px;
+  margin: 10px 0 0;
+  color: #666;
+  background-color: var(--wj-preview-blockquote-background-color);
+  border: 2px dashed var(--wj-preview-strong-color);
+}
+
+.preview-theme-cyanosis :where(h1, h2, h3, h4, h5, h6)::selection {
+  color: var(--wj-preview-cyanosis-selection-title-color);
+  background-color: var(--wj-preview-cyanosis-selection-title-background-color);
+}
+
+.preview-theme-cyanosis :where(p, ol li, ul li)::selection {
+  color: var(--wj-preview-cyanosis-selection-text-color);
+  background-color: var(--wj-preview-cyanosis-selection-background-color);
+}
+
+.preview-theme-cyanosis :where(a, b, strong, i, em)::selection {
+  background-color: var(--wj-preview-cyanosis-selection-element-background-color);
+}
+
+.preview-theme-cyanosis del::selection {
+  color: var(--wj-preview-cyanosis-selection-delete-color);
+  background-color: var(--wj-preview-cyanosis-selection-element-background-color);
+}
+
+.preview-theme-cyanosis table thead th::selection {
+  background-color: transparent;
+}
+
+.preview-theme-cyanosis table tbody td::selection {
+  background-color: var(--wj-preview-cyanosis-selection-background-color);
+}
+
+.preview-theme-cyanosis code::selection {
+  background-color: var(--wj-preview-cyanosis-selection-code-background-color);
+}
+
+.preview-theme-cyanosis pre > code::selection {
+  background-color: var(--wj-preview-cyanosis-selection-pre-background-color);
+}
+
+.preview-theme-cyanosis .contains-task-list input[type='checkbox'] {
+  position: relative;
+}
+
+.preview-theme-cyanosis .contains-task-list input[type='checkbox']::before {
+  position: absolute;
+  inset: 0;
+  width: inherit;
+  height: inherit;
+  content: '';
+  background: #f0f8ff;
+  border: 1px solid #add6ff;
+  border-radius: 2px;
+  box-sizing: border-box;
+  z-index: 1;
+}
+
+.preview-theme-cyanosis .contains-task-list input[type='checkbox']:checked::after {
+  position: absolute;
+  top: -12px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  color: #ff5555;
+  font-size: 20px;
+  font-weight: bold;
+  content: '\2713';
+  z-index: 2;
+}
+
+@media (max-width: 720px) {
+  .preview-theme-cyanosis h1 {
+    font-size: 24px;
   }
 
-  @mixin transitionColor() {
-    transition: color 0.35s;
+  .preview-theme-cyanosis h2 {
+    font-size: 20px;
   }
 
-  @mixin headTitle($padb: 4px, $fontSize: 24px, $mtop: 36px) {
-    padding-bottom: $padb;
-    margin-top: $mtop;
-    margin-bottom: 10px;
-    font-size: $fontSize;
-    line-height: 1.5;
-    color: var(--cyanosis-title-color);
-  }
-
-  @mixin blockquoteColor {
-    color: var(--cyanosis-blockquote-color);
-    border-left: 4px solid var(--cyanosis-strong-color);
-    background-color: var(--cyanosis-blockquote-bg-color);
-  }
-
-  @mixin selectionColor($bgColor: '', $txtColor: '') {
-    @if $bgColor != '' {
-      background-color: var($bgColor);
-    }
-    @if $txtColor != '' {
-      color: var($txtColor);
-    }
-  }
-
-  word-break: break-word;
-  line-height: 1.75;
-  font-weight: 400;
-  font-size: 14px;
-  overflow-x: hidden;
-  color: var(--cyanosis-base-color);
-  @include transitionColor();
-  @include LightAndDark();
-
-  @at-root [theme='dark'] & {
-    @include LightAndDark(true);
-  }
-
-  h1 {
-    @include headTitle(4px, 30px);
-    @include transitionColor();
-  }
-
-  h2 {
-    position: relative;
-    padding-left: 10px;
-    padding-right: 10px;
-    @include headTitle(10px, 24px);
-    border-bottom: 1px solid var(--cyanosis-border-color-2);
-    @include transitionColor();
-
-    &::before {
-      content: '「';
-      position: absolute;
-      top: -6px;
-      left: -14px;
-    }
-
-    &::after {
-      content: '」';
-      position: relative;
-      top: 6px;
-      right: auto;
-    }
-  }
-
-  h3 {
-    position: relative;
-    @include headTitle(0, 20px, 30px);
-    padding-left: 6px;
-    @include transitionColor();
-
-    &::before {
-      content: '»';
-      padding-right: 6px;
-      color: var(--cyanosis-strong-color);
-    }
-  }
-
-  h4 {
-    @include headTitle(0, 16px, 24px);
-    padding-left: 6px;
-    @include transitionColor();
-  }
-
-  h5 {
-    @include headTitle(0, 14px, 18px);
-    padding-left: 6px;
-    @include transitionColor();
-  }
-
-  h6 {
-    @include headTitle(0, 12px, 12px);
-    padding-left: 6px;
-    @include transitionColor();
-  }
-
-  p {
-    line-height: inherit;
-    margin-top: $line-space;
-    margin-bottom: $line-space;
-  }
-
-  img {
-    max-width: 100%;
-    box-shadow: var(--img-box-shadow);
-  }
-
-  hr {
-    position: relative;
-    width: 98%;
-    height: 1px;
-    margin-top: 32px;
-    margin-bottom: 32px;
-    background-image: linear-gradient(
-      90deg,
-      var(--cyanosis-link-color),
-      rgba(255, 0, 0, 0.3),
-      rgba(255, 255, 255, 0.1),
-      rgba(255, 0, 0, 0.3),
-      var(--cyanosis-link-color)
-    );
-    border-width: 0;
-    overflow: visible;
-
-    //&::after {
-    //  content: "";
-    //  position: absolute;
-    //  margin: auto;
-    //  left: 0;
-    //  right: 0;
-    //  bottom: 0;
-    //  top: 0;
-    //  display: inline-block;
-    //  width: 60px;
-    //  height: 20px;
-    //  background-color: var(--cyanosis-bg-color);
-    //  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAgCAYAAABgrToAAAADoklEQVRYR82XTYgcRRTHf2933Q1RjAa9eFO8JHoJ8RQVBQ2iBwXBET0YEUTXNVmNQtTpmeqaWV0XNRq/o4KoECSCEPSg4CF+BYUkIIiCoCJCPIhC/Ihh2Z0nVV27VnZnenumW9i6ddV7//frV69fVQurfMgq56NawFTPAU6QyomqXrw6wIZeyhCPebA5buNR+akKyGoAjd6BshthnYdSjqNcRVuOlIUsD2j0SuA94IwuMHdh5ZUykOUBXfSGbmKI54EtAeYIHSZoy5dl4JxvNYBOKdW1KE8BQ8AkVk6WhasWsAiN0TX9gveXQaPP+Aytpc4u+bMI06JNohsYYYYOR2lJWtS3OKDRfcAtQfgDoI6Vo4UCGb0OmAEuDvZvYmVbEd/igC3dzDz7gQu8sPA9kJDK27mBmjqBeLjTg90PDFOjWawFFQd06kZHEfaj3LAIpTRpSXsZ5E06zEYP9sDimnAApYaV2SLZG/wjMeqAkijwW4xQJ5Gf/ZzRC8OW3hiBTGGlURRswW55Bh/Ssxljrwew8l1PQaM14GngvGDzBUKdDsMeTtgU5o8B92PFlUf3YXUrHa7Fys6lBqcCGnX15YQ2A18FyPd7Crd1A3M8C1wdbH4DD3hWeP6IEXbQkG97ajR1HPFnuPP5jFFq1OWX7hl8WM9l1AO648uNfwLk7tytMeogty+xeQ4rO3r6bdcx1nuwOGsHmaXGtPzae4uzGnLH1kQkvpdZGrHjssBZJrL+pqS05KWc8tgITAPXRzYvYOXe/C2OV43eDcRBDtIhoS2f9wzc0Cv8Wls+zoFzUC5zF0U241h5uZtPfptp6OUM8wbK+cH5GEpCS17P3fJei0Z3+npTxryJ8CPzbKMtn/ZyWbkPGl0PuFPkmkjkcb4h4R2ZLwRq1H0ALmvjkf2HwK1Y+T1PY2XABe/sHJ6MxN5lnoSpnC/UGbsTaI5phK2R7x6s3Ffk5YoDOrWm3onwJHBmEP86bPmBrsGaenNoIdnxCH+gPEhLXi0Cl1VBvyPVLSh7gEuC62yAfOIUqabWEaaiucMIk6RyqJ+Q/QM69V26jjW86Gvov/EaoyT8zRCn+Xq7PVrbx0nuYUaO9wM3WAbjCE1NEUw09Um4UV+2OKfYfu5/S19gsAzGKqm6LE5FrShbdS0ku465DjDwKA/oQht19ejqbaEVuRbiLhuHByYLjtUAZpDutzP7cYdHsPJXWbjyNVgFwQoa1WXwf4Jd9YD/Ap80+yE7+u9aAAAAAElFTkSuQmCC);
-    //  background-repeat: no-repeat;
-    //  background-size: auto 100%;
-    //  background-position-x: center;
-    //  transition: background-color 0.5s;
-    //}
-  }
-
-  code {
-    padding: 0.065em 0.4em;
-    font-size: 0.9em;
-    word-break: break-word;
-    overflow-x: auto;
-    border-radius: 2px;
-    color: var(--cyanosis-code-color);
-    background-color: var(--cyanosis-code-bg-color);
-    box-decoration-break: clone;
-  }
-
-  pre {
-    overflow: auto;
-    position: relative;
-    line-height: 1.75;
-    > code {
-      color: inherit;
-      background-color: inherit;
-      display: block;
-      padding: 1.2rem;
-      margin: 0;
-      font-size: 14px;
-      word-break: normal;
-      overflow-x: auto;
-      &::-webkit-scrollbar {
-        width: 4px;
-        height: 4px;
-      }
-      &::-webkit-scrollbar-track {
-        background-color: var(--cyanosis-border-color);
-      }
-
-      &::-webkit-scrollbar-thumb {
-        background-color: var(--cyanosis-strong-color);
-        border-radius: 10px;
-      }
-    }
-  }
-
-  pre:not(.hljs) {
-    background: var(--cyanosis-code-pre-color);
-    > code {
-      color: #333;
-      background: var(--cyanosis-code-pre-color);
-    }
-  }
-
-  a {
-    position: relative;
-    text-decoration: none;
-    color: var(--cyanosis-link-color);
-    border-bottom: 1px solid var(--cyanosis-border-color);
-
-    &:hover {
-      color: var(--cyanosis-linkh-color);
-      border-bottom-color: var(--cyanosis-linkh-color);
-    }
-
-    &:active {
-      color: var(--cyanosis-linkh-color);
-    }
-
-    &::after {
-      position: absolute;
-      content: '';
-      top: 100%;
-      left: 0;
-      width: 100%;
-      opacity: 0;
-      border-bottom: 1px solid var(--cyanosis-border-color);
-      transition:
-        top 0.3s,
-        opacity 0.3s;
-      transform: translate3d(0, 0, 0);
-    }
-
-    &:hover::after {
-      top: 0;
-      opacity: 1;
-      border-bottom-color: var(--cyanosis-linkh-color);
-    }
-  }
-
-  table {
-    display: inline-block !important;
-    font-size: 14px;
-    width: auto;
-    max-width: 100%;
-    overflow: auto;
-    border: 1px solid var(--cyanosis-table-border-color);
-    border-spacing: 0;
-    border-collapse: collapse;
-
-    thead {
-      color: #000;
-      text-align: left;
-      font-size: 16px;
-      background: #f6f6f6;
-    }
-
-    tr:nth-child(2n) {
-      background-color: var(--cyanosis-table-tr-nc-color);
-    }
-
-    tr:hover {
-      background-color: var(--cyanosis-table-trh-color);
-    }
-
-    th,
-    td {
-      padding: 12px 8px;
-      line-height: 24px;
-      border: 1px solid var(--cyanosis-table-border-color);
-    }
-
-    th {
-      color: var(--cyanosis-table-tht-color);
-      background-color: var(--cyanosis-table-th-color);
-    }
-
-    td {
-      min-width: 120px;
-    }
-  }
-
-  blockquote {
-    @include blockquoteColor;
-    padding: 1px 20px;
-    margin: 22px 0;
-    @include transitionColor();
-
-    &::after {
-      display: block;
-      content: '';
-    }
-
-    & > p {
-      margin: 10px 0;
-    }
-
-    & > b,
-    & > strong {
-      color: var(--cyanosis-strong-color);
-    }
-  }
-
-  b,
-  strong {
-    color: var(--cyanosis-strong-color);
-  }
-
-  i,
-  em {
-    color: var(--cyanosis-em-color);
-  }
-
-  del {
-    color: var(--cyanosis-del-color);
-  }
-
-  ol,
-  ul {
-    padding-left: 28px;
-
-    li {
-      margin-bottom: 0;
-      list-style: inherit;
-
-      & .task-list-item {
-        list-style: none;
-
-        ul,
-        ol {
-          margin-top: 0;
-        }
-      }
-    }
-
-    ul,
-    ol {
-      margin-top: 4px;
-    }
-  }
-
-  ol li {
-    padding-left: 6px;
-  }
-
-  // details & summary
-  details {
-    & > summary {
-      outline: none;
-      font-size: 20px;
-      font-weight: bolder;
-      cursor: pointer;
-    }
-
-    & > p {
-      padding: 10px 20px;
-      margin: 10px 0 0;
-      color: #666;
-      background-color: var(--cyanosis-blockquote-bg-color);
-      border: 2px dashed var(--cyanosis-strong-color);
-    }
-  }
-
-  // selection
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    &::selection {
-      @include selectionColor();
-      color: var(--cyanosis-slct-title-color);
-      background-color: var(--cyanosis-slct-titlebg-color);
-    }
-  }
-
-  p,
-  ol li,
-  ul li {
-    &::selection {
-      color: var(--cyanosis-slct-text-color);
-      background-color: var(--cyanosis-slct-bg-color);
-    }
-  }
-
-  a,
-  b,
-  strong,
-  i,
-  em {
-    &::selection {
-      background-color: var(--cyanosis-slct-elbg-color);
-    }
-  }
-
-  del::selection {
-    color: var(--cyanosis-slct-del-color);
-    background-color: var(--cyanosis-slct-elbg-color);
-  }
-
-  table {
-    thead th {
-      &::selection {
-        background-color: transparent;
-      }
-    }
-    tbody td {
-      &::selection {
-        background-color: var(--cyanosis-slct-bg-color);
-      }
-    }
-  }
-
-  code::selection {
-    background-color: var(--cyanosis-slct-codebg-color);
-  }
-
-  pre {
-    > code::selection {
-      background-color: var(--cyanosis-slct-prebg-color);
-    }
-  }
-
-  .contains-task-list {
-    padding-left: 14px;
-    list-style: none;
-
-    input[type='checkbox'] {
-      position: relative;
-
-      &::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: inherit;
-        height: inherit;
-        background: #f0f8ff;
-        border: 1px solid #add6ff;
-        border-radius: 2px;
-        box-sizing: border-box;
-        z-index: 1;
-      }
-
-      &:checked {
-        &::after {
-          content: '\2713';
-          position: absolute;
-          top: -12px;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          width: 0;
-          height: 0;
-          color: #ff5555;
-          font-size: 20px;
-          font-weight: bold;
-          z-index: 2;
-        }
-      }
-    }
-  }
-
-  // @media
-  @media (max-width: 720px) {
-    h1 {
-      font-size: 24px;
-    }
-
-    h2 {
-      font-size: 20px;
-    }
-
-    h3 {
-      font-size: 18px;
-    }
+  .preview-theme-cyanosis h3 {
+    font-size: 18px;
   }
 }

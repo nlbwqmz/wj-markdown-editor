@@ -1,13 +1,71 @@
-:root[theme='dark'] {
-  .preview-theme-smart-blue {
-    p {
-      color: var(--wj-markdown-text-primary);
-    }
-  }
-}
 .preview-theme-smart-blue {
-  color: #595959;
-  font-size: 15px;
+  --wj-preview-text-color: #595959;
+  --wj-preview-font-weight: 400;
+  --wj-preview-font-size: 15px;
+  --wj-preview-line-height: 2;
+  --wj-preview-word-break: break-word;
+
+  --wj-preview-heading-color: #135ce0;
+  --wj-preview-heading-margin-top: 0;
+  --wj-preview-heading-margin-bottom: 0;
+  --wj-preview-heading-padding: 30px 0;
+  --wj-preview-h3-font-size: 16px;
+
+  --wj-preview-adjacent-paragraph-margin-top: 16px;
+  --wj-preview-paragraph-margin: 4px 0;
+  --wj-preview-list-margin: 16px 0 16px 16px;
+  --wj-preview-list-padding-inline-start: 40px;
+  --wj-preview-list-text-color: var(--wj-markdown-text-primary);
+  --wj-preview-list-item-margin-bottom: 0;
+  --wj-preview-unordered-list-style: disc outside;
+
+  --wj-preview-link-color: #036aca;
+  --wj-preview-link-hover-color: #036aca;
+  --wj-preview-link-font-weight: 400;
+  --wj-preview-link-text-decoration: none;
+  --wj-preview-link-hover-text-decoration: none;
+  --wj-preview-link-border-bottom: 1px solid rgba(3, 106, 202, 0.8);
+
+  --wj-preview-strong-color: #036aca;
+
+  --wj-preview-blockquote-margin: 2em 0;
+  --wj-preview-blockquote-padding: 2px 20px;
+  --wj-preview-blockquote-text-color: #666;
+  --wj-preview-blockquote-background-color: #fff9f9;
+  --wj-preview-blockquote-border-color: #b2aec5;
+  --wj-preview-blockquote-paragraph-margin: 10px 0;
+  --wj-preview-blockquote-first-child-margin-top: 10px;
+  --wj-preview-blockquote-last-child-margin-bottom: 10px;
+
+  --wj-preview-hr-margin: 1rem 0;
+  --wj-preview-hr-border-top: 1px solid #135ce0;
+
+  --wj-preview-table-margin: 1rem 0;
+  --wj-preview-table-border-collapse: collapse;
+  --wj-preview-table-border-color: #dfe2e5;
+  --wj-preview-table-cell-border: 1px solid var(--wj-preview-table-border-color);
+  --wj-preview-table-cell-padding: 0.6em 1em;
+  --wj-preview-table-row-border-top: 1px solid var(--wj-preview-table-border-color);
+  --wj-preview-table-row-even-background-color: #f6f8fa;
+
+  --wj-preview-inline-code-font-size: 0.87em;
+  --wj-preview-inline-code-padding: 0.065em 0.4em;
+  --wj-preview-inline-code-border-radius: 6px;
+  --wj-preview-inline-code-background-color: #fff5f5;
+  --wj-preview-inline-code-text-color: #ff502c;
+
+  --wj-preview-pre-position: relative;
+  --wj-preview-code-line-height: 1.75;
+  --wj-preview-code-block-font-size: 12px;
+  --wj-preview-code-block-padding: 1.2rem;
+  --wj-preview-code-block-border-radius: 6px;
+  --wj-preview-code-block-background-color: #f8f8f8;
+  --wj-preview-code-block-content-background-color: inherit;
+  --wj-preview-code-block-text-color: #333;
+
+  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-list-style: none;
+
   background-image:
     linear-gradient(90deg, rgba(60, 10, 30, 0.04) 3%, rgba(0, 0, 0, 0) 3%),
     linear-gradient(360deg, rgba(60, 10, 30, 0.04) 3%, rgba(0, 0, 0, 0) 3%);
@@ -15,214 +73,40 @@
   background-position: center center;
 }
 
-/* 段落 */
-.preview-theme-smart-blue p {
-  color: #595959;
-  font-size: 15px;
-  line-height: 2;
-  font-weight: 400;
-  margin: 4px 0;
-}
-
-/* 段落间距控制 */
-.preview-theme-smart-blue p + p {
-  margin-top: 16px;
-}
-
-/* 标题的通用设置 */
-.preview-theme-smart-blue h1,
-.preview-theme-smart-blue h2,
-.preview-theme-smart-blue h3,
-.preview-theme-smart-blue h4,
-.preview-theme-smart-blue h5,
-.preview-theme-smart-blue h6 {
-  padding: 30px 0;
-  margin: 0;
-  color: #135ce0;
-}
-
-/* 一级标题 */
-.preview-theme-smart-blue h1 {
-  position: relative;
-  text-align: center;
-  font-size: 22px;
-  margin: 50px 0;
-}
-
-/* 一级标题前缀，用来放背景图，支持透明度控制 */
-//.preview-theme-smart-blue h1:before {
-//  position: absolute;
-//  content: "";
-//  top: -10px;
-//  left: 50%;
-//  width: 32px;
-//  height: 32px;
-//  transform: translateX(-50%);
-//  background-size: 100% 100%;
-//  opacity: .36;
-//  background-repeat: no-repeat;
-//  background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAABfVBMVEX///8Ad/8AgP8AgP8AgP8Aff8AgP8Af/8AgP8AVf8Af/8Af/8AgP8AgP8Af/8Afv8AAP8Afv8Afv8Aef8AgP8AdP8Afv8AgP8AgP8Acf8Ae/8AgP8Af/8AgP8Af/8Af/8AfP8Afv8AgP8Af/8Af/8Afv8Afv8AgP8Afv8AgP8Af/8Af/8AgP8AgP8Afv8AgP8Af/8AgP8AgP8AgP8Ae/8Afv8Af/8AgP8Af/8AgP8Af/8Af/8Aff8Af/8Abf8AgP8Af/8AgP8Af/8Af/8Afv8AgP8AgP8Afv8Afv8AgP8Af/8Aff8AgP8Afv8AgP8Aff8AgP8AfP8AgP8Ae/8AgP8Af/8AgP8AgP8AgP8Afv8AgP8AgP8AgP8Afv8AgP8AgP8AgP8AgP8AgP8Af/8AgP8Af/8Af/8Aev8Af/8AgP8Aff8Afv8AgP8AgP8AgP8Af/8AgP8Af/8Af/8AgP8Afv8AgP8AgP8AgP8AgP8Af/8AeP8Af/8Af/8Af//////rzEHnAAAAfXRSTlMAD7CCAivatxIDx5EMrP19AXdLEwgLR+6iCR/M0yLRzyFF7JupSXn8cw6v60Q0QeqzKtgeG237HMne850/6Qeq7QaZ+WdydHtj+OM3qENCMRYl1B3K2U7wnlWE/mhlirjkODa9FN/BF7/iNV/2kASNZpX1Wlf03C4stRGxgUPclqoAAAABYktHRACIBR1IAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4gEaBzgZ4yeM3AAAAT9JREFUOMvNUldbwkAQvCAqsSBoABE7asSOBRUVVBQNNuy9996789+9cMFAMHnVebmdm+/bmdtbQv4dOFOW2UjPzgFyLfo6nweKfIMOBYWwFtmMPGz2Yj2pJI0JDq3udJW6VVbmKa9I192VQFV1ktXUAl5NB0cd4KpnORqsEO2ZIRpF9gJfE9Dckqq0KuZt7UAH5+8EPF3spjsRpCeQNO/tA/qDwIDA+OCQbBoKA8NOdjMySgcZGVM6jwcgRuUiSs0nlPFNSrEpJfU0jTLD6llqbvKxei7OzvkFNQohi0vAsj81+MoqsCaoPOQFgus/1LyxichW+hS2JWCHZ7VlF9jb187pIAYcHiViHAMnp5mTjJ8B5xeEXF4B1ze/fTh/C0h398DDI9HB07O8ci+vRBdvdGnfP4gBuM8vw7X/G3wDmFhFZEdxzjMAAAAldEVYdGRhdGU6Y3JlYXRlADIwMTgtMDEtMjZUMDc6NTY6MjUrMDE6MDA67pVWAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDE4LTAxLTI2VDA3OjU2OjI1KzAxOjAwS7Mt6gAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAAWdEVYdFRpdGxlAGp1ZWppbl9sb2dvIGNvcHlxapmKAAAAV3pUWHRSYXcgcHJvZmlsZSB0eXBlIGlwdGMAAHic4/IMCHFWKCjKT8vMSeVSAAMjCy5jCxMjE0uTFAMTIESANMNkAyOzVCDL2NTIxMzEHMQHy4BIoEouAOoXEXTyQjWVAAAAAElFTkSuQmCC);
-//}
-
-/* 二级标题 */
-.preview-theme-smart-blue h2 {
-  position: relative;
-  font-size: 20px;
-  border-left: 4px solid;
-  padding: 0 0 0 10px;
-  margin: 30px 0;
-}
-
-/* 三级标题 */
-.preview-theme-smart-blue h3 {
-  font-size: 16px;
-}
-
-.preview-theme-smart-blue ol {
-  margin-left: 16px;
-}
-
-/* 无序列表 */
-.preview-theme-smart-blue ul {
-  list-style: disc outside;
-  margin-left: 16px;
-  margin-top: 16px;
-}
-
-/* 无序列表内容 */
-.preview-theme-smart-blue li {
-  line-height: 2;
-  color: var(--wj-markdown-text-primary);
-  margin-bottom: 0;
-  list-style: inherit;
-}
-
-.preview-theme-smart-blue img {
-  max-width: 100%;
-  box-shadow: var(--img-box-shadow);
-}
-
-/* 已加载图片 */
-.preview-theme-smart-blue img.loaded {
-  margin: 0 auto;
-  display: block;
-}
-
-/* 引用 */
-.preview-theme-smart-blue blockquote {
-  background: #fff9f9;
-  margin: 2em 0;
-  padding: 2px 20px;
-  border-left: 4px solid #b2aec5;
-}
-
-/* 引用文字 */
-.preview-theme-smart-blue blockquote p {
-  color: #666;
-  line-height: 2;
-  margin: 10px 0;
-}
-
-/* 链接 */
-.preview-theme-smart-blue a {
-  color: #036aca;
-  border-bottom: 1px solid rgba(3, 106, 202, 0.8);
-  font-weight: 400;
-  text-decoration: none;
-}
-
-/* 加粗 */
-.preview-theme-smart-blue strong {
-  color: #036aca;
-}
-
-/* 加粗斜体 */
-.preview-theme-smart-blue em strong {
-  color: #036aca;
-}
-
-/* 分隔线 */
-.preview-theme-smart-blue hr {
-  border-top: 1px solid #135ce0;
-  margin: 1rem 0;
-}
-
-/* 代码 */
-.preview-theme-smart-blue pre {
-  overflow: auto;
-}
-
-.preview-theme-smart-blue pre,
-.preview-theme-smart-blue code {
-  border-radius: 6px;
-  overflow: auto;
-  position: relative;
-  line-height: 1.75;
-}
-
-.preview-theme-smart-blue pre > code {
-  font-size: 12px;
-  padding: 1.2rem;
-  margin: 0;
-  word-break: normal;
-  display: block;
-  overflow-x: auto;
-  color: inherit;
-  background-color: inherit;
-}
-
-.preview-theme-smart-blue {
-  pre:not(.hljs) {
-    code {
-      color: #333;
-      background: #f8f8f8;
-    }
+:root[theme='dark'] {
+  .preview-theme-smart-blue {
+    --wj-preview-text-color: var(--wj-markdown-text-primary);
   }
 }
 
-.preview-theme-smart-blue code {
-  word-break: break-word;
-  border-radius: 6px;
-  overflow-x: auto;
-  font-size: 0.87em;
-  padding: 0.065em 0.4em;
-  background-color: #fff5f5;
-  color: #ff502c;
-  box-decoration-break: clone;
+/* 保留 smart-blue 的背景纹理、标题造型和 kbd 呈现。 */
+.preview-theme-smart-blue h1 {
+  position: relative;
+  margin: 50px 0;
+  font-size: 22px;
+  text-align: center;
 }
 
-/* 表格 */
-.preview-theme-smart-blue table {
-  border-collapse: collapse;
-  margin: 1rem 0;
-  overflow-x: auto;
+.preview-theme-smart-blue h2 {
+  position: relative;
+  padding: 0 0 0 10px;
+  margin: 30px 0;
+  font-size: 20px;
+  border-left: 4px solid currentColor;
 }
 
-.preview-theme-smart-blue table th,
-.preview-theme-smart-blue table td {
-  border: 1px solid #dfe2e5;
-  padding: 0.6em 1em;
+.preview-theme-smart-blue img.loaded {
+  display: block;
+  margin: 0 auto;
 }
 
-.preview-theme-smart-blue table tr {
-  border-top: 1px solid #dfe2e5;
-}
-
-.preview-theme-smart-blue table tr:nth-child(2n) {
-  background-color: #f6f8fa;
-}
-
-/*
-  From: icewolf-sec (御坂19008号)
-  Description: 新增HTML5 <kbd> 键盘文字标签样式
-*/
 .preview-theme-smart-blue kbd {
+  padding: 2px;
+  margin: auto 5px auto;
   color: white;
+  font-size: small;
+  font-weight: bold;
   background-color: #135ce0;
   border: 1px solid #135ce0;
   border-radius: 6px;
-  padding: 2px;
-  font-weight: bold;
-  margin: auto 5px auto;
-  font-size: small;
 }
