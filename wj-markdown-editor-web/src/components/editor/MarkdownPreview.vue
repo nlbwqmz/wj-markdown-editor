@@ -21,7 +21,7 @@ const props = defineProps({
   },
   previewTheme: {
     type: String,
-    default: () => 'github-light',
+    default: () => 'github',
   },
   watermark: {
     type: Object,

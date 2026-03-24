@@ -65,7 +65,7 @@ const props = defineProps({
   },
   previewTheme: {
     type: String,
-    default: () => 'github-light',
+    default: () => 'github',
   },
   watermark: {
     type: Object,
@@ -889,7 +889,7 @@ defineExpose({
       <div
         v-if="previewController"
         ref="previewRef"
-        class="allow-search wj-scrollbar h-full p-2"
+        class="wj-scrollbar allow-search h-full p-2"
         :style="previewContainerStyle"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"
