@@ -1,5 +1,6 @@
+import { sanitizeLoadedConfig } from './configLoadSanitizer.js'
 import { repairConfig } from './configRepairUtil.js'
-import { validateConfigShape } from './configSchema.js'
+import { configSchema, validateConfigShape } from './configSchema.js'
 import { cloneConfig } from './configSnapshotUtil.js'
 
 function createWriteFailedResult() {
@@ -19,7 +20,20 @@ function createInvalidConfigResult() {
 }
 
 function isPlainObject(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function assertPatchValueSupported(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || isPlainObject(value)) {
+    return
+  }
+
+  throw new TypeError('配置 patch 仅支持 plain object、数组、原始值或 null')
 }
 
 function mergeConfigPatch(target, patch) {
@@ -30,10 +44,19 @@ function mergeConfigPatch(target, patch) {
   const merged = { ...target }
 
   for (const key in patch) {
+    if (Object.prototype.hasOwnProperty.call(merged, key) === false) {
+      throw new TypeError('配置 patch 包含未知字段')
+    }
+
     const nextValue = patch[key]
     const currentValue = merged[key]
+    assertPatchValueSupported(nextValue)
 
-    if (isPlainObject(currentValue) && isPlainObject(nextValue)) {
+    if (isPlainObject(currentValue)) {
+      if (isPlainObject(nextValue) === false) {
+        throw new TypeError('配置对象字段只接受 plain object patch')
+      }
+
       merged[key] = mergeConfigPatch(currentValue, nextValue)
       continue
     }
@@ -64,8 +87,19 @@ export function createConfigService(deps) {
     return nextTask
   }
 
-  function normalizeConfig(rawConfig) {
+  function normalizeConfigForLoad(rawConfig) {
     const repairedConfig = repairConfig(rawConfig, defaultConfig)
+    const sanitizedConfig = sanitizeLoadedConfig(repairedConfig, defaultConfig, configSchema)
+    validateConfigShape(sanitizedConfig)
+    return sanitizedConfig
+  }
+
+  function normalizeConfigForWrite(rawConfig) {
+    const repairedConfig = repairConfig(rawConfig, defaultConfig)
+    if (JSON.stringify(repairedConfig) !== JSON.stringify(rawConfig)) {
+      throw new Error('配置写入 patch 触发了静默修复')
+    }
+
     validateConfigShape(repairedConfig)
     return repairedConfig
   }
@@ -81,7 +115,7 @@ export function createConfigService(deps) {
     try {
       return {
         ok: true,
-        nextConfig: normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), nextPartial)),
+        nextConfig: normalizeConfigForWrite(mergeConfigPatch(getCurrentConfigOrDefault(), nextPartial)),
       }
     }
     catch {
@@ -166,11 +200,11 @@ export function createConfigService(deps) {
       let normalizedConfig = null
 
       try {
-        normalizedConfig = normalizeConfig(rawConfig)
+        normalizedConfig = normalizeConfigForLoad(rawConfig)
       }
       catch {
         // 初始化阶段如果修复后仍不合法，继续回退到默认配置保证 service 内存态始终可用。
-        normalizedConfig = normalizeConfig(cloneConfig(defaultConfig))
+        normalizedConfig = normalizeConfigForLoad(cloneConfig(defaultConfig))
         shouldRewriteConfig = true
       }
 
@@ -211,7 +245,7 @@ export function createConfigService(deps) {
         let nextConfig = null
 
         try {
-          nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
+          nextConfig = normalizeConfigForWrite(mergeConfigPatch(getCurrentConfigOrDefault(), {
             theme: {
               global: theme,
             },
@@ -229,7 +263,7 @@ export function createConfigService(deps) {
         let nextConfig = null
 
         try {
-          nextConfig = normalizeConfig(mergeConfigPatch(getCurrentConfigOrDefault(), {
+          nextConfig = normalizeConfigForWrite(mergeConfigPatch(getCurrentConfigOrDefault(), {
             language,
           }))
         }

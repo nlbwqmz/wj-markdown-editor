@@ -2,6 +2,10 @@ function cloneConfigValue(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function mergeAndPrune(target, desc) {
   // 描述值不是对象时，保留已有值，维持历史兼容语义。
   if (typeof desc !== 'object' || desc === null) {
@@ -50,14 +54,25 @@ function mergeAndPrune(target, desc) {
 
 function repairShortcutKeyList(shortcutKeyList, defaultShortcutKeyList) {
   const rawShortcutKeyList = Array.isArray(shortcutKeyList) ? shortcutKeyList : []
+  const seenShortcutKeyIds = new Set()
 
   // 快捷键项必须按 id 对齐默认值重建，避免数组按下标合并导致字段串位。
   const repairedShortcutKeyList = rawShortcutKeyList
     .map((item) => {
+      if (isPlainObject(item) === false || typeof item.id !== 'string') {
+        return null
+      }
+
       const defaultShortcutKey = defaultShortcutKeyList.find(temp => temp.id === item.id)
       if (!defaultShortcutKey) {
         return null
       }
+
+      // 重复 id 只保留首次出现的合法项，避免运行期结果依赖输入顺序漂移。
+      if (seenShortcutKeyIds.has(item.id)) {
+        return null
+      }
+      seenShortcutKeyIds.add(item.id)
 
       return mergeAndPrune(item, defaultShortcutKey)
     })

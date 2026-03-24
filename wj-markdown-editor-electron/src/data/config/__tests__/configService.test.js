@@ -82,6 +82,111 @@ describe('configService', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
+  it('初始化时 recentMax 为 null 只回退该字段，其他合法配置必须保留且会回写规范化结果', async () => {
+    const repository = createRepositoryStub({
+      readResult: {
+        ...cloneValue(defaultConfig),
+        recentMax: null,
+        language: 'en-US',
+        theme: {
+          ...cloneValue(defaultConfig.theme),
+          global: 'dark',
+        },
+      },
+    })
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+
+    expect(service.getConfig()).toEqual(expect.objectContaining({
+      recentMax: defaultConfig.recentMax,
+      language: 'en-US',
+      theme: expect.objectContaining({
+        global: 'dark',
+      }),
+    }))
+    expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(repository.writeConfigText.mock.calls[0][0])).toEqual(expect.objectContaining({
+      recentMax: defaultConfig.recentMax,
+      language: 'en-US',
+      theme: expect.objectContaining({
+        global: 'dark',
+      }),
+    }))
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('初始化时 shortcutKeyList 含 null 不得触发整份回默认，其他合法配置必须保留且会回写规范化结果', async () => {
+    const repository = createRepositoryStub({
+      readResult: {
+        ...cloneValue(defaultConfig),
+        language: 'en-US',
+        theme: {
+          ...cloneValue(defaultConfig.theme),
+          global: 'dark',
+        },
+        shortcutKeyList: [null],
+      },
+    })
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+
+    expect(service.getConfig()).toEqual(expect.objectContaining({
+      language: 'en-US',
+      theme: expect.objectContaining({
+        global: 'dark',
+      }),
+    }))
+    expect(service.getConfig().shortcutKeyList).toHaveLength(defaultConfig.shortcutKeyList.length)
+    expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(repository.writeConfigText.mock.calls[0][0])).toEqual(expect.objectContaining({
+      language: 'en-US',
+      theme: expect.objectContaining({
+        global: 'dark',
+      }),
+    }))
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('初始化时 shortcutKeyList 含重复合法 id 时，回写结果不得保留重复项', async () => {
+    const repository = createRepositoryStub({
+      readResult: {
+        ...cloneValue(defaultConfig),
+        language: 'en-US',
+        shortcutKeyList: [
+          { id: 'save', enabled: false },
+          { id: 'save', enabled: true },
+        ],
+      },
+    })
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+
+    const persistedConfig = JSON.parse(repository.writeConfigText.mock.calls[0][0])
+    const persistedSaveShortcutKeys = persistedConfig.shortcutKeyList.filter(item => item.id === 'save')
+    const currentSaveShortcutKeys = service.getConfig().shortcutKeyList.filter(item => item.id === 'save')
+
+    expect(persistedSaveShortcutKeys).toHaveLength(1)
+    expect(persistedSaveShortcutKeys[0].enabled).toBe(false)
+    expect(currentSaveShortcutKeys).toHaveLength(1)
+    expect(currentSaveShortcutKeys[0].enabled).toBe(false)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
   it('运行期写盘失败时，内存态与广播都不能前移', async () => {
     const repository = createRepositoryStub({
       writeError: new Error('disk full'),
@@ -185,6 +290,272 @@ describe('configService', () => {
 
     expect(repository.writeConfigText).not.toHaveBeenCalled()
     expect(service.getConfig()).toEqual(defaultConfig)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 根级 patch 为 Date 时必须直接拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig(new Date('2020-01-01T00:00:00Z'))).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig()).toEqual(defaultConfig)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 的嵌套 patch 值为 Date 时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      theme: new Date('2020-01-01T00:00:00Z'),
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().theme).toEqual(defaultConfig.theme)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 的对象字段被 patch 为 null 时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      theme: null,
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().theme).toEqual(defaultConfig.theme)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 的对象字段被 patch 为数组时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      theme: [],
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().theme).toEqual(defaultConfig.theme)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 含未知根字段时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      unknownField: 1,
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig()).toEqual(defaultConfig)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 含未知嵌套字段时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      theme: {
+        unknownNested: true,
+      },
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().theme).toEqual(defaultConfig.theme)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 的 shortcutKeyList 为对象时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      shortcutKeyList: { id: 'save' },
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().shortcutKeyList).toEqual(defaultConfig.shortcutKeyList)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 的 shortcutKeyList 含脏字段项时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      shortcutKeyList: [{ id: 'save', bogus: true }],
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().shortcutKeyList).toEqual(defaultConfig.shortcutKeyList)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 的 recentMax 为 null 时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      recentMax: null,
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().recentMax).toBe(defaultConfig.recentMax)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 的非法 theme.global 必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      theme: {
+        global: 'solarized',
+      },
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().theme.global).toBe(defaultConfig.theme.global)
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('setConfig 的 autoSave 含非法项时必须严格拒绝，且不能写盘或推进状态', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.setConfig({
+      autoSave: ['blur', 'oops'],
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'config-invalid',
+      messageKey: 'message.configInvalid',
+    })
+
+    expect(repository.writeConfigText).not.toHaveBeenCalled()
+    expect(service.getConfig().autoSave).toEqual(defaultConfig.autoSave)
     expect(callback).not.toHaveBeenCalled()
   })
 

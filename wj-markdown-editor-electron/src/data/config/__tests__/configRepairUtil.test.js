@@ -50,6 +50,49 @@ describe('configRepairUtil', () => {
     expect(saveShortcutKey.type).toBe(defaultSaveShortcutKey.type)
   })
 
+  it('shortcutKeyList 含 null 等脏项时不得抛错，未知脏项必须被忽略且默认快捷键仍会补齐', () => {
+    expect(() => repairConfig({
+      shortcutKeyList: [
+        null,
+        undefined,
+        'oops',
+        123,
+        { id: 'unknown', index: 999 },
+        { id: 'save', enabled: false },
+      ],
+    }, defaultConfig)).not.toThrow()
+
+    const repaired = repairConfig({
+      shortcutKeyList: [
+        null,
+        undefined,
+        'oops',
+        123,
+        { id: 'unknown', index: 999 },
+        { id: 'save', enabled: false },
+      ],
+    }, defaultConfig)
+
+    expect(repaired.shortcutKeyList.some(item => item.id === 'unknown')).toBe(false)
+    expect(repaired.shortcutKeyList.some(item => item.id === 'save')).toBe(true)
+    expect(repaired.shortcutKeyList.length).toBe(defaultConfig.shortcutKeyList.length)
+  })
+
+  it('重复的合法快捷键 id 只保留第一次出现的项', () => {
+    const repaired = repairConfig({
+      shortcutKeyList: [
+        { id: 'save', enabled: false },
+        { id: 'save', enabled: true },
+      ],
+    }, defaultConfig)
+
+    const saveShortcutKeys = repaired.shortcutKeyList.filter(item => item.id === 'save')
+
+    expect(saveShortcutKeys).toHaveLength(1)
+    expect(saveShortcutKeys[0].enabled).toBe(false)
+    expect(repaired.shortcutKeyList.length).toBe(defaultConfig.shortcutKeyList.length)
+  })
+
   it('旧 preview 主题 github-light 必须修正为 github', () => {
     const repaired = repairConfig({
       theme: {
