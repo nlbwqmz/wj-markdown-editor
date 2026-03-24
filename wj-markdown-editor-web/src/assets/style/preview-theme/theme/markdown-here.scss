@@ -1,206 +1,183 @@
+.preview-theme-markdown-here {
+  --wj-preview-font-size: 16px;
+  --wj-preview-line-height: 1.8em;
+
+  --wj-preview-heading-color: #009688;
+  --wj-preview-heading-font-weight: 700;
+  --wj-preview-heading-margin-top: 1.5em;
+  --wj-preview-heading-margin-bottom: 1.5em;
+  --wj-preview-heading-padding: 0.5em 1em;
+  --wj-preview-heading-text-align: center;
+  --wj-preview-h1-font-size: 24px;
+  --wj-preview-h2-font-size: 20px;
+  --wj-preview-h3-font-size: 18px;
+  --wj-preview-h4-font-size: 16px;
+
+  --wj-preview-paragraph-margin: 1.5em 5px;
+
+  --wj-preview-strong-color: #bf360c;
+  --wj-preview-emphasis-color: #009688;
+
+  --wj-preview-hr-margin: 1.5em auto;
+  --wj-preview-hr-border: 1px solid #bf360c;
+  --wj-preview-hr-border-top: 0;
+
+  --wj-preview-blockquote-margin: 1em 0 1em 1em;
+  --wj-preview-blockquote-padding: 0 10px;
+  --wj-preview-blockquote-text-color: #777;
+  --wj-preview-blockquote-background-color: transparent;
+  --wj-preview-blockquote-border-color: #009688;
+  --wj-preview-blockquote-border-width: 2px;
+  --wj-preview-blockquote-paragraph-margin: 1.5em 5px;
+  --wj-preview-blockquote-first-child-margin-top: 1.5em;
+  --wj-preview-blockquote-last-child-margin-bottom: 1.5em;
+
+  --wj-preview-list-padding-inline-start: 15px;
+  --wj-preview-list-item-margin-bottom: 10px;
+  --wj-preview-list-nested-margin-top: 0;
+  --wj-preview-list-nested-margin-bottom: 0;
+
+  --wj-preview-inline-code-font-size: 16px;
+  --wj-preview-inline-code-padding: 0 2px;
+  --wj-preview-inline-code-border-radius: 2px;
+  --wj-preview-inline-code-white-space: pre-wrap;
+  --wj-preview-inline-code-background-color: rgba(27, 31, 35, 0.05);
+  --wj-preview-inline-code-text-color: black;
+
+  --wj-preview-pre-font-size: 15px;
+  --wj-preview-code-line-height: 1.4em;
+  --wj-preview-code-block-font-size: 16px;
+  --wj-preview-code-block-padding: 1.2rem;
+  --wj-preview-code-block-border-radius: 4px;
+  --wj-preview-code-block-background-color: transparent;
+  --wj-preview-code-block-content-background-color: inherit;
+  --wj-preview-code-block-text-color: inherit;
+}
+
 :root[theme='dark'] {
   .preview-theme-markdown-here {
-    code {
-      color: var(--wj-markdown-text-primary);
-      background-color: var(--wj-markdown-bg-hover);
-    }
-    pre {
-      code {
-        color: unset;
-        background-color: unset;
-      }
-    }
+    --wj-preview-inline-code-text-color: var(--wj-markdown-text-primary);
+    --wj-preview-inline-code-background-color: var(--wj-markdown-bg-hover);
   }
 }
+
+/* 保留 markdown-here 的文风化特征与非通用结构。 */
 .preview-theme-markdown-here {
-  font-size: 16px;
-  line-height: 1.8em;
   letter-spacing: 0.1em;
+}
 
-  img {
-    max-width: 100%;
-    box-shadow: var(--img-box-shadow);
-  }
+.preview-theme-markdown-here h1,
+.preview-theme-markdown-here h2,
+.preview-theme-markdown-here h3,
+.preview-theme-markdown-here h4,
+.preview-theme-markdown-here h5,
+.preview-theme-markdown-here h6 {
+  margin-right: 5px;
+  margin-left: 5px;
+}
 
-  pre,
-  code {
-    font-size: 14px;
-  }
+.preview-theme-markdown-here pre code {
+  white-space: pre;
+}
 
-  code {
-    white-space: pre-wrap;
-    border-radius: 2px;
-    display: inline;
-    background-color: rgba(27, 31, 35, 0.05);
-    font-size: 16px;
-    color: black;
-    padding: 0 2px;
-    box-decoration-break: clone;
-  }
+.preview-theme-markdown-here li {
+  margin: 10px;
+}
 
-  pre {
-    font-size: 15px;
-    line-height: 1.4em;
-    border-radius: 4px;
-    overflow: auto;
-    display: block;
-  }
+.preview-theme-markdown-here li p {
+  margin: 10px 0;
+}
 
-  pre code {
-    color: inherit;
-    background-color: inherit;
-    white-space: pre;
-    padding: 1.2rem;
-    display: block;
-    overflow-x: auto;
-  }
+.preview-theme-markdown-here ul {
+  list-style-type: none;
+  margin-left: -16px;
+}
 
-  strong,
-  b {
-    color: #bf360c;
-  }
+.preview-theme-markdown-here ul ul,
+.preview-theme-markdown-here ul ol,
+.preview-theme-markdown-here ol ul,
+.preview-theme-markdown-here ol ol {
+  margin: 0;
+  padding-left: 10px;
+}
 
-  em,
-  i {
-    color: #009688;
-  }
+.preview-theme-markdown-here dl {
+  padding: 0;
+}
 
-  hr {
-    border: 1px solid #bf360c;
-    margin: 1.5em auto;
-  }
+.preview-theme-markdown-here dl dt {
+  font-size: 1em;
+  font-weight: bold;
+  font-style: italic;
+}
 
-  p {
-    margin: 1.5em 5px;
-  }
+.preview-theme-markdown-here dl dd {
+  margin: 0 0 10px;
+  padding: 0 10px;
+}
 
-  ul,
-  ol {
-    padding-left: 15px;
-  }
+.preview-theme-markdown-here blockquote,
+.preview-theme-markdown-here q {
+  border-left: 2px solid #009688;
+  padding: 0 10px;
+  color: #777;
+  quotes: none;
+  margin-left: 1em;
+}
 
-  li {
-    margin: 10px;
-  }
+.preview-theme-markdown-here blockquote::before,
+.preview-theme-markdown-here blockquote::after,
+.preview-theme-markdown-here q::before,
+.preview-theme-markdown-here q::after {
+  content: none;
+}
 
-  li p {
-    margin: 10px 0;
-  }
+.preview-theme-markdown-here h1 {
+  border-bottom: 1px solid #ddd;
+}
 
-  ul ul,
-  ul ol,
-  ol ul,
-  ol ol {
-    margin: 0;
-    padding-left: 10px;
-  }
+.preview-theme-markdown-here h2 {
+  border-bottom: 1px solid #eee;
+}
 
-  ul {
-    list-style-type: none;
-    margin-left: -16px;
-  }
+.preview-theme-markdown-here table {
+  padding: 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: 1em;
+  border: 0;
+  margin: 0 auto;
+}
 
-  dl {
-    padding: 0;
-  }
+.preview-theme-markdown-here tbody {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
 
-  dl dt {
-    font-size: 1em;
-    font-weight: bold;
-    font-style: italic;
-  }
+.preview-theme-markdown-here table tr {
+  border: 0;
+  border-top: 1px solid #ccc;
+  background-color: white;
+  margin: 0;
+  padding: 0;
+}
 
-  dl dd {
-    margin: 0 0 10px;
-    padding: 0 10px;
-  }
+.preview-theme-markdown-here table tr:nth-child(2n) {
+  background-color: #f8f8f8;
+}
 
-  blockquote,
-  q {
-    border-left: 2px solid #009688;
-    padding: 0 10px;
-    color: #777;
-    quotes: none;
-    margin-left: 1em;
-  }
+.preview-theme-markdown-here table tr th,
+.preview-theme-markdown-here table tr td {
+  font-size: 16px;
+  border: 1px solid #ccc;
+  margin: 0;
+  padding: 5px 10px;
+}
 
-  blockquote::before,
-  blockquote::after,
-  q::before,
-  q::after {
-    content: none;
-  }
-
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    font-weight: bold;
-    color: #009688;
-    text-align: center;
-    margin: 1.5em 5px;
-    padding: 0.5em 1em;
-  }
-
-  h1 {
-    font-size: 24px;
-    border-bottom: 1px solid #ddd;
-  }
-
-  h2 {
-    font-size: 20px;
-    border-bottom: 1px solid #eee;
-  }
-
-  h3 {
-    font-size: 18px;
-  }
-
-  h4 {
-    font-size: 16px;
-  }
-
-  table {
-    padding: 0;
-    border-collapse: collapse;
-    border-spacing: 0;
-    font-size: 1em;
-    border: 0;
-    margin: 0 auto;
-  }
-
-  tbody {
-    margin: 0;
-    padding: 0;
-    border: 0;
-  }
-
-  table tr {
-    border: 0;
-    border-top: 1px solid #ccc;
-    background-color: white;
-    margin: 0;
-    padding: 0;
-  }
-
-  table tr:nth-child(2n) {
-    background-color: #f8f8f8;
-  }
-
-  table tr th,
-  table tr td {
-    font-size: 16px;
-    border: 1px solid #ccc;
-    margin: 0;
-    padding: 5px 10px;
-  }
-
-  table tr th {
-    font-weight: bold;
-    color: #eee;
-    border: 1px solid #009688;
-    background-color: #009688;
-  }
+.preview-theme-markdown-here table tr th {
+  font-weight: bold;
+  color: #eee;
+  border: 1px solid #009688;
+  background-color: #009688;
 }

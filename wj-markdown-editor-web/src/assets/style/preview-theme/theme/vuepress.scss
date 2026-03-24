@@ -1,255 +1,151 @@
+$color: #3eaf7c;
+$color-secondary: #42b983;
+$color-text: #2c3e50;
+$color-border: #eaecef;
+$color-background: #f3f5f7;
+$color-code-bg: rgba(27, 31, 35, 0.05);
+
+$font-size: 14px;
+$font-size-lg: 16px;
+$line-height: 1.7;
+$paragraph-space: 22px;
+
 .preview-theme-vuepress {
-  // ================ Variables ================
-  $color: #3eaf7c;
-  $color-secondary: #42b983;
-  $color-accessory: rgb(218, 112, 43);
+  --wj-preview-text-color: #{$color-text};
+  --wj-preview-font-weight: 400;
+  --wj-preview-font-size: #{$font-size-lg};
+  --wj-preview-line-height: #{$line-height};
+  --wj-preview-word-break: break-word;
+  --wj-preview-overflow-x: hidden;
 
-  $color-text: #2c3e50;
-  $color-border: #eaecef;
-  $color-background: #f3f5f7;
+  --wj-preview-heading-font-weight: 600;
+  --wj-preview-heading-line-height: #{$line-height};
+  --wj-preview-heading-margin-top: 36px;
+  --wj-preview-heading-margin-bottom: 8px;
+  --wj-preview-heading-padding: 0 0 6px;
+  --wj-preview-heading-before-display: none;
+  --wj-preview-h1-font-size: 30px;
+  --wj-preview-h2-font-size: 24px;
+  --wj-preview-h3-font-size: 18px;
+  --wj-preview-h4-font-size: 16px;
+  --wj-preview-h5-font-size: 14px;
+  --wj-preview-h6-font-size: 12px;
 
-  $color-code-bg: rgba(27, 31, 35, 0.05);
+  --wj-preview-paragraph-margin: #{$paragraph-space} 0;
 
-  // Font
-  $font-size-sm: 12px;
-  $font-size: 14px;
-  $font-size-lg: 16px;
+  --wj-preview-hr-margin: 36px 0;
+  --wj-preview-hr-border-top: 1px solid #{$color-border};
 
-  $line-height: 1.7;
+  --wj-preview-link-color: #{$color};
+  --wj-preview-link-hover-color: #{$color-secondary};
+  --wj-preview-link-font-weight: 500;
+  --wj-preview-link-text-decoration: none;
+  --wj-preview-link-hover-text-decoration: none;
+  --wj-preview-link-hover-border-bottom: 1px solid #{$color-secondary};
 
-  // Space
-  $paragraph-space: 22px;
+  --wj-preview-blockquote-margin: 16px 0;
+  --wj-preview-blockquote-padding: 4px 24px;
+  --wj-preview-blockquote-text-color: var(--wj-preview-text-color);
+  --wj-preview-blockquote-font-size: 14px;
+  --wj-preview-blockquote-background-color: #{$color-background};
+  --wj-preview-blockquote-border-color: #{$color-secondary};
+  --wj-preview-blockquote-border-width: 6px;
+  --wj-preview-blockquote-paragraph-margin: 16px 0;
+  --wj-preview-blockquote-first-child-margin-top: 16px;
+  --wj-preview-blockquote-last-child-margin-bottom: 16px;
 
-  // Table
-  $table-border: 1px solid $color-border;
-  $table-header-bg: $color;
-  $table-row-bg: #f6f8fa;
+  --wj-preview-table-display: inline-block;
+  --wj-preview-table-width: auto;
+  --wj-preview-table-max-width: 100%;
+  --wj-preview-table-margin: 16px 0;
+  --wj-preview-table-overflow-x: auto;
+  --wj-preview-table-font-size: 14px;
+  --wj-preview-table-header-background-color: #{$color};
+  --wj-preview-table-header-text-color: #fff;
+  --wj-preview-table-header-text-align: left;
+  --wj-preview-table-row-even-background-color: transparent;
+  --wj-preview-table-cell-padding: 10px 16px;
+  --wj-preview-table-cell-border: 1px solid #{$color-border};
+  --wj-preview-table-cell-line-height: 22px;
 
-  @at-root [theme='dark'] & {
-    $color-text: var(--wj-markdown-text-primary);
-    $color-background: rgba(171, 178, 191, 0.2);
-    code {
-      color: var(--wj-markdown-text-primary);
-      background-color: $color-background;
-    }
+  --wj-preview-list-padding-inline-start: 32px;
+  --wj-preview-list-item-margin-bottom: 0;
+  --wj-preview-list-nested-margin-top: 4px;
+  --wj-preview-list-nested-margin-bottom: 4px;
+  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-list-style: none;
+
+  --wj-preview-inline-code-font-size: 0.85em;
+  --wj-preview-inline-code-font-weight: 400;
+  --wj-preview-inline-code-padding: 0.165em 0.5em;
+  --wj-preview-inline-code-border-radius: 3px;
+  --wj-preview-inline-code-overflow-x: auto;
+  --wj-preview-inline-code-background-color: #{$color-code-bg};
+  --wj-preview-inline-code-text-color: #476582;
+
+  --wj-preview-pre-position: relative;
+  --wj-preview-code-line-height: #{$line-height};
+  --wj-preview-code-block-font-size: #{$font-size};
+  --wj-preview-code-block-border-radius: 8px;
+  --wj-preview-code-block-background-color: #{$color-code-bg};
+  --wj-preview-code-block-content-background-color: inherit;
+  --wj-preview-code-block-text-color: #fff;
+}
+
+:root[theme='dark'] {
+  .preview-theme-vuepress {
+    --wj-preview-text-color: var(--wj-markdown-text-primary);
+    --wj-preview-inline-code-text-color: var(--wj-markdown-text-primary);
+    --wj-preview-inline-code-background-color: rgba(171, 178, 191, 0.2);
   }
+}
 
-  // ================ Mixins ================
-  @mixin Font {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    font-size: $font-size-lg;
-    color: $color-text;
-    font-weight: 400;
-  }
+/* 保留 vuepress 主题仍依赖的标题、链接和表格特例。 */
+.preview-theme-vuepress h1 {
+  margin-bottom: 6px;
+}
 
-  @include Font();
-  word-break: break-word;
-  line-height: $line-height;
-  overflow-x: hidden;
+.preview-theme-vuepress h2 {
+  margin-top: 50px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eaecef;
+}
 
-  // Title
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    line-height: $line-height;
-    font-weight: 600;
-    margin-top: 36px;
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    &::before {
-      display: none;
-    }
-  }
-  h1 {
-    font-size: 30px;
-    margin-bottom: 6px;
-  }
-  h2 {
-    padding-bottom: 8px;
-    margin-top: 50px;
+.preview-theme-vuepress h3 {
+  padding-bottom: 0;
+}
+
+.preview-theme-vuepress h6 {
+  margin-top: 4px;
+}
+
+.preview-theme-vuepress a::before {
+  display: none;
+}
+
+.preview-theme-vuepress table {
+  display: inline-block !important;
+}
+
+.preview-theme-vuepress blockquote::after {
+  display: block;
+  content: '';
+}
+
+.preview-theme-vuepress ol li {
+  padding-left: 4px;
+}
+
+@media (max-width: 720px) {
+  .preview-theme-vuepress h1 {
     font-size: 24px;
-    border-bottom: 1px solid $color-border;
   }
-  h3 {
+
+  .preview-theme-vuepress h2 {
+    font-size: 20px;
+  }
+
+  .preview-theme-vuepress h3 {
     font-size: 18px;
-    padding-bottom: 0;
-  }
-  h4 {
-    font-size: 16px;
-  }
-  h5 {
-    font-size: 14px;
-  }
-  h6 {
-    font-size: 12px;
-    margin-top: 4px;
-  }
-
-  // Paragraph
-  p {
-    line-height: inherit;
-    margin-top: $paragraph-space;
-    margin-bottom: $paragraph-space;
-  }
-
-  img {
-    max-width: 100%;
-    box-shadow: var(--img-box-shadow);
-  }
-
-  hr {
-    border: none;
-    border-top: 1px solid $color-border;
-    margin-top: 36px;
-    margin-bottom: 36px;
-  }
-
-  // 高亮
-  code {
-    word-break: break-word;
-    border-radius: 3px;
-    overflow-x: auto;
-    font-weight: 400;
-    margin: 0;
-    font-size: 0.85em;
-    padding: 0.165em 0.5em;
-    background-color: rgba(27, 31, 35, 0.05);
-    color: #476582;
-    box-decoration-break: clone;
-  }
-
-  pre {
-    overflow: auto;
-    position: relative;
-    line-height: 1.7;
-    border-radius: 8px;
-    > code {
-      color: inherit;
-      background-color: inherit;
-      padding: 1.2rem;
-      font-size: $font-size;
-      word-break: normal;
-      display: block;
-      overflow-x: auto;
-    }
-  }
-
-  pre:not(.hljs) {
-    background: rgba(27, 31, 35, 0.05);
-    > code {
-      color: #fff;
-      background: rgba(27, 31, 35, 0.05);
-    }
-  }
-
-  // Link
-  a {
-    text-decoration: none;
-    color: $color;
-    font-weight: 500;
-    &:hover,
-    &:active {
-      color: $color-secondary;
-      border-bottom: 1px solid $color-secondary;
-    }
-    &::before {
-      display: none;
-    }
-  }
-
-  // Table
-  table {
-    display: inline-block !important;
-    font-size: 14px;
-    width: auto;
-    max-width: 100%;
-    overflow-x: auto;
-    margin: 16px 0;
-    border-collapse: collapse;
-  }
-  thead {
-    background: $color;
-    color: #fff;
-    text-align: left;
-  }
-  // tr:nth-child(2n) {
-  //   background-color: $table-row-bg;
-  // }
-  th,
-  td {
-    border: 1px solid $color-border;
-    padding: 10px 16px;
-    line-height: 22px;
-  }
-
-  // 引用
-  blockquote {
-    font-size: 14px;
-    padding: 4px 24px;
-    margin: 16px 0;
-    border-left: 6px solid $color-secondary;
-    background-color: $color-background;
-    font-weight: 400;
-    &::after {
-      display: block;
-      content: '';
-    }
-    & > p {
-      margin: 16px 0;
-    }
-  }
-
-  p,
-  ul,
-  ol {
-    line-height: $line-height;
-  }
-
-  ol,
-  ul {
-    padding-left: 32px;
-    li {
-      margin-bottom: 0;
-      list-style: inherit;
-      &.task-list-item {
-        list-style: none;
-        ul,
-        ol {
-          margin-top: 0;
-        }
-      }
-    }
-
-    ul,
-    ol {
-      margin: 4px 0;
-    }
-  }
-  ol li {
-    padding-left: 4px;
-  }
-
-  .contains-task-list {
-    padding-left: 0;
-  }
-
-  .task-list-item {
-    list-style: none;
-  }
-
-  @media (max-width: 720px) {
-    h1 {
-      font-size: 24px;
-    }
-    h2 {
-      font-size: 20px;
-    }
-    h3 {
-      font-size: 18px;
-    }
   }
 }
