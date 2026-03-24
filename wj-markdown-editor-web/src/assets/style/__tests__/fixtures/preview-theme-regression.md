@@ -24,9 +24,9 @@
 
 ![示例图片](./assets/example.png)
 
-![示例音频](./assets/example.mp3)
+!audio(./assets/example.mp3)
 
-![示例视频](./assets/example.mp4)
+!video(./assets/example.mp4)
 
 这里有一段行内代码 `const theme = 'github'` 用于检查代码样式。
 
