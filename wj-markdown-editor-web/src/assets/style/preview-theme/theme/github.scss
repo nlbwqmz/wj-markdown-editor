@@ -1,0 +1,578 @@
+/* github 主题以变量赋值为主，仅保留当前链路仍会命中的少量覆盖。 */
+:root[theme='dark'] {
+  .preview-theme-github {
+    color-scheme: dark;
+    --focus-outlineColor: #1f6feb;
+    --fgColor-default: #f0f6fc;
+    --fgColor-muted: #9198a1;
+    --fgColor-accent: #4493f8;
+    --fgColor-success: #3fb950;
+    --fgColor-attention: #d29922;
+    --fgColor-danger: #f85149;
+    --fgColor-done: #ab7df8;
+    --bgColor-default: var(--wj-markdown-bg-primary);
+    --bgColor-muted: #151b23;
+    --bgColor-neutral-muted: #656c7633;
+    --bgColor-attention-muted: #bb800926;
+    --borderColor-default: #3d444d;
+    --borderColor-muted: #3d444db3;
+    --borderColor-neutral-muted: #3d444db3;
+    --borderColor-accent-emphasis: #1f6feb;
+    --borderColor-success-emphasis: #238636;
+    --borderColor-attention-emphasis: #9e6a03;
+    --borderColor-danger-emphasis: #da3633;
+    --borderColor-done-emphasis: #8957e5;
+  }
+}
+
+:root[theme='light'] {
+  .preview-theme-github {
+    color-scheme: light;
+    --focus-outlineColor: #0969da;
+    --fgColor-default: #1f2328;
+    --fgColor-muted: #59636e;
+    --fgColor-accent: #0969da;
+    --fgColor-success: #1a7f37;
+    --fgColor-attention: #9a6700;
+    --fgColor-danger: #d1242f;
+    --fgColor-done: #8250df;
+    --bgColor-default: var(--wj-markdown-bg-primary);
+    --bgColor-muted: #f6f8fa;
+    --bgColor-neutral-muted: #818b981f;
+    --bgColor-attention-muted: #fff8c5;
+    --borderColor-default: #d1d9e0;
+    --borderColor-muted: #d1d9e0b3;
+    --borderColor-neutral-muted: #d1d9e0b3;
+    --borderColor-accent-emphasis: #0969da;
+    --borderColor-success-emphasis: #1a7f37;
+    --borderColor-attention-emphasis: #9a6700;
+    --borderColor-danger-emphasis: #cf222e;
+    --borderColor-done-emphasis: #8250df;
+  }
+}
+
+.preview-theme-github {
+  --wj-preview-github-space-4: 0.25rem;
+  --wj-preview-github-space-8: 0.5rem;
+  --wj-preview-github-space-16: 1rem;
+  --wj-preview-github-space-24: 1.5rem;
+  --wj-preview-github-font-monospace: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  --wj-preview-github-font-weight-normal: 400;
+  --wj-preview-github-font-weight-medium: 500;
+  --wj-preview-github-font-weight-semibold: 600;
+
+  --wj-preview-text-color: var(--fgColor-default);
+  --wj-preview-muted-text-color: var(--fgColor-muted);
+  --wj-preview-background-color: var(--bgColor-default);
+  --wj-preview-font-weight: var(--wj-preview-github-font-weight-normal);
+  --wj-preview-font-size: 16px;
+  --wj-preview-line-height: 1.5;
+  --wj-preview-word-break: break-word;
+  --wj-preview-overflow-wrap: break-word;
+  --wj-preview-root-first-child-margin-top: 0;
+  --wj-preview-root-last-child-margin-bottom: 0;
+
+  --wj-preview-heading-color: var(--fgColor-default);
+  --wj-preview-heading-font-weight: var(--wj-preview-github-font-weight-semibold);
+  --wj-preview-heading-line-height: 1.25;
+  --wj-preview-heading-margin-top: var(--wj-preview-github-space-24);
+  --wj-preview-heading-margin-bottom: var(--wj-preview-github-space-16);
+  --wj-preview-h1-font-size: 2em;
+  --wj-preview-h2-font-size: 1.5em;
+  --wj-preview-h3-font-size: 1.25em;
+  --wj-preview-h4-font-size: 1em;
+  --wj-preview-h5-font-size: 0.875em;
+  --wj-preview-h6-font-size: 0.85em;
+
+  --wj-preview-paragraph-margin: 0 0 var(--wj-preview-github-space-16);
+  --wj-preview-list-margin: 0 0 var(--wj-preview-github-space-16);
+  --wj-preview-list-padding-inline-start: 2em;
+  --wj-preview-list-item-margin-bottom: 0;
+  --wj-preview-list-nested-margin-top: 0;
+  --wj-preview-list-nested-margin-bottom: 0;
+
+  --wj-preview-link-color: var(--fgColor-accent);
+  --wj-preview-link-hover-color: var(--fgColor-accent);
+  --wj-preview-link-text-decoration: none;
+  --wj-preview-link-hover-text-decoration: underline;
+
+  --wj-preview-strong-font-weight: var(--wj-preview-github-font-weight-semibold);
+  --wj-preview-mark-background-color: var(--bgColor-attention-muted);
+  --wj-preview-mark-text-color: var(--fgColor-default);
+  --wj-preview-delete-opacity: 1;
+
+  --wj-preview-blockquote-margin: 0 0 var(--wj-preview-github-space-16);
+  --wj-preview-blockquote-padding: 0 1em;
+  --wj-preview-blockquote-text-color: var(--fgColor-muted);
+  --wj-preview-blockquote-border-color: var(--borderColor-default);
+  --wj-preview-blockquote-border-width: 0.25em;
+
+  --wj-preview-hr-margin: var(--wj-preview-github-space-24) 0;
+
+  --wj-preview-table-margin: 0 0 var(--wj-preview-github-space-16);
+  --wj-preview-table-display: block;
+  --wj-preview-table-width: max-content;
+  --wj-preview-table-max-width: 100%;
+  --wj-preview-table-overflow-x: auto;
+  --wj-preview-table-header-background-color: transparent;
+  --wj-preview-table-row-even-background-color: var(--bgColor-muted);
+  --wj-preview-table-cell-padding: 6px 13px;
+  --wj-preview-table-cell-border: 1px solid var(--borderColor-default);
+  --wj-preview-table-header-font-weight: var(--wj-preview-github-font-weight-semibold);
+
+  --wj-preview-inline-code-font-family: var(--wj-preview-github-font-monospace);
+  --wj-preview-inline-code-font-size: 85%;
+  --wj-preview-inline-code-padding: 0.2em 0.4em;
+  --wj-preview-inline-code-border-radius: 6px;
+  --wj-preview-inline-code-background-color: var(--bgColor-neutral-muted);
+
+  --wj-preview-pre-margin: 0 0 var(--wj-preview-github-space-16);
+  --wj-preview-pre-font-size: 85%;
+  --wj-preview-code-font-family: var(--wj-preview-github-font-monospace);
+  --wj-preview-code-line-height: 1.45;
+  --wj-preview-code-block-font-size: 100%;
+  --wj-preview-code-block-padding: 1.2rem;
+  --wj-preview-code-block-color: inherit;
+  --wj-preview-code-block-border-radius: 6px;
+  --wj-preview-code-block-background-color: var(--bgColor-muted);
+  --wj-preview-code-block-text-color: var(--fgColor-default);
+  --wj-preview-code-block-overflow-x: auto;
+
+  --wj-preview-footnote-font-size: 12px;
+  --wj-preview-footnote-text-color: var(--fgColor-muted);
+  --wj-preview-footnote-list-padding-inline-start: var(--wj-preview-github-space-16);
+
+  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-list-style: none;
+  --wj-preview-task-checkbox-margin: 0 0.2em 0.25em -1.4em;
+  --wj-preview-task-checkbox-vertical-align: middle;
+
+  --wj-preview-summary-font-weight: var(--wj-preview-github-font-weight-medium);
+
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 标题、列表、定义列表和表格保留 github 特有的细节。 */
+.preview-theme-github h1,
+.preview-theme-github h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--borderColor-muted);
+}
+
+.preview-theme-github h6 {
+  color: var(--fgColor-muted);
+}
+
+.preview-theme-github sub,
+.preview-theme-github sup {
+  position: relative;
+  font-size: 75%;
+  line-height: 0;
+  vertical-align: baseline;
+}
+
+.preview-theme-github sub {
+  bottom: -0.25em;
+}
+
+.preview-theme-github sup {
+  top: -0.5em;
+}
+
+.preview-theme-github img {
+  box-sizing: content-box;
+}
+
+.preview-theme-github img[align='right'] {
+  padding-left: 20px;
+}
+
+.preview-theme-github img[align='left'] {
+  padding-right: 20px;
+}
+
+.preview-theme-github hr {
+  box-sizing: content-box;
+  border: 0;
+  height: 0.2em;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--borderColor-default);
+}
+
+.preview-theme-github ol ol,
+.preview-theme-github ul ol {
+  list-style-type: lower-roman;
+}
+
+.preview-theme-github ul ul ol,
+.preview-theme-github ul ol ol,
+.preview-theme-github ol ul ol,
+.preview-theme-github ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+.preview-theme-github ul ul,
+.preview-theme-github ul ol,
+.preview-theme-github ol ol,
+.preview-theme-github ol ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.preview-theme-github li + li {
+  margin-top: 0.25em;
+}
+
+.preview-theme-github li > p {
+  margin-top: var(--wj-preview-github-space-16);
+}
+
+.preview-theme-github ol[type='a s'] {
+  list-style-type: lower-alpha;
+}
+
+.preview-theme-github ol[type='A s'] {
+  list-style-type: upper-alpha;
+}
+
+.preview-theme-github ol[type='i s'] {
+  list-style-type: lower-roman;
+}
+
+.preview-theme-github ol[type='I s'] {
+  list-style-type: upper-roman;
+}
+
+.preview-theme-github ol[type='1'] {
+  list-style-type: decimal;
+}
+
+.preview-theme-github div > ol:not([type]) {
+  list-style-type: decimal;
+}
+
+.preview-theme-github dl {
+  padding: 0;
+  margin: 0 0 var(--wj-preview-github-space-16);
+}
+
+.preview-theme-github dl dt {
+  margin-top: var(--wj-preview-github-space-16);
+  font-size: 1em;
+  font-style: italic;
+  font-weight: var(--wj-preview-github-font-weight-semibold);
+}
+
+.preview-theme-github dl dd {
+  padding: 0 var(--wj-preview-github-space-16);
+  margin-bottom: var(--wj-preview-github-space-16);
+}
+
+.preview-theme-github table {
+  border-spacing: 0;
+  font-variant: tabular-nums;
+}
+
+.preview-theme-github table tr {
+  background-color: var(--bgColor-default);
+  border-top: 1px solid var(--borderColor-muted);
+}
+
+.preview-theme-github table td > :last-child {
+  margin-bottom: 0;
+}
+
+.preview-theme-github table img {
+  background-color: transparent;
+}
+
+/* 未高亮代码块与历史 highlight 包裹都要继续命中回退样式。 */
+.preview-theme-github .highlight {
+  margin-bottom: var(--wj-preview-github-space-16);
+}
+
+.preview-theme-github .highlight pre {
+  margin-bottom: 0;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  word-break: normal;
+  border-radius: 6px;
+}
+
+.preview-theme-github .highlight pre,
+.preview-theme-github pre:not(.hljs) {
+  color: var(--fgColor-default);
+  background-color: var(--bgColor-muted);
+}
+
+.preview-theme-github pre {
+  word-wrap: normal;
+}
+
+.preview-theme-github pre > code,
+.preview-theme-github pre > tt {
+  overflow: visible;
+  word-wrap: normal;
+  background-color: transparent;
+  border: 0;
+}
+
+.preview-theme-github :where(:not(pre) > code, :not(pre) > tt, :not(pre) > samp) {
+  white-space: break-spaces;
+  box-decoration-break: clone;
+}
+
+.preview-theme-github code br,
+.preview-theme-github tt br {
+  display: none;
+}
+
+.preview-theme-github del code {
+  text-decoration: inherit;
+}
+
+.preview-theme-github a:not([href]) {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 原生表单控件在允许直出 HTML 的预览内容里需要继续跟随 github 主题。 */
+.preview-theme-github :where(button, input, optgroup, select, textarea) {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.preview-theme-github :where(button, input) {
+  overflow: visible;
+}
+
+.preview-theme-github :where(button, [type='button'], [type='reset'], [type='submit']) {
+  -webkit-appearance: button;
+  appearance: button;
+}
+
+.preview-theme-github :where([type='checkbox'], [type='radio']) {
+  box-sizing: border-box;
+  padding: 0;
+}
+
+.preview-theme-github [type='number']::-webkit-inner-spin-button,
+.preview-theme-github [type='number']::-webkit-outer-spin-button {
+  height: auto;
+}
+
+.preview-theme-github [type='search']::-webkit-search-cancel-button,
+.preview-theme-github [type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.preview-theme-github ::-webkit-input-placeholder {
+  color: inherit;
+  opacity: 0.54;
+}
+
+.preview-theme-github ::-webkit-file-upload-button {
+  -webkit-appearance: button;
+  appearance: button;
+  font: inherit;
+}
+
+.preview-theme-github ::placeholder {
+  color: var(--fgColor-muted);
+  opacity: 1;
+}
+
+.preview-theme-github a:focus,
+.preview-theme-github [role='button']:focus,
+.preview-theme-github input[type='radio']:focus,
+.preview-theme-github input[type='checkbox']:focus {
+  outline: 2px solid var(--focus-outlineColor);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.preview-theme-github a:focus:not(:focus-visible),
+.preview-theme-github [role='button']:focus:not(:focus-visible),
+.preview-theme-github input[type='radio']:focus:not(:focus-visible),
+.preview-theme-github input[type='checkbox']:focus:not(:focus-visible) {
+  outline: solid 1px transparent;
+}
+
+.preview-theme-github a:focus-visible,
+.preview-theme-github [role='button']:focus-visible,
+.preview-theme-github input[type='radio']:focus-visible,
+.preview-theme-github input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--focus-outlineColor);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.preview-theme-github a:not([class]):focus,
+.preview-theme-github a:not([class]):focus-visible,
+.preview-theme-github input[type='radio']:focus,
+.preview-theme-github input[type='radio']:focus-visible,
+.preview-theme-github input[type='checkbox']:focus,
+.preview-theme-github input[type='checkbox']:focus-visible {
+  outline-offset: 0;
+}
+
+.preview-theme-github [role='button']:focus:not(:focus-visible),
+.preview-theme-github [role='tabpanel'][tabindex='0']:focus:not(:focus-visible),
+.preview-theme-github button:focus:not(:focus-visible),
+.preview-theme-github summary:focus:not(:focus-visible),
+.preview-theme-github a:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+.preview-theme-github [tabindex='0']:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.preview-theme-github kbd {
+  display: inline-block;
+  padding: var(--wj-preview-github-space-4);
+  color: var(--fgColor-default);
+  font: 11px var(--wj-preview-github-font-monospace);
+  line-height: 10px;
+  vertical-align: middle;
+  background-color: var(--bgColor-muted);
+  border: 1px solid var(--borderColor-neutral-muted);
+  border-radius: 6px;
+  box-shadow: inset 0 -1px 0 var(--borderColor-neutral-muted);
+}
+
+/* details 内的 summary 仍保留 github 的可点击呈现。 */
+.preview-theme-github details summary {
+  cursor: pointer;
+}
+
+.preview-theme-github summary > :where(h1, h2, h3, h4, h5, h6) {
+  display: inline-block;
+}
+
+.preview-theme-github summary > :where(h1, h2) {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* 脚注需要保留 github 风格的编号括号和命中高亮。 */
+.preview-theme-github [data-footnote-ref]::before {
+  content: '[';
+}
+
+.preview-theme-github [data-footnote-ref]::after {
+  content: ']';
+}
+
+.preview-theme-github .footnotes ol ul {
+  display: inline-block;
+  padding-left: var(--wj-preview-github-space-16);
+  margin-top: var(--wj-preview-github-space-16);
+}
+
+.preview-theme-github .footnotes li {
+  position: relative;
+}
+
+.preview-theme-github .footnotes li:target::before {
+  position: absolute;
+  inset-block: calc(var(--wj-preview-github-space-8) * -1);
+  inset-inline-end: calc(var(--wj-preview-github-space-8) * -1);
+  inset-inline-start: calc(var(--wj-preview-github-space-24) * -1);
+  pointer-events: none;
+  content: '';
+  border: 2px solid var(--borderColor-accent-emphasis);
+  border-radius: 6px;
+}
+
+.preview-theme-github .footnotes li:target {
+  color: var(--fgColor-default);
+}
+
+/* 任务列表与 alert 仍是当前渲染链路的真实输出。 */
+.preview-theme-github .task-list-item label {
+  font-weight: var(--wj-preview-github-font-weight-normal);
+}
+
+.preview-theme-github .task-list-item.enabled label {
+  cursor: pointer;
+}
+
+.preview-theme-github .task-list-item + .task-list-item {
+  margin-top: var(--wj-preview-github-space-4);
+}
+
+.preview-theme-github ul:dir(rtl) .task-list-item-checkbox,
+.preview-theme-github ol:dir(rtl) .task-list-item-checkbox {
+  margin: 0 -1.6em 0.25em 0.2em;
+}
+
+.preview-theme-github .markdown-alert {
+  padding: var(--wj-preview-github-space-8) var(--wj-preview-github-space-16);
+  margin-bottom: var(--wj-preview-github-space-16);
+  color: inherit;
+  border-left: 0.25em solid var(--borderColor-default);
+}
+
+.preview-theme-github .markdown-alert > :first-child {
+  margin-top: 0;
+}
+
+.preview-theme-github .markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+
+.preview-theme-github .markdown-alert .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  font-weight: var(--wj-preview-github-font-weight-medium);
+  line-height: 1;
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-note {
+  border-left-color: var(--borderColor-accent-emphasis);
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--fgColor-accent);
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-important {
+  border-left-color: var(--borderColor-done-emphasis);
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--fgColor-done);
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-warning {
+  border-left-color: var(--borderColor-attention-emphasis);
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--fgColor-attention);
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-tip {
+  border-left-color: var(--borderColor-success-emphasis);
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--fgColor-success);
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-caution {
+  border-left-color: var(--borderColor-danger-emphasis);
+}
+
+.preview-theme-github .markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--fgColor-danger);
+}

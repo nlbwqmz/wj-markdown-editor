@@ -17,6 +17,7 @@
   --wj-preview-subtle-text-color: var(--wj-markdown-text-tertiary);
   --wj-preview-background-color: var(--wj-preview-background-color-transparent);
   --wj-preview-font-family: var(--preview-area-font, inherit);
+  --wj-preview-font-weight: inherit;
   --wj-preview-font-size: 16px;
   --wj-preview-line-height: 1.75;
   --wj-preview-word-break: break-word;
@@ -98,6 +99,7 @@
   --wj-preview-inline-code-text-color: inherit;
 
   --wj-preview-pre-margin: 1em 0;
+  --wj-preview-pre-font-size: inherit;
   --wj-preview-code-font-family: var(--code-area-font, monospace);
   --wj-preview-code-line-height: 1.75;
   --wj-preview-code-block-font-size: 12px;

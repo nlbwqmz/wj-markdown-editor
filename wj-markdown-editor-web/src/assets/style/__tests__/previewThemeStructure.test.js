@@ -212,7 +212,7 @@ test('断言必须限定在 previewTheme 属性块内', () => {
 })
 
 test('github 预览主题需要覆盖未高亮代码块的回退样式', () => {
-  const githubThemeSource = readSource('../preview-theme/theme/github.css')
+  const githubThemeSource = readSource('../preview-theme/theme/github.scss')
 
   assertGithubThemeFallbackCodeBlockStyle(githubThemeSource)
 })

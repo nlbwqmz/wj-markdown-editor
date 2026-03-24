@@ -3,6 +3,7 @@
   color: var(--wj-preview-text-color);
   background-color: var(--wj-preview-background-color);
   font-family: var(--wj-preview-font-family);
+  font-weight: var(--wj-preview-font-weight);
   font-size: var(--wj-preview-font-size);
   line-height: var(--wj-preview-line-height);
   word-break: var(--wj-preview-word-break);
@@ -161,6 +162,7 @@
 
   :where(pre) {
     margin: var(--wj-preview-pre-margin);
+    font-size: var(--wj-preview-pre-font-size);
     font-family: var(--wj-preview-code-font-family);
     line-height: var(--wj-preview-code-line-height);
     overflow-x: var(--wj-preview-code-block-overflow-x);
