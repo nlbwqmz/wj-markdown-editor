@@ -110,6 +110,23 @@ function assertPreviewThemeEntryContainsOnlyUseStatements(source) {
   })
 }
 
+function assertPreviewThemeBaseConsumesVariablesOnly(source) {
+  const declarationLines = source
+    .split(/\r?\n/u)
+    .map(line => line.trim())
+    .filter(line => /^[a-z-]+:[^;]+;$/u.test(line))
+
+  declarationLines.forEach((line) => {
+    const separatorIndex = line.indexOf(':')
+    const propertyName = separatorIndex === -1 ? '' : line.slice(0, separatorIndex)
+    const propertyValue = separatorIndex === -1
+      ? ''
+      : line.slice(separatorIndex + 1, -1).trim()
+    assert.ok(propertyName, `无法解析样式声明：${line}`)
+    assert.match(propertyValue, /^var\(--wj-preview-[a-z0-9-]+\)$/u, `基础层存在未通过变量协议消费的声明：${line}`)
+  })
+}
+
 function assertPreviewThemeRegressionFixtureCoverage(source) {
   const requiredMarkers = [
     '![示例图片](',
@@ -181,6 +198,12 @@ test('预览主题入口文件只能保留 @use 语句', () => {
   const previewThemeEntrySource = readSource('../preview-theme/preview-theme.scss')
 
   assertPreviewThemeEntryContainsOnlyUseStatements(previewThemeEntrySource)
+})
+
+test('预览主题基础骨架的声明值必须通过变量协议消费', () => {
+  const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
+
+  assertPreviewThemeBaseConsumesVariablesOnly(previewThemeBaseSource)
 })
 
 test('预览主题回归样本必须覆盖关键 Markdown 标记', () => {

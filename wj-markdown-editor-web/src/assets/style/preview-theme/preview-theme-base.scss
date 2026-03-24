@@ -9,11 +9,11 @@
   overflow-wrap: var(--wj-preview-overflow-wrap);
 
   > :where(.wj-scrollbar) > :first-child {
-    margin-top: 0;
+    margin-top: var(--wj-preview-root-first-child-margin-top);
   }
 
   > :where(.wj-scrollbar) > :last-child {
-    margin-bottom: 0;
+    margin-bottom: var(--wj-preview-root-last-child-margin-bottom);
   }
 
   :where(h1, h2, h3, h4, h5, h6) {
@@ -63,13 +63,13 @@
 
   :where(li > ul, li > ol) {
     margin-top: var(--wj-preview-list-nested-margin-top);
-    margin-bottom: 0;
+    margin-bottom: var(--wj-preview-list-nested-margin-bottom);
   }
 
   :where(a) {
     color: var(--wj-preview-link-color);
     text-decoration: var(--wj-preview-link-text-decoration);
-    text-underline-offset: 0.15em;
+    text-underline-offset: var(--wj-preview-link-underline-offset);
   }
 
   :where(a:hover) {
@@ -79,7 +79,7 @@
 
   :where(strong, b) {
     color: var(--wj-preview-strong-color);
-    font-weight: 600;
+    font-weight: var(--wj-preview-strong-font-weight);
   }
 
   :where(em, i) {
@@ -100,21 +100,21 @@
     padding: var(--wj-preview-blockquote-padding);
     color: var(--wj-preview-blockquote-text-color);
     background-color: var(--wj-preview-blockquote-background-color);
-    border-inline-start: var(--wj-preview-blockquote-border-width) solid var(--wj-preview-blockquote-border-color);
+    border-inline-start: var(--wj-preview-blockquote-border-inline-start);
   }
 
   :where(blockquote > :first-child) {
-    margin-top: 0;
+    margin-top: var(--wj-preview-blockquote-first-child-margin-top);
   }
 
   :where(blockquote > :last-child) {
-    margin-bottom: 0;
+    margin-bottom: var(--wj-preview-blockquote-last-child-margin-bottom);
   }
 
   :where(hr) {
     margin: var(--wj-preview-hr-margin);
-    border: 0;
-    border-top: var(--wj-preview-hr-width) solid var(--wj-preview-hr-color);
+    border: var(--wj-preview-hr-border);
+    border-top: var(--wj-preview-hr-border-top);
   }
 
   :where(table) {
@@ -123,7 +123,7 @@
     max-width: var(--wj-preview-table-max-width);
     margin: var(--wj-preview-table-margin);
     overflow-x: var(--wj-preview-table-overflow-x);
-    border-collapse: collapse;
+    border-collapse: var(--wj-preview-table-border-collapse);
   }
 
   :where(thead) {
@@ -132,11 +132,11 @@
 
   :where(th, td) {
     padding: var(--wj-preview-table-cell-padding);
-    border: 1px solid var(--wj-preview-table-border-color);
+    border: var(--wj-preview-table-cell-border);
   }
 
   :where(th) {
-    font-weight: 600;
+    font-weight: var(--wj-preview-table-header-font-weight);
   }
 
   :where(tbody tr:nth-child(2n)) {
@@ -145,7 +145,7 @@
 
   :where(img) {
     max-width: var(--wj-preview-image-max-width);
-    height: auto;
+    height: var(--wj-preview-image-height);
     box-shadow: var(--wj-preview-image-box-shadow);
   }
 
@@ -173,15 +173,15 @@
   }
 
   :where(pre > code) {
-    display: block;
-    margin: 0;
+    display: var(--wj-preview-code-block-display);
+    margin: var(--wj-preview-code-block-margin);
     padding: var(--wj-preview-code-block-padding);
-    color: inherit;
+    color: var(--wj-preview-code-block-color);
     font-family: var(--wj-preview-code-font-family);
     font-size: var(--wj-preview-code-block-font-size);
-    line-height: inherit;
-    word-break: normal;
-    background-color: transparent;
+    line-height: var(--wj-preview-code-block-content-line-height);
+    word-break: var(--wj-preview-code-block-word-break);
+    background-color: var(--wj-preview-code-block-content-background-color);
   }
 
   :where(.pre-container) {
@@ -192,23 +192,23 @@
     color: var(--wj-preview-code-toolbar-text-color);
     font-family: var(--wj-preview-code-font-family);
     font-size: var(--wj-preview-code-toolbar-font-size);
-    line-height: 1;
-    user-select: none;
+    line-height: var(--wj-preview-code-toolbar-line-height);
+    user-select: var(--wj-preview-code-toolbar-user-select);
     background-color: var(--wj-preview-code-toolbar-background-color);
     border-radius: var(--wj-preview-code-toolbar-border-radius);
     padding: var(--wj-preview-code-toolbar-padding);
   }
 
   :where(.pre-container-copy) {
-    display: none;
+    display: var(--wj-preview-code-toolbar-copy-display);
   }
 
   :where(.pre-container:hover .pre-container-copy) {
-    display: block;
+    display: var(--wj-preview-code-toolbar-copy-hover-display);
   }
 
   :where(.pre-container:hover .pre-container-lang) {
-    display: none;
+    display: var(--wj-preview-code-toolbar-lang-hover-display);
   }
 
   :where(.footnotes) {
@@ -216,7 +216,7 @@
     padding-top: var(--wj-preview-footnote-padding-top);
     color: var(--wj-preview-footnote-text-color);
     font-size: var(--wj-preview-footnote-font-size);
-    border-top: 1px solid var(--wj-preview-footnote-border-color);
+    border-top: var(--wj-preview-footnote-border-top);
   }
 
   :where(.footnotes ol) {
@@ -224,11 +224,11 @@
   }
 
   :where(.footnotes li) {
-    margin-bottom: 0.5em;
+    margin-bottom: var(--wj-preview-footnote-list-item-margin-bottom);
   }
 
   :where(.footnote-ref, .footnote-backref) {
-    font-size: 0.9em;
+    font-size: var(--wj-preview-footnote-link-font-size);
   }
 
   :where(.contains-task-list) {
@@ -236,7 +236,7 @@
   }
 
   :where(.task-list-item) {
-    list-style: none;
+    list-style: var(--wj-preview-task-list-style);
   }
 
   :where(.task-list-item-checkbox) {
@@ -248,20 +248,20 @@
     margin: var(--wj-preview-details-margin);
     padding: var(--wj-preview-details-padding);
     background-color: var(--wj-preview-details-background-color);
-    border: 1px solid var(--wj-preview-details-border-color);
+    border: var(--wj-preview-details-border);
     border-radius: var(--wj-preview-details-border-radius);
   }
 
   :where(details[open] > summary) {
-    margin-bottom: 0.75em;
+    margin-bottom: var(--wj-preview-details-open-summary-margin-bottom);
   }
 
   :where(details > :last-child) {
-    margin-bottom: 0;
+    margin-bottom: var(--wj-preview-details-last-child-margin-bottom);
   }
 
   :where(summary) {
-    cursor: pointer;
+    cursor: var(--wj-preview-summary-cursor);
     color: var(--wj-preview-summary-text-color);
     font-weight: var(--wj-preview-summary-font-weight);
   }
