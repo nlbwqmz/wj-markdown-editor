@@ -7,6 +7,10 @@ function readSource(relativePath) {
   return fs.readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
+function resolveFixturePath(relativePath) {
+  return new URL(relativePath, import.meta.url)
+}
+
 function getObjectPropertyBlock(source, propertyName) {
   const propertyIndex = source.indexOf(`${propertyName}:`)
   assert.notEqual(propertyIndex, -1, `未找到 ${propertyName} 属性`)
@@ -94,6 +98,22 @@ function assertPreviewThemeRegressionFixtureCoverage(source) {
   })
 }
 
+function assertRegressionFixtureAssetsExist(source) {
+  const referencedAssets = Array.from(source.matchAll(/\.\/assets\/[^\s)]+/g), match => match[0])
+  const uniqueAssets = Array.from(new Set(referencedAssets))
+
+  assert.notEqual(uniqueAssets.length, 0, '回归样本没有引用本地资源文件')
+
+  uniqueAssets.forEach((assetPath) => {
+    const absoluteAssetPath = resolveFixturePath(`./fixtures/${assetPath}`)
+    assert.equal(
+      fs.existsSync(absoluteAssetPath),
+      true,
+      `回归样本引用的资源不存在：${assetPath}`,
+    )
+  })
+}
+
 test('预览组件默认主题值必须统一为 github', () => {
   const previewSource = readSource('../../../components/editor/MarkdownPreview.vue')
   const editSource = readSource('../../../components/editor/MarkdownEdit.vue')
@@ -126,4 +146,10 @@ test('预览主题回归样本必须覆盖关键 Markdown 标记', () => {
   const regressionFixtureSource = readSource('./fixtures/preview-theme-regression.md')
 
   assertPreviewThemeRegressionFixtureCoverage(regressionFixtureSource)
+})
+
+test('预览主题回归样本引用的本地资源必须存在', () => {
+  const regressionFixtureSource = readSource('./fixtures/preview-theme-regression.md')
+
+  assertRegressionFixtureAssetsExist(regressionFixtureSource)
 })
