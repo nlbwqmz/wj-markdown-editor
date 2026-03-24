@@ -149,6 +149,13 @@ function assertPreviewThemeBaseVariablesDeclaredInContract(baseSource, contractS
   })
 }
 
+function assertPreviewThemeCodeToolbarHoverRulesHaveSpecificity(source) {
+  assert.match(source, /\.pre-container:hover\s+\.pre-container-copy\s*\{/u)
+  assert.match(source, /\.pre-container:hover\s+\.pre-container-lang\s*\{/u)
+  assert.equal(source.includes(':where(.pre-container:hover .pre-container-copy)'), false)
+  assert.equal(source.includes(':where(.pre-container:hover .pre-container-lang)'), false)
+}
+
 function assertPreviewThemeRegressionFixtureCoverage(source) {
   const requiredMarkers = [
     '![示例图片](',
@@ -247,6 +254,12 @@ test('预览主题变量声明断言必须能识别基础骨架中的变量拼�
     () => assertPreviewThemeBaseVariablesDeclaredInContract(mutatedPreviewThemeBaseSource, previewThemeContractSource),
     /基础层消费的变量未在变量协议中声明：--wj-preview-summary-text-color-typo/u,
   )
+})
+
+test('预览主题基础骨架的代码块工具栏 hover 规则必须保留足够 specificity', () => {
+  const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
+
+  assertPreviewThemeCodeToolbarHoverRulesHaveSpecificity(previewThemeBaseSource)
 })
 
 test('预览主题回归样本必须覆盖关键 Markdown 标记', () => {

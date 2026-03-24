@@ -203,11 +203,11 @@
     display: var(--wj-preview-code-toolbar-copy-display);
   }
 
-  :where(.pre-container:hover .pre-container-copy) {
+  .pre-container:hover .pre-container-copy {
     display: var(--wj-preview-code-toolbar-copy-hover-display);
   }
 
-  :where(.pre-container:hover .pre-container-lang) {
+  .pre-container:hover .pre-container-lang {
     display: var(--wj-preview-code-toolbar-lang-hover-display);
   }
 
