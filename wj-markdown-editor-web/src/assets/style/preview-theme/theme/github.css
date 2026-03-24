@@ -863,6 +863,12 @@
   border-radius: 6px;
 }
 
+.preview-theme-github .highlight pre,
+.preview-theme-github pre:not(.hljs) {
+  color: var(--fgColor-default);
+  background-color: var(--bgColor-muted);
+}
+
 .preview-theme-github-light .highlight pre,
 .preview-theme-github-light pre:not(.hljs) {
   color: var(--fgColor-default);
