@@ -127,6 +127,28 @@ function assertPreviewThemeBaseConsumesVariablesOnly(source) {
   })
 }
 
+/**
+ * 校验基础层消费到的预览变量都在变量协议中声明，避免变量名拼写错误被静默放过。
+ * @param {string} baseSource
+ * @param {string} contractSource
+ */
+function assertPreviewThemeBaseVariablesDeclaredInContract(baseSource, contractSource) {
+  const consumedVariableNames = new Set(
+    Array.from(baseSource.matchAll(/var\((--wj-preview-[a-z0-9-]+)\)/gu), match => match[1]),
+  )
+  const declaredVariableNames = new Set(
+    Array.from(contractSource.matchAll(/^\s*(--wj-preview-[a-z0-9-]+):/gmu), match => match[1]),
+  )
+
+  consumedVariableNames.forEach((variableName) => {
+    assert.equal(
+      declaredVariableNames.has(variableName),
+      true,
+      `基础层消费的变量未在变量协议中声明：${variableName}`,
+    )
+  })
+}
+
 function assertPreviewThemeRegressionFixtureCoverage(source) {
   const requiredMarkers = [
     '![示例图片](',
@@ -204,6 +226,27 @@ test('预览主题基础骨架的声明值必须通过变量协议消费', () =>
   const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
 
   assertPreviewThemeBaseConsumesVariablesOnly(previewThemeBaseSource)
+})
+
+test('预览主题基础骨架消费到的变量必须都在变量协议中声明', () => {
+  const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
+  const previewThemeContractSource = readSource('../preview-theme/preview-theme-contract.scss')
+
+  assertPreviewThemeBaseVariablesDeclaredInContract(previewThemeBaseSource, previewThemeContractSource)
+})
+
+test('预览主题变量声明断言必须能识别基础骨架中的变量拼写错误', () => {
+  const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
+  const previewThemeContractSource = readSource('../preview-theme/preview-theme-contract.scss')
+  const mutatedPreviewThemeBaseSource = previewThemeBaseSource.replace(
+    'var(--wj-preview-summary-text-color)',
+    'var(--wj-preview-summary-text-color-typo)',
+  )
+
+  assert.throws(
+    () => assertPreviewThemeBaseVariablesDeclaredInContract(mutatedPreviewThemeBaseSource, previewThemeContractSource),
+    /基础层消费的变量未在变量协议中声明：--wj-preview-summary-text-color-typo/u,
+  )
 })
 
 test('预览主题回归样本必须覆盖关键 Markdown 标记', () => {
