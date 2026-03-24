@@ -1,0 +1,268 @@
+/* 预览主题基础骨架：统一结构回退，具体人格化样式仍由主题层覆盖。 */
+:where([class*='preview-theme-']) {
+  color: var(--wj-preview-text-color);
+  background-color: var(--wj-preview-background-color);
+  font-family: var(--wj-preview-font-family);
+  font-size: var(--wj-preview-font-size);
+  line-height: var(--wj-preview-line-height);
+  word-break: var(--wj-preview-word-break);
+  overflow-wrap: var(--wj-preview-overflow-wrap);
+
+  > :where(.wj-scrollbar) > :first-child {
+    margin-top: 0;
+  }
+
+  > :where(.wj-scrollbar) > :last-child {
+    margin-bottom: 0;
+  }
+
+  :where(h1, h2, h3, h4, h5, h6) {
+    margin-top: var(--wj-preview-heading-margin-top);
+    margin-bottom: var(--wj-preview-heading-margin-bottom);
+    color: var(--wj-preview-heading-color);
+    font-weight: var(--wj-preview-heading-font-weight);
+    line-height: var(--wj-preview-heading-line-height);
+  }
+
+  :where(h1) {
+    font-size: var(--wj-preview-h1-font-size);
+  }
+
+  :where(h2) {
+    font-size: var(--wj-preview-h2-font-size);
+  }
+
+  :where(h3) {
+    font-size: var(--wj-preview-h3-font-size);
+  }
+
+  :where(h4) {
+    font-size: var(--wj-preview-h4-font-size);
+  }
+
+  :where(h5) {
+    font-size: var(--wj-preview-h5-font-size);
+  }
+
+  :where(h6) {
+    font-size: var(--wj-preview-h6-font-size);
+  }
+
+  :where(p) {
+    margin: var(--wj-preview-paragraph-margin);
+  }
+
+  :where(ul, ol) {
+    margin: var(--wj-preview-list-margin);
+    padding-inline-start: var(--wj-preview-list-padding-inline-start);
+  }
+
+  :where(li) {
+    margin-bottom: var(--wj-preview-list-item-margin-bottom);
+  }
+
+  :where(li > ul, li > ol) {
+    margin-top: var(--wj-preview-list-nested-margin-top);
+    margin-bottom: 0;
+  }
+
+  :where(a) {
+    color: var(--wj-preview-link-color);
+    text-decoration: var(--wj-preview-link-text-decoration);
+    text-underline-offset: 0.15em;
+  }
+
+  :where(a:hover) {
+    color: var(--wj-preview-link-hover-color);
+    text-decoration: var(--wj-preview-link-hover-text-decoration);
+  }
+
+  :where(strong, b) {
+    color: var(--wj-preview-strong-color);
+    font-weight: 600;
+  }
+
+  :where(em, i) {
+    color: var(--wj-preview-emphasis-color);
+  }
+
+  :where(mark) {
+    color: var(--wj-preview-mark-text-color);
+    background-color: var(--wj-preview-mark-background-color);
+  }
+
+  :where(del, s) {
+    opacity: var(--wj-preview-delete-opacity);
+  }
+
+  :where(blockquote) {
+    margin: var(--wj-preview-blockquote-margin);
+    padding: var(--wj-preview-blockquote-padding);
+    color: var(--wj-preview-blockquote-text-color);
+    background-color: var(--wj-preview-blockquote-background-color);
+    border-inline-start: var(--wj-preview-blockquote-border-width) solid var(--wj-preview-blockquote-border-color);
+  }
+
+  :where(blockquote > :first-child) {
+    margin-top: 0;
+  }
+
+  :where(blockquote > :last-child) {
+    margin-bottom: 0;
+  }
+
+  :where(hr) {
+    margin: var(--wj-preview-hr-margin);
+    border: 0;
+    border-top: var(--wj-preview-hr-width) solid var(--wj-preview-hr-color);
+  }
+
+  :where(table) {
+    display: var(--wj-preview-table-display);
+    width: var(--wj-preview-table-width);
+    max-width: var(--wj-preview-table-max-width);
+    margin: var(--wj-preview-table-margin);
+    overflow-x: var(--wj-preview-table-overflow-x);
+    border-collapse: collapse;
+  }
+
+  :where(thead) {
+    background-color: var(--wj-preview-table-header-background-color);
+  }
+
+  :where(th, td) {
+    padding: var(--wj-preview-table-cell-padding);
+    border: 1px solid var(--wj-preview-table-border-color);
+  }
+
+  :where(th) {
+    font-weight: 600;
+  }
+
+  :where(tbody tr:nth-child(2n)) {
+    background-color: var(--wj-preview-table-row-even-background-color);
+  }
+
+  :where(img) {
+    max-width: var(--wj-preview-image-max-width);
+    height: auto;
+    box-shadow: var(--wj-preview-image-box-shadow);
+  }
+
+  :where(:not(pre) > code, :not(pre) > tt, :not(pre) > samp) {
+    padding: var(--wj-preview-inline-code-padding);
+    color: var(--wj-preview-inline-code-text-color);
+    font-family: var(--wj-preview-inline-code-font-family);
+    font-size: var(--wj-preview-inline-code-font-size);
+    line-height: var(--wj-preview-inline-code-line-height);
+    background-color: var(--wj-preview-inline-code-background-color);
+    border-radius: var(--wj-preview-inline-code-border-radius);
+  }
+
+  :where(pre) {
+    margin: var(--wj-preview-pre-margin);
+    font-family: var(--wj-preview-code-font-family);
+    line-height: var(--wj-preview-code-line-height);
+    overflow-x: var(--wj-preview-code-block-overflow-x);
+  }
+
+  :where(pre:not(.hljs)) {
+    color: var(--wj-preview-code-block-text-color);
+    background-color: var(--wj-preview-code-block-background-color);
+    border-radius: var(--wj-preview-code-block-border-radius);
+  }
+
+  :where(pre > code) {
+    display: block;
+    margin: 0;
+    padding: var(--wj-preview-code-block-padding);
+    color: inherit;
+    font-family: var(--wj-preview-code-font-family);
+    font-size: var(--wj-preview-code-block-font-size);
+    line-height: inherit;
+    word-break: normal;
+    background-color: transparent;
+  }
+
+  :where(.pre-container) {
+    font-family: var(--wj-preview-code-font-family);
+  }
+
+  :where(.pre-container-copy, .pre-container-lang) {
+    color: var(--wj-preview-code-toolbar-text-color);
+    font-family: var(--wj-preview-code-font-family);
+    font-size: var(--wj-preview-code-toolbar-font-size);
+    line-height: 1;
+    user-select: none;
+    background-color: var(--wj-preview-code-toolbar-background-color);
+    border-radius: var(--wj-preview-code-toolbar-border-radius);
+    padding: var(--wj-preview-code-toolbar-padding);
+  }
+
+  :where(.pre-container-copy) {
+    display: none;
+  }
+
+  :where(.pre-container:hover .pre-container-copy) {
+    display: block;
+  }
+
+  :where(.pre-container:hover .pre-container-lang) {
+    display: none;
+  }
+
+  :where(.footnotes) {
+    margin-top: var(--wj-preview-footnote-margin-top);
+    padding-top: var(--wj-preview-footnote-padding-top);
+    color: var(--wj-preview-footnote-text-color);
+    font-size: var(--wj-preview-footnote-font-size);
+    border-top: 1px solid var(--wj-preview-footnote-border-color);
+  }
+
+  :where(.footnotes ol) {
+    padding-inline-start: var(--wj-preview-footnote-list-padding-inline-start);
+  }
+
+  :where(.footnotes li) {
+    margin-bottom: 0.5em;
+  }
+
+  :where(.footnote-ref, .footnote-backref) {
+    font-size: 0.9em;
+  }
+
+  :where(.contains-task-list) {
+    padding-inline-start: var(--wj-preview-task-list-padding-inline-start);
+  }
+
+  :where(.task-list-item) {
+    list-style: none;
+  }
+
+  :where(.task-list-item-checkbox) {
+    margin: var(--wj-preview-task-checkbox-margin);
+    vertical-align: var(--wj-preview-task-checkbox-vertical-align);
+  }
+
+  :where(details) {
+    margin: var(--wj-preview-details-margin);
+    padding: var(--wj-preview-details-padding);
+    background-color: var(--wj-preview-details-background-color);
+    border: 1px solid var(--wj-preview-details-border-color);
+    border-radius: var(--wj-preview-details-border-radius);
+  }
+
+  :where(details[open] > summary) {
+    margin-bottom: 0.75em;
+  }
+
+  :where(details > :last-child) {
+    margin-bottom: 0;
+  }
+
+  :where(summary) {
+    cursor: pointer;
+    color: var(--wj-preview-summary-text-color);
+    font-weight: var(--wj-preview-summary-font-weight);
+  }
+}

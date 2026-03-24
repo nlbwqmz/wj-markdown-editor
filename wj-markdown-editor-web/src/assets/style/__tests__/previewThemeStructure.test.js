@@ -81,6 +81,35 @@ function assertGithubThemeFallbackCodeBlockStyle(source) {
   )
 }
 
+function assertPreviewThemeEntryImportOrder(source) {
+  const useStatements = Array.from(source.matchAll(/^@use\s+['"][^'"]+['"];/gm), match => match[0])
+  const expectedUseStatements = [
+    '@use \'./preview-theme-contract\';',
+    '@use \'./preview-theme-base\';',
+    '@use \'./theme/github\';',
+    '@use \'./theme/juejin.scss\';',
+    '@use \'./theme/smart-blue\';',
+    '@use \'./theme/vuepress\';',
+    '@use \'./theme/mk-cute\';',
+    '@use \'./theme/cyanosis\';',
+    '@use \'./theme/scrolls\';',
+    '@use \'./theme/markdown-here\';',
+  ]
+
+  assert.deepEqual(useStatements, expectedUseStatements)
+}
+
+function assertPreviewThemeEntryContainsOnlyUseStatements(source) {
+  const nonEmptyLines = source
+    .split(/\r?\n/u)
+    .map(line => line.trim())
+    .filter(Boolean)
+
+  nonEmptyLines.forEach((line) => {
+    assert.match(line, /^@use\s+['"][^'"]+['"];/, `入口文件存在非 @use 语句：${line}`)
+  })
+}
+
 function assertPreviewThemeRegressionFixtureCoverage(source) {
   const requiredMarkers = [
     '![示例图片](',
@@ -140,6 +169,18 @@ test('github 预览主题需要覆盖未高亮代码块的回退样式', () => {
   const githubThemeSource = readSource('../preview-theme/theme/github.css')
 
   assertGithubThemeFallbackCodeBlockStyle(githubThemeSource)
+})
+
+test('预览主题入口必须先聚合变量协议和基础骨架，再引入各主题文件', () => {
+  const previewThemeEntrySource = readSource('../preview-theme/preview-theme.scss')
+
+  assertPreviewThemeEntryImportOrder(previewThemeEntrySource)
+})
+
+test('预览主题入口文件只能保留 @use 语句', () => {
+  const previewThemeEntrySource = readSource('../preview-theme/preview-theme.scss')
+
+  assertPreviewThemeEntryContainsOnlyUseStatements(previewThemeEntrySource)
 })
 
 test('预览主题回归样本必须覆盖关键 Markdown 标记', () => {

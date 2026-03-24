@@ -1,0 +1,107 @@
+/* 预览主题变量协议：仅声明公共变量，具体结构样式放到基础层消费。 */
+:where([class*='preview-theme-']) {
+  --wj-preview-text-color: var(--wj-markdown-text-primary);
+  --wj-preview-muted-text-color: var(--wj-markdown-text-secondary);
+  --wj-preview-subtle-text-color: var(--wj-markdown-text-tertiary);
+  --wj-preview-background-color: transparent;
+  --wj-preview-font-family: var(--preview-area-font, inherit);
+  --wj-preview-font-size: 16px;
+  --wj-preview-line-height: 1.75;
+  --wj-preview-word-break: break-word;
+  --wj-preview-overflow-wrap: break-word;
+
+  --wj-preview-heading-color: inherit;
+  --wj-preview-heading-font-weight: 600;
+  --wj-preview-heading-line-height: 1.4;
+  --wj-preview-heading-margin-top: 1.5em;
+  --wj-preview-heading-margin-bottom: 0.6em;
+  --wj-preview-h1-font-size: 2em;
+  --wj-preview-h2-font-size: 1.5em;
+  --wj-preview-h3-font-size: 1.25em;
+  --wj-preview-h4-font-size: 1em;
+  --wj-preview-h5-font-size: 0.875em;
+  --wj-preview-h6-font-size: 0.85em;
+
+  --wj-preview-paragraph-margin: 1em 0;
+  --wj-preview-list-margin: 1em 0;
+  --wj-preview-list-padding-inline-start: 1.5em;
+  --wj-preview-list-item-margin-bottom: 0.25em;
+  --wj-preview-list-nested-margin-top: 0.35em;
+
+  --wj-preview-link-color: #1677ff;
+  --wj-preview-link-hover-color: var(--wj-preview-link-color);
+  --wj-preview-link-text-decoration: underline;
+  --wj-preview-link-hover-text-decoration: underline;
+
+  --wj-preview-strong-color: inherit;
+  --wj-preview-emphasis-color: inherit;
+  --wj-preview-mark-background-color: rgba(250, 173, 20, 0.25);
+  --wj-preview-mark-text-color: inherit;
+  --wj-preview-delete-opacity: 0.8;
+
+  --wj-preview-blockquote-margin: 1.25em 0;
+  --wj-preview-blockquote-padding: 0.25em 1em;
+  --wj-preview-blockquote-text-color: var(--wj-preview-muted-text-color);
+  --wj-preview-blockquote-background-color: transparent;
+  --wj-preview-blockquote-border-color: var(--wj-markdown-border-primary);
+  --wj-preview-blockquote-border-width: 4px;
+
+  --wj-preview-hr-margin: 1.5em 0;
+  --wj-preview-hr-color: var(--wj-markdown-border-primary);
+  --wj-preview-hr-width: 1px;
+
+  --wj-preview-table-margin: 1em 0;
+  --wj-preview-table-display: block;
+  --wj-preview-table-width: max-content;
+  --wj-preview-table-max-width: 100%;
+  --wj-preview-table-overflow-x: auto;
+  --wj-preview-table-border-color: var(--wj-markdown-border-primary);
+  --wj-preview-table-header-background-color: var(--wj-markdown-bg-secondary);
+  --wj-preview-table-row-even-background-color: var(--wj-markdown-bg-secondary);
+  --wj-preview-table-cell-padding: 0.6em 1em;
+
+  --wj-preview-image-max-width: 100%;
+  --wj-preview-image-box-shadow: var(--img-box-shadow);
+
+  --wj-preview-inline-code-font-family: var(--code-area-font, monospace);
+  --wj-preview-inline-code-font-size: 0.875em;
+  --wj-preview-inline-code-line-height: 1.6;
+  --wj-preview-inline-code-padding: 0.125em 0.4em;
+  --wj-preview-inline-code-border-radius: 6px;
+  --wj-preview-inline-code-background-color: var(--wj-markdown-bg-secondary);
+  --wj-preview-inline-code-text-color: inherit;
+
+  --wj-preview-pre-margin: 1em 0;
+  --wj-preview-code-font-family: var(--code-area-font, monospace);
+  --wj-preview-code-line-height: 1.75;
+  --wj-preview-code-block-font-size: 12px;
+  --wj-preview-code-block-padding: 1.2rem;
+  --wj-preview-code-block-border-radius: 8px;
+  --wj-preview-code-block-background-color: var(--wj-markdown-bg-secondary);
+  --wj-preview-code-block-text-color: var(--wj-markdown-text-primary);
+  --wj-preview-code-block-overflow-x: auto;
+  --wj-preview-code-toolbar-text-color: var(--wj-markdown-text-secondary);
+  --wj-preview-code-toolbar-font-size: 12px;
+  --wj-preview-code-toolbar-padding: 4px 8px;
+  --wj-preview-code-toolbar-border-radius: 6px;
+  --wj-preview-code-toolbar-background-color: transparent;
+
+  --wj-preview-footnote-margin-top: 2em;
+  --wj-preview-footnote-padding-top: 1em;
+  --wj-preview-footnote-font-size: 12px;
+  --wj-preview-footnote-text-color: var(--wj-preview-muted-text-color);
+  --wj-preview-footnote-border-color: var(--wj-markdown-border-primary);
+  --wj-preview-footnote-list-padding-inline-start: 1.5em;
+
+  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-checkbox-margin: 0 0.4em 0.25em 0;
+  --wj-preview-task-checkbox-vertical-align: middle;
+
+  --wj-preview-details-margin: 1em 0;
+  --wj-preview-details-padding: 0.75em 1em;
+  --wj-preview-details-border-color: var(--wj-markdown-border-primary);
+  --wj-preview-details-border-radius: 8px;
+  --wj-preview-details-background-color: transparent;
+  --wj-preview-summary-font-weight: 500;
+  --wj-preview-summary-text-color: inherit;
+}
