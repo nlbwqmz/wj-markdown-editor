@@ -1,6 +1,6 @@
 # Preview Theme Visual Fixes Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task on the current branch. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在不改预览主题对外名称、配置值和当前分支的前提下，一次性修复预览主题的复制按钮、`kbd`、`details`、受影响主题暗黑表面以及回归测试缺口。
 
@@ -314,12 +314,15 @@ test('基础层消费到的新变量必须在 contract 中声明', () => {
     '--wj-preview-code-toolbar-background-color',
     '--wj-preview-code-toolbar-hover-opacity',
     '--wj-preview-mermaid-background-color',
+    '--wj-preview-mermaid-text-align',
     '--wj-preview-theme-background-image',
     '--wj-preview-theme-background-size',
     '--wj-preview-theme-background-position',
+    '--wj-preview-details-padding',
     '--wj-preview-details-background-color',
     '--wj-preview-details-border',
     '--wj-preview-details-border-radius',
+    '--wj-preview-details-open-summary-margin-bottom',
     '--wj-preview-summary-text-color',
     '--wj-preview-summary-font-weight',
     '--wj-preview-code-toolbar-opacity',
@@ -345,12 +348,15 @@ test('基础层消费到的新变量必须在 contract 中声明', () => {
   --wj-preview-code-toolbar-opacity: 0.65;
   --wj-preview-code-toolbar-hover-opacity: 1;
   --wj-preview-mermaid-background-color: var(--wj-preview-code-block-background-color);
+  --wj-preview-mermaid-text-align: center;
   --wj-preview-theme-background-image: none;
   --wj-preview-theme-background-size: auto;
   --wj-preview-theme-background-position: 0 0;
+  --wj-preview-details-padding: 0.75em 1em;
   --wj-preview-details-background-color: var(--wj-preview-background-color-transparent);
   --wj-preview-details-border: 1px solid var(--wj-markdown-border-primary);
   --wj-preview-details-border-radius: 8px;
+  --wj-preview-details-open-summary-margin-bottom: 0.75em;
   --wj-preview-summary-text-color: var(--wj-markdown-text-primary);
   --wj-preview-summary-font-weight: 500;
 }
@@ -368,6 +374,7 @@ test('基础层消费到的新变量必须在 contract 中声明', () => {
   padding: var(--wj-preview-mermaid-padding);
   background-color: var(--wj-preview-mermaid-background-color);
   border-radius: var(--wj-preview-mermaid-border-radius);
+  text-align: var(--wj-preview-mermaid-text-align);
 }
 ```
 
