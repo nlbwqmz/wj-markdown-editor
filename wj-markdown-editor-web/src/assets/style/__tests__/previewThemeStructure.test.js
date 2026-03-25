@@ -382,6 +382,85 @@ function splitTopLevelSelectorEntries(selectorHeader) {
   return selectorEntries
 }
 
+function splitSelectorCompounds(selectorEntry) {
+  const compoundSegments = []
+  let tokenStart = 0
+  let parenDepth = 0
+  let bracketDepth = 0
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let escaped = false
+
+  function pushCompoundSegment(tokenEnd) {
+    const compoundSegment = selectorEntry.slice(tokenStart, tokenEnd).trim()
+
+    if (compoundSegment) {
+      compoundSegments.push(compoundSegment)
+    }
+  }
+
+  for (let i = 0; i < selectorEntry.length; i++) {
+    const currentChar = selectorEntry[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (currentChar === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (!inDoubleQuote && currentChar === '\'') {
+      inSingleQuote = !inSingleQuote
+      continue
+    }
+
+    if (!inSingleQuote && currentChar === '"') {
+      inDoubleQuote = !inDoubleQuote
+      continue
+    }
+
+    if (inSingleQuote || inDoubleQuote) {
+      continue
+    }
+
+    if (currentChar === '(') {
+      parenDepth++
+      continue
+    }
+
+    if (currentChar === ')') {
+      parenDepth--
+      continue
+    }
+
+    if (currentChar === '[') {
+      bracketDepth++
+      continue
+    }
+
+    if (currentChar === ']') {
+      bracketDepth--
+      continue
+    }
+
+    if (parenDepth > 0 || bracketDepth > 0) {
+      continue
+    }
+
+    if (/\s/u.test(currentChar) || ['>', '+', '~'].includes(currentChar)) {
+      pushCompoundSegment(i)
+      tokenStart = i + 1
+    }
+  }
+
+  pushCompoundSegment(selectorEntry.length)
+
+  return compoundSegments
+}
+
 function collectNestedSelectorEntriesRecursively(blockSource) {
   return getTopLevelNestedRuleEntries(blockSource)
     .flatMap(({ selectorHeader, blockSource: nestedBlockSource }) => {
@@ -488,14 +567,14 @@ function selectorEntryTargetsSemanticTag(selectorEntry, tagName) {
     .some(entry => selectorEntryTargetsSemanticTag(entry, tagName))
 }
 
-function selectorEntryTargetsLeadingPreSurface(selectorEntry) {
-  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+function selectorCompoundTargetsLeadingPreSurface(selectorCompound) {
+  const normalizedCompound = stripLeadingRelativeSelectorPrefix(selectorCompound)
 
-  if (/^pre(?=$|[:.[#\s>+~])/u.test(normalizedEntry)) {
+  if (/^pre(?=$|[:.[#])/u.test(normalizedCompound)) {
     return true
   }
 
-  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedEntry)
+  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedCompound)
 
   if (!functionalArguments) {
     return false
@@ -505,14 +584,19 @@ function selectorEntryTargetsLeadingPreSurface(selectorEntry) {
     .some(entry => selectorEntryTargetsLeadingPreSurface(entry))
 }
 
-function selectorEntryTargetsMermaidPreSurface(selectorEntry) {
-  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+function selectorEntryTargetsLeadingPreSurface(selectorEntry) {
+  return splitSelectorCompounds(selectorEntry)
+    .some(selectorCompound => selectorCompoundTargetsLeadingPreSurface(selectorCompound))
+}
 
-  if (/^pre\.(?:mermaid|mermaid-cache)(?=$|[:.[#\s>+~])/u.test(normalizedEntry)) {
+function selectorCompoundTargetsMermaidPreSurface(selectorCompound) {
+  const normalizedCompound = stripLeadingRelativeSelectorPrefix(selectorCompound)
+
+  if (/^pre\.(?:mermaid|mermaid-cache)(?=$|[:.[#])/u.test(normalizedCompound)) {
     return true
   }
 
-  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedEntry)
+  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedCompound)
 
   if (!functionalArguments) {
     return false
@@ -520,6 +604,11 @@ function selectorEntryTargetsMermaidPreSurface(selectorEntry) {
 
   return splitTopLevelSelectorEntries(functionalArguments)
     .some(entry => selectorEntryTargetsMermaidPreSurface(entry))
+}
+
+function selectorEntryTargetsMermaidPreSurface(selectorEntry) {
+  return splitSelectorCompounds(selectorEntry)
+    .some(selectorCompound => selectorCompoundTargetsMermaidPreSurface(selectorCompound))
 }
 
 function selectorEntryContainsLegacyPreContainerSurface(selectorEntry) {
@@ -962,6 +1051,38 @@ test('基础骨架旧职责断言必须识别等价回流变体，而不是只�
     opacity: 1;
   }`),
       /pre-container/u,
+    ],
+    [
+      '祖先限定的后代 pre',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & .legacy-shell pre {
+    margin: 0;
+  }`),
+      /pre/u,
+    ],
+    [
+      '祖先限定的后代 Mermaid pre',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & .legacy-shell pre.mermaid {
+    text-align: center;
+  }`),
+      /pre\.mermaid/u,
+    ],
+    [
+      '祖先限定的 :where(pre)',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & .legacy-shell :where(pre) {
+    margin: 0;
+  }`),
+      /pre/u,
+    ],
+    [
+      '祖先限定的 Mermaid :where 变体',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & .legacy-shell :where(pre.mermaid-cache, pre.mermaid) {
+    text-align: center;
+  }`),
+      /pre\.mermaid/u,
     ],
   ]
 
