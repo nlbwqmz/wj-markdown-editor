@@ -265,17 +265,11 @@
     opacity: var(--wj-preview-code-toolbar-opacity);
   }
 
-  & :where(.pre-container-copy) {
-    display: var(--wj-preview-code-toolbar-copy-display);
-  }
-
   & .pre-container:hover .pre-container-copy {
-    display: var(--wj-preview-code-toolbar-copy-hover-display);
     opacity: var(--wj-preview-code-toolbar-hover-opacity);
   }
 
   & .pre-container:hover .pre-container-lang {
-    display: var(--wj-preview-code-toolbar-lang-hover-display);
     opacity: var(--wj-preview-code-toolbar-hover-opacity);
   }
 
