@@ -261,6 +261,34 @@ function assertDarkThemeBranchPreservesInlineCodeSeparation(source, selector) {
   })
 }
 
+/**
+ * 从主题根块中提取标题字号，避免仅靠字符串匹配判断层级是否递减。
+ * @param {string} source
+ * @param {string} selector
+ * @param {number} level
+ */
+function getThemeHeadingFontSizePx(source, selector, level) {
+  const rootBlock = getSelectorBlock(source, selector)
+  const match = rootBlock.match(new RegExp(`--wj-preview-h${level}-font-size:\\s*([0-9.]+)px;`, 'u'))
+
+  assert.ok(match, `${selector} 缺少 h${level} 标题字号变量`)
+
+  return Number(match[1])
+}
+
+/**
+ * 校验受影响主题已经停止用 kbd 选择器承担主外观，后续应统一走变量协议。
+ * @param {string} source
+ * @param {string} selector
+ */
+function assertThemeDoesNotUseKbdSelectorForPrimarySurface(source, selector) {
+  assert.equal(
+    /(?:^|\n)\s*kbd\s*\{/u.test(source),
+    false,
+    `${selector} 不得继续使用 kbd 选择器承担主外观`,
+  )
+}
+
 test('基础层相邻段落节奏应通过 margin-top 变量表达，避免污染 blockquote 多段间距', () => {
   const contractSource = readSource('../preview-theme/preview-theme-contract.scss')
   const baseSource = readSource('../preview-theme/preview-theme-base.scss')
@@ -361,6 +389,31 @@ test('juejin 主题应通过首末段变量恢复单段引用块节奏', () => {
     '.preview-theme-juejin',
     '--wj-preview-blockquote-last-child-margin-bottom',
     '10px',
+  )
+})
+
+test('juejin 主题标题层级必须满足 h3 > h4 > h5 > h6', () => {
+  const source = readSource('../preview-theme/theme/juejin.scss')
+  const selector = '.preview-theme-juejin'
+  const h3FontSize = getThemeHeadingFontSizePx(source, selector, 3)
+  const h4FontSize = getThemeHeadingFontSizePx(source, selector, 4)
+  const h5FontSize = getThemeHeadingFontSizePx(source, selector, 5)
+  const h6FontSize = getThemeHeadingFontSizePx(source, selector, 6)
+
+  assert.ok(
+    h3FontSize > h4FontSize && h4FontSize > h5FontSize && h5FontSize > h6FontSize,
+    `${selector} 标题层级异常：h3=${h3FontSize}px, h4=${h4FontSize}px, h5=${h5FontSize}px, h6=${h6FontSize}px`,
+  )
+})
+
+test('juejin 明亮模式必须保留表格斑马纹变量', () => {
+  const source = readSource('../preview-theme/theme/juejin.scss')
+
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-juejin',
+    '--wj-preview-table-row-even-background-color',
+    '#fcfcfc',
   )
 })
 
@@ -582,6 +635,23 @@ test('smart-blue 主题只保留标题人格与 kbd 特例选择器', () => {
   assert.match(smartBlueSpecialBlock, /(^|\n)\s*h1\s*\{/u)
   assert.match(smartBlueSpecialBlock, /(^|\n)\s*h2\s*\{/u)
   assert.match(smartBlueSpecialBlock, /(^|\n)\s*kbd\s*\{/u)
+})
+
+test('受影响主题不得继续用 kbd 选择器承担主外观', () => {
+  const themeSelectors = [
+    ['juejin', '.preview-theme-juejin'],
+    ['smart-blue', '.preview-theme-smart-blue'],
+    ['vuepress', '.preview-theme-vuepress'],
+    ['mk-cute', '.preview-theme-mk-cute'],
+    ['scrolls', '.preview-theme-scrolls'],
+    ['markdown-here', '.preview-theme-markdown-here'],
+  ]
+
+  themeSelectors.forEach(([themeName, selector]) => {
+    const source = readSource(`../preview-theme/theme/${themeName}.scss`)
+
+    assertThemeDoesNotUseKbdSelectorForPrimarySurface(source, selector)
+  })
 })
 
 test('mk-cute 主题应在主题根块声明统一变量入口', () => {

@@ -216,11 +216,38 @@ function assertPreviewThemeRegressionFixtureCoverage(source) {
     '::: details',
     '`const theme = \'github\'`',
     '```js',
+    '<kbd>Ctrl</kbd> + <kbd>K</kbd>',
+    '```mermaid',
+    '  - 二级无序项 A.1',
+    '    - 三级无序项 A.1.a',
   ]
 
   requiredMarkers.forEach((marker) => {
     assert.equal(source.includes(marker), true, `回归样本缺少关键标记：${marker}`)
   })
+}
+
+/**
+ * 校验回归样本补齐了本轮预览主题治理涉及的新 Markdown 场景。
+ * @param {string} source
+ */
+function assertPreviewThemeRegressionFixtureExtendedCoverage(source) {
+  assert.match(source, /<kbd>Ctrl<\/kbd>\s*\+\s*<kbd>K<\/kbd>/u)
+  assert.match(source, /```mermaid[\s\S]*?graph TD[\s\S]*?```/u)
+  assert.match(source, /- 无序项 A[\s\S]*? {2}- 二级无序项 A\.1[\s\S]*? {4}- 三级无序项 A\.1\.a/u)
+}
+
+/**
+ * 校验基础层已经显式承接本轮新增的预览语义变量，而不是继续散落到主题特例中。
+ * @param {string} source
+ */
+function assertPreviewThemeBaseConsumesExtendedSurfaceVariables(source) {
+  assert.match(source, /:where\(kbd\)\s*\{[\s\S]*?var\(--wj-preview-kbd-/u)
+  assert.match(source, /:where\(pre\.mermaid,\s*pre\.mermaid-cache\)\s*\{/u)
+  assert.match(source, /:where\(details\)\s*\{[\s\S]*?var\(--wj-preview-details-/u)
+  assert.match(source, /background-image:\s*var\(--wj-preview-theme-background-image\);/u)
+  assert.match(source, /background-size:\s*var\(--wj-preview-theme-background-size\);/u)
+  assert.match(source, /background-position:\s*var\(--wj-preview-theme-background-position\);/u)
 }
 
 function assertRegressionFixtureAssetsExist(source) {
@@ -316,6 +343,18 @@ test('预览主题回归样本必须覆盖关键 Markdown 标记', () => {
   const regressionFixtureSource = readSource('./fixtures/preview-theme-regression.md')
 
   assertPreviewThemeRegressionFixtureCoverage(regressionFixtureSource)
+})
+
+test('预览主题回归样本必须覆盖 kbd、mermaid 和多级无序列表', () => {
+  const regressionFixtureSource = readSource('./fixtures/preview-theme-regression.md')
+
+  assertPreviewThemeRegressionFixtureExtendedCoverage(regressionFixtureSource)
+})
+
+test('预览主题基础骨架必须消费 kbd、mermaid、details 与主题根背景变量', () => {
+  const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
+
+  assertPreviewThemeBaseConsumesExtendedSurfaceVariables(previewThemeBaseSource)
 })
 
 test('预览主题回归样本引用的本地资源必须存在', () => {
