@@ -66,7 +66,7 @@ const previewThemeFiles = [
 
 const previewThemeForbiddenStructurePatterns = [
   ['.highlight', /(?:^|[^\w-])\.highlight(?=$|[^\w-])/u],
-  ['.hljs', /(?:^|[^\w-])\.hljs(?=$|[^\w-])/u],
+  ['.hljs*', /(?:^|[^\w-])\.hljs(?:-[\w-]+)?(?=$|[^\w-])/u],
   ['.pre-container*', /(?:^|[^\w-])\.pre-container(?:-[\w-]+)?(?=$|[^\w-])/u],
   ['pre > code', /(?:^|[^\w-])pre\s*>\s*code(?=$|[^\w-])/u],
   ['pre code', /(?:^|[^\w-])pre\s+code(?=$|[^\w-])/u],
@@ -74,7 +74,8 @@ const previewThemeForbiddenStructurePatterns = [
 ]
 
 const previewThemeForbiddenSelectionPatterns = [
-  ['code::selection', /(?:^|[^\w-])code\s*::selection(?=$|[^\w-])/u],
+  ['.hljs*::selection', /(?:^|[^\w-])\.hljs(?:-[\w-]+)?\b[^,{]*::selection(?=$|[^\w-])/u],
+  ['pre code*::selection', /(?:^|[^\w-])pre(?:\s*>\s*|\s+)code\b[^,{]*::selection(?=$|[^\w-])/u],
 ]
 
 const previewThemeForbiddenVariablePrefixes = [
@@ -82,6 +83,41 @@ const previewThemeForbiddenVariablePrefixes = [
   '--wj-preview-code-toolbar-',
   '--wj-preview-mermaid-',
 ]
+
+test('结构选择器模式必须把 .hljs 本体和 .hljs-* token 选择器都视为禁区', () => {
+  const structurePatterns = previewThemeForbiddenStructurePatterns.map(([, pattern]) => pattern)
+
+  assert.equal(
+    structurePatterns.some(pattern => pattern.test('.wj-preview-theme .hljs { color: inherit; }')),
+    true,
+    '结构禁区必须继续命中 .hljs 本体',
+  )
+  assert.equal(
+    structurePatterns.some(pattern => pattern.test('.wj-preview-theme .hljs-keyword { color: inherit; }')),
+    true,
+    '结构禁区必须命中 .hljs-* token 选择器',
+  )
+})
+
+test('代码块 selection 模式必须允许 inline code 选择器并继续拦截 fenced code block 上下文', () => {
+  const selectionPatterns = previewThemeForbiddenSelectionPatterns.map(([, pattern]) => pattern)
+
+  assert.equal(
+    selectionPatterns.some(pattern => pattern.test('.wj-preview-theme pre > code::selection { background: red; }')),
+    true,
+    'selection 禁区必须命中 pre > code::selection',
+  )
+  assert.equal(
+    selectionPatterns.some(pattern => pattern.test('.wj-preview-theme .hljs-keyword::selection { background: red; }')),
+    true,
+    'selection 禁区必须命中 .hljs-*::selection',
+  )
+  assert.equal(
+    selectionPatterns.some(pattern => pattern.test('.wj-preview-theme :not(pre) > code::selection { background: red; }')),
+    false,
+    'selection 禁区不得误伤 inline code 选择器',
+  )
+})
 
 test('main.js 必须在 preview theme 之后导入 code block base', () => {
   const mainSource = readSource('../../../main.js')
