@@ -367,6 +367,31 @@ function assertThemeRootVariableEntry(source, selector, requiredVariables) {
   })
 }
 
+/**
+ * fenced code block 与 mermaid 外壳职责已经迁出 preview theme contract，避免旧变量族继续留在协议层。
+ * @param {string} source
+ */
+function assertPreviewThemeContractDoesNotDeclareLegacyCodeBlockVariables(source) {
+  const declaredVariableNames = Array.from(
+    source.matchAll(/^\s*(--wj-preview-[a-z0-9-]+):/gmu),
+    match => match[1],
+  )
+  const forbiddenVariablePrefixes = [
+    '--wj-preview-pre-',
+    '--wj-preview-code-block-',
+    '--wj-preview-code-toolbar-',
+    '--wj-preview-mermaid-',
+  ]
+  const forbiddenVariableNames = declaredVariableNames
+    .filter(variableName => forbiddenVariablePrefixes.some(prefix => variableName.startsWith(prefix)))
+
+  assert.equal(
+    forbiddenVariableNames.length,
+    0,
+    `变量协议不应继续声明 fenced code block / mermaid 外壳变量：${forbiddenVariableNames.join(', ')}`,
+  )
+}
+
 function assertThemeRootVariableValue(source, selector, variableName, expectedValue) {
   const rootBlock = getSelectorBlock(source, selector)
 
@@ -595,6 +620,24 @@ test('基础层相邻段落节奏应通过 margin-top 变量表达，避免污�
   assert.equal(baseSource.includes('padding-top: var(--wj-preview-adjacent-paragraph-margin-top);'), false)
 })
 
+test('preview-theme-contract 不得继续声明 fenced code block 与 mermaid 外壳变量', () => {
+  const contractSource = readSource('../preview-theme/preview-theme-contract.scss')
+
+  assertPreviewThemeContractDoesNotDeclareLegacyCodeBlockVariables(contractSource)
+})
+
+test('旧职责变量断言必须识别 code block 变量残留', () => {
+  const compliantContractSource = `.wj-preview-theme {
+  --wj-preview-inline-code-text-color: inherit;
+  --wj-preview-details-border: 1px solid var(--wj-markdown-border-primary);
+}`
+  const mutatedContractSource = `${compliantContractSource}
+  --wj-preview-code-block-background-color: var(--wj-markdown-bg-secondary);`
+
+  assert.doesNotThrow(() => assertPreviewThemeContractDoesNotDeclareLegacyCodeBlockVariables(compliantContractSource))
+  assert.throws(() => assertPreviewThemeContractDoesNotDeclareLegacyCodeBlockVariables(mutatedContractSource), /code-block/u)
+})
+
 test('juejin 主题应在主题根块声明统一变量入口', () => {
   const source = readSource('../preview-theme/theme/juejin.scss')
 
@@ -608,7 +651,6 @@ test('juejin 主题应在主题根块声明统一变量入口', () => {
     '--wj-preview-link-color',
     '--wj-preview-link-hover-color',
     '--wj-preview-inline-code-background-color',
-    '--wj-preview-code-block-background-color',
     '--wj-preview-table-cell-padding',
     '--wj-preview-blockquote-padding',
     '--wj-preview-blockquote-first-child-margin-top',
@@ -629,7 +671,6 @@ test('vuepress 主题应在主题根块声明统一变量入口', () => {
     '--wj-preview-link-color',
     '--wj-preview-link-hover-color',
     '--wj-preview-inline-code-background-color',
-    '--wj-preview-code-block-background-color',
     '--wj-preview-table-header-background-color',
     '--wj-preview-table-cell-border',
     '--wj-preview-blockquote-border-color',
@@ -650,7 +691,6 @@ test('markdown-here 主题应在主题根块声明统一变量入口', () => {
     '--wj-preview-paragraph-margin',
     '--wj-preview-inline-code-background-color',
     '--wj-preview-inline-code-text-color',
-    '--wj-preview-code-block-padding',
     '--wj-preview-blockquote-paragraph-margin',
     '--wj-preview-blockquote-first-child-margin-top',
     '--wj-preview-blockquote-last-child-margin-bottom',
@@ -886,8 +926,6 @@ test('smart-blue 主题应在主题根块声明统一变量入口', () => {
     '--wj-preview-blockquote-last-child-margin-bottom',
     '--wj-preview-inline-code-background-color',
     '--wj-preview-inline-code-text-color',
-    '--wj-preview-code-block-background-color',
-    '--wj-preview-code-block-text-color',
     '--wj-preview-table-cell-border',
     '--wj-preview-table-row-border-top',
     '--wj-preview-table-row-even-background-color',
@@ -1023,7 +1061,6 @@ test('mk-cute 主题应在主题根块声明统一变量入口', () => {
     '--wj-preview-link-border-bottom',
     '--wj-preview-inline-code-background-color',
     '--wj-preview-inline-code-text-color',
-    '--wj-preview-code-block-background-color',
     '--wj-preview-list-padding-inline-start',
     '--wj-preview-list-item-margin-bottom',
     '--wj-preview-list-nested-margin-top',
@@ -1055,7 +1092,6 @@ test('cyanosis 主题应在主题根块声明统一变量入口', () => {
     '--wj-preview-link-hover-color',
     '--wj-preview-inline-code-background-color',
     '--wj-preview-inline-code-text-color',
-    '--wj-preview-code-block-background-color',
     '--wj-preview-blockquote-background-color',
     '--wj-preview-blockquote-border-color',
     '--wj-preview-blockquote-text-color',
@@ -1084,7 +1120,6 @@ test('scrolls 主题应在主题根块声明统一变量入口', () => {
     '--wj-preview-link-hover-color',
     '--wj-preview-inline-code-background-color',
     '--wj-preview-inline-code-text-color',
-    '--wj-preview-code-block-background-color',
     '--wj-preview-list-padding-inline-start',
     '--wj-preview-list-item-margin-bottom',
     '--wj-preview-ordered-list-item-padding-inline-start',
@@ -1284,7 +1319,7 @@ test('smart-blue 主题 dark 分支应只通过变量覆盖运行时 token', () 
   )
 })
 
-test('smart-blue dark 分支必须覆盖引用、表格、mermaid 和背景纹理变量', () => {
+test('smart-blue dark 分支必须覆盖引用、表格与背景纹理变量', () => {
   const source = readSource('../preview-theme/theme/smart-blue.scss')
 
   assertDarkThemeBranchHasRequiredVariables(source, '.preview-theme-smart-blue', [
@@ -1294,7 +1329,6 @@ test('smart-blue dark 分支必须覆盖引用、表格、mermaid 和背景纹�
     '--wj-preview-table-border-color',
     '--wj-preview-table-header-background-color',
     '--wj-preview-table-row-even-background-color',
-    '--wj-preview-mermaid-background-color',
     '--wj-preview-theme-background-image',
     '--wj-preview-theme-background-size',
     '--wj-preview-theme-background-position',
@@ -1309,7 +1343,6 @@ test('mk-cute 主题 dark 分支应只通过变量覆盖运行时 token', () => 
     '--wj-preview-text-color',
     '--wj-preview-table-header-text-color',
     '--wj-preview-inline-code-background-color',
-    '--wj-preview-code-block-background-color',
   ])
   assertDarkThemeBranchVariableValue(
     source,
@@ -1329,12 +1362,6 @@ test('mk-cute 主题 dark 分支应只通过变量覆盖运行时 token', () => 
     '--wj-preview-inline-code-background-color',
     'rgb\\(30, 34, 42\\)',
   )
-  assertDarkThemeBranchVariableValue(
-    source,
-    '.preview-theme-mk-cute',
-    '--wj-preview-code-block-background-color',
-    'rgb\\(30, 34, 42\\)',
-  )
 })
 
 test('cyanosis 主题 dark 分支应只通过变量覆盖运行时 token', () => {
@@ -1347,7 +1374,6 @@ test('cyanosis 主题 dark 分支应只通过变量覆盖运行时 token', () =>
     '--wj-preview-strong-color',
     '--wj-preview-link-color',
     '--wj-preview-inline-code-background-color',
-    '--wj-preview-code-block-background-color',
   ])
   assertDarkThemeBranchVariableValue(
     source,
@@ -1379,12 +1405,6 @@ test('cyanosis 主题 dark 分支应只通过变量覆盖运行时 token', () =>
     '--wj-preview-inline-code-background-color',
     '#ffcb7b',
   )
-  assertDarkThemeBranchVariableValue(
-    source,
-    '.preview-theme-cyanosis',
-    '--wj-preview-code-block-background-color',
-    'rgba\\(255, 227, 185, 0\\.5\\)',
-  )
 })
 
 test('scrolls 主题 dark 分支应只通过变量覆盖运行时 token', () => {
@@ -1414,7 +1434,6 @@ test('7.5.7 矩阵要求的 dark 分支 token 必须全部覆盖', () => {
         '--wj-preview-table-header-background-color',
         '--wj-preview-table-header-text-color',
         '--wj-preview-table-row-even-background-color',
-        '--wj-preview-mermaid-background-color',
       ],
     },
     {
@@ -1427,7 +1446,6 @@ test('7.5.7 矩阵要求的 dark 分支 token 必须全部覆盖', () => {
         '--wj-preview-table-border-color',
         '--wj-preview-table-header-background-color',
         '--wj-preview-table-row-even-background-color',
-        '--wj-preview-mermaid-background-color',
         '--wj-preview-theme-background-image',
         '--wj-preview-theme-background-size',
         '--wj-preview-theme-background-position',
@@ -1450,7 +1468,6 @@ test('7.5.7 矩阵要求的 dark 分支 token 必须全部覆盖', () => {
         '--wj-preview-table-header-background-color',
         '--wj-preview-table-header-text-color',
         '--wj-preview-table-row-even-background-color',
-        '--wj-preview-mermaid-background-color',
         '--wj-preview-theme-background-image',
         '--wj-preview-theme-background-size',
         '--wj-preview-theme-background-position',
@@ -1463,7 +1480,6 @@ test('7.5.7 矩阵要求的 dark 分支 token 必须全部覆盖', () => {
         '--wj-preview-table-border-color',
         '--wj-preview-table-header-background-color',
         '--wj-preview-table-row-even-background-color',
-        '--wj-preview-mermaid-background-color',
       ],
     },
     {
@@ -1476,7 +1492,6 @@ test('7.5.7 矩阵要求的 dark 分支 token 必须全部覆盖', () => {
         '--wj-preview-table-border-color',
         '--wj-preview-table-header-background-color',
         '--wj-preview-table-row-even-background-color',
-        '--wj-preview-mermaid-background-color',
       ],
     },
   ]

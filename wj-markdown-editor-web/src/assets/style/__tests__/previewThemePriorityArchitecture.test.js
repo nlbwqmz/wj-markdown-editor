@@ -785,7 +785,6 @@ const requiredBaseSelectors = [
   '.wj-preview-theme :where(ul, ol)',
   '.wj-preview-theme :where(blockquote)',
   '.wj-preview-theme :where(table)',
-  '.wj-preview-theme :where(pre)',
   '.wj-preview-theme :where(:not(pre) > code, :not(pre) > tt, :not(pre) > samp)',
 ]
 

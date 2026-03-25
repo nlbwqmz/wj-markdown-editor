@@ -222,64 +222,6 @@
     border-radius: var(--wj-preview-inline-code-border-radius);
   }
 
-  & :where(pre) {
-    margin: var(--wj-preview-pre-margin);
-    position: var(--wj-preview-pre-position);
-    font-size: var(--wj-preview-pre-font-size);
-    font-family: var(--wj-preview-code-font-family);
-    line-height: var(--wj-preview-code-line-height);
-    overflow-x: var(--wj-preview-code-block-overflow-x);
-  }
-
-  & :where(pre:not(.hljs)) {
-    color: var(--wj-preview-code-block-text-color);
-    background-color: var(--wj-preview-code-block-background-color);
-    border-radius: var(--wj-preview-code-block-border-radius);
-  }
-
-  & :where(pre > code) {
-    display: var(--wj-preview-code-block-display);
-    margin: var(--wj-preview-code-block-margin);
-    padding: var(--wj-preview-code-block-padding);
-    color: var(--wj-preview-code-block-color);
-    font-family: var(--wj-preview-code-font-family);
-    font-size: var(--wj-preview-code-block-font-size);
-    line-height: var(--wj-preview-code-block-content-line-height);
-    word-break: var(--wj-preview-code-block-word-break);
-    background-color: var(--wj-preview-code-block-content-background-color);
-  }
-
-  & :where(.pre-container) {
-    font-family: var(--wj-preview-code-font-family);
-  }
-
-  & :where(.pre-container-copy, .pre-container-lang) {
-    color: var(--wj-preview-code-toolbar-text-color);
-    font-family: var(--wj-preview-code-font-family);
-    font-size: var(--wj-preview-code-toolbar-font-size);
-    line-height: var(--wj-preview-code-toolbar-line-height);
-    user-select: var(--wj-preview-code-toolbar-user-select);
-    background-color: var(--wj-preview-code-toolbar-background-color);
-    border-radius: var(--wj-preview-code-toolbar-border-radius);
-    padding: var(--wj-preview-code-toolbar-padding);
-    opacity: var(--wj-preview-code-toolbar-opacity);
-  }
-
-  & .pre-container:hover .pre-container-copy {
-    opacity: var(--wj-preview-code-toolbar-hover-opacity);
-  }
-
-  & .pre-container:hover .pre-container-lang {
-    opacity: var(--wj-preview-code-toolbar-hover-opacity);
-  }
-
-  & :where(pre.mermaid, pre.mermaid-cache) {
-    padding: var(--wj-preview-mermaid-padding);
-    background-color: var(--wj-preview-mermaid-background-color);
-    border-radius: var(--wj-preview-mermaid-border-radius);
-    text-align: var(--wj-preview-mermaid-text-align);
-  }
-
   & :where(.footnotes) {
     margin-top: var(--wj-preview-footnote-margin-top);
     padding-top: var(--wj-preview-footnote-padding-top);

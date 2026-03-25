@@ -472,27 +472,6 @@ function selectorEntryTargetsSemanticTag(selectorEntry, tagName) {
     .some(entry => selectorEntryTargetsSemanticTag(entry, tagName))
 }
 
-function selectorEntryTargetsMermaidSurface(selectorEntry) {
-  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
-
-  if (/^pre\.mermaid-cache(?=$|[:.[#])/u.test(normalizedEntry)) {
-    return true
-  }
-
-  if (/^pre\.mermaid(?=$|[:.[#])/u.test(normalizedEntry)) {
-    return true
-  }
-
-  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedEntry)
-
-  if (!functionalArguments) {
-    return false
-  }
-
-  return splitTopLevelSelectorEntries(functionalArguments)
-    .some(entry => selectorEntryTargetsMermaidSurface(entry))
-}
-
 function assertPreviewThemeDefaultIsGithub(source) {
   const previewThemeBlock = getObjectPropertyBlock(source, 'previewTheme')
   assert.match(previewThemeBlock, /default:\s*\(\)\s*=>\s*'github'/)
@@ -608,74 +587,27 @@ function assertPreviewThemeContractAndBaseCoverRequiredVariables(contractSource,
   })
 }
 
-function assertPreviewThemeCodeToolbarHoverRulesHaveSpecificity(source) {
-  assert.match(source, /\.pre-container:hover\s+\.pre-container-copy\s*\{/u)
-  assert.match(source, /\.pre-container:hover\s+\.pre-container-lang\s*\{/u)
-  assert.equal(source.includes(':where(.pre-container:hover .pre-container-copy)'), false)
-  assert.equal(source.includes(':where(.pre-container:hover .pre-container-lang)'), false)
-}
-
 /**
- * 代码块工具栏应改为常驻低透明可见，悬浮后增强，不再通过 display 做显隐切换。
- * @param {string} contractSource
- * @param {string} baseSource
+ * fenced code block 与 mermaid 外壳职责已经迁出基础骨架，这里只允许保留正文与 inline code 等非块级语义。
+ * @param {string} source
  */
-function assertPreviewThemeCodeToolbarUsesOpacityVisibilityModel(contractSource, baseSource) {
-  const forbiddenContractVariables = [
-    '--wj-preview-code-toolbar-copy-display',
-    '--wj-preview-code-toolbar-copy-hover-display',
-    '--wj-preview-code-toolbar-lang-hover-display',
+function assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(source) {
+  const forbiddenSelectorPatterns = [
+    [/:where\(\s*pre\s*\)/u, ':where(pre)'],
+    [/:where\(\s*pre\s*:not\(\.hljs\)\s*\)/u, ':where(pre:not(.hljs))'],
+    [/:where\(\s*pre\s*>\s*code\s*\)/u, ':where(pre > code)'],
+    [/:where\(\s*\.pre-container\s*\)/u, ':where(.pre-container)'],
+    [/:where\(\s*\.pre-container-copy\s*,\s*\.pre-container-lang\s*\)/u, ':where(.pre-container-copy, .pre-container-lang)'],
+    [/\.pre-container:hover\s+\.pre-container-copy\s*\{/u, '.pre-container:hover .pre-container-copy'],
+    [/\.pre-container:hover\s+\.pre-container-lang\s*\{/u, '.pre-container:hover .pre-container-lang'],
+    [/:where\(\s*pre\.mermaid\s*,\s*pre\.mermaid-cache\s*\)/u, ':where(pre.mermaid, pre.mermaid-cache)'],
   ]
 
-  forbiddenContractVariables.forEach((variableName) => {
+  forbiddenSelectorPatterns.forEach(([pattern, selectorLabel]) => {
     assert.equal(
-      contractSource.includes(`${variableName}:`),
+      pattern.test(source),
       false,
-      `变量协议不应继续声明工具栏 display 变量：${variableName}`,
-    )
-  })
-
-  const toolbarDefaultBlock = getSelectorBlock(baseSource, ':where(.pre-container-copy, .pre-container-lang)')
-
-  assert.match(
-    toolbarDefaultBlock,
-    /opacity:\s*var\(--wj-preview-code-toolbar-opacity\);/u,
-    '基础骨架必须让复制按钮和语言标签默认使用低透明可见模型',
-  )
-
-  assert.equal(
-    /display\s*:/u.test(toolbarDefaultBlock),
-    false,
-    '基础骨架不应在工具栏默认块中通过 display 控制可见性',
-  )
-  assert.equal(
-    /:where\(\.pre-container-copy\)\s*\{/u.test(baseSource),
-    false,
-    '基础骨架不应单独通过 display 控制复制按钮可见性',
-  )
-  assert.equal(
-    /:where\(\.pre-container-lang\)\s*\{/u.test(baseSource),
-    false,
-    '基础骨架不应单独通过 display 控制语言标签可见性',
-  )
-
-  const hoverSelectors = [
-    '.pre-container:hover .pre-container-copy',
-    '.pre-container:hover .pre-container-lang',
-  ]
-
-  hoverSelectors.forEach((selector) => {
-    const hoverBlock = getSelectorBlock(baseSource, selector)
-
-    assert.match(
-      hoverBlock,
-      /opacity:\s*var\(--wj-preview-code-toolbar-hover-opacity\);/u,
-      `${selector} hover 时必须提升透明度`,
-    )
-    assert.equal(
-      /display\s*:/u.test(hoverBlock),
-      false,
-      `${selector} hover 时不应再通过 display 控制显隐`,
+      `基础骨架不得继续承接 fenced code block / mermaid 外壳职责：${selectorLabel}`,
     )
   })
 }
@@ -724,7 +656,7 @@ function assertPreviewThemeRegressionFixtureExtendedCoverage(source) {
 }
 
 /**
- * 校验基础层已经显式承接本轮新增的预览语义变量，而不是继续散落到主题特例中。
+ * 校验基础层已经显式承接本轮新增的非 fenced code block 语义变量，而不是继续散落到主题特例中。
  * @param {string} source
  */
 function assertPreviewThemeBaseConsumesExtendedSurfaceVariables(source) {
@@ -738,12 +670,6 @@ function assertPreviewThemeBaseConsumesExtendedSurfaceVariables(source) {
       selectorHeader => splitTopLevelSelectorEntries(selectorHeader)
         .some(entry => selectorEntryTargetsSemanticTag(entry, 'kbd')),
       /var\(--wj-preview-kbd-[a-z0-9-]+\)/u,
-    ],
-    [
-      'mermaid',
-      selectorHeader => splitTopLevelSelectorEntries(selectorHeader)
-        .some(entry => selectorEntryTargetsMermaidSurface(entry)),
-      /var\(--wj-preview-mermaid-[a-z0-9-]+\)/u,
     ],
     [
       'details',
@@ -843,7 +769,7 @@ test('预览主题基础骨架消费到的变量必须都在变量协议中声�
   assertPreviewThemeBaseVariablesDeclaredInContract(previewThemeBaseSource, previewThemeContractSource)
 })
 
-test('预览主题变量协议与基础骨架必须覆盖任务 3 新增基础表面变量', () => {
+test('预览主题变量协议与基础骨架必须覆盖非 fenced code block 的基础表面变量', () => {
   const previewThemeContractSource = readSource('../preview-theme/preview-theme-contract.scss')
   const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
 
@@ -855,13 +781,6 @@ test('预览主题变量协议与基础骨架必须覆盖任务 3 新增基础�
       '--wj-preview-kbd-font-size',
       '--wj-preview-kbd-border-radius',
       '--wj-preview-kbd-box-shadow',
-      '--wj-preview-code-toolbar-text-color',
-      '--wj-preview-code-toolbar-background-color',
-      '--wj-preview-code-toolbar-hover-opacity',
-      '--wj-preview-mermaid-background-color',
-      '--wj-preview-mermaid-padding',
-      '--wj-preview-mermaid-border-radius',
-      '--wj-preview-mermaid-text-align',
       '--wj-preview-theme-background-image',
       '--wj-preview-theme-background-size',
       '--wj-preview-theme-background-position',
@@ -872,7 +791,6 @@ test('预览主题变量协议与基础骨架必须覆盖任务 3 新增基础�
       '--wj-preview-details-open-summary-margin-bottom',
       '--wj-preview-summary-text-color',
       '--wj-preview-summary-font-weight',
-      '--wj-preview-code-toolbar-opacity',
     ],
   )
 })
@@ -891,72 +809,30 @@ test('预览主题变量声明断言必须能识别基础骨架中的变量拼�
   )
 })
 
-test('预览主题基础骨架的代码块工具栏 hover 规则必须保留足够 specificity', () => {
+test('预览主题基础骨架不得继续承担 fenced code block 与 mermaid 外壳职责', () => {
   const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
 
-  assertPreviewThemeCodeToolbarHoverRulesHaveSpecificity(previewThemeBaseSource)
+  assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(previewThemeBaseSource)
 })
 
-test('预览主题代码块工具栏必须改为常驻低透明可见并在 hover 时增强', () => {
-  const previewThemeContractSource = readSource('../preview-theme/preview-theme-contract.scss')
-  const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
-
-  assertPreviewThemeCodeToolbarUsesOpacityVisibilityModel(
-    previewThemeContractSource,
-    previewThemeBaseSource,
-  )
-})
-
-test('工具栏可见性模型断言必须识别 contract 残留的 display 变量和 base 的 display 切换', () => {
-  const previewThemeContractSource = readSource('../preview-theme/preview-theme-contract.scss')
-  const compliantContractSource = previewThemeContractSource
-    .replace(/^\s*--wj-preview-code-toolbar-copy-display:[^\n]+\n/gmu, '')
-    .replace(/^\s*--wj-preview-code-toolbar-copy-hover-display:[^\n]+\n/gmu, '')
-    .replace(/^\s*--wj-preview-code-toolbar-lang-hover-display:[^\n]+\n/gmu, '')
-  const mutatedPreviewThemeContractSource = `${previewThemeContractSource}
-  --wj-preview-code-toolbar-copy-display: none;`
+test('基础骨架旧职责断言必须识别 pre、toolbar 与 mermaid 外壳选择器残留', () => {
   const compliantBaseSource = `.wj-preview-theme {
-  & :where(.pre-container-copy, .pre-container-lang) {
-    opacity: var(--wj-preview-code-toolbar-opacity);
-  }
-
-  & .pre-container:hover .pre-container-copy {
-    opacity: var(--wj-preview-code-toolbar-hover-opacity);
-  }
-
-  & .pre-container:hover .pre-container-lang {
-    opacity: var(--wj-preview-code-toolbar-hover-opacity);
+  & :where(:not(pre) > code, :not(pre) > tt, :not(pre) > samp) {
+    color: var(--wj-preview-inline-code-text-color);
   }
 }`
-  const mutatedPreviewThemeBaseSource = `.wj-preview-theme {
-  & :where(.pre-container-copy, .pre-container-lang) {
-    opacity: var(--wj-preview-code-toolbar-opacity);
-  }
+  const preMutatedBaseSource = `${compliantBaseSource}
+  & :where(pre) {
+    margin: var(--wj-preview-paragraph-margin);
+  }`
+  const mermaidMutatedBaseSource = `${compliantBaseSource}
+  & :where(pre.mermaid, pre.mermaid-cache) {
+    text-align: center;
+  }`
 
-  & .pre-container:hover .pre-container-copy {
-    display: none;
-    opacity: var(--wj-preview-code-toolbar-hover-opacity);
-  }
-
-  & .pre-container:hover .pre-container-lang {
-    opacity: var(--wj-preview-code-toolbar-hover-opacity);
-  }
-}`
-
-  assert.throws(
-    () => assertPreviewThemeCodeToolbarUsesOpacityVisibilityModel(
-      mutatedPreviewThemeContractSource,
-      compliantBaseSource,
-    ),
-    /变量协议不应继续声明工具栏 display 变量/u,
-  )
-  assert.throws(
-    () => assertPreviewThemeCodeToolbarUsesOpacityVisibilityModel(
-      compliantContractSource,
-      mutatedPreviewThemeBaseSource,
-    ),
-    /hover 时不应再通过 display 控制显隐/u,
-  )
+  assert.doesNotThrow(() => assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(compliantBaseSource))
+  assert.throws(() => assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(preMutatedBaseSource), /:where\(pre\)/u)
+  assert.throws(() => assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(mermaidMutatedBaseSource), /pre\.mermaid/u)
 })
 
 test('预览主题回归样本必须覆盖关键 Markdown 标记', () => {
@@ -971,13 +847,13 @@ test('预览主题回归样本必须覆盖 kbd、mermaid 和多级无序列表',
   assertPreviewThemeRegressionFixtureExtendedCoverage(regressionFixtureSource)
 })
 
-test('预览主题基础骨架必须消费 kbd、mermaid、details 与主题根背景变量', () => {
+test('预览主题基础骨架必须消费 kbd、details 与主题根背景变量', () => {
   const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
 
   assertPreviewThemeBaseConsumesExtendedSurfaceVariables(previewThemeBaseSource)
 })
 
-test('基础骨架扩展语义断言不应绑定 mermaid 选择器顺序和主题根背景属性写法', () => {
+test('基础骨架扩展语义断言不应绑定主题根背景属性写法与 details 选择器顺序', () => {
   const equivalentBaseSource = `.wj-preview-theme {
   background:
     var(--wj-preview-theme-background-image)
@@ -989,12 +865,7 @@ test('基础骨架扩展语义断言不应绑定 mermaid 选择器顺序和主�
     color: var(--wj-preview-kbd-text-color);
   }
 
-  & :where(pre.mermaid-cache, pre.mermaid) {
-    background: var(--wj-preview-mermaid-background-color);
-    text-align: var(--wj-preview-mermaid-text-align);
-  }
-
-  & :where(details, summary) {
+  & :where(summary, details) {
     border-color: var(--wj-preview-details-border);
     color: var(--wj-preview-summary-text-color);
   }
@@ -1011,10 +882,6 @@ test('基础骨架扩展语义断言不应把同名类选择器误判为真实�
 
   .kbd-hint {
     color: var(--wj-preview-kbd-text-color);
-  }
-
-  .mermaid-toolbar {
-    text-align: var(--wj-preview-mermaid-text-align);
   }
 
   .details-panel {
