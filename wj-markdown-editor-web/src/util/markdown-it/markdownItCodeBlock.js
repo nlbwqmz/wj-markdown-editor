@@ -87,6 +87,37 @@ function resolveCodeBlockLanguageMeta(info, code) {
   }
 }
 
+function createFallbackCodeBlockLanguageMeta(info, code, md) {
+  const explicitLabel = info ? info.split(/\s+/u)[0]?.trim() ?? '' : ''
+
+  if (explicitLabel) {
+    const normalizedInput = explicitLabel.toLowerCase()
+    const canonicalKey = canonicalLanguageKeyByAlias.get(normalizedInput) ?? ''
+    const codeClassNames = ['hljs']
+
+    if (canonicalKey) {
+      codeClassNames.push(`language-${normalizedInput}`)
+      if (canonicalKey !== normalizedInput) {
+        codeClassNames.push(`language-${canonicalKey}`)
+      }
+    }
+
+    return {
+      codeClassName: codeClassNames.join(' '),
+      highlightedValue: md.utils.escapeHtml(code),
+      toolbarLangLabel: explicitLabel,
+      toolbarLangHidden: false,
+    }
+  }
+
+  return {
+    codeClassName: 'hljs',
+    highlightedValue: md.utils.escapeHtml(code),
+    toolbarLangLabel: '',
+    toolbarLangHidden: true,
+  }
+}
+
 function parseAttrs(attrs) {
   const value = []
   if (attrs && attrs.length > 0) {
@@ -120,6 +151,25 @@ function html(strings, ...values) {
     .trim() // 去除首尾的空白
 }
 
+function renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md) {
+  const preAttrs = parseAttrs(token.attrs)
+  const escapedToolbarLabel = md.utils.escapeHtml(languageMeta.toolbarLangLabel)
+
+  return html`
+  <div class="pre-container">
+    <div class="pre-container-toolbar">
+      <div class="font-bold op-80 color-[var(--wj-markdown-text-secondary)] pre-container-lang font-size-3 line-height-3 ${languageMeta.toolbarLangHidden ? 'hidden' : ''}">${escapedToolbarLabel}</div>
+      <div class="i-tabler:copy cursor-pointer op-80 color-[var(--wj-markdown-text-secondary)] pre-container-copy font-size-3.5 hover:op-100" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${encodedCode}')" onkeydown="${createCopyCodeKeydownHandler(encodedCode)}"></div>
+    </div>
+    <pre${preAttrs ? ` ${preAttrs}` : ''}>
+      <code class="${languageMeta.codeClassName}">`
+      + languageMeta.highlightedValue
+      + html`</code>
+    </pre>
+  </div>
+  `
+}
+
 export default function codeBlockPlugin(md) {
   const defaultRenderer = md.renderer.rules.fence.bind(md.renderer.rules)
   md.renderer.rules.fence = (tokens, idx, options, env, slf) => {
@@ -134,23 +184,10 @@ export default function codeBlockPlugin(md) {
     } else {
       try {
         const languageMeta = resolveCodeBlockLanguageMeta(info, code)
-        const preAttrs = parseAttrs(token.attrs)
-        const escapedToolbarLabel = md.utils.escapeHtml(languageMeta.toolbarLangLabel)
-        return html`
-        <div class="pre-container">
-          <div class="pre-container-toolbar">
-            <div class="font-bold op-80 color-[var(--wj-markdown-text-secondary)] pre-container-lang font-size-3 line-height-3 ${languageMeta.toolbarLangHidden ? 'hidden' : ''}">${escapedToolbarLabel}</div>
-            <div class="i-tabler:copy cursor-pointer op-80 color-[var(--wj-markdown-text-secondary)] pre-container-copy font-size-3.5 hover:op-100" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${encodedCode}')" onkeydown="${createCopyCodeKeydownHandler(encodedCode)}"></div>
-          </div>
-          <pre${preAttrs ? ` ${preAttrs}` : ''}>
-            <code class="${languageMeta.codeClassName}">`
-            + languageMeta.highlightedValue
-            + html`</code>
-          </pre>
-        </div>
-        `
+        return renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md)
       } catch (e) {
         console.error(e)
+        return renderStandardCodeBlockHtml(token, encodedCode, createFallbackCodeBlockLanguageMeta(info, code, md), md)
       }
     }
     return defaultRenderer(tokens, idx, options, env, slf)
