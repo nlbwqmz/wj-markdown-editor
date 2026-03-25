@@ -1,4 +1,4 @@
-.preview-theme-cyanosis {
+.wj-preview-theme.preview-theme-cyanosis {
   --wj-preview-cyanosis-base-color: #353535;
   --wj-preview-cyanosis-title-color: #005bb7;
   --wj-preview-cyanosis-strong-color: #2196f3;
@@ -107,7 +107,7 @@
 }
 
 :root[theme='dark'] {
-  .preview-theme-cyanosis {
+  .wj-preview-theme.preview-theme-cyanosis {
     --wj-preview-cyanosis-base-color: #cacaca;
     --wj-preview-cyanosis-title-color: #ddd;
     --wj-preview-cyanosis-strong-color: #fe9900;
@@ -160,7 +160,7 @@
 }
 
 /* 保留 cyanosis 的标题标点、链接动效、details 与 selection 皮肤。 */
-.preview-theme-cyanosis {
+.wj-preview-theme.preview-theme-cyanosis {
   h1 {
     margin-top: 36px;
     margin-bottom: 10px;
@@ -390,7 +390,7 @@
 }
 
 @media (max-width: 720px) {
-  .preview-theme-cyanosis {
+  .wj-preview-theme.preview-theme-cyanosis {
     h1 {
       font-size: 24px;
     }

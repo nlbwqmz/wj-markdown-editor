@@ -1,6 +1,6 @@
 /* github 主题以变量赋值为主，仅保留当前链路仍会命中的少量覆盖。 */
 :root[theme='dark'] {
-  .preview-theme-github {
+  .wj-preview-theme.preview-theme-github {
     color-scheme: dark;
     --focus-outlineColor: #1f6feb;
     --fgColor-default: #f0f6fc;
@@ -26,7 +26,7 @@
 }
 
 :root[theme='light'] {
-  .preview-theme-github {
+  .wj-preview-theme.preview-theme-github {
     color-scheme: light;
     --focus-outlineColor: #0969da;
     --fgColor-default: #1f2328;
@@ -51,7 +51,7 @@
   }
 }
 
-.preview-theme-github {
+.wj-preview-theme.preview-theme-github {
   --wj-preview-github-space-4: 0.25rem;
   --wj-preview-github-space-8: 0.5rem;
   --wj-preview-github-space-16: 1rem;
@@ -155,7 +155,7 @@
 }
 
 /* 标题、列表、定义列表和表格保留 github 特有的细节。 */
-.preview-theme-github {
+.wj-preview-theme.preview-theme-github {
   h1,
   h2 {
     padding-bottom: 0.3em;

@@ -1,4 +1,4 @@
-.preview-theme-scrolls {
+.wj-preview-theme.preview-theme-scrolls {
   --wj-preview-scrolls-accent-color: #cca152;
   --wj-preview-scrolls-border-color: #d1a34e99;
   --wj-preview-scrolls-hr-color: #e0c9a1;
@@ -81,13 +81,13 @@
 }
 
 :root[theme='dark'] {
-  .preview-theme-scrolls {
+  .wj-preview-theme.preview-theme-scrolls {
     --wj-preview-text-color: var(--wj-markdown-text-primary);
   }
 }
 
 /* 保留 scrolls 的卷轴标题装饰、表格底纹和复选框皮肤。 */
-.preview-theme-scrolls {
+.wj-preview-theme.preview-theme-scrolls {
   h1,
   h2,
   h3,
@@ -217,7 +217,7 @@
 }
 
 @media (max-width: 720px) {
-  .preview-theme-scrolls {
+  .wj-preview-theme.preview-theme-scrolls {
     h1 {
       font-size: 24px;
     }

@@ -1,5 +1,5 @@
 /* 预览主题变量协议：仅声明公共变量，具体结构样式放到基础层消费。 */
-:where([class*='preview-theme-']) {
+.wj-preview-theme {
   --wj-preview-space-none: 0;
   --wj-preview-display-block: block;
   --wj-preview-display-none: none;

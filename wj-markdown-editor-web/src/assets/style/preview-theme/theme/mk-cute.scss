@@ -8,7 +8,7 @@
   }
 }
 
-.preview-theme-mk-cute {
+.wj-preview-theme.preview-theme-mk-cute {
   --wj-preview-mk-cute-theme-color: #36ace1;
   --wj-preview-mk-cute-secondary-color: #409eff;
   --wj-preview-mk-cute-link-color: #409eff;
@@ -91,7 +91,7 @@
 }
 
 :root[theme='dark'] {
-  .preview-theme-mk-cute {
+  .wj-preview-theme.preview-theme-mk-cute {
     --wj-preview-text-color: #36ace1;
     --wj-preview-mk-cute-code-background-color: rgb(30, 34, 42);
     --wj-preview-inline-code-background-color: rgb(30, 34, 42);
@@ -100,7 +100,7 @@
 }
 
 /* 保留 mk-cute 的旋转标题图标、渐变分割线和引用装饰。 */
-.preview-theme-mk-cute {
+.wj-preview-theme.preview-theme-mk-cute {
   h1,
   h2,
   h3,
@@ -253,7 +253,7 @@
 }
 
 @media (max-width: 720px) {
-  .preview-theme-mk-cute {
+  .wj-preview-theme.preview-theme-mk-cute {
     h1 {
       font-size: 24px;
     }

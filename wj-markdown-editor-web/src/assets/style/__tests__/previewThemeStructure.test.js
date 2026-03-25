@@ -69,15 +69,65 @@ function getObjectPropertyBlock(source, propertyName) {
   assert.fail(`${propertyName} 属性块没有正确闭合`)
 }
 
+function getSelectorBlocks(source, selector) {
+  const selectorBlocks = []
+  let searchIndex = 0
+
+  while (searchIndex < source.length) {
+    const selectorIndex = source.indexOf(selector, searchIndex)
+    if (selectorIndex === -1) {
+      break
+    }
+
+    const blockStart = source.indexOf('{', selectorIndex)
+    assert.notEqual(blockStart, -1, `${selector} 缺少起始大括号`)
+
+    let braceDepth = 0
+    let blockEnd = -1
+
+    for (let i = blockStart; i < source.length; i++) {
+      const char = source[i]
+
+      if (char === '{') {
+        braceDepth++
+        continue
+      }
+
+      if (char === '}') {
+        braceDepth--
+        if (braceDepth === 0) {
+          blockEnd = i + 1
+          selectorBlocks.push(source.slice(blockStart, blockEnd))
+          searchIndex = blockEnd
+          break
+        }
+      }
+    }
+
+    if (blockEnd === -1) {
+      assert.fail(`${selector} 没有正确闭合`)
+    }
+  }
+
+  return selectorBlocks
+}
+
 function assertPreviewThemeDefaultIsGithub(source) {
   const previewThemeBlock = getObjectPropertyBlock(source, 'previewTheme')
   assert.match(previewThemeBlock, /default:\s*\(\)\s*=>\s*'github'/)
 }
 
 function assertGithubThemeFallbackCodeBlockStyle(source) {
+  const githubThemeRootBlocks = getSelectorBlocks(source, '.wj-preview-theme.preview-theme-github')
+  const githubThemeFallbackBlock = githubThemeRootBlocks.find(
+    block => /\.highlight\s*\{/u.test(block),
+  )
+
+  assert.ok(githubThemeFallbackBlock, 'github 主题必须保留包含 .highlight 的稳定根块')
+
   assert.match(
-    source,
-    /\.preview-theme-github\s+\.highlight pre,\s*\.preview-theme-github\s+pre:not\(\.hljs\)\s*\{[\s\S]*?color:\s*var\(--fgColor-default\);[\s\S]*?background-color:\s*var\(--bgColor-muted\);[\s\S]*?\}/,
+    githubThemeFallbackBlock,
+    /\.highlight pre,\s*pre:not\(\.hljs\)\s*\{[\s\S]*?color:\s*var\(--fgColor-default\);[\s\S]*?background-color:\s*var\(--bgColor-muted\);[\s\S]*?\}/,
   )
 }
 

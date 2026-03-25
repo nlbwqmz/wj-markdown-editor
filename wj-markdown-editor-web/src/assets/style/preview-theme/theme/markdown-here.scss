@@ -1,4 +1,4 @@
-.preview-theme-markdown-here {
+.wj-preview-theme.preview-theme-markdown-here {
   --wj-preview-font-size: 16px;
   --wj-preview-line-height: 1.8em;
 
@@ -55,14 +55,14 @@
 }
 
 :root[theme='dark'] {
-  .preview-theme-markdown-here {
+  .wj-preview-theme.preview-theme-markdown-here {
     --wj-preview-inline-code-text-color: var(--wj-markdown-text-primary);
     --wj-preview-inline-code-background-color: var(--wj-markdown-bg-hover);
   }
 }
 
 /* 保留 markdown-here 的文风化特征与非通用结构。 */
-.preview-theme-markdown-here {
+.wj-preview-theme.preview-theme-markdown-here {
   letter-spacing: 0.1em;
 
   h1,

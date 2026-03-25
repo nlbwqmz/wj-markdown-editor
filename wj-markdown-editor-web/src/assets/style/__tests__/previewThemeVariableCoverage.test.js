@@ -7,30 +7,164 @@ function readSource(relativePath) {
   return fs.readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
+function getStableThemeRootSelector(themeName) {
+  return `.wj-preview-theme.preview-theme-${themeName}`
+}
+
+function normalizeStableThemeRootSelector(selector) {
+  const legacyThemeRootMatch = selector.match(/^\.preview-theme-([a-z0-9-]+)$/u)
+
+  if (legacyThemeRootMatch) {
+    return getStableThemeRootSelector(legacyThemeRootMatch[1])
+  }
+
+  return selector
+}
+
 function getSelectorBlock(source, selector) {
-  const selectorIndex = source.indexOf(selector)
-  assert.notEqual(selectorIndex, -1, `未找到选择器：${selector}`)
+  const selectorBlocks = getSelectorBlocks(source, selector)
+  assert.notEqual(selectorBlocks.length, 0, `未找到选择器：${normalizeStableThemeRootSelector(selector)}`)
 
-  const blockStart = source.indexOf('{', selectorIndex)
-  assert.notEqual(blockStart, -1, `${selector} 缺少起始大括号`)
+  return selectorBlocks[0]
+}
 
-  let braceDepth = 0
+function getSelectorBlocks(source, selector) {
+  const normalizedSelector = normalizeStableThemeRootSelector(selector)
+  const selectorBlocks = []
+  let searchIndex = 0
 
-  for (let i = blockStart; i < source.length; i++) {
-    const char = source[i]
-    if (char === '{') {
-      braceDepth++
-      continue
+  while (searchIndex < source.length) {
+    const selectorIndex = source.indexOf(normalizedSelector, searchIndex)
+    if (selectorIndex === -1) {
+      break
     }
-    if (char === '}') {
-      braceDepth--
-      if (braceDepth === 0) {
-        return source.slice(blockStart, i + 1)
+
+    const blockStart = source.indexOf('{', selectorIndex)
+    assert.notEqual(blockStart, -1, `${normalizedSelector} 缺少起始大括号`)
+
+    let braceDepth = 0
+    let blockEnd = -1
+
+    for (let i = blockStart; i < source.length; i++) {
+      const char = source[i]
+      if (char === '{') {
+        braceDepth++
+        continue
       }
+      if (char === '}') {
+        braceDepth--
+        if (braceDepth === 0) {
+          blockEnd = i + 1
+          selectorBlocks.push(source.slice(blockStart, blockEnd))
+          searchIndex = blockEnd
+          break
+        }
+      }
+    }
+
+    if (blockEnd === -1) {
+      assert.fail(`${normalizedSelector} 没有正确闭合`)
     }
   }
 
-  assert.fail(`${selector} 没有正确闭合`)
+  return selectorBlocks
+}
+
+function getTopLevelNestedRuleEntries(blockSource) {
+  const blockBody = blockSource.slice(1, -1)
+  const ruleEntries = []
+  let braceDepth = 0
+  let bracketDepth = 0
+  let parenDepth = 0
+  let tokenStart = 0
+  let currentHeader = ''
+  let currentBlockStart = -1
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let escaped = false
+
+  for (let i = 0; i < blockBody.length; i++) {
+    const currentChar = blockBody[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (currentChar === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (!inDoubleQuote && currentChar === '\'') {
+      inSingleQuote = !inSingleQuote
+      continue
+    }
+
+    if (!inSingleQuote && currentChar === '"') {
+      inDoubleQuote = !inDoubleQuote
+      continue
+    }
+
+    if (inSingleQuote || inDoubleQuote) {
+      continue
+    }
+
+    if (currentChar === '[') {
+      bracketDepth++
+      continue
+    }
+
+    if (currentChar === ']') {
+      bracketDepth--
+      continue
+    }
+
+    if (currentChar === '(') {
+      parenDepth++
+      continue
+    }
+
+    if (currentChar === ')') {
+      parenDepth--
+      continue
+    }
+
+    if (bracketDepth > 0 || parenDepth > 0) {
+      continue
+    }
+
+    if (currentChar === '{') {
+      if (braceDepth === 0) {
+        currentHeader = blockBody.slice(tokenStart, i).trim()
+        currentBlockStart = i
+      }
+      braceDepth++
+      continue
+    }
+
+    if (currentChar === '}') {
+      braceDepth--
+      if (braceDepth === 0) {
+        if (currentHeader) {
+          ruleEntries.push({
+            selectorHeader: currentHeader,
+            blockSource: blockBody.slice(currentBlockStart, i + 1),
+          })
+        }
+        tokenStart = i + 1
+        currentHeader = ''
+        currentBlockStart = -1
+      }
+      continue
+    }
+
+    if (braceDepth === 0 && currentChar === ';') {
+      tokenStart = i + 1
+    }
+  }
+
+  return ruleEntries
 }
 
 function assertThemeRootVariableEntry(source, selector, requiredVariables) {
@@ -419,17 +553,35 @@ test('smart-blue 主题应在主题根块声明统一变量入口', () => {
 
 test('smart-blue 主题只保留标题人格与 kbd 特例选择器', () => {
   const source = readSource('../preview-theme/theme/smart-blue.scss')
+  const stableSmartBlueSelector = getStableThemeRootSelector('smart-blue')
+  const smartBlueStableBlocks = getSelectorBlocks(source, stableSmartBlueSelector)
+  const smartBlueSpecialBlock = smartBlueStableBlocks
+    .find(block => /(?:^|\n)\s*kbd\s*\{/u.test(block))
 
-  assert.equal(source.includes('.preview-theme-smart-blue p + p'), false)
-  assert.equal(source.includes('.preview-theme-smart-blue h3'), false)
-  assert.equal(source.includes('.preview-theme-smart-blue ol'), false)
-  assert.equal(source.includes('.preview-theme-smart-blue ul'), false)
-  assert.equal(source.includes('.preview-theme-smart-blue li'), false)
-  assert.equal(source.includes('.preview-theme-smart-blue table tr'), false)
+  assert.ok(smartBlueSpecialBlock, 'smart-blue 主题必须保留包含 kbd 的稳定根特例块')
 
-  assert.equal(source.includes('.preview-theme-smart-blue h1'), true)
-  assert.equal(source.includes('.preview-theme-smart-blue h2'), true)
-  assert.equal(source.includes('.preview-theme-smart-blue kbd'), true)
+  smartBlueStableBlocks.forEach((smartBlueBlock) => {
+    const smartBlueRuleEntries = getTopLevelNestedRuleEntries(smartBlueBlock)
+    const smartBlueTopLevelSelectorHeaders = smartBlueRuleEntries
+      .map(({ selectorHeader }) => selectorHeader)
+    const smartBlueTableRuleEntry = smartBlueRuleEntries
+      .find(({ selectorHeader }) => selectorHeader === 'table')
+    const smartBlueTableNestedSelectorHeaders = smartBlueTableRuleEntry
+      ? getTopLevelNestedRuleEntries(smartBlueTableRuleEntry.blockSource)
+          .map(({ selectorHeader }) => selectorHeader)
+      : []
+
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('p + p'), false)
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('h3'), false)
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('ol'), false)
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('ul'), false)
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('li'), false)
+    assert.equal(smartBlueTableNestedSelectorHeaders.includes('tr'), false)
+  })
+
+  assert.match(smartBlueSpecialBlock, /(^|\n)\s*h1\s*\{/u)
+  assert.match(smartBlueSpecialBlock, /(^|\n)\s*h2\s*\{/u)
+  assert.match(smartBlueSpecialBlock, /(^|\n)\s*kbd\s*\{/u)
 })
 
 test('mk-cute 主题应在主题根块声明统一变量入口', () => {

@@ -1,4 +1,4 @@
-.preview-theme-smart-blue {
+.wj-preview-theme.preview-theme-smart-blue {
   --wj-preview-text-color: #595959;
   --wj-preview-font-weight: 400;
   --wj-preview-font-size: 15px;
@@ -74,13 +74,13 @@
 }
 
 :root[theme='dark'] {
-  .preview-theme-smart-blue {
+  .wj-preview-theme.preview-theme-smart-blue {
     --wj-preview-text-color: var(--wj-markdown-text-primary);
   }
 }
 
 /* 保留 smart-blue 的背景纹理、标题造型和 kbd 呈现。 */
-.preview-theme-smart-blue {
+.wj-preview-theme.preview-theme-smart-blue {
   h1 {
     position: relative;
     margin: 50px 0;

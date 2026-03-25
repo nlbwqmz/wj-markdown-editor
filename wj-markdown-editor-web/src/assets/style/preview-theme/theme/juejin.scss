@@ -1,6 +1,6 @@
 $line-space: 22px;
 
-.preview-theme-juejin {
+.wj-preview-theme.preview-theme-juejin {
   --wj-preview-text-color: #333;
   --wj-preview-font-weight: 400;
   --wj-preview-font-size: 16px;
@@ -79,14 +79,14 @@ $line-space: 22px;
 }
 
 :root[theme='dark'] {
-  .preview-theme-juejin {
+  .wj-preview-theme.preview-theme-juejin {
     --wj-preview-text-color: var(--wj-markdown-text-primary);
     --wj-preview-inline-code-background-color: rgba(171, 178, 191, 0.2);
   }
 }
 
 /* 保留掘金主题仍需按级别微调的标题与表格容器细节。 */
-.preview-theme-juejin {
+.wj-preview-theme.preview-theme-juejin {
   h1 {
     margin-bottom: 5px;
   }
@@ -122,7 +122,7 @@ $line-space: 22px;
 }
 
 @media (max-width: 720px) {
-  .preview-theme-juejin {
+  .wj-preview-theme.preview-theme-juejin {
     h1 {
       font-size: 24px;
     }
