@@ -1,47 +1,54 @@
-.pre-container {
-  position: relative;
-  overflow: hidden;
-  border-radius: var(--wj-preview-code-block-border-radius, 8px);
-}
+.wj-preview-theme {
+  --wj-code-block-base-block-margin: var(--wj-preview-pre-margin, 1em 0);
+  --wj-code-block-base-border-radius: var(--wj-preview-code-block-border-radius, 8px);
+  --wj-code-block-base-surface-background-color: var(--wj-preview-code-block-background-color, var(--wj-markdown-bg-secondary));
+  --wj-code-block-base-toolbar-inset-block: 8px;
+  --wj-code-block-base-toolbar-inset-inline: 8px;
+  --wj-code-block-base-toolbar-gap: 8px;
+  --wj-code-block-base-toolbar-min-height: 28px;
+  --wj-code-block-base-toolbar-clearance: calc(var(--wj-code-block-base-toolbar-inset-block) * 2 + var(--wj-code-block-base-toolbar-min-height));
+  --wj-code-block-base-mermaid-border-radius: var(--wj-preview-mermaid-border-radius, var(--wj-code-block-base-border-radius));
 
-.pre-container-toolbar {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  left: 8px;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  pointer-events: none;
-}
+  :where(.pre-container) {
+    position: relative;
+    overflow: hidden;
+    margin: var(--wj-code-block-base-block-margin);
+    padding-top: var(--wj-code-block-base-toolbar-clearance);
+    background-color: var(--wj-code-block-base-surface-background-color);
+    border-radius: var(--wj-code-block-base-border-radius);
+  }
 
-.pre-container-copy,
-.pre-container-lang {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  pointer-events: auto;
-}
+  :where(.pre-container-toolbar) {
+    position: absolute;
+    top: var(--wj-code-block-base-toolbar-inset-block);
+    right: var(--wj-code-block-base-toolbar-inset-inline);
+    left: var(--wj-code-block-base-toolbar-inset-inline);
+    z-index: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--wj-code-block-base-toolbar-gap);
+    min-height: var(--wj-code-block-base-toolbar-min-height);
+    pointer-events: none;
+  }
 
-.pre-container pre {
-  margin: 0;
-  overflow: auto;
-  border-radius: inherit;
-}
+  :where(.pre-container-copy, .pre-container-lang) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    pointer-events: auto;
+  }
 
-// 为绝对定位工具栏预留顶部空间，避免遮挡首行代码。
-.pre-container code.hljs {
-  display: block;
-  min-width: max-content;
-  padding-top: calc(var(--wj-preview-code-block-padding, 1.2rem) + 1.75rem);
-}
+  :where(.pre-container pre) {
+    margin: 0;
+    overflow: auto;
+    border-radius: inherit;
+  }
 
-pre.mermaid,
-pre.mermaid-cache {
-  max-width: 100%;
-  overflow: auto;
-  border-radius: var(--wj-preview-mermaid-border-radius, var(--wj-preview-code-block-border-radius, 8px));
+  :where(pre.mermaid, pre.mermaid-cache) {
+    max-width: 100%;
+    overflow: auto;
+    border-radius: var(--wj-code-block-base-mermaid-border-radius);
+  }
 }
