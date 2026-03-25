@@ -306,6 +306,193 @@ function getTopLevelDeclarationEntries(blockSource) {
   return declarationEntries
 }
 
+function splitTopLevelSelectorEntries(selectorHeader) {
+  const selectorEntries = []
+  let tokenStart = 0
+  let bracketDepth = 0
+  let parenDepth = 0
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let escaped = false
+
+  for (let i = 0; i < selectorHeader.length; i++) {
+    const currentChar = selectorHeader[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (currentChar === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (!inDoubleQuote && currentChar === '\'') {
+      inSingleQuote = !inSingleQuote
+      continue
+    }
+
+    if (!inSingleQuote && currentChar === '"') {
+      inDoubleQuote = !inDoubleQuote
+      continue
+    }
+
+    if (inSingleQuote || inDoubleQuote) {
+      continue
+    }
+
+    if (currentChar === '[') {
+      bracketDepth++
+      continue
+    }
+
+    if (currentChar === ']') {
+      bracketDepth--
+      continue
+    }
+
+    if (currentChar === '(') {
+      parenDepth++
+      continue
+    }
+
+    if (currentChar === ')') {
+      parenDepth--
+      continue
+    }
+
+    if (currentChar === ',' && bracketDepth === 0 && parenDepth === 0) {
+      const selectorEntry = selectorHeader.slice(tokenStart, i).trim()
+
+      if (selectorEntry) {
+        selectorEntries.push(selectorEntry)
+      }
+
+      tokenStart = i + 1
+    }
+  }
+
+  const lastSelectorEntry = selectorHeader.slice(tokenStart).trim()
+
+  if (lastSelectorEntry) {
+    selectorEntries.push(lastSelectorEntry)
+  }
+
+  return selectorEntries
+}
+
+function stripLeadingRelativeSelectorPrefix(selectorEntry) {
+  let normalizedEntry = selectorEntry.trim()
+
+  while (normalizedEntry.startsWith('&')) {
+    normalizedEntry = normalizedEntry.slice(1).trimStart()
+  }
+
+  while (/^[>+~]/u.test(normalizedEntry)) {
+    normalizedEntry = normalizedEntry.slice(1).trimStart()
+  }
+
+  return normalizedEntry
+}
+
+function getLeadingFunctionalSelectorArguments(selectorEntry) {
+  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+  const supportedFunctionalPseudoClasses = [':where(', ':is(']
+
+  for (const functionPrefix of supportedFunctionalPseudoClasses) {
+    if (!normalizedEntry.startsWith(functionPrefix)) {
+      continue
+    }
+
+    const argumentStart = functionPrefix.length
+    let parenDepth = 1
+    let inSingleQuote = false
+    let inDoubleQuote = false
+    let escaped = false
+
+    for (let i = argumentStart; i < normalizedEntry.length; i++) {
+      const currentChar = normalizedEntry[i]
+
+      if (escaped) {
+        escaped = false
+        continue
+      }
+
+      if (currentChar === '\\') {
+        escaped = true
+        continue
+      }
+
+      if (!inDoubleQuote && currentChar === '\'') {
+        inSingleQuote = !inSingleQuote
+        continue
+      }
+
+      if (!inSingleQuote && currentChar === '"') {
+        inDoubleQuote = !inDoubleQuote
+        continue
+      }
+
+      if (inSingleQuote || inDoubleQuote) {
+        continue
+      }
+
+      if (currentChar === '(') {
+        parenDepth++
+        continue
+      }
+
+      if (currentChar === ')') {
+        parenDepth--
+        if (parenDepth === 0) {
+          return normalizedEntry.slice(argumentStart, i)
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+function selectorEntryTargetsSemanticTag(selectorEntry, tagName) {
+  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+
+  if (new RegExp(`^${tagName}(?=$|[:.[#])`, 'u').test(normalizedEntry)) {
+    return true
+  }
+
+  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedEntry)
+
+  if (!functionalArguments) {
+    return false
+  }
+
+  return splitTopLevelSelectorEntries(functionalArguments)
+    .some(entry => selectorEntryTargetsSemanticTag(entry, tagName))
+}
+
+function selectorEntryTargetsMermaidSurface(selectorEntry) {
+  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+
+  if (/^pre\.mermaid-cache(?=$|[:.[#])/u.test(normalizedEntry)) {
+    return true
+  }
+
+  if (/^pre\.mermaid(?=$|[:.[#])/u.test(normalizedEntry)) {
+    return true
+  }
+
+  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedEntry)
+
+  if (!functionalArguments) {
+    return false
+  }
+
+  return splitTopLevelSelectorEntries(functionalArguments)
+    .some(entry => selectorEntryTargetsMermaidSurface(entry))
+}
+
 function assertPreviewThemeDefaultIsGithub(source) {
   const previewThemeBlock = getObjectPropertyBlock(source, 'previewTheme')
   assert.match(previewThemeBlock, /default:\s*\(\)\s*=>\s*'github'/)
@@ -441,14 +628,29 @@ function assertPreviewThemeBaseConsumesExtendedSurfaceVariables(source) {
   const stableRootDeclarationEntries = getTopLevelDeclarationEntries(stableRootBlock)
 
   const semanticSurfaceAssertions = [
-    ['kbd', /kbd/u, /var\(--wj-preview-kbd-[a-z0-9-]+\)/u],
-    ['mermaid', /mermaid/u, /var\(--wj-preview-mermaid-[a-z0-9-]+\)/u],
-    ['details', /details/u, /var\(--wj-preview-details-[a-z0-9-]+\)/u],
+    [
+      'kbd',
+      selectorHeader => splitTopLevelSelectorEntries(selectorHeader)
+        .some(entry => selectorEntryTargetsSemanticTag(entry, 'kbd')),
+      /var\(--wj-preview-kbd-[a-z0-9-]+\)/u,
+    ],
+    [
+      'mermaid',
+      selectorHeader => splitTopLevelSelectorEntries(selectorHeader)
+        .some(entry => selectorEntryTargetsMermaidSurface(entry)),
+      /var\(--wj-preview-mermaid-[a-z0-9-]+\)/u,
+    ],
+    [
+      'details',
+      selectorHeader => splitTopLevelSelectorEntries(selectorHeader)
+        .some(entry => selectorEntryTargetsSemanticTag(entry, 'details') || selectorEntryTargetsSemanticTag(entry, 'summary')),
+      /var\(--wj-preview-(?:details|summary)-[a-z0-9-]+\)/u,
+    ],
   ]
 
-  semanticSurfaceAssertions.forEach(([surfaceName, selectorPattern, variablePattern]) => {
+  semanticSurfaceAssertions.forEach(([surfaceName, selectorMatcher, variablePattern]) => {
     const matchedRuleEntry = stableRootRuleEntries.find(({ selectorHeader, blockSource }) => {
-      return selectorPattern.test(selectorHeader) && variablePattern.test(blockSource)
+      return selectorMatcher(selectorHeader) && variablePattern.test(blockSource)
     })
 
     assert.ok(matchedRuleEntry, `基础骨架未在稳定根块中承接 ${surfaceName} 语义变量`)
@@ -598,6 +800,32 @@ test('基础骨架扩展语义断言不应绑定 mermaid 选择器顺序和主�
 }`
 
   assert.doesNotThrow(() => assertPreviewThemeBaseConsumesExtendedSurfaceVariables(equivalentBaseSource))
+})
+
+test('基础骨架扩展语义断言不应把同名类选择器误判为真实语义目标', () => {
+  const misleadingBaseSource = `.wj-preview-theme {
+  background-image: var(--wj-preview-theme-background-image);
+  background-size: var(--wj-preview-theme-background-size);
+  background-position: var(--wj-preview-theme-background-position);
+
+  .kbd-hint {
+    color: var(--wj-preview-kbd-text-color);
+  }
+
+  .mermaid-toolbar {
+    text-align: var(--wj-preview-mermaid-text-align);
+  }
+
+  .details-panel {
+    border: var(--wj-preview-details-border);
+    color: var(--wj-preview-summary-text-color);
+  }
+}`
+
+  assert.throws(
+    () => assertPreviewThemeBaseConsumesExtendedSurfaceVariables(misleadingBaseSource),
+    /基础骨架未在稳定根块中承接 kbd 语义变量/u,
+  )
 })
 
 test('预览主题回归样本引用的本地资源必须存在', () => {

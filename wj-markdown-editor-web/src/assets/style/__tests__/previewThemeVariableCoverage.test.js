@@ -167,6 +167,172 @@ function getTopLevelNestedRuleEntries(blockSource) {
   return ruleEntries
 }
 
+function splitTopLevelSelectorEntries(selectorHeader) {
+  const selectorEntries = []
+  let tokenStart = 0
+  let bracketDepth = 0
+  let parenDepth = 0
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let escaped = false
+
+  for (let i = 0; i < selectorHeader.length; i++) {
+    const currentChar = selectorHeader[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (currentChar === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (!inDoubleQuote && currentChar === '\'') {
+      inSingleQuote = !inSingleQuote
+      continue
+    }
+
+    if (!inSingleQuote && currentChar === '"') {
+      inDoubleQuote = !inDoubleQuote
+      continue
+    }
+
+    if (inSingleQuote || inDoubleQuote) {
+      continue
+    }
+
+    if (currentChar === '[') {
+      bracketDepth++
+      continue
+    }
+
+    if (currentChar === ']') {
+      bracketDepth--
+      continue
+    }
+
+    if (currentChar === '(') {
+      parenDepth++
+      continue
+    }
+
+    if (currentChar === ')') {
+      parenDepth--
+      continue
+    }
+
+    if (currentChar === ',' && bracketDepth === 0 && parenDepth === 0) {
+      const selectorEntry = selectorHeader.slice(tokenStart, i).trim()
+
+      if (selectorEntry) {
+        selectorEntries.push(selectorEntry)
+      }
+
+      tokenStart = i + 1
+    }
+  }
+
+  const lastSelectorEntry = selectorHeader.slice(tokenStart).trim()
+
+  if (lastSelectorEntry) {
+    selectorEntries.push(lastSelectorEntry)
+  }
+
+  return selectorEntries
+}
+
+function stripLeadingRelativeSelectorPrefix(selectorEntry) {
+  let normalizedEntry = selectorEntry.trim()
+
+  while (normalizedEntry.startsWith('&')) {
+    normalizedEntry = normalizedEntry.slice(1).trimStart()
+  }
+
+  while (/^[>+~]/u.test(normalizedEntry)) {
+    normalizedEntry = normalizedEntry.slice(1).trimStart()
+  }
+
+  return normalizedEntry
+}
+
+function getLeadingFunctionalSelectorArguments(selectorEntry) {
+  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+  const supportedFunctionalPseudoClasses = [':where(', ':is(']
+
+  for (const functionPrefix of supportedFunctionalPseudoClasses) {
+    if (!normalizedEntry.startsWith(functionPrefix)) {
+      continue
+    }
+
+    const argumentStart = functionPrefix.length
+    let parenDepth = 1
+    let inSingleQuote = false
+    let inDoubleQuote = false
+    let escaped = false
+
+    for (let i = argumentStart; i < normalizedEntry.length; i++) {
+      const currentChar = normalizedEntry[i]
+
+      if (escaped) {
+        escaped = false
+        continue
+      }
+
+      if (currentChar === '\\') {
+        escaped = true
+        continue
+      }
+
+      if (!inDoubleQuote && currentChar === '\'') {
+        inSingleQuote = !inSingleQuote
+        continue
+      }
+
+      if (!inSingleQuote && currentChar === '"') {
+        inDoubleQuote = !inDoubleQuote
+        continue
+      }
+
+      if (inSingleQuote || inDoubleQuote) {
+        continue
+      }
+
+      if (currentChar === '(') {
+        parenDepth++
+        continue
+      }
+
+      if (currentChar === ')') {
+        parenDepth--
+        if (parenDepth === 0) {
+          return normalizedEntry.slice(argumentStart, i)
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+function selectorEntryUsesDirectKbdSurface(selectorEntry) {
+  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+
+  if (/^kbd(?=$|[:.[#])/u.test(normalizedEntry)) {
+    return true
+  }
+
+  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedEntry)
+
+  if (!functionalArguments) {
+    return false
+  }
+
+  return splitTopLevelSelectorEntries(functionalArguments)
+    .some(entry => selectorEntryUsesDirectKbdSurface(entry))
+}
+
 function assertThemeRootVariableEntry(source, selector, requiredVariables) {
   const rootBlock = getSelectorBlock(source, selector)
   const declaredVariableNames = new Set(
@@ -287,10 +453,8 @@ function assertThemeDoesNotUseKbdSelectorForPrimarySurface(source, selector) {
   stableThemeBlocks.forEach((stableThemeBlock) => {
     const stableThemeRuleEntries = getTopLevelNestedRuleEntries(stableThemeBlock)
     const primaryKbdRuleEntry = stableThemeRuleEntries.find(({ selectorHeader }) => {
-      return selectorHeader
-        .split(',')
-        .map(entry => entry.trim())
-        .some(entry => /^kbd(?:$|[:.[#])/u.test(entry) || /^:where\(kbd(?:[\s,:.)]|$)/u.test(entry))
+      return splitTopLevelSelectorEntries(selectorHeader)
+        .some(entry => selectorEntryUsesDirectKbdSurface(entry))
     })
 
     assert.equal(
@@ -705,6 +869,19 @@ test('kbd 主外观断言不应把稳定根块外或更具体局部特例误判�
 
   assert.doesNotThrow(
     () => assertThemeDoesNotUseKbdSelectorForPrimarySurface(source, '.preview-theme-smart-blue'),
+  )
+})
+
+test('kbd 主外观断言必须识别 :where(.shortcut, kbd) 这类函数选择器中的直接 kbd', () => {
+  const source = `.wj-preview-theme.preview-theme-smart-blue {
+  :where(.shortcut, kbd) {
+    color: #135ce0;
+  }
+}`
+
+  assert.throws(
+    () => assertThemeDoesNotUseKbdSelectorForPrimarySurface(source, '.preview-theme-smart-blue'),
+    /直接 kbd 选择器承担主外观/u,
   )
 })
 
