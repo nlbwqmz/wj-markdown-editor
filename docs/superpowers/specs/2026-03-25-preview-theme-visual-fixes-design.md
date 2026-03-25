@@ -283,7 +283,7 @@
 - `h4`、`h5`、`h6` 不允许压平成同字号，也不允许再次大于或等于 `h3`
 - 恢复明亮模式表格斑马纹
 - dark 分支补齐引用、表格、Mermaid 外壳表面
-- 增加 `kbd` 主题变量
+- 补齐 `kbd` 变量覆盖
 
 #### 7.5.2 `smart-blue`
 
@@ -291,20 +291,20 @@
 
 - dark 分支补齐引用、表格、Mermaid 外壳背景
 - 补强 dark 背景纹理对比度，保证网格可见
-- 保留原有标题人格和 `kbd` 特例，但把背景纹理改为变量驱动
+- 保留原有标题人格，并将 `kbd` 与背景纹理统一迁移为变量覆盖
 
 #### 7.5.3 `vuepress`
 
 修复项：
 
-- 增加 `kbd` 样式
+- 补齐 `kbd` 变量覆盖
 - dark 分支补齐引用块背景与边框对比
 
 #### 7.5.4 `mk-cute`
 
 修复项：
 
-- 增加 `kbd` 样式
+- 补齐 `kbd` 变量覆盖
 - dark 分支补齐表格与 Mermaid 外壳表面
 - 将根背景纹理迁移为变量驱动，并在 dark 分支中同步提高纹理对比度
 - 保留旋转标题图标、引用装饰等人格特征
@@ -313,7 +313,7 @@
 
 修复项：
 
-- 增加 `kbd` 样式
+- 补齐 `kbd` 变量覆盖
 - dark 分支补齐表格与 Mermaid 外壳表面
 - 保留卷轴标题装饰和任务列表皮肤
 
@@ -322,8 +322,21 @@
 修复项：
 
 - 恢复无序列表标记，不再让 `ul` 退化为纯文本块
-- 增加 `kbd` 样式
+- 补齐 `kbd` 变量覆盖
 - dark 分支补齐表格、引用、Mermaid 外壳的可读性
+
+#### 7.5.7 主题 dark 最小变量覆盖矩阵
+
+后续 implementation plan 与自动化断言必须直接引用这张矩阵，不允许再用“所需变量”“相关表面”等模糊描述代替。
+
+| 主题 | `kbd` 最小覆盖 | 引用块最小覆盖 | 表格最小覆盖 | Mermaid 外壳最小覆盖 | 背景纹理最小覆盖 |
+|------|----------------|----------------|--------------|----------------------|------------------|
+| `juejin` | `--wj-preview-kbd-text-color`、`--wj-preview-kbd-background-color`、`--wj-preview-kbd-border` | `--wj-preview-blockquote-text-color`、`--wj-preview-blockquote-background-color`、`--wj-preview-blockquote-border-color` | `--wj-preview-table-header-background-color`、`--wj-preview-table-header-text-color`、`--wj-preview-table-row-even-background-color` | `--wj-preview-mermaid-background-color` | 无 |
+| `smart-blue` | `--wj-preview-kbd-text-color`、`--wj-preview-kbd-background-color`、`--wj-preview-kbd-border` | `--wj-preview-blockquote-text-color`、`--wj-preview-blockquote-background-color`、`--wj-preview-blockquote-border-color` | `--wj-preview-table-border-color`、`--wj-preview-table-header-background-color`、`--wj-preview-table-row-even-background-color` | `--wj-preview-mermaid-background-color` | `--wj-preview-theme-background-image`、`--wj-preview-theme-background-size`、`--wj-preview-theme-background-position` |
+| `vuepress` | `--wj-preview-kbd-text-color`、`--wj-preview-kbd-background-color`、`--wj-preview-kbd-border` | `--wj-preview-blockquote-text-color`、`--wj-preview-blockquote-background-color`、`--wj-preview-blockquote-border-color` | 无 | 无 | 无 |
+| `mk-cute` | `--wj-preview-kbd-text-color`、`--wj-preview-kbd-background-color`、`--wj-preview-kbd-border` | 无 | `--wj-preview-table-border-color`、`--wj-preview-table-header-background-color`、`--wj-preview-table-row-even-background-color` | `--wj-preview-mermaid-background-color` | `--wj-preview-theme-background-image`、`--wj-preview-theme-background-size`、`--wj-preview-theme-background-position` |
+| `scrolls` | `--wj-preview-kbd-text-color`、`--wj-preview-kbd-background-color`、`--wj-preview-kbd-border` | 无 | `--wj-preview-table-border-color`、`--wj-preview-table-header-background-color`、`--wj-preview-table-row-even-background-color` | `--wj-preview-mermaid-background-color` | 无 |
+| `markdown-here` | `--wj-preview-kbd-text-color`、`--wj-preview-kbd-background-color`、`--wj-preview-kbd-border` | `--wj-preview-blockquote-text-color`、`--wj-preview-blockquote-background-color`、`--wj-preview-blockquote-border-color` | `--wj-preview-table-border-color`、`--wj-preview-table-header-background-color`、`--wj-preview-table-row-even-background-color` | `--wj-preview-mermaid-background-color` | 无 |
 
 ### 7.6 Mermaid 的处理边界
 
@@ -370,13 +383,8 @@
 - `juejin` 的标题层级满足 `h3 > h4 > h5 > h6`
 - `juejin` 明亮模式保留表格斑马纹变量
 - `markdown-here` 不再通过主题特例移除无序列表标记
-- 受影响主题显式覆盖 `kbd` 变量，不再把主题级 `kbd` 规则作为主实现路径
-- `juejin` 的 dark 分支显式覆盖引用、表格、Mermaid 外壳所需变量
-- `smart-blue` 的 dark 分支显式覆盖引用、表格、Mermaid 外壳、背景纹理所需变量
-- `vuepress` 的 dark 分支显式覆盖引用块所需变量
-- `mk-cute` 的 dark 分支显式覆盖表格、Mermaid 外壳、背景纹理所需变量
-- `scrolls` 的 dark 分支显式覆盖表格、Mermaid 外壳所需变量
-- `markdown-here` 的 dark 分支显式覆盖表格、引用、Mermaid 外壳所需变量
+- 矩阵中的受影响主题显式覆盖 `kbd` 变量，不再把主题级 `kbd` 规则作为主实现路径
+- `juejin`、`smart-blue`、`vuepress`、`mk-cute`、`scrolls`、`markdown-here` 的 dark 分支分别满足“7.5.7 主题 dark 最小变量覆盖矩阵”的必覆盖 token 集
 
 这些断言的目标不是替代最终视觉验收，而是阻止“问题源代码形态”直接回退。
 
