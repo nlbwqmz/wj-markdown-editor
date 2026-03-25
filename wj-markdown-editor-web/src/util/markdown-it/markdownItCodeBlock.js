@@ -1,11 +1,19 @@
-import commonUtil from '@/util/commonUtil.js'
 // @unocss-include
 import hljs from 'highlight.js'
+
+const COPY_CODE_LABEL = '复制'
+
 /**
  * 若字符串以```结尾，则删除最后3个字符
  */
 function removeTripleBackticks(inputString) {
   return inputString.endsWith('```') ? inputString.slice(0, -3) : inputString
+}
+
+function strToBase64(str) {
+  const bytes = new TextEncoder().encode(str)
+  const binString = String.fromCodePoint(...bytes)
+  return btoa(binString)
 }
 
 function parseAttrs(attrs) {
@@ -57,7 +65,7 @@ export default function codeBlockPlugin(md) {
         <div class="relative pre-container">
           <div class="absolute top-0 right-0 p-1 z-10">
             <div class="font-bold op-80 color-[var(--wj-markdown-text-secondary)] pre-container-lang font-size-3 line-height-3">${lang}</div>
-            <div class="i-tabler:copy cursor-pointer op-80 color-[var(--wj-markdown-text-secondary)] pre-container-copy hidden font-size-3.5 hover:op-100" title="复制" onclick="copyCode('${commonUtil.strToBase64(code)}')"></div>
+            <div class="i-tabler:copy cursor-pointer op-80 color-[var(--wj-markdown-text-secondary)] pre-container-copy font-size-3.5 hover:op-100" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${strToBase64(code)}')"></div>
           </div>
           <pre class="hljs" ${parseAttrs(token.attrs)}>
             <code>`
