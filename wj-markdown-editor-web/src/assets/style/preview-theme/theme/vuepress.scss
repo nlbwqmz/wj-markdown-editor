@@ -101,51 +101,59 @@ $paragraph-space: 22px;
 }
 
 /* 保留 vuepress 主题仍依赖的标题、链接和表格特例。 */
-.preview-theme-vuepress h1 {
-  margin-bottom: 6px;
-}
+.preview-theme-vuepress {
+  h1 {
+    margin-bottom: 6px;
+  }
 
-.preview-theme-vuepress h2 {
-  margin-top: 50px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #eaecef;
-}
+  h2 {
+    margin-top: 50px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eaecef;
+  }
 
-.preview-theme-vuepress h3 {
-  padding-bottom: 0;
-}
+  h3 {
+    padding-bottom: 0;
+  }
 
-.preview-theme-vuepress h6 {
-  margin-top: 4px;
-}
+  h6 {
+    margin-top: 4px;
+  }
 
-.preview-theme-vuepress a::before {
-  display: none;
-}
+  a {
+    &::before {
+      display: none;
+    }
+  }
 
-.preview-theme-vuepress table {
-  display: inline-block !important;
-}
+  table {
+    display: inline-block !important;
+  }
 
-.preview-theme-vuepress blockquote::after {
-  display: block;
-  content: '';
-}
+  blockquote {
+    &::after {
+      display: block;
+      content: '';
+    }
+  }
 
-.preview-theme-vuepress ol li {
-  padding-left: 4px;
+  ol li {
+    padding-left: 4px;
+  }
 }
 
 @media (max-width: 720px) {
-  .preview-theme-vuepress h1 {
-    font-size: 24px;
-  }
+  .preview-theme-vuepress {
+    h1 {
+      font-size: 24px;
+    }
 
-  .preview-theme-vuepress h2 {
-    font-size: 20px;
-  }
+    h2 {
+      font-size: 20px;
+    }
 
-  .preview-theme-vuepress h3 {
-    font-size: 18px;
+    h3 {
+      font-size: 18px;
+    }
   }
 }

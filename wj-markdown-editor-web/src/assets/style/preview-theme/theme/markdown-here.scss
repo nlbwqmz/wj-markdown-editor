@@ -64,120 +64,118 @@
 /* 保留 markdown-here 的文风化特征与非通用结构。 */
 .preview-theme-markdown-here {
   letter-spacing: 0.1em;
-}
 
-.preview-theme-markdown-here h1,
-.preview-theme-markdown-here h2,
-.preview-theme-markdown-here h3,
-.preview-theme-markdown-here h4,
-.preview-theme-markdown-here h5,
-.preview-theme-markdown-here h6 {
-  margin-right: 5px;
-  margin-left: 5px;
-}
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin-right: 5px;
+    margin-left: 5px;
+  }
 
-.preview-theme-markdown-here pre code {
-  white-space: pre;
-}
+  pre code {
+    white-space: pre;
+  }
 
-.preview-theme-markdown-here li {
-  margin: 10px;
-}
+  li {
+    margin: 10px;
 
-.preview-theme-markdown-here li p {
-  margin: 10px 0;
-}
+    p {
+      margin: 10px 0;
+    }
+  }
 
-.preview-theme-markdown-here ul {
-  list-style-type: none;
-  margin-left: -16px;
-}
+  ul {
+    list-style-type: none;
+    margin-left: -16px;
+  }
 
-.preview-theme-markdown-here ul ul,
-.preview-theme-markdown-here ul ol,
-.preview-theme-markdown-here ol ul,
-.preview-theme-markdown-here ol ol {
-  margin: 0;
-  padding-left: 10px;
-}
+  ul ul,
+  ul ol,
+  ol ul,
+  ol ol {
+    margin: 0;
+    padding-left: 10px;
+  }
 
-.preview-theme-markdown-here dl {
-  padding: 0;
-}
+  dl {
+    padding: 0;
 
-.preview-theme-markdown-here dl dt {
-  font-size: 1em;
-  font-weight: bold;
-  font-style: italic;
-}
+    dt {
+      font-size: 1em;
+      font-weight: bold;
+      font-style: italic;
+    }
 
-.preview-theme-markdown-here dl dd {
-  margin: 0 0 10px;
-  padding: 0 10px;
-}
+    dd {
+      margin: 0 0 10px;
+      padding: 0 10px;
+    }
+  }
 
-.preview-theme-markdown-here blockquote,
-.preview-theme-markdown-here q {
-  border-left: 2px solid #009688;
-  padding: 0 10px;
-  color: #777;
-  quotes: none;
-  margin-left: 1em;
-}
+  blockquote,
+  q {
+    padding: 0 10px;
+    margin-left: 1em;
+    color: #777;
+    quotes: none;
+    border-left: 2px solid #009688;
 
-.preview-theme-markdown-here blockquote::before,
-.preview-theme-markdown-here blockquote::after,
-.preview-theme-markdown-here q::before,
-.preview-theme-markdown-here q::after {
-  content: none;
-}
+    &::before,
+    &::after {
+      content: none;
+    }
+  }
 
-.preview-theme-markdown-here h1 {
-  border-bottom: 1px solid #ddd;
-}
+  h1 {
+    border-bottom: 1px solid #ddd;
+  }
 
-.preview-theme-markdown-here h2 {
-  border-bottom: 1px solid #eee;
-}
+  h2 {
+    border-bottom: 1px solid #eee;
+  }
 
-.preview-theme-markdown-here table {
-  padding: 0;
-  border-collapse: collapse;
-  border-spacing: 0;
-  font-size: 1em;
-  border: 0;
-  margin: 0 auto;
-}
+  table {
+    padding: 0;
+    margin: 0 auto;
+    font-size: 1em;
+    border: 0;
+    border-collapse: collapse;
+    border-spacing: 0;
 
-.preview-theme-markdown-here tbody {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
+    tr {
+      padding: 0;
+      margin: 0;
+      background-color: white;
+      border: 0;
+      border-top: 1px solid #ccc;
 
-.preview-theme-markdown-here table tr {
-  border: 0;
-  border-top: 1px solid #ccc;
-  background-color: white;
-  margin: 0;
-  padding: 0;
-}
+      &:nth-child(2n) {
+        background-color: #f8f8f8;
+      }
 
-.preview-theme-markdown-here table tr:nth-child(2n) {
-  background-color: #f8f8f8;
-}
+      th,
+      td {
+        padding: 5px 10px;
+        margin: 0;
+        font-size: 16px;
+        border: 1px solid #ccc;
+      }
 
-.preview-theme-markdown-here table tr th,
-.preview-theme-markdown-here table tr td {
-  font-size: 16px;
-  border: 1px solid #ccc;
-  margin: 0;
-  padding: 5px 10px;
-}
+      th {
+        color: #eee;
+        font-weight: bold;
+        background-color: #009688;
+        border: 1px solid #009688;
+      }
+    }
+  }
 
-.preview-theme-markdown-here table tr th {
-  font-weight: bold;
-  color: #eee;
-  border: 1px solid #009688;
-  background-color: #009688;
+  tbody {
+    padding: 0;
+    margin: 0;
+    border: 0;
+  }
 }

@@ -80,33 +80,35 @@
 }
 
 /* 保留 smart-blue 的背景纹理、标题造型和 kbd 呈现。 */
-.preview-theme-smart-blue h1 {
-  position: relative;
-  margin: 50px 0;
-  font-size: 22px;
-  text-align: center;
-}
+.preview-theme-smart-blue {
+  h1 {
+    position: relative;
+    margin: 50px 0;
+    font-size: 22px;
+    text-align: center;
+  }
 
-.preview-theme-smart-blue h2 {
-  position: relative;
-  padding: 0 0 0 10px;
-  margin: 30px 0;
-  font-size: 20px;
-  border-left: 4px solid currentColor;
-}
+  h2 {
+    position: relative;
+    padding: 0 0 0 10px;
+    margin: 30px 0;
+    font-size: 20px;
+    border-left: 4px solid currentColor;
+  }
 
-.preview-theme-smart-blue img.loaded {
-  display: block;
-  margin: 0 auto;
-}
+  img.loaded {
+    display: block;
+    margin: 0 auto;
+  }
 
-.preview-theme-smart-blue kbd {
-  padding: 2px;
-  margin: auto 5px auto;
-  color: white;
-  font-size: small;
-  font-weight: bold;
-  background-color: #135ce0;
-  border: 1px solid #135ce0;
-  border-radius: 6px;
+  kbd {
+    padding: 2px;
+    margin: auto 5px auto;
+    color: white;
+    font-size: small;
+    font-weight: bold;
+    background-color: #135ce0;
+    border: 1px solid #135ce0;
+    border-radius: 6px;
+  }
 }

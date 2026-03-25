@@ -86,47 +86,53 @@ $line-space: 22px;
 }
 
 /* 保留掘金主题仍需按级别微调的标题与表格容器细节。 */
-.preview-theme-juejin h1 {
-  margin-bottom: 5px;
-}
+.preview-theme-juejin {
+  h1 {
+    margin-bottom: 5px;
+  }
 
-.preview-theme-juejin h2 {
-  padding-bottom: 12px;
-  border-bottom: 1px solid #ececec;
-}
+  h2 {
+    padding-bottom: 12px;
+    border-bottom: 1px solid #ececec;
+  }
 
-.preview-theme-juejin h3 {
-  padding-bottom: 0;
-}
+  h3 {
+    padding-bottom: 0;
+  }
 
-.preview-theme-juejin h6 {
-  margin-top: 5px;
-}
+  h6 {
+    margin-top: 5px;
+  }
 
-.preview-theme-juejin table {
-  display: inline-block !important;
-  border: solid 1px #f6f6f6;
-}
+  table {
+    display: inline-block !important;
+    border: solid 1px #f6f6f6;
+  }
 
-.preview-theme-juejin blockquote::after {
-  display: block;
-  content: '';
-}
+  blockquote {
+    &::after {
+      display: block;
+      content: '';
+    }
+  }
 
-.preview-theme-juejin ol li {
-  padding-left: 6px;
+  ol li {
+    padding-left: 6px;
+  }
 }
 
 @media (max-width: 720px) {
-  .preview-theme-juejin h1 {
-    font-size: 24px;
-  }
+  .preview-theme-juejin {
+    h1 {
+      font-size: 24px;
+    }
 
-  .preview-theme-juejin h2 {
-    font-size: 20px;
-  }
+    h2 {
+      font-size: 20px;
+    }
 
-  .preview-theme-juejin h3 {
-    font-size: 18px;
+    h3 {
+      font-size: 18px;
+    }
   }
 }
