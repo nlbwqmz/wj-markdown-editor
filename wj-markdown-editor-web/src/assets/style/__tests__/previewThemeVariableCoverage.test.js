@@ -289,6 +289,47 @@ function assertThemeDoesNotUseKbdSelectorForPrimarySurface(source, selector) {
   )
 }
 
+/**
+ * 校验 smart-blue 仍可保留标题人格相关特例，但不再把其他结构样式塞回稳定根块。
+ * @param {string} source
+ */
+function assertSmartBlueThemePreservesHeadingPersonaSelectors(source) {
+  const stableSmartBlueSelector = getStableThemeRootSelector('smart-blue')
+  const smartBlueStableBlocks = getSelectorBlocks(source, stableSmartBlueSelector)
+  const smartBlueSpecialBlock = smartBlueStableBlocks.find((smartBlueBlock) => {
+    const smartBlueRuleEntries = getTopLevelNestedRuleEntries(smartBlueBlock)
+    const smartBlueTopLevelSelectorHeaders = smartBlueRuleEntries
+      .map(({ selectorHeader }) => selectorHeader)
+
+    return smartBlueTopLevelSelectorHeaders.includes('h1')
+      && smartBlueTopLevelSelectorHeaders.includes('h2')
+  })
+
+  assert.ok(smartBlueSpecialBlock, 'smart-blue 主题必须保留包含 h1/h2 的稳定根标题人格块')
+
+  smartBlueStableBlocks.forEach((smartBlueBlock) => {
+    const smartBlueRuleEntries = getTopLevelNestedRuleEntries(smartBlueBlock)
+    const smartBlueTopLevelSelectorHeaders = smartBlueRuleEntries
+      .map(({ selectorHeader }) => selectorHeader)
+    const smartBlueTableRuleEntry = smartBlueRuleEntries
+      .find(({ selectorHeader }) => selectorHeader === 'table')
+    const smartBlueTableNestedSelectorHeaders = smartBlueTableRuleEntry
+      ? getTopLevelNestedRuleEntries(smartBlueTableRuleEntry.blockSource)
+          .map(({ selectorHeader }) => selectorHeader)
+      : []
+
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('p + p'), false)
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('h3'), false)
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('ol'), false)
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('ul'), false)
+    assert.equal(smartBlueTopLevelSelectorHeaders.includes('li'), false)
+    assert.equal(smartBlueTableNestedSelectorHeaders.includes('tr'), false)
+  })
+
+  assert.match(smartBlueSpecialBlock, /(^|\n)\s*h1\s*\{/u)
+  assert.match(smartBlueSpecialBlock, /(^|\n)\s*h2\s*\{/u)
+}
+
 test('基础层相邻段落节奏应通过 margin-top 变量表达，避免污染 blockquote 多段间距', () => {
   const contractSource = readSource('../preview-theme/preview-theme-contract.scss')
   const baseSource = readSource('../preview-theme/preview-theme-base.scss')
@@ -604,37 +645,20 @@ test('smart-blue 主题应在主题根块声明统一变量入口', () => {
   ])
 })
 
-test('smart-blue 主题只保留标题人格与 kbd 特例选择器', () => {
+test('smart-blue 标题人格断言必须允许移除 kbd 特例', () => {
   const source = readSource('../preview-theme/theme/smart-blue.scss')
-  const stableSmartBlueSelector = getStableThemeRootSelector('smart-blue')
-  const smartBlueStableBlocks = getSelectorBlocks(source, stableSmartBlueSelector)
-  const smartBlueSpecialBlock = smartBlueStableBlocks
-    .find(block => /(?:^|\n)\s*kbd\s*\{/u.test(block))
+  const mutatedSource = source.replace(
+    /\n\s*kbd\s*\{[^\n{}]*\n\s*(?:[^\s{}][^\n{}]*\n\s*)*\}\n/u,
+    '\n',
+  )
 
-  assert.ok(smartBlueSpecialBlock, 'smart-blue 主题必须保留包含 kbd 的稳定根特例块')
+  assert.doesNotThrow(() => assertSmartBlueThemePreservesHeadingPersonaSelectors(mutatedSource))
+})
 
-  smartBlueStableBlocks.forEach((smartBlueBlock) => {
-    const smartBlueRuleEntries = getTopLevelNestedRuleEntries(smartBlueBlock)
-    const smartBlueTopLevelSelectorHeaders = smartBlueRuleEntries
-      .map(({ selectorHeader }) => selectorHeader)
-    const smartBlueTableRuleEntry = smartBlueRuleEntries
-      .find(({ selectorHeader }) => selectorHeader === 'table')
-    const smartBlueTableNestedSelectorHeaders = smartBlueTableRuleEntry
-      ? getTopLevelNestedRuleEntries(smartBlueTableRuleEntry.blockSource)
-          .map(({ selectorHeader }) => selectorHeader)
-      : []
+test('smart-blue 主题只保留标题人格相关特例选择器', () => {
+  const source = readSource('../preview-theme/theme/smart-blue.scss')
 
-    assert.equal(smartBlueTopLevelSelectorHeaders.includes('p + p'), false)
-    assert.equal(smartBlueTopLevelSelectorHeaders.includes('h3'), false)
-    assert.equal(smartBlueTopLevelSelectorHeaders.includes('ol'), false)
-    assert.equal(smartBlueTopLevelSelectorHeaders.includes('ul'), false)
-    assert.equal(smartBlueTopLevelSelectorHeaders.includes('li'), false)
-    assert.equal(smartBlueTableNestedSelectorHeaders.includes('tr'), false)
-  })
-
-  assert.match(smartBlueSpecialBlock, /(^|\n)\s*h1\s*\{/u)
-  assert.match(smartBlueSpecialBlock, /(^|\n)\s*h2\s*\{/u)
-  assert.match(smartBlueSpecialBlock, /(^|\n)\s*kbd\s*\{/u)
+  assertSmartBlueThemePreservesHeadingPersonaSelectors(source)
 })
 
 test('受影响主题不得继续用 kbd 选择器承担主外观', () => {
