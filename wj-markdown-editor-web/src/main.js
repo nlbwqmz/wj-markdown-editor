@@ -19,6 +19,7 @@ import 'vue3-colorpicker/style.css'
 // 代码主题改为按需动态加载，详见 codeThemeUtil.js
 // 预览主题
 import '@/assets/style/preview-theme/preview-theme.scss'
+import '@/assets/style/code-block/code-block-base.scss'
 import '@/assets/style/antd.scss'
 // markdown-it-github-alerts
 import 'markdown-it-github-alerts/styles/github-base.css'

@@ -1,0 +1,47 @@
+.pre-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--wj-preview-code-block-border-radius, 8px);
+}
+
+.pre-container-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  left: 8px;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.pre-container-copy,
+.pre-container-lang {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.pre-container pre {
+  margin: 0;
+  overflow: auto;
+  border-radius: inherit;
+}
+
+// 为绝对定位工具栏预留顶部空间，避免遮挡首行代码。
+.pre-container code.hljs {
+  display: block;
+  min-width: max-content;
+  padding-top: calc(var(--wj-preview-code-block-padding, 1.2rem) + 1.75rem);
+}
+
+pre.mermaid,
+pre.mermaid-cache {
+  max-width: 100%;
+  overflow: auto;
+  border-radius: var(--wj-preview-mermaid-border-radius, var(--wj-preview-code-block-border-radius, 8px));
+}
