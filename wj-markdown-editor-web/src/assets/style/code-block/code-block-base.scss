@@ -8,22 +8,21 @@
   --wj-code-block-base-mermaid-border-radius: var(--wj-preview-mermaid-border-radius, var(--wj-code-block-base-border-radius));
 
   :where(.pre-container) {
-    position: relative;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
     margin: var(--wj-code-block-base-block-margin);
     border-radius: var(--wj-code-block-base-border-radius);
   }
 
   :where(.pre-container-toolbar) {
-    position: absolute;
-    top: var(--wj-code-block-base-toolbar-inset-block);
-    right: var(--wj-code-block-base-toolbar-inset-inline);
-    left: var(--wj-code-block-base-toolbar-inset-inline);
-    z-index: 1;
+    grid-row: 1;
     display: flex;
     align-items: flex-start;
     gap: var(--wj-code-block-base-toolbar-gap);
     min-height: var(--wj-code-block-base-toolbar-min-height);
+    padding: var(--wj-code-block-base-toolbar-inset-block) var(--wj-code-block-base-toolbar-inset-inline) 0;
+    box-sizing: border-box;
     pointer-events: none;
   }
 
@@ -40,7 +39,9 @@
   }
 
   :where(.pre-container pre) {
+    grid-row: 2;
     margin: 0;
+    min-width: 0;
     overflow: auto;
     border-radius: inherit;
   }
