@@ -13,8 +13,11 @@ test('普通 fenced code block 必须输出可访问的复制按钮结构', () =
   const renderedHtml = md.render('```js\nconsole.log(1)\n```')
 
   assert.match(renderedHtml, /pre-container-copy/u)
+  assert.match(renderedHtml, /role="button"/u)
+  assert.match(renderedHtml, /tabindex="0"/u)
   assert.equal(renderedHtml.includes('hidden'), false)
   assert.match(renderedHtml, /title="复制"/u)
   assert.match(renderedHtml, /aria-label="复制"/u)
   assert.match(renderedHtml, /onclick="copyCode\('[^']+'\)"/u)
+  assert.match(renderedHtml, /onkeydown="[^"]*copyCode\('[^']+'\)[^"]*"/u)
 })

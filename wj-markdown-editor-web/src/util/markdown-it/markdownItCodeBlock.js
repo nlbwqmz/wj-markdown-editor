@@ -16,6 +16,10 @@ function strToBase64(str) {
   return btoa(binString)
 }
 
+function createCopyCodeKeydownHandler(encodedCode) {
+  return `if(event.key==='Enter'||event.key===' '){event.preventDefault();copyCode('${encodedCode}')}`
+}
+
 function parseAttrs(attrs) {
   const value = []
   if (attrs && attrs.length > 0) {
@@ -56,6 +60,7 @@ export default function codeBlockPlugin(md) {
     const code = token.content.trim()
     const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
     const lang = info.split(/\s+/g)[0]
+    const encodedCode = strToBase64(code)
     if (lang === 'mermaid') {
       const content = removeTripleBackticks(code)
       return `<pre class="mermaid" data-code="${content.replace(/\s/g, '')}" ${parseAttrs(token.attrs)}>\n${content}\n</pre>\n`
@@ -65,7 +70,7 @@ export default function codeBlockPlugin(md) {
         <div class="relative pre-container">
           <div class="absolute top-0 right-0 p-1 z-10">
             <div class="font-bold op-80 color-[var(--wj-markdown-text-secondary)] pre-container-lang font-size-3 line-height-3">${lang}</div>
-            <div class="i-tabler:copy cursor-pointer op-80 color-[var(--wj-markdown-text-secondary)] pre-container-copy font-size-3.5 hover:op-100" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${strToBase64(code)}')"></div>
+            <div class="i-tabler:copy cursor-pointer op-80 color-[var(--wj-markdown-text-secondary)] pre-container-copy font-size-3.5 hover:op-100" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${encodedCode}')" onkeydown="${createCopyCodeKeydownHandler(encodedCode)}"></div>
           </div>
           <pre class="hljs" ${parseAttrs(token.attrs)}>
             <code>`
