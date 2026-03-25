@@ -7,6 +7,12 @@ function readSource(relativePath) {
   return fs.readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
+function stripScssComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//gu, '')
+    .replace(/^\s*\/\/.*$/gmu, '')
+}
+
 function escapeRegExp(sourceText) {
   return sourceText.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }
@@ -42,6 +48,40 @@ function getSelectorBlockRange(source, selector) {
 
   assert.fail(`${selector} 没有正确闭合`)
 }
+
+function readPreviewThemeSource(fileName) {
+  return stripScssComments(readSource(`../preview-theme/theme/${fileName}`))
+}
+
+const previewThemeFiles = [
+  'github.scss',
+  'juejin.scss',
+  'vuepress.scss',
+  'markdown-here.scss',
+  'smart-blue.scss',
+  'mk-cute.scss',
+  'cyanosis.scss',
+  'scrolls.scss',
+]
+
+const previewThemeForbiddenStructurePatterns = [
+  ['.highlight', /(?:^|[^\w-])\.highlight(?=$|[^\w-])/u],
+  ['.hljs', /(?:^|[^\w-])\.hljs(?=$|[^\w-])/u],
+  ['.pre-container*', /(?:^|[^\w-])\.pre-container(?:-[\w-]+)?(?=$|[^\w-])/u],
+  ['pre > code', /(?:^|[^\w-])pre\s*>\s*code(?=$|[^\w-])/u],
+  ['pre code', /(?:^|[^\w-])pre\s+code(?=$|[^\w-])/u],
+  ['pre.mermaid*', /(?:^|[^\w-])pre\.(?:mermaid|mermaid-cache)(?=$|[^\w-])/u],
+]
+
+const previewThemeForbiddenSelectionPatterns = [
+  ['code::selection', /(?:^|[^\w-])code\s*::selection(?=$|[^\w-])/u],
+]
+
+const previewThemeForbiddenVariablePrefixes = [
+  '--wj-preview-code-block-',
+  '--wj-preview-code-toolbar-',
+  '--wj-preview-mermaid-',
+]
 
 test('main.js 必须在 preview theme 之后导入 code block base', () => {
   const mainSource = readSource('../../../main.js')
@@ -174,4 +214,46 @@ test('code-block-base.scss 不得承接 code theme 分支和 token 颜色规则'
     /\.hljs-(keyword|string|comment)\b/u,
     'code-block-base.scss 不得包含 hljs token 颜色规则',
   )
+})
+
+test('preview theme 文件不得继续声明 fenced code block / mermaid 变量族', () => {
+  previewThemeFiles.forEach((fileName) => {
+    const source = readPreviewThemeSource(fileName)
+
+    previewThemeForbiddenVariablePrefixes.forEach((variablePrefix) => {
+      assert.doesNotMatch(
+        source,
+        new RegExp(`^\\s*${escapeRegExp(variablePrefix)}[a-z0-9-]*\\s*:`, 'mu'),
+        `${fileName} 不得继续声明变量族：${variablePrefix}*`,
+      )
+    })
+  })
+})
+
+test('preview theme 文件不得继续命中 fenced code block / mermaid 结构选择器', () => {
+  previewThemeFiles.forEach((fileName) => {
+    const source = readPreviewThemeSource(fileName)
+
+    previewThemeForbiddenStructurePatterns.forEach(([selectorLabel, pattern]) => {
+      assert.doesNotMatch(
+        source,
+        pattern,
+        `${fileName} 不得继续命中结构选择器：${selectorLabel}`,
+      )
+    })
+  })
+})
+
+test('preview theme 文件不得继续命中代码块相关 ::selection 选择器', () => {
+  previewThemeFiles.forEach((fileName) => {
+    const source = readPreviewThemeSource(fileName)
+
+    previewThemeForbiddenSelectionPatterns.forEach(([selectorLabel, pattern]) => {
+      assert.doesNotMatch(
+        source,
+        pattern,
+        `${fileName} 不得继续命中代码块相关选择器：${selectorLabel}`,
+      )
+    })
+  })
 })

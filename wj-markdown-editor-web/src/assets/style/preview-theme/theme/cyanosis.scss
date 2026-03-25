@@ -13,7 +13,6 @@
   --wj-preview-cyanosis-blockquote-background-color: #f0fdff;
   --wj-preview-cyanosis-code-color: #c2185b;
   --wj-preview-cyanosis-code-background-color: #fff4f4;
-  --wj-preview-cyanosis-code-block-background-color: #f8f8f8;
   --wj-preview-cyanosis-table-border-color: #c3e0fd;
   --wj-preview-cyanosis-table-header-background-color: #dff0ff;
   --wj-preview-cyanosis-table-header-text-color: #005bb7;
@@ -25,8 +24,6 @@
   --wj-preview-cyanosis-selection-background-color: rgba(175, 207, 247, 0.25);
   --wj-preview-cyanosis-selection-delete-color: #999;
   --wj-preview-cyanosis-selection-element-background-color: #e8ebec;
-  --wj-preview-cyanosis-selection-code-background-color: #ffeaeb;
-  --wj-preview-cyanosis-selection-pre-background-color: rgba(160, 200, 255, 0.25);
 
   --wj-preview-text-color: var(--wj-preview-cyanosis-base-color);
   --wj-preview-font-weight: 400;
@@ -73,12 +70,6 @@
 
   --wj-preview-pre-position: relative;
   --wj-preview-code-line-height: 1.75;
-  --wj-preview-code-block-font-size: 14px;
-  --wj-preview-code-block-padding: 1.2rem;
-  --wj-preview-code-block-border-radius: 0;
-  --wj-preview-code-block-background-color: var(--wj-preview-cyanosis-code-block-background-color);
-  --wj-preview-code-block-content-background-color: inherit;
-  --wj-preview-code-block-text-color: #333;
 
   --wj-preview-table-display: inline-block;
   --wj-preview-table-width: auto;
@@ -122,7 +113,6 @@
     --wj-preview-cyanosis-blockquote-background-color: rgba(255, 199, 116, 0.1);
     --wj-preview-cyanosis-code-color: #000;
     --wj-preview-cyanosis-code-background-color: #ffcb7b;
-    --wj-preview-cyanosis-code-block-background-color: rgba(255, 227, 185, 0.5);
     --wj-preview-cyanosis-table-border-color: #fe9900;
     --wj-preview-cyanosis-table-header-background-color: #ffb648;
     --wj-preview-cyanosis-table-header-text-color: #000;
@@ -134,8 +124,6 @@
     --wj-preview-cyanosis-selection-background-color: rgba(175, 207, 247, 0.25);
     --wj-preview-cyanosis-selection-delete-color: #999;
     --wj-preview-cyanosis-selection-element-background-color: #000;
-    --wj-preview-cyanosis-selection-code-background-color: #ffcb7b;
-    --wj-preview-cyanosis-selection-pre-background-color: rgba(160, 200, 255, 0.25);
 
     --wj-preview-text-color: #cacaca;
     --wj-preview-heading-color: #ddd;
@@ -150,7 +138,6 @@
     --wj-preview-blockquote-border-color: #fe9900;
     --wj-preview-inline-code-text-color: #000;
     --wj-preview-inline-code-background-color: #ffcb7b;
-    --wj-preview-code-block-background-color: rgba(255, 227, 185, 0.5);
     --wj-preview-table-border: 1px solid #fe9900;
     --wj-preview-table-border-color: #fe9900;
     --wj-preview-table-header-background-color: #ffb648;
@@ -242,26 +229,6 @@
     border-width: 0;
   }
 
-  pre > code {
-    &::-webkit-scrollbar {
-      width: 4px;
-      height: 4px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background-color: var(--wj-preview-cyanosis-border-color);
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background-color: var(--wj-preview-cyanosis-strong-color);
-      border-radius: 10px;
-    }
-
-    &::selection {
-      background-color: var(--wj-preview-cyanosis-selection-pre-background-color);
-    }
-  }
-
   a {
     position: relative;
 
@@ -350,10 +317,6 @@
 
   :where(a, b, strong, i, em)::selection {
     background-color: var(--wj-preview-cyanosis-selection-element-background-color);
-  }
-
-  code::selection {
-    background-color: var(--wj-preview-cyanosis-selection-code-background-color);
   }
 
   .contains-task-list input[type='checkbox'] {

@@ -633,20 +633,6 @@ function assertPreviewThemeDefaultIsGithub(source) {
   assert.match(previewThemeBlock, /default:\s*\(\)\s*=>\s*'github'/)
 }
 
-function assertGithubThemeFallbackCodeBlockStyle(source) {
-  const githubThemeRootBlocks = getSelectorBlocks(source, '.wj-preview-theme.preview-theme-github')
-  const githubThemeFallbackBlock = githubThemeRootBlocks.find(
-    block => /\.highlight\s*\{/u.test(block),
-  )
-
-  assert.ok(githubThemeFallbackBlock, 'github 主题必须保留包含 .highlight 的稳定根块')
-
-  assert.match(
-    githubThemeFallbackBlock,
-    /\.highlight pre,\s*pre:not\(\.hljs\)\s*\{[\s\S]*?color:\s*var\(--fgColor-default\);[\s\S]*?background-color:\s*var\(--bgColor-muted\);[\s\S]*?\}/,
-  )
-}
-
 function assertPreviewThemeEntryImportOrder(source) {
   const useStatements = Array.from(source.matchAll(/^@use\s+['"][^'"]+['"];/gm), match => match[0])
   const expectedUseStatements = [
@@ -898,12 +884,6 @@ test('断言必须限定在 previewTheme 属性块内', () => {
     .replace(/default:\s*\(\)\s*=>\s*'atom-one-dark'/, `default: () => 'github'`)
 
   assert.throws(() => assertPreviewThemeDefaultIsGithub(mutatedPreviewSource))
-})
-
-test('github 预览主题需要覆盖未高亮代码块的回退样式', () => {
-  const githubThemeSource = readSource('../preview-theme/theme/github.scss')
-
-  assertGithubThemeFallbackCodeBlockStyle(githubThemeSource)
 })
 
 test('预览主题入口必须先聚合变量协议和基础骨架，再引入各主题文件', () => {

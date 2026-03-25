@@ -1509,12 +1509,3 @@ test('mk-cute 主题应保留旋转标题图标特例', () => {
   assert.match(source, /@keyframes\s+mk-cute-spin/u)
   assert.match(source, /animation:\s*mk-cute-spin/u)
 })
-
-test('scrolls 主题应保留 mermaid 代码块居中覆盖', () => {
-  const source = readSource('../preview-theme/theme/scrolls.scss')
-
-  assert.match(
-    source,
-    /pre\.mermaid,\s*pre\.mermaid-cache\s*\{[\s\S]*?text-align:\s*center;/u,
-  )
-})

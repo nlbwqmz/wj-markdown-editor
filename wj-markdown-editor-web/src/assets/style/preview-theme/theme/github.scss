@@ -131,13 +131,6 @@
   --wj-preview-pre-font-size: 85%;
   --wj-preview-code-font-family: var(--wj-preview-github-font-monospace);
   --wj-preview-code-line-height: 1.45;
-  --wj-preview-code-block-font-size: 100%;
-  --wj-preview-code-block-padding: 1.2rem;
-  --wj-preview-code-block-color: inherit;
-  --wj-preview-code-block-border-radius: 6px;
-  --wj-preview-code-block-background-color: var(--bgColor-muted);
-  --wj-preview-code-block-text-color: var(--fgColor-default);
-  --wj-preview-code-block-overflow-x: auto;
 
   --wj-preview-footnote-font-size: 12px;
   --wj-preview-footnote-text-color: var(--fgColor-muted);
@@ -287,38 +280,6 @@
 
     img {
       background-color: transparent;
-    }
-  }
-
-  /* 未高亮代码块与历史 highlight 包裹都要继续命中回退样式。 */
-  .highlight {
-    margin-bottom: var(--wj-preview-github-space-16);
-
-    pre {
-      margin-bottom: 0;
-      overflow: auto;
-      font-size: 85%;
-      line-height: 1.45;
-      word-break: normal;
-      border-radius: 6px;
-    }
-  }
-
-  .highlight pre,
-  pre:not(.hljs) {
-    color: var(--fgColor-default);
-    background-color: var(--bgColor-muted);
-  }
-
-  pre {
-    word-wrap: normal;
-
-    > code,
-    > tt {
-      overflow: visible;
-      word-wrap: normal;
-      background-color: transparent;
-      border: 0;
     }
   }
 

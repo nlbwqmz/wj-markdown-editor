@@ -89,11 +89,6 @@ $paragraph-space: 22px;
 
   --wj-preview-pre-position: relative;
   --wj-preview-code-line-height: #{$line-height};
-  --wj-preview-code-block-font-size: #{$font-size};
-  --wj-preview-code-block-border-radius: 8px;
-  --wj-preview-code-block-background-color: #{$color-code-bg};
-  --wj-preview-code-block-content-background-color: inherit;
-  --wj-preview-code-block-text-color: #fff;
 }
 
 :root[theme='dark'] {

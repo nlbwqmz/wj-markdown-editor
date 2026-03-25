@@ -77,12 +77,6 @@
 
   --wj-preview-pre-position: relative;
   --wj-preview-code-line-height: 1.75;
-  --wj-preview-code-block-font-size: 12px;
-  --wj-preview-code-block-padding: 1.2rem;
-  --wj-preview-code-block-border-radius: 10px;
-  --wj-preview-code-block-background-color: var(--wj-preview-mk-cute-code-background-color);
-  --wj-preview-code-block-content-background-color: inherit;
-  --wj-preview-code-block-text-color: var(--wj-preview-mk-cute-code-color);
 
   --wj-preview-task-list-style: none;
   --wj-preview-task-list-padding-inline-start: 0;
@@ -102,9 +96,7 @@
     --wj-preview-table-header-background-color: rgba(54, 172, 225, 0.22);
     --wj-preview-table-header-text-color: var(--wj-markdown-text-primary);
     --wj-preview-table-row-even-background-color: rgba(54, 172, 225, 0.08);
-    --wj-preview-mermaid-background-color: rgb(30, 34, 42);
     --wj-preview-inline-code-background-color: rgb(30, 34, 42);
-    --wj-preview-code-block-background-color: rgb(30, 34, 42);
     --wj-preview-theme-background-image:
       linear-gradient(90deg, rgba(54, 172, 225, 0.08) 3%, rgba(0, 0, 0, 0) 3%),
       linear-gradient(360deg, rgba(54, 172, 225, 0.08) 3%, rgba(0, 0, 0, 0) 3%);
