@@ -176,10 +176,8 @@
 - `--wj-preview-code-toolbar-background-color`
 - `--wj-preview-code-toolbar-opacity`
 - `--wj-preview-code-toolbar-hover-opacity`
-- `--wj-preview-code-toolbar-copy-display`
-- `--wj-preview-code-toolbar-copy-hover-display`
 
-当前已有部分工具栏变量，但缺少“默认可见状态”和“悬浮增强”的完整表达。本轮需要让复制按钮默认可感知，而不是完全不可见。
+本轮明确采用“默认低透明可见，悬浮后增强”的交互模型，不再保留“默认隐藏，仅悬浮显示”的实现方向。复制按钮与语言标签始终渲染在 DOM 中，基础层只通过透明度与表面变量控制其可感知程度。
 
 #### 7.1.3 Mermaid 表面语义
 
@@ -254,7 +252,8 @@
 
 修复项：
 
-- 纠正 `h4~h6` 层级尺寸，保证不大于 `h3`
+- 纠正 `h4 ~ h6` 层级尺寸，明确恢复为严格递减关系：`h3 > h4 > h5 > h6`
+- `h4`、`h5`、`h6` 不允许压平成同字号，也不允许再次大于或等于 `h3`
 - 恢复明亮模式表格斑马纹
 - dark 分支补齐引用、表格、Mermaid 外壳表面
 - 增加 `kbd` 主题变量
@@ -280,6 +279,7 @@
 
 - 增加 `kbd` 样式
 - dark 分支补齐表格与 Mermaid 外壳表面
+- 将根背景纹理迁移为变量驱动，并在 dark 分支中同步提高纹理对比度
 - 保留旋转标题图标、引用装饰等人格特征
 
 #### 7.5.5 `scrolls`
@@ -300,20 +300,16 @@
 
 ### 7.6 Mermaid 的处理边界
 
-本轮 Mermaid 分两级处理：
+本轮 Mermaid 只纳入一级方案，不预留运行时 `themeVariables` 注入。
 
-#### 一级：必须完成
-
-通过主题变量解决 Mermaid 外壳表面问题，包括：
+本轮必须完成的 Mermaid 修复范围只有外壳表面，包括：
 
 - 背景色
 - 圆角
 - 内边距
 - 对齐
 
-#### 二级：按需追加
-
-如果一级处理后，仍然出现“图内部节点颜色与主题强烈冲突”，再在 `MarkdownPreview.vue` 中根据 `previewTheme + globalTheme` 为 Mermaid 注入有限的 `themeVariables`。这一步不是默认第一优先级，避免把本轮工作扩成 Mermaid 专项改造。
+若本轮完成后，在人工验收矩阵中仍然发现“节点文字不可读”或“节点背景与主题强烈冲突”等图内部配色问题，则另起一个后续 spec 处理 Mermaid 运行时 `themeVariables` 注入，不并入本轮 implementation plan。
 
 ## 8. 测试与验证设计
 
@@ -342,14 +338,30 @@
 - 继续禁止 dark 分支写元素级规则
 - 继续要求 dark 分支挂在稳定根类下
 
+除变量覆盖范围外，还需要补充主题级静态回归断言，专门拦截本轮已确认的问题来源。自动化断言至少应覆盖：
+
+- `juejin` 的标题层级满足 `h3 > h4 > h5 > h6`
+- `juejin` 明亮模式保留表格斑马纹变量
+- `markdown-here` 不再通过主题特例移除无序列表标记
+- 受影响主题保留 `kbd` 规则或 `kbd` 变量覆盖
+- `juejin` 的 dark 分支显式覆盖引用、表格、Mermaid 外壳所需变量
+- `smart-blue` 的 dark 分支显式覆盖引用、表格、Mermaid 外壳、背景纹理所需变量
+- `vuepress` 的 dark 分支显式覆盖引用块所需变量
+- `mk-cute` 的 dark 分支显式覆盖表格、Mermaid 外壳、背景纹理所需变量
+- `scrolls` 的 dark 分支显式覆盖表格、Mermaid 外壳所需变量
+- `markdown-here` 的 dark 分支显式覆盖表格、引用、Mermaid 外壳所需变量
+
+这些断言的目标不是替代最终视觉验收，而是阻止“问题源代码形态”直接回退。
+
 ### 8.4 人工验收矩阵
 
 至少覆盖：
 
-- 8 个预览主题
+- 8 个预览主题：`github`、`juejin`、`smart-blue`、`vuepress`、`mk-cute`、`cyanosis`、`scrolls`、`markdown-here`
 - 明亮 / 暗黑两种全局主题
 - 编辑页预览区
 - 独立预览页
+- 导出页中的预览渲染
 
 重点检查项：
 
@@ -388,7 +400,8 @@
 控制方式：
 
 - 默认只治理外壳表面
-- 只有在一级方案不足时，才进入 Mermaid `themeVariables`
+- 不在本轮 implementation plan 中纳入 Mermaid `themeVariables`
+- 若人工验收仍发现图内部配色不可读，再单独立项处理
 
 ## 10. 实施顺序
 
@@ -401,7 +414,7 @@
 5. 修复 `juejin` 与 `smart-blue` 两个问题最集中的主题。
 6. 修复 `vuepress`、`mk-cute`、`scrolls`、`markdown-here` 的补充问题。
 7. 扩充回归样本并更新静态测试。
-8. 进行明亮 / 暗黑全主题手工回归。
+8. 进行明亮 / 暗黑全主题手工回归，覆盖编辑页、独立预览页与导出页。
 
 ## 11. 完成标准
 
@@ -412,4 +425,5 @@
 - `details` 不再复用提示容器样式，也不再带内联 `summary` 样式。
 - 受影响主题的 dark 分支只通过变量覆盖完成视觉校准。
 - 回归样本已覆盖 `kbd`、Mermaid、多级列表、`details`。
-- 自动化测试能够阻止这批问题以同样形式再次回归。
+- 自动化测试能够阻止本轮已归因的结构性回归来源再次出现，包括标题层级变量、列表标记移除、`kbd` 缺失、关键 dark 变量缺失等。
+- 最终视觉效果仍需通过人工验收矩阵确认，自动化测试不替代主题最终观感判断。
