@@ -132,6 +132,12 @@ test('juejin 主题标题层级必须满足 h3 > h4 > h5 > h6', () => {
   assert.match(source, /--wj-preview-h6-font-size:\s*15px;/u)
 })
 
+test('juejin 明亮模式必须保留表格斑马纹变量', () => {
+  const source = readSource('../preview-theme/theme/juejin.scss')
+
+  assert.match(source, /--wj-preview-table-row-even-background-color:\s*#fcfcfc;/u)
+})
+
 test('受影响主题不得继续用 kbd 选择器承担主外观', () => {
   for (const name of ['juejin', 'smart-blue', 'vuepress', 'mk-cute', 'scrolls', 'markdown-here']) {
     const source = readSource(`../preview-theme/theme/${name}.scss`)
@@ -304,9 +310,18 @@ test('基础层消费到的新变量必须在 contract 中声明', () => {
 
   for (const variableName of [
     '--wj-preview-kbd-text-color',
+    '--wj-preview-code-toolbar-text-color',
+    '--wj-preview-code-toolbar-background-color',
+    '--wj-preview-code-toolbar-hover-opacity',
     '--wj-preview-mermaid-background-color',
     '--wj-preview-theme-background-image',
+    '--wj-preview-theme-background-size',
+    '--wj-preview-theme-background-position',
     '--wj-preview-details-background-color',
+    '--wj-preview-details-border',
+    '--wj-preview-details-border-radius',
+    '--wj-preview-summary-text-color',
+    '--wj-preview-summary-font-weight',
     '--wj-preview-code-toolbar-opacity',
   ]) {
     assert.match(contractSource, new RegExp(`${variableName}\\s*:`))
@@ -325,9 +340,19 @@ test('基础层消费到的新变量必须在 contract 中声明', () => {
   --wj-preview-kbd-text-color: var(--wj-markdown-text-primary);
   --wj-preview-kbd-background-color: var(--wj-markdown-bg-secondary);
   --wj-preview-kbd-border: 1px solid var(--wj-markdown-border-primary);
+  --wj-preview-code-toolbar-text-color: var(--wj-markdown-text-secondary);
+  --wj-preview-code-toolbar-background-color: var(--wj-markdown-bg-secondary);
+  --wj-preview-code-toolbar-opacity: 0.65;
+  --wj-preview-code-toolbar-hover-opacity: 1;
   --wj-preview-mermaid-background-color: var(--wj-preview-code-block-background-color);
   --wj-preview-theme-background-image: none;
+  --wj-preview-theme-background-size: auto;
+  --wj-preview-theme-background-position: 0 0;
   --wj-preview-details-background-color: var(--wj-preview-background-color-transparent);
+  --wj-preview-details-border: 1px solid var(--wj-markdown-border-primary);
+  --wj-preview-details-border-radius: 8px;
+  --wj-preview-summary-text-color: var(--wj-markdown-text-primary);
+  --wj-preview-summary-font-weight: 500;
 }
 ```
 
@@ -447,6 +472,8 @@ test('markdown-here 主题不得再移除无序列表标记', () => {
     --wj-preview-theme-background-image:
       linear-gradient(90deg, rgba(120, 170, 220, 0.12) 3%, rgba(0, 0, 0, 0) 3%),
       linear-gradient(360deg, rgba(120, 170, 220, 0.12) 3%, rgba(0, 0, 0, 0) 3%);
+    --wj-preview-theme-background-size: 20px 20px;
+    --wj-preview-theme-background-position: center center;
   }
 }
 ```
@@ -542,13 +569,16 @@ npm run dev
 
 Manual checklist:
 
-- 编辑页、独立预览页中，复制按钮可见且点击后能正常复制代码。
-- 编辑页、独立预览页中的 `details` 可正常折叠 / 展开。
+- 按 `github`、`juejin`、`smart-blue`、`vuepress`、`mk-cute`、`cyanosis`、`scrolls`、`markdown-here` 8 个主题逐个检查。
+- 每个主题都至少在全局 `light` 和 `dark` 两种模式下各检查一次。
+- 每个主题都要覆盖编辑页预览区、独立预览页、导出页 3 个页面面。
+- 编辑页与独立预览页中，复制按钮可见且点击后能正常复制代码。
+- 编辑页与独立预览页中的 `details` 可正常折叠 / 展开。
 - 导出页中 `details` 仍按既有行为自动展开。
 - `juejin` 的 `h3 > h4 > h5 > h6` 层级正确，明亮模式表格有斑马纹。
 - `smart-blue` 与 `mk-cute` 的 dark 背景纹理可见。
 - `markdown-here` 的无序列表恢复项目符号。
-- 受影响主题在 dark 下的引用、表格、Mermaid 外壳可读。
+- 全量主题在 `light/dark × 编辑页/预览页/导出页` 组合下，表格、引用、Mermaid 外壳、`kbd`、复制按钮和 `details` 都需完成一轮检查。
 
 - [ ] **Step 4: 按文件执行最终 ESLint 修复并提交收尾 commit**
 
