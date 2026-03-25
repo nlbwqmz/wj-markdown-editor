@@ -74,7 +74,7 @@ function createRequiredRuntimeDeps(overrides = {}) {
   }
 }
 
-function createRuntimeContext() {
+function createRuntimeContext(overrides = {}) {
   const windowByIdMap = new Map()
 
   function getOrCreateWindow(windowId) {
@@ -193,6 +193,7 @@ function createRuntimeContext() {
   const openDocumentWindow = vi.fn(async (_targetPath, options = {}) => (
     options.isRecent === true ? 19 : 18
   ))
+  const publishOpenFailureSystemNotification = vi.fn()
 
   const runtime = createDocumentSessionRuntime({
     store: {
@@ -218,6 +219,8 @@ function createRuntimeContext() {
     getWindowById,
     getDocumentContext,
     openDocumentWindow,
+    publishOpenFailureSystemNotification,
+    ...overrides,
   })
 
   return {
@@ -231,6 +234,7 @@ function createRuntimeContext() {
     getWindowById,
     getDocumentContext,
     openDocumentWindow,
+    publishOpenFailureSystemNotification,
   }
 }
 
@@ -981,6 +985,75 @@ describe('documentSessionRuntime', () => {
     })
   })
 
+  it('document.open-path 命中 open-target-read-failed 时，有窗口上下文必须同时发送窗口消息和系统通知', async () => {
+    const {
+      runtime,
+      effectService,
+      windowBridge,
+      publishOpenFailureSystemNotification,
+    } = createRuntimeContext()
+    effectService.executeCommand.mockResolvedValueOnce({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'C:/docs/locked.md',
+    })
+
+    const result = await runtime.executeUiCommand(8, 'document.open-path', {
+      path: 'C:/docs/locked.md',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'C:/docs/locked.md',
+    })
+    expect(windowBridge.publishMessage).toHaveBeenCalledWith({
+      windowId: 8,
+      data: {
+        type: 'error',
+        content: 'message.openMarkdownFileFailed',
+      },
+      snapshot: {
+        sessionId: 'session-8',
+        content: '# 8',
+        saved: false,
+      },
+    })
+    expect(publishOpenFailureSystemNotification).toHaveBeenCalledWith({
+      windowId: 8,
+      path: 'C:/docs/locked.md',
+    })
+  })
+
+  it('openDocumentPath(trigger=second-instance) 命中 open-target-read-failed 时，即使没有窗口上下文也必须发送系统通知', async () => {
+    const {
+      runtime,
+      effectService,
+      windowBridge,
+      publishOpenFailureSystemNotification,
+    } = createRuntimeContext()
+    effectService.executeCommand.mockResolvedValueOnce({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'C:/docs/locked.md',
+    })
+
+    const result = await runtime.openDocumentPath('C:/docs/locked.md', {
+      trigger: 'second-instance',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'C:/docs/locked.md',
+    })
+    expect(windowBridge.publishMessage).not.toHaveBeenCalled()
+    expect(publishOpenFailureSystemNotification).toHaveBeenCalledWith({
+      windowId: null,
+      path: 'C:/docs/locked.md',
+    })
+  })
+
   it('document.get-session-snapshot 必须返回 windowBridge 中的快照真相', async () => {
     const { runtime } = createRuntimeContext()
 
@@ -1059,6 +1132,35 @@ describe('documentSessionRuntime', () => {
         content: '# 19',
         saved: true,
       },
+    })
+  })
+
+  it('document.open-recent(trigger=startup) 命中 open-target-read-failed 时，即使没有窗口上下文也必须发送系统通知', async () => {
+    const {
+      runtime,
+      effectService,
+      windowBridge,
+      publishOpenFailureSystemNotification,
+    } = createRuntimeContext()
+    effectService.executeCommand.mockResolvedValueOnce({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'C:/docs/locked.md',
+    })
+
+    const result = await runtime.openRecent('C:/docs/locked.md', {
+      trigger: 'startup',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'C:/docs/locked.md',
+    })
+    expect(windowBridge.publishMessage).not.toHaveBeenCalled()
+    expect(publishOpenFailureSystemNotification).toHaveBeenCalledWith({
+      windowId: null,
+      path: 'C:/docs/locked.md',
     })
   })
 

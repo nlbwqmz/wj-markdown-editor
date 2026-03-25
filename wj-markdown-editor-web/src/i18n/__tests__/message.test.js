@@ -51,3 +51,14 @@ test('中英文文案都应提供配置更新失败提示', () => {
     'The configuration is invalid. Please review your changes.',
   )
 })
+
+test('中英文文案都应提供打开 Markdown 文件失败提示', () => {
+  assert.equal(
+    zhCN.message.openMarkdownFileFailed,
+    '打开 Markdown 文件失败，请检查文件权限或占用状态。',
+  )
+  assert.equal(
+    enUS.message.openMarkdownFileFailed,
+    'Failed to open the Markdown file. Please check file permissions or whether it is in use.',
+  )
+})

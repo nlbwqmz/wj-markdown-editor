@@ -3,6 +3,7 @@ import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
 import { handleSecondInstanceOpenRequest, handleStartupOpenRequest } from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
+import { createDocumentOpenFailureNotificationPublisher } from './util/document-session/documentOpenFailureNotificationUtil.js'
 import { isMarkdownFilePath } from './util/document-session/documentOpenTargetUtil.js'
 import { initializeDocumentSessionRuntime } from './util/document-session/documentSessionRuntime.js'
 import { createDocumentSessionRuntimeComposition } from './util/document-session/documentSessionRuntimeComposition.js'
@@ -89,6 +90,11 @@ function initializeAppDocumentSessionRuntime() {
       showItemInFolder: shell.showItemInFolder,
     }),
     ...windowLifecycleService.getDocumentSessionRuntimeHostDeps(),
+    publishOpenFailureSystemNotification: createDocumentOpenFailureNotificationPublisher({
+      getConfig: () => configUtil.getConfig(),
+      resolveWindowById: windowId => windowRegistry.getWindowById(windowId),
+      listWindows: () => windowLifecycleService.listWindows(),
+    }),
   })
 
   return documentSessionRuntime

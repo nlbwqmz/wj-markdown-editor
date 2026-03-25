@@ -54,6 +54,24 @@ export function normalizeOpenCommandResult({
   return result
 }
 
+function getOpenFailureWindowMessage(result) {
+  if (result?.reason === 'open-target-invalid-extension' || result?.reason === 'open-target-not-file') {
+    return {
+      type: 'warning',
+      content: 'message.onlyMarkdownFilesCanBeOpened',
+    }
+  }
+
+  if (result?.reason === 'open-target-read-failed') {
+    return {
+      type: 'error',
+      content: 'message.openMarkdownFileFailed',
+    }
+  }
+
+  return null
+}
+
 export async function openDocumentWindowWithRuntimePolicy({
   targetPath,
   trigger = 'user',
@@ -170,6 +188,7 @@ export function createDocumentSessionRuntime(deps = {}) {
   const getWindowById = deps.getWindowById || (() => null)
   const getDocumentContextByWindowId = deps.getDocumentContext || null
   const openDocumentWindow = deps.openDocumentWindow || null
+  const publishOpenFailureSystemNotification = deps.publishOpenFailureSystemNotification || (() => null)
   const buildRunnerEffectContext = deps.buildRunnerEffectContext || (() => ({}))
   let runtimeApi = null
   const executeDocumentCommand = deps.executeDocumentCommand || (async ({
@@ -305,6 +324,26 @@ export function createDocumentSessionRuntime(deps = {}) {
     }) || null
   }
 
+  function publishOpenFailureNotification(windowId, result, payload) {
+    if (result?.ok !== false || result.reason !== 'open-target-read-failed') {
+      return null
+    }
+
+    const targetPath = typeof result.path === 'string'
+      ? result.path
+      : (typeof payload?.path === 'string' ? payload.path : null)
+
+    try {
+      return publishOpenFailureSystemNotification({
+        windowId: isValidWindowId(windowId) ? windowId : null,
+        path: targetPath,
+      }) || null
+    } catch {
+      // 通知失败不能反向打断打开链路的结构化返回。
+      return null
+    }
+  }
+
   function createUiDispatchCommand(windowId) {
     return (nextCommand, nextPayload) => {
       return executeUiCommand(windowId, nextCommand, nextPayload)
@@ -333,14 +372,14 @@ export function createDocumentSessionRuntime(deps = {}) {
       targetPath: typeof payload?.path === 'string' ? payload.path : null,
     })
 
-    if (normalizedWindowId != null
+    const windowMessageData = normalizedWindowId != null
       && normalizedResult?.ok === false
-      && (normalizedResult.reason === 'open-target-invalid-extension' || normalizedResult.reason === 'open-target-not-file')) {
-      publishWindowMessage(normalizedWindowId, {
-        type: 'warning',
-        content: 'message.onlyMarkdownFilesCanBeOpened',
-      })
+      ? getOpenFailureWindowMessage(normalizedResult)
+      : null
+    if (windowMessageData) {
+      publishWindowMessage(normalizedWindowId, windowMessageData)
     }
+    publishOpenFailureNotification(normalizedWindowId, normalizedResult, payload)
 
     return normalizedResult
   }

@@ -587,6 +587,219 @@ async function refreshRecentOrderBeforeClose(windowId) {
   }
 }
 
+async function refreshRecentOrderAfterOpen(documentPath) {
+  if (!documentPath) {
+    return false
+  }
+
+  try {
+    await recent.add(documentPath)
+    return true
+  } catch {
+    // recent 只是打开成功后的附属持久化，失败时不能回滚真实开窗。
+    return false
+  }
+}
+
+function createOpenTargetReadFailedResult(documentPath) {
+  return {
+    ok: false,
+    reason: 'open-target-read-failed',
+    path: documentPath || null,
+  }
+}
+
+function createWindowShellLoadFailedResult(documentPath) {
+  return {
+    ok: false,
+    reason: 'window-shell-load-failed',
+    path: documentPath || null,
+  }
+}
+
+function isDevRendererMode() {
+  return Boolean(process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev')
+}
+
+function getWindowShellLoadFailureContent(documentPath) {
+  const language = configUtil.getConfig().language || 'zh-CN'
+  const isDevMode = isDevRendererMode()
+
+  if (language === 'en-US') {
+    return {
+      title: 'Failed to load editor window',
+      body: documentPath
+        ? `${isDevMode
+          ? 'Unable to load the editor window. Please make sure the local dev server is running.'
+          : 'Unable to load the editor window. Please verify the application files are complete.'}\nTarget file: ${documentPath}`
+        : (isDevMode
+            ? 'Unable to load the editor window. Please make sure the local dev server is running.'
+            : 'Unable to load the editor window. Please verify the application files are complete.'),
+    }
+  }
+
+  return {
+    title: '编辑器界面加载失败',
+    body: documentPath
+      ? `${isDevMode
+        ? '无法加载编辑器界面，请检查本地开发服务器是否已启动。'
+        : '无法加载编辑器界面，请检查应用安装文件是否完整。'}\n目标文件：${documentPath}`
+      : (isDevMode
+          ? '无法加载编辑器界面，请检查本地开发服务器是否已启动。'
+          : '无法加载编辑器界面，请检查应用安装文件是否完整。'),
+  }
+}
+
+function showWindowShellLoadFailureDialog(documentPath) {
+  const content = getWindowShellLoadFailureContent(documentPath)
+  try {
+    dialog.showErrorBox(content.title, content.body)
+  } catch {
+    // 原生错误框失败时不能再继续抛错，避免把真正的加载失败原因掩盖掉。
+  }
+}
+
+async function loadWindowShellContent(win, { hasContent }) {
+  const hash = hasContent ? configUtil.getConfig().startPage : 'editor'
+
+  if (isDevRendererMode()) {
+    await win.loadURL(`http://localhost:8080/#/${hash}`)
+    win.webContents.openDevTools({ mode: 'undocked' })
+    return
+  }
+
+  await win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash })
+}
+
+function createObservedAtSequence(windowId) {
+  let nextObservedAt = (getCurrentWatchObservedFloor(windowId) || 0) + 1
+
+  return () => {
+    const observedAt = nextObservedAt
+    nextObservedAt += 1
+    return observedAt
+  }
+}
+
+function isSessionAlreadyMissing(session) {
+  if (!session) {
+    return false
+  }
+
+  return session.documentSource?.exists === false
+    && session.diskSnapshot?.exists === false
+}
+
+async function reconcileOpenedDocumentAgainstDisk(windowId, documentPath) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId || !documentPath) {
+    return false
+  }
+
+  const bindingToken = getCurrentWatchBindingToken(normalizedWindowId)
+  if (!Number.isFinite(bindingToken)) {
+    return false
+  }
+
+  const nextObservedAt = createObservedAtSequence(normalizedWindowId)
+  const watchingPath = documentPath
+  const dispatchWatchCommand = async (command, payload = {}, options = {}) => {
+    return await dispatchCommand(normalizedWindowId, command, {
+      bindingToken,
+      watchingPath,
+      ...payload,
+    }, {
+      publishSnapshotChanged: 'if-changed',
+      ...options,
+    })
+  }
+
+  const dispatchMissingIfNeeded = async (error = null) => {
+    const currentSession = getSessionByWindowId(normalizedWindowId)
+    if (isSessionAlreadyMissing(currentSession)) {
+      return false
+    }
+
+    await dispatchWatchCommand('watch.file-missing', {
+      observedAt: nextObservedAt(),
+      error,
+    })
+    return true
+  }
+
+  try {
+    const exists = await fs.pathExists(documentPath)
+    if (!exists) {
+      return await dispatchMissingIfNeeded()
+    }
+
+    const diskContent = await fs.readFile(documentPath, 'utf-8')
+    let diskStat = null
+    try {
+      diskStat = await fs.stat(documentPath)
+    } catch {
+      // 对账里的 stat 只是附属信息，失败时不能盖过真实读盘结果。
+    }
+
+    if (getSessionByWindowId(normalizedWindowId)?.documentSource?.exists === false) {
+      await dispatchWatchCommand('watch.file-restored', {
+        observedAt: nextObservedAt(),
+        diskContent,
+        diskStat,
+      })
+    }
+
+    await dispatchWatchCommand('watch.file-changed', {
+      observedAt: nextObservedAt(),
+      diskContent,
+      diskStat,
+    })
+    return true
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return await dispatchMissingIfNeeded(error)
+    }
+
+    await dispatchWatchCommand('watch.error', {
+      error,
+    }, {
+      publishSnapshotChanged: 'always',
+    })
+    return false
+  }
+}
+
+function destroyWindowSilently(win) {
+  if (!win) {
+    return false
+  }
+
+  try {
+    if (typeof win.isDestroyed === 'function' && win.isDestroyed()) {
+      return false
+    }
+
+    win.destroy?.()
+    return true
+  } catch {
+    return false
+  }
+}
+
+function rollbackCreatedWindow({
+  windowId,
+  session,
+  win,
+}) {
+  stopExternalWatch(windowId)
+  if (session?.sessionId) {
+    const { store } = ensureSessionRuntimeInitialized()
+    store.destroySession(session.sessionId)
+  }
+  deleteEditorWin(windowId)
+  destroyWindowSilently(win)
+}
+
 async function continueWindowClose(windowId) {
   const normalizedWindowId = normalizeWindowId(windowId)
   const win = getWindowById(normalizedWindowId)
@@ -1128,15 +1341,24 @@ async function createNew(filePath, isRecent = false) {
   const normalizedFilePath = resolveDocumentOpenPath(filePath)
   const exists = Boolean(normalizedFilePath && await fs.pathExists(normalizedFilePath))
   if (exists) {
-    await recent.add(normalizedFilePath)
     const existedSession = store.findSessionByComparablePath(normalizedFilePath)
     if (existedSession) {
       const existedWindowId = findRegisteredWindowIdBySessionId(existedSession.sessionId)
       const existedWin = existedWindowId ? getWindowById(existedWindowId) : null
       if (existedWin) {
         existedWin.show()
+        await refreshRecentOrderAfterOpen(normalizedFilePath)
         return existedWindowId
       }
+    }
+  }
+
+  let content = ''
+  if (exists) {
+    try {
+      content = await fs.readFile(normalizedFilePath, 'utf-8')
+    } catch {
+      return createOpenTargetReadFailedResult(normalizedFilePath)
     }
   }
 
@@ -1146,7 +1368,6 @@ async function createNew(filePath, isRecent = false) {
     frame: false,
     icon: path.resolve(__dirname, '../../../icon/favicon.ico'),
     title: 'wj-markdown-editor',
-    show: false,
     maximizable: true,
     resizable: true,
     width: workAreaSize.width / 4 * 3,
@@ -1158,135 +1379,161 @@ async function createNew(filePath, isRecent = false) {
       preload: path.resolve(__dirname, '../../preload.js'),
     },
   })
+  let session = null
 
-  const content = exists ? await fs.readFile(normalizedFilePath, 'utf-8') : ''
-  windowRegistry.registerWindow({
-    windowId: id,
-    win,
-  })
-
-  hostStateStore.registerWindowState({
-    windowId: id,
-    state: {
+  try {
+    windowRegistry.registerWindow({
+      windowId: id,
       win,
-      externalWatch: createExternalWatchState(),
-      externalWatchBridge: null,
-      allowImmediateClose: false,
-      forceClose: false,
-      lastClosedManualRequestCompletions: [],
-    },
-  })
+    })
 
-  const session = createInitialSession({
-    sessionId: commonUtil.createId(),
-    filePath: normalizedFilePath,
-    exists,
-    content,
-    isRecent,
-  })
-  registerSessionForWindow(id, session)
+    hostStateStore.registerWindowState({
+      windowId: id,
+      state: {
+        win,
+        externalWatch: createExternalWatchState(),
+        externalWatchBridge: null,
+        allowImmediateClose: false,
+        forceClose: false,
+        lastClosedManualRequestCompletions: [],
+      },
+    })
 
-  if (exists) {
-    startExternalWatch(id)
-  }
+    session = createInitialSession({
+      sessionId: commonUtil.createId(),
+      filePath: normalizedFilePath,
+      exists,
+      content,
+      isRecent,
+    })
+    registerSessionForWindow(id, session)
 
-  win.once('ready-to-show', () => {
-    win.show()
-    setTimeout(() => {
-      updateUtil.checkUpdate(listWindows())
-    }, 30000)
-  })
-  win.on('unmaximize', () => {
-    sendUtil.send(win, { event: 'window-size', data: { isMaximize: false } })
-  })
-  win.on('maximize', () => {
-    sendUtil.send(win, { event: 'window-size', data: { isMaximize: true } })
-  })
-  win.on('always-on-top-changed', (event, isAlwaysOnTop) => {
-    sendUtil.send(win, { event: 'always-on-top-changed', data: isAlwaysOnTop })
-  })
-  win.webContents.setWindowOpenHandler((details) => {
-    const url = details.url
-    if (url.match('^http')) {
-      shell.openExternal(url).then(() => {})
-    } else if (url.match('^wj://')) {
-      handleLocalResourceLinkOpen(win, id, url).then(() => {}).catch(() => {})
-    }
-    return { action: 'deny' }
-  })
+    win.once('ready-to-show', () => {
+      win.show()
+      setTimeout(() => {
+        updateUtil.checkUpdate(listWindows())
+      }, 30000)
+    })
+    win.on('unmaximize', () => {
+      sendUtil.send(win, { event: 'window-size', data: { isMaximize: false } })
+    })
+    win.on('maximize', () => {
+      sendUtil.send(win, { event: 'window-size', data: { isMaximize: true } })
+    })
+    win.on('always-on-top-changed', (event, isAlwaysOnTop) => {
+      sendUtil.send(win, { event: 'always-on-top-changed', data: isAlwaysOnTop })
+    })
+    win.webContents.setWindowOpenHandler((details) => {
+      const url = details.url
+      if (url.match('^http')) {
+        shell.openExternal(url).then(() => {})
+      } else if (url.match('^wj://')) {
+        handleLocalResourceLinkOpen(win, id, url).then(() => {}).catch(() => {})
+      }
+      return { action: 'deny' }
+    })
 
-  win.on('close', (e) => {
-    const currentWindowId = findRegisteredWindowIdByWin(win)
-    if (!currentWindowId) {
-      return
-    }
+    win.on('close', (e) => {
+      const currentWindowId = findRegisteredWindowIdByWin(win)
+      if (!currentWindowId) {
+        return
+      }
 
-    if (isAllowImmediateClose(currentWindowId)) {
-      setAllowImmediateClose(currentWindowId, false)
-      finalizeWindowClose(currentWindowId)
-      return
-    }
-
-    const command = isForceCloseRequested(currentWindowId)
-      ? 'document.confirm-force-close'
-      : 'document.request-close'
-    const runtime = getDocumentSessionRuntime()
-    const handleCloseCommandResult = (result) => {
-      const effectList = Array.isArray(result?.effects) ? result.effects : []
-
-      if (isForceCloseRequested(currentWindowId)
-        && effectList.length === 1
-        && effectList[0]?.type === 'close-window') {
+      if (isAllowImmediateClose(currentWindowId)) {
+        setAllowImmediateClose(currentWindowId, false)
         finalizeWindowClose(currentWindowId)
         return
       }
 
-      if (shouldHoldWindowClose(effectList)) {
-        applyEffects(currentWindowId, effectList).then(() => {}).catch(() => {})
-        return
+      const command = isForceCloseRequested(currentWindowId)
+        ? 'document.confirm-force-close'
+        : 'document.request-close'
+      const runtime = getDocumentSessionRuntime()
+      const handleCloseCommandResult = (result) => {
+        const effectList = Array.isArray(result?.effects) ? result.effects : []
+
+        if (isForceCloseRequested(currentWindowId)
+          && effectList.length === 1
+          && effectList[0]?.type === 'close-window') {
+          finalizeWindowClose(currentWindowId)
+          return
+        }
+
+        if (shouldHoldWindowClose(effectList)) {
+          applyEffects(currentWindowId, effectList).then(() => {}).catch(() => {})
+          return
+        }
+
+        if (effectList.length > 0) {
+          applyEffects(currentWindowId, effectList).then(() => {}).catch(() => {})
+          return
+        }
+
+        continueWindowClose(currentWindowId).then(() => {}).catch(() => {})
       }
 
-      if (effectList.length > 0) {
-        applyEffects(currentWindowId, effectList).then(() => {}).catch(() => {})
-        return
+      if (!isForceCloseRequested(currentWindowId)) {
+        e.preventDefault()
       }
 
-      continueWindowClose(currentWindowId).then(() => {}).catch(() => {})
-    }
+      const closeCommandResult = runtime.executeUiCommand(currentWindowId, command, null)
+      if (closeCommandResult && typeof closeCommandResult.then === 'function') {
+        closeCommandResult
+          .then(handleCloseCommandResult)
+          .catch(() => {})
+      } else {
+        handleCloseCommandResult(closeCommandResult)
+      }
 
-    if (!isForceCloseRequested(currentWindowId)) {
-      e.preventDefault()
-    }
-
-    const closeCommandResult = runtime.executeUiCommand(currentWindowId, command, null)
-    if (closeCommandResult && typeof closeCommandResult.then === 'function') {
-      closeCommandResult
-        .then(handleCloseCommandResult)
-        .catch(() => {})
-    } else {
-      handleCloseCommandResult(closeCommandResult)
-    }
-
-    if (isForceCloseRequested(currentWindowId)) {
-      return
-    }
-    return false
-  })
-
-  win.on('blur', () => {
-    const currentWindowId = findRegisteredWindowIdByWin(win)
-    dispatchCommand(currentWindowId, 'window.blur').then(() => {}).catch(() => {})
-  })
-
-  if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
-    win.loadURL(content ? `http://localhost:8080/#/${configUtil.getConfig().startPage}` : 'http://localhost:8080/#/editor').then(() => {
-      win.webContents.openDevTools({ mode: 'undocked' })
+      if (isForceCloseRequested(currentWindowId)) {
+        return
+      }
+      return false
     })
-  } else {
-    win.loadFile(path.resolve(__dirname, '../../../web-dist/index.html'), { hash: content ? configUtil.getConfig().startPage : 'editor' }).then(() => {})
-  }
 
-  return id
+    win.on('blur', () => {
+      const currentWindowId = findRegisteredWindowIdByWin(win)
+      dispatchCommand(currentWindowId, 'window.blur').then(() => {}).catch(() => {})
+    })
+
+    if (exists) {
+      startExternalWatch(id)
+    }
+
+    try {
+      await loadWindowShellContent(win, {
+        hasContent: Boolean(content),
+      })
+    } catch {
+      const shouldNotifyUser = isWindowAlive(win)
+      rollbackCreatedWindow({
+        windowId: id,
+        session,
+        win,
+      })
+      if (shouldNotifyUser) {
+        showWindowShellLoadFailureDialog(normalizedFilePath)
+      }
+      return createWindowShellLoadFailedResult(normalizedFilePath)
+    }
+
+    if (exists) {
+      await reconcileOpenedDocumentAgainstDisk(id, normalizedFilePath)
+    }
+
+    if (exists) {
+      await refreshRecentOrderAfterOpen(normalizedFilePath)
+    }
+
+    return id
+  } catch (error) {
+    rollbackCreatedWindow({
+      windowId: id,
+      session,
+      win,
+    })
+    throw error
+  }
 }
 
 Object.assign(windowLifecycleService, {
