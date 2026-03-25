@@ -16,4 +16,5 @@ test('普通 fenced code block 必须输出可访问的复制按钮结构', () =
   assert.equal(renderedHtml.includes('hidden'), false)
   assert.match(renderedHtml, /title="复制"/u)
   assert.match(renderedHtml, /aria-label="复制"/u)
+  assert.match(renderedHtml, /onclick="copyCode\('[^']+'\)"/u)
 })

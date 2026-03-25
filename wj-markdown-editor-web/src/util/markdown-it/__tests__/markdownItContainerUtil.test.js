@@ -17,6 +17,7 @@ test('details 容器必须输出独立 disclosure 结构', () => {
   assert.equal(renderedHtml.includes('wj-markdown-it-container'), false)
   assert.equal(renderedHtml.includes('wj-markdown-it-container-details'), false)
   assert.equal(renderedHtml.includes('style='), false)
-  assert.match(renderedHtml, /<details/u)
+  assert.match(renderedHtml, /<details class="wj-preview-details">/u)
   assert.match(renderedHtml, /<summary>/u)
+  assert.match(renderedHtml, /wj-preview-details-content/u)
 })
