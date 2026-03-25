@@ -7,6 +7,7 @@ const readFileMock = vi.fn()
 const pathExistsMock = vi.fn()
 const statMock = vi.fn()
 const showSaveDialogSyncMock = vi.fn()
+const showErrorBoxMock = vi.fn()
 const openExternalMock = vi.fn()
 const showItemInFolderMock = vi.fn()
 const openLocalResourceInFolderMock = vi.fn()
@@ -27,6 +28,8 @@ const settlePendingChangeMock = vi.fn((state) => {
 const appExitMock = vi.fn()
 const getConfigMock = vi.fn(() => ({ language: 'zh-CN', autoSave: [], startPage: 'editor' }))
 const browserWindowInstances = []
+const loadURLMock = vi.fn(() => Promise.resolve())
+const loadFileMock = vi.fn(() => Promise.resolve())
 let webContentsId = 1
 let createIdIndex = 1
 
@@ -124,16 +127,20 @@ vi.mock('electron', () => {
       return this.destroyed
     }
 
+    destroy() {
+      this.destroyed = true
+    }
+
     getParentWindow() {
       return null
     }
 
-    loadURL() {
-      return Promise.resolve()
+    loadURL(...args) {
+      return loadURLMock(...args)
     }
 
-    loadFile() {
-      return Promise.resolve()
+    loadFile(...args) {
+      return loadFileMock(...args)
     }
   }
 
@@ -147,6 +154,7 @@ vi.mock('electron', () => {
     },
     dialog: {
       showSaveDialogSync: showSaveDialogSyncMock,
+      showErrorBox: showErrorBoxMock,
     },
     screen: {
       getPrimaryDisplay: vi.fn(() => ({ workAreaSize: { width: 1920, height: 1080 } })),
@@ -411,6 +419,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     pathExistsMock.mockReset()
     statMock.mockReset()
     showSaveDialogSyncMock.mockReset()
+    showErrorBoxMock.mockReset()
     openExternalMock.mockReset()
     showItemInFolderMock.mockReset()
     openLocalResourceInFolderMock.mockReset()
@@ -425,6 +434,10 @@ describe('windowLifecycleService 生命周期 facade', () => {
     appExitMock.mockReset()
     getConfigMock.mockReset()
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startPage: 'editor' })
+    loadURLMock.mockReset()
+    loadURLMock.mockResolvedValue(undefined)
+    loadFileMock.mockReset()
+    loadFileMock.mockResolvedValue(undefined)
     pathExistsMock.mockResolvedValue(false)
     statMock.mockResolvedValue({
       isFile: () => true,
@@ -474,6 +487,83 @@ describe('windowLifecycleService 生命周期 facade', () => {
       'getAll',
       'getByWebContentsId',
     ]))
+  })
+
+  it('createNew 打开存在但不可读的 Markdown 时，必须销毁已创建窗口且不能提前写 recent', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockRejectedValue(Object.assign(new Error('EACCES: permission denied'), {
+      code: 'EACCES',
+    }))
+
+    const result = await winInfoUtil.createNew('D:/locked.md')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'D:/locked.md',
+    })
+    expect(recentAddMock).not.toHaveBeenCalled()
+    expect(listWindowRefs()).toHaveLength(0)
+    expect(browserWindowInstances).toHaveLength(0)
+  })
+
+  it('createNew 在开发态壳页加载失败时，必须回滚已注册窗口且不能污染 recent', async () => {
+    const originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'dev'
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    loadURLMock.mockRejectedValueOnce(new Error('ECONNREFUSED: dev server unavailable'))
+
+    try {
+      const result = await winInfoUtil.createNew('D:/demo.md')
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'window-shell-load-failed',
+        path: 'D:/demo.md',
+      })
+      expect(loadURLMock).toHaveBeenCalledWith('http://localhost:8080/#/editor')
+      expect(recentAddMock).not.toHaveBeenCalled()
+      expect(startWatchingMock).toHaveBeenCalledTimes(1)
+      expect(stopWatchingMock).toHaveBeenCalled()
+      expect(listWindowRefs()).toHaveLength(0)
+      expect(showErrorBoxMock).toHaveBeenCalledWith(
+        '编辑器界面加载失败',
+        '无法加载编辑器界面，请检查本地开发服务器是否已启动。\n目标文件：D:/demo.md',
+      )
+      expect(browserWindowInstances).toHaveLength(1)
+      expect(browserWindowInstances[0].isDestroyed()).toBe(true)
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
+  })
+
+  it('createNew 在静态资源壳页加载失败时，必须回滚已注册窗口且不能污染 recent', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    loadFileMock.mockRejectedValueOnce(new Error('ENOENT: web-dist missing'))
+
+    const result = await winInfoUtil.createNew('D:/demo.md')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'window-shell-load-failed',
+      path: 'D:/demo.md',
+    })
+    expect(loadFileMock).toHaveBeenCalledWith(
+      path.resolve(process.cwd(), 'web-dist/index.html'),
+      { hash: 'editor' },
+    )
+    expect(recentAddMock).not.toHaveBeenCalled()
+    expect(startWatchingMock).toHaveBeenCalledTimes(1)
+    expect(stopWatchingMock).toHaveBeenCalled()
+    expect(listWindowRefs()).toHaveLength(0)
+    expect(showErrorBoxMock).toHaveBeenCalledWith(
+      '编辑器界面加载失败',
+      '无法加载编辑器界面，请检查应用安装文件是否完整。\n目标文件：D:/demo.md',
+    )
+    expect(browserWindowInstances).toHaveLength(1)
+    expect(browserWindowInstances[0].isDestroyed()).toBe(true)
   })
 
   it('runtime host deps 构造 effectContext 时，必须只暴露显式 controller，不再暴露旧聚合宿主字段', async () => {
@@ -1390,6 +1480,42 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/demo.md')
   })
 
+  it('已有窗口打开存在但不可读的 Markdown 时，必须保留原窗口并给出明确失败提示', async () => {
+    pathExistsMock.mockImplementation(async targetPath => ['D:/demo.md', 'D:/locked.md'].includes(targetPath))
+    readFileMock.mockImplementation(async (targetPath) => {
+      if (targetPath === 'D:/demo.md') {
+        return '# 原始内容'
+      }
+      throw Object.assign(new Error('EACCES: permission denied'), {
+        code: 'EACCES',
+      })
+    })
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    sendMock.mockClear()
+
+    const result = await executeTestCommand(winInfo, 'document.open-path', {
+      path: 'D:/locked.md',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'D:/locked.md',
+    })
+    expect(listWindowRefs()).toHaveLength(1)
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/demo.md')
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'error',
+        content: 'message.openMarkdownFileFailed',
+      },
+    })
+  })
+
   it('watch.file-missing 只能通过 snapshot 推送最新 exists=false 与 saved=false，不能再发送 legacy file-missing / file-is-saved', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
@@ -1449,6 +1575,54 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(watchState.pendingChange).toBeNull()
   })
 
+  it('createNew 在壳页加载期间必须先启动 watcher，让打开中的外部变更直接进入统一命令流', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    getConfigMock.mockReturnValue({
+      language: 'zh-CN',
+      autoSave: [],
+      startPage: 'editor',
+      externalFileChangeStrategy: 'prompt',
+    })
+    const loadDeferred = createDeferred()
+    loadFileMock.mockReturnValueOnce(loadDeferred.promise)
+
+    const createWindowPromise = winInfoUtil.createNew('D:/demo.md')
+
+    await vi.waitFor(() => {
+      expect(listWindowRefs()).toHaveLength(1)
+    })
+    expect(startWatchingMock).toHaveBeenCalledTimes(1)
+
+    const [winInfo] = listWindowRefs()
+    const watchOptions = getCurrentWatchOptions()
+
+    await watchOptions?.onExternalChange?.({
+      content: '# 外部新内容',
+      versionHash: 'hash:# 外部新内容',
+    }, {
+      bindingToken: watchOptions?.bindingToken ?? null,
+      watchingPath: 'D:/demo.md',
+      observedAt: 1700000005001,
+      diskStat: {
+        mtimeMs: 1700000005001,
+      },
+    })
+
+    const pendingSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(pendingSnapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 1,
+      localContent: '# 原始内容',
+      externalContent: '# 外部新内容',
+      fileName: 'demo.md',
+    })
+
+    loadDeferred.resolve()
+
+    await expect(createWindowPromise).resolves.toBe(winInfo.id)
+  })
+
   it('watch.file-changed 在 strategy=apply 时，只能通过 snapshot 收敛，不应再发送 file-content-reloaded / file-is-saved', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
@@ -1490,6 +1664,49 @@ describe('windowLifecycleService 生命周期 facade', () => {
         saved: true,
       }),
     })
+  })
+
+  it('createNew 必须在壳页加载成功后补做磁盘对账，收敛首读与 watcher 生效之间漏掉的外部变更', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock
+      .mockResolvedValueOnce('# 原始内容')
+      .mockResolvedValueOnce('# 外部新内容')
+    getConfigMock.mockReturnValue({
+      language: 'zh-CN',
+      autoSave: [],
+      startPage: 'editor',
+      externalFileChangeStrategy: 'prompt',
+    })
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(readFileMock).toHaveBeenCalledTimes(2)
+    expect(snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 1,
+      localContent: '# 原始内容',
+      externalContent: '# 外部新内容',
+      fileName: 'demo.md',
+    })
+  })
+
+  it('createNew 必须在壳页加载成功后补做磁盘对账，收敛首读之后立刻被删除的目标文件', async () => {
+    pathExistsMock
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+    readFileMock.mockResolvedValueOnce('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(snapshot.exists).toBe(false)
+    expect(snapshot.saved).toBe(false)
+    expect(snapshot.externalPrompt).toBeNull()
   })
 
   it('watch.file-changed 在 strategy=prompt 时，只能通过 snapshot.externalPrompt 推送冲突，不能再发送 file-external-changed', async () => {
@@ -2180,6 +2397,26 @@ describe('windowLifecycleService 生命周期 facade', () => {
       path: 'D:/missing.md',
     })
     expect(listWindowRefs()).toHaveLength(0)
+  })
+
+  it('显式路径打开入口遇到存在但不可读的 Markdown 时，必须返回结构化失败并清理临时窗口', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockRejectedValue(Object.assign(new Error('EACCES: permission denied'), {
+      code: 'EACCES',
+    }))
+
+    const result = await openDocumentPathThroughRuntime('D:/locked.md', {
+      trigger: 'startup',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'D:/locked.md',
+    })
+    expect(recentAddMock).not.toHaveBeenCalled()
+    expect(listWindowRefs()).toHaveLength(0)
+    expect(browserWindowInstances).toHaveLength(0)
   })
 
   it('显式路径打开入口如果收到相对路径和 baseDir，必须先解析为稳定绝对路径再打开文档', async () => {

@@ -275,6 +275,7 @@ export default {
     anchorTargetDoesNotExist: 'The anchor target does not exist.',
     theFileDoesNotExist: 'The file does not exist.',
     onlyMarkdownFilesCanBeOpened: 'Only Markdown (.md) files can be opened.',
+    openMarkdownFileFailed: 'Failed to open the Markdown file. Please check file permissions or whether it is in use.',
     invalidLocalResourceLink: 'The local resource link is invalid and cannot be resolved to a file.',
     theFileIsBeingSaved: 'The file is being saved.',
     theFileIsSavedSuccessfully: 'The file is saved successfully.',
