@@ -1,20 +1,16 @@
 .wj-preview-theme {
   --wj-code-block-base-block-margin: var(--wj-preview-pre-margin, 1em 0);
   --wj-code-block-base-border-radius: var(--wj-preview-code-block-border-radius, 8px);
-  --wj-code-block-base-surface-background-color: var(--wj-preview-code-block-background-color, var(--wj-markdown-bg-secondary));
   --wj-code-block-base-toolbar-inset-block: 8px;
   --wj-code-block-base-toolbar-inset-inline: 8px;
   --wj-code-block-base-toolbar-gap: 8px;
   --wj-code-block-base-toolbar-min-height: 28px;
-  --wj-code-block-base-toolbar-clearance: calc(var(--wj-code-block-base-toolbar-inset-block) * 2 + var(--wj-code-block-base-toolbar-min-height));
   --wj-code-block-base-mermaid-border-radius: var(--wj-preview-mermaid-border-radius, var(--wj-code-block-base-border-radius));
 
   :where(.pre-container) {
     position: relative;
     overflow: hidden;
     margin: var(--wj-code-block-base-block-margin);
-    padding-top: var(--wj-code-block-base-toolbar-clearance);
-    background-color: var(--wj-code-block-base-surface-background-color);
     border-radius: var(--wj-code-block-base-border-radius);
   }
 
@@ -26,7 +22,6 @@
     z-index: 1;
     display: flex;
     align-items: flex-start;
-    justify-content: space-between;
     gap: var(--wj-code-block-base-toolbar-gap);
     min-height: var(--wj-code-block-base-toolbar-min-height);
     pointer-events: none;
@@ -38,6 +33,10 @@
     justify-content: center;
     flex-shrink: 0;
     pointer-events: auto;
+  }
+
+  :where(.pre-container-copy) {
+    margin-left: auto;
   }
 
   :where(.pre-container pre) {
