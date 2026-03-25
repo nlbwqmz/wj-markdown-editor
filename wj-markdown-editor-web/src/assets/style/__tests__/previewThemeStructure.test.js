@@ -382,6 +382,22 @@ function splitTopLevelSelectorEntries(selectorHeader) {
   return selectorEntries
 }
 
+function collectNestedSelectorEntriesRecursively(blockSource) {
+  return getTopLevelNestedRuleEntries(blockSource)
+    .flatMap(({ selectorHeader, blockSource: nestedBlockSource }) => {
+      const nestedSelectorEntries = collectNestedSelectorEntriesRecursively(nestedBlockSource)
+
+      if (selectorHeader.trim().startsWith('@')) {
+        return nestedSelectorEntries
+      }
+
+      return [
+        ...splitTopLevelSelectorEntries(selectorHeader),
+        ...nestedSelectorEntries,
+      ]
+    })
+}
+
 function stripLeadingRelativeSelectorPrefix(selectorEntry) {
   let normalizedEntry = selectorEntry.trim()
 
@@ -470,6 +486,57 @@ function selectorEntryTargetsSemanticTag(selectorEntry, tagName) {
 
   return splitTopLevelSelectorEntries(functionalArguments)
     .some(entry => selectorEntryTargetsSemanticTag(entry, tagName))
+}
+
+function selectorEntryTargetsLeadingPreSurface(selectorEntry) {
+  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+
+  if (/^pre(?=$|[:.[#\s>+~])/u.test(normalizedEntry)) {
+    return true
+  }
+
+  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedEntry)
+
+  if (!functionalArguments) {
+    return false
+  }
+
+  return splitTopLevelSelectorEntries(functionalArguments)
+    .some(entry => selectorEntryTargetsLeadingPreSurface(entry))
+}
+
+function selectorEntryTargetsMermaidPreSurface(selectorEntry) {
+  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+
+  if (/^pre\.(?:mermaid|mermaid-cache)(?=$|[:.[#\s>+~])/u.test(normalizedEntry)) {
+    return true
+  }
+
+  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedEntry)
+
+  if (!functionalArguments) {
+    return false
+  }
+
+  return splitTopLevelSelectorEntries(functionalArguments)
+    .some(entry => selectorEntryTargetsMermaidPreSurface(entry))
+}
+
+function selectorEntryContainsLegacyPreContainerSurface(selectorEntry) {
+  const normalizedEntry = stripLeadingRelativeSelectorPrefix(selectorEntry)
+
+  if (/(?:^|[^\w-])\.pre-container(?:-[\w-]+)?(?=$|[^\w-])/u.test(normalizedEntry)) {
+    return true
+  }
+
+  const functionalArguments = getLeadingFunctionalSelectorArguments(normalizedEntry)
+
+  if (!functionalArguments) {
+    return false
+  }
+
+  return splitTopLevelSelectorEntries(functionalArguments)
+    .some(entry => selectorEntryContainsLegacyPreContainerSurface(entry))
 }
 
 function assertPreviewThemeDefaultIsGithub(source) {
@@ -592,24 +659,30 @@ function assertPreviewThemeContractAndBaseCoverRequiredVariables(contractSource,
  * @param {string} source
  */
 function assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(source) {
-  const forbiddenSelectorPatterns = [
-    [/:where\(\s*pre\s*\)/u, ':where(pre)'],
-    [/:where\(\s*pre\s*:not\(\.hljs\)\s*\)/u, ':where(pre:not(.hljs))'],
-    [/:where\(\s*pre\s*>\s*code\s*\)/u, ':where(pre > code)'],
-    [/:where\(\s*\.pre-container\s*\)/u, ':where(.pre-container)'],
-    [/:where\(\s*\.pre-container-copy\s*,\s*\.pre-container-lang\s*\)/u, ':where(.pre-container-copy, .pre-container-lang)'],
-    [/\.pre-container:hover\s+\.pre-container-copy\s*\{/u, '.pre-container:hover .pre-container-copy'],
-    [/\.pre-container:hover\s+\.pre-container-lang\s*\{/u, '.pre-container:hover .pre-container-lang'],
-    [/:where\(\s*pre\.mermaid\s*,\s*pre\.mermaid-cache\s*\)/u, ':where(pre.mermaid, pre.mermaid-cache)'],
+  const stableRootBlock = getSelectorBlock(source, '.wj-preview-theme')
+  const selectorEntries = collectNestedSelectorEntriesRecursively(stableRootBlock)
+  const forbiddenSelectorMatchers = [
+    ['pre.mermaid*', selectorEntryTargetsMermaidPreSurface],
+    ['.pre-container*', selectorEntryContainsLegacyPreContainerSurface],
+    ['pre*', selectorEntryTargetsLeadingPreSurface],
   ]
+  const offendingSelectorMatch = selectorEntries
+    .flatMap(selectorEntry => forbiddenSelectorMatchers
+      .filter(([, matcher]) => matcher(selectorEntry))
+      .map(([selectorLabel]) => ({ selectorEntry, selectorLabel })))
+    .at(0)
 
-  forbiddenSelectorPatterns.forEach(([pattern, selectorLabel]) => {
-    assert.equal(
-      pattern.test(source),
-      false,
-      `基础骨架不得继续承接 fenced code block / mermaid 外壳职责：${selectorLabel}`,
-    )
-  })
+  assert.equal(
+    offendingSelectorMatch,
+    undefined,
+    offendingSelectorMatch
+      ? `基础骨架不得继续承接 fenced code block / mermaid 外壳职责：${offendingSelectorMatch.selectorLabel} -> ${offendingSelectorMatch.selectorEntry}`
+      : '基础骨架不得继续承接 fenced code block / mermaid 外壳职责',
+  )
+}
+
+function injectNestedRuleIntoPreviewThemeBaseSource(baseSource, nestedRuleSource) {
+  return baseSource.replace(/\}\s*$/u, `${nestedRuleSource}\n}`)
 }
 
 /**
@@ -821,18 +894,84 @@ test('基础骨架旧职责断言必须识别 pre、toolbar 与 mermaid 外壳�
     color: var(--wj-preview-inline-code-text-color);
   }
 }`
-  const preMutatedBaseSource = `${compliantBaseSource}
+  const preMutatedBaseSource = injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
   & :where(pre) {
     margin: var(--wj-preview-paragraph-margin);
-  }`
-  const mermaidMutatedBaseSource = `${compliantBaseSource}
+  }`)
+  const mermaidMutatedBaseSource = injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
   & :where(pre.mermaid, pre.mermaid-cache) {
     text-align: center;
-  }`
+  }`)
 
   assert.doesNotThrow(() => assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(compliantBaseSource))
   assert.throws(() => assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(preMutatedBaseSource), /:where\(pre\)/u)
   assert.throws(() => assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(mermaidMutatedBaseSource), /pre\.mermaid/u)
+})
+
+test('基础骨架旧职责断言必须识别等价回流变体，而不是只防精确字符串', () => {
+  const compliantBaseSource = `.wj-preview-theme {
+  & :where(:not(pre) > code, :not(pre) > tt, :not(pre) > samp) {
+    color: var(--wj-preview-inline-code-text-color);
+  }
+}`
+  const variantSources = [
+    [
+      '顺序互换的 Mermaid 外壳',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & :where(pre.mermaid-cache, pre.mermaid) {
+    text-align: center;
+  }`),
+      /pre\.mermaid/u,
+    ],
+    [
+      'toolbar 容器别名',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & :where(.pre-container-toolbar) {
+    opacity: 1;
+  }`),
+      /pre-container/u,
+    ],
+    [
+      'pre-container 下的后代 pre',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & :where(.pre-container pre) {
+    margin: 0;
+  }`),
+      /pre-container/u,
+    ],
+    [
+      '单独复制按钮选择器',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & :where(.pre-container-copy) {
+    opacity: 1;
+  }`),
+      /pre-container/u,
+    ],
+    [
+      '单独语言标签选择器',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & :where(.pre-container-lang) {
+    opacity: 1;
+  }`),
+      /pre-container/u,
+    ],
+    [
+      'toolbar hover 变体',
+      injectNestedRuleIntoPreviewThemeBaseSource(compliantBaseSource, `
+  & .pre-container-toolbar:hover .pre-container-copy {
+    opacity: 1;
+  }`),
+      /pre-container/u,
+    ],
+  ]
+
+  variantSources.forEach(([label, source, expectedPattern]) => {
+    assert.throws(
+      () => assertPreviewThemeBaseDoesNotOwnLegacyCodeBlockSurface(source),
+      expectedPattern,
+      `${label} 必须被旧职责断言识别`,
+    )
+  })
 })
 
 test('预览主题回归样本必须覆盖关键 Markdown 标记', () => {
