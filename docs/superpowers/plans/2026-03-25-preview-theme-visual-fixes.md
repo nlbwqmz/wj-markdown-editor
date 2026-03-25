@@ -553,7 +553,7 @@ git commit -m "fix(web): repair preview theme visual surfaces"
 Run:
 
 ```bash
-npm run test:run -- src/assets/style/__tests__/previewThemeStructure.test.js src/assets/style/__tests__/previewThemeVariableCoverage.test.js src/util/markdown-it/__tests__/markdownItCodeBlock.test.js src/util/markdown-it/__tests__/markdownItContainerUtil.test.js src/util/__tests__/previewMermaidRenderUtil.test.js
+npm run test:run -- src/assets/style/__tests__/previewThemePriorityArchitecture.test.js src/assets/style/__tests__/previewThemeStructure.test.js src/assets/style/__tests__/previewThemeVariableCoverage.test.js src/util/markdown-it/__tests__/markdownItCodeBlock.test.js src/util/markdown-it/__tests__/markdownItContainerUtil.test.js src/util/__tests__/previewMermaidRenderUtil.test.js
 ```
 
 Expected:
