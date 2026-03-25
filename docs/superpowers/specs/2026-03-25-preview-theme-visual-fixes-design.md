@@ -158,6 +158,8 @@
 
 需要在 `preview-theme-contract.scss` 新增并在 `preview-theme-base.scss` 消费以下变量：
 
+本轮所有需要被 dark 分支或主题差异覆盖的视觉表面，必须优先落到统一变量协议中，再由基础层消费。若现有协议已经存在可表达同类表面的变量，则优先复用，不重复发明新的并行变量族。
+
 #### 7.1.1 `kbd` 语义
 
 - `--wj-preview-kbd-padding`
@@ -169,6 +171,8 @@
 - `--wj-preview-kbd-box-shadow`
 
 基础层统一提供 `kbd` 兜底外观。未单独定制的主题至少具备可读、可辨识的键帽样式。
+
+本轮 `kbd` 必须统一走变量协议，不再保留主题级原生 `kbd` 样式作为主实现路径。现有主题里的 `kbd` 特例应迁移为变量赋值；只有当变量无法表达极少量装饰效果时，才允许保留薄特例覆盖，但不能再承担主外观定义。
 
 #### 7.1.2 代码块工具栏语义
 
@@ -195,6 +199,29 @@
 - `--wj-preview-theme-background-position`
 
 基础层负责根容器消费这些变量。这样 `smart-blue`、`mk-cute` 等主题在 dark 分支里只需要改背景 token，不再写分散的根块覆盖。
+
+#### 7.1.5 `details` 语义
+
+本轮 `details` 需要明确纳入统一变量协议。最小表面集合包括：
+
+- `--wj-preview-details-padding`
+- `--wj-preview-details-background-color`
+- `--wj-preview-details-border`
+- `--wj-preview-details-border-radius`
+- `--wj-preview-summary-text-color`
+- `--wj-preview-summary-font-weight`
+- `--wj-preview-details-open-summary-margin-bottom`
+
+这些变量由基础层统一消费，主题层只负责赋值或小幅微调，不再由主题文件直接承担 `details` 主外观。
+
+#### 7.1.6 引用块与表格语义
+
+引用块与表格不新增独立的“dark 专用变量族”，而是复用当前协议中已有的语义变量，并在必要时补齐缺口：
+
+- 引用块复用 `--wj-preview-blockquote-*`
+- 表格复用 `--wj-preview-table-*`
+
+本轮若发现现有 `blockquote` / `table` 变量不足以表达目标表面，允许只补充缺失 token，但仍归入这两组既有变量族，不引入并行命名。
 
 ### 7.2 调整代码块复制按钮输出结构
 
@@ -225,7 +252,7 @@
 最终目标是：
 
 - `details` 拥有统一的“折叠块”视觉语义
-- 各主题只通过变量微调风格
+- 各主题只通过 `--wj-preview-details-*` 与 `--wj-preview-summary-*` 变量微调风格
 - 不再出现提示容器样式污染 `details`
 
 ### 7.4 调整主题 dark 分支的允许覆盖范围
@@ -343,7 +370,7 @@
 - `juejin` 的标题层级满足 `h3 > h4 > h5 > h6`
 - `juejin` 明亮模式保留表格斑马纹变量
 - `markdown-here` 不再通过主题特例移除无序列表标记
-- 受影响主题保留 `kbd` 规则或 `kbd` 变量覆盖
+- 受影响主题显式覆盖 `kbd` 变量，不再把主题级 `kbd` 规则作为主实现路径
 - `juejin` 的 dark 分支显式覆盖引用、表格、Mermaid 外壳所需变量
 - `smart-blue` 的 dark 分支显式覆盖引用、表格、Mermaid 外壳、背景纹理所需变量
 - `vuepress` 的 dark 分支显式覆盖引用块所需变量
