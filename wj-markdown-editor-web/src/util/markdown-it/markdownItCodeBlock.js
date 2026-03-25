@@ -2,6 +2,7 @@
 import hljs from 'highlight.js'
 
 const COPY_CODE_LABEL = '复制'
+const canonicalLanguageKeyByAlias = createCanonicalLanguageKeyByAlias()
 
 /**
  * 若字符串以```结尾，则删除最后3个字符
@@ -18,6 +19,72 @@ function strToBase64(str) {
 
 function createCopyCodeKeydownHandler(encodedCode) {
   return `if(event.key==='Enter'||event.key===' '){event.preventDefault();copyCode('${encodedCode}')}`
+}
+
+/**
+ * 生成 highlight.js 语言别名到 canonical key 的映射
+ */
+function createCanonicalLanguageKeyByAlias() {
+  const aliasMap = new Map()
+
+  hljs.listLanguages().forEach((languageKey) => {
+    const language = hljs.getLanguage(languageKey)
+    if (!language) {
+      return
+    }
+
+    aliasMap.set(languageKey.toLowerCase(), languageKey)
+    if (Array.isArray(language.aliases)) {
+      language.aliases.forEach((alias) => {
+        aliasMap.set(String(alias).toLowerCase(), languageKey)
+      })
+    }
+  })
+
+  return aliasMap
+}
+
+/**
+ * 解析普通 fenced code block 的语言元数据
+ */
+function resolveCodeBlockLanguageMeta(info, code) {
+  const explicitLabel = info ? info.split(/\s+/u)[0]?.trim() ?? '' : ''
+
+  if (explicitLabel) {
+    const normalizedInput = explicitLabel.toLowerCase()
+    const canonicalKey = canonicalLanguageKeyByAlias.get(normalizedInput) ?? ''
+    const codeClassNames = ['hljs']
+
+    if (canonicalKey) {
+      codeClassNames.push(`language-${normalizedInput}`)
+      if (canonicalKey !== normalizedInput) {
+        codeClassNames.push(`language-${canonicalKey}`)
+      }
+    }
+
+    return {
+      codeClassName: codeClassNames.join(' '),
+      highlightedValue: canonicalKey
+        ? hljs.highlight(code, { language: canonicalKey, ignoreIllegals: true }).value
+        : hljs.highlightAuto(code).value,
+      toolbarLangLabel: explicitLabel,
+      toolbarLangHidden: false,
+    }
+  }
+
+  const autoHighlightResult = hljs.highlightAuto(code)
+  const codeClassNames = ['hljs']
+
+  if (autoHighlightResult.language) {
+    codeClassNames.push(`language-${autoHighlightResult.language}`)
+  }
+
+  return {
+    codeClassName: codeClassNames.join(' '),
+    highlightedValue: autoHighlightResult.value,
+    toolbarLangLabel: '',
+    toolbarLangHidden: true,
+  }
 }
 
 function parseAttrs(attrs) {
@@ -66,18 +133,19 @@ export default function codeBlockPlugin(md) {
       return `<pre class="mermaid" data-code="${content.replace(/\s/g, '')}" ${parseAttrs(token.attrs)}>\n${content}\n</pre>\n`
     } else {
       try {
+        const languageMeta = resolveCodeBlockLanguageMeta(info, code)
+        const preAttrs = parseAttrs(token.attrs)
+        const escapedToolbarLabel = md.utils.escapeHtml(languageMeta.toolbarLangLabel)
         return html`
-        <div class="relative pre-container">
-          <div class="absolute top-0 right-0 p-1 z-10">
-            <div class="font-bold op-80 color-[var(--wj-markdown-text-secondary)] pre-container-lang font-size-3 line-height-3">${lang}</div>
+        <div class="pre-container">
+          <div class="pre-container-toolbar">
+            <div class="font-bold op-80 color-[var(--wj-markdown-text-secondary)] pre-container-lang font-size-3 line-height-3 ${languageMeta.toolbarLangHidden ? 'hidden' : ''}">${escapedToolbarLabel}</div>
             <div class="i-tabler:copy cursor-pointer op-80 color-[var(--wj-markdown-text-secondary)] pre-container-copy font-size-3.5 hover:op-100" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${encodedCode}')" onkeydown="${createCopyCodeKeydownHandler(encodedCode)}"></div>
           </div>
-          <pre class="hljs" ${parseAttrs(token.attrs)}>
-            <code>`
-          + (lang && hljs.getLanguage(lang)
-            ? hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
-            : hljs.highlightAuto(code).value)
-          + html`</code>
+          <pre${preAttrs ? ` ${preAttrs}` : ''}>
+            <code class="${languageMeta.codeClassName}">`
+            + languageMeta.highlightedValue
+            + html`</code>
           </pre>
         </div>
         `
