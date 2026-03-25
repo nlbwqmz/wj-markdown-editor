@@ -172,7 +172,7 @@
 
 基础层统一提供 `kbd` 兜底外观。未单独定制的主题至少具备可读、可辨识的键帽样式。
 
-本轮 `kbd` 必须统一走变量协议，不再保留任何主题级 `kbd` 选择器作为实现路径。现有主题里的 `kbd` 特例应全部迁移为变量赋值；自动化测试也以“主题文件不再承担 `kbd` 主外观定义”为判断标准。
+本轮 `kbd` 治理范围仅限本次问题涉及的主题，即 `juejin`、`smart-blue`、`vuepress`、`mk-cute`、`scrolls`、`markdown-here`。这些受影响主题中的 `kbd` 必须统一走变量协议，不再保留任何主题级 `kbd` 选择器作为实现路径；自动化测试也以“这些主题文件不再承担 `kbd` 主外观定义”为判断标准。未出现在本轮问题清单和 `7.5.7` 矩阵中的主题，不纳入本轮 `kbd` 治理范围。
 
 #### 7.1.2 代码块工具栏语义
 
@@ -341,6 +341,8 @@
 
 后续 implementation plan 与自动化断言必须直接引用这张矩阵，不允许再用“所需变量”“相关表面”等模糊描述代替。
 
+这张矩阵同时是本轮主题修复范围的唯一主题级判定依据。未出现在矩阵中的主题，不默认纳入本轮视觉治理与自动化断言范围。
+
 | 主题 | `kbd` 最小覆盖 | 引用块最小覆盖 | 表格最小覆盖 | Mermaid 外壳最小覆盖 | 背景纹理最小覆盖 |
 |------|----------------|----------------|--------------|----------------------|------------------|
 | `juejin` | `--wj-preview-kbd-text-color`、`--wj-preview-kbd-background-color`、`--wj-preview-kbd-border` | `--wj-preview-blockquote-text-color`、`--wj-preview-blockquote-background-color`、`--wj-preview-blockquote-border-color` | `--wj-preview-table-header-background-color`、`--wj-preview-table-header-text-color`、`--wj-preview-table-row-even-background-color` | `--wj-preview-mermaid-background-color` | 无 |
@@ -414,8 +416,10 @@
 重点检查项：
 
 - 代码块复制按钮是否可见且对比清晰
+- 代码块复制按钮点击后是否仍能正常复制内容
 - `kbd` 是否具备清晰键帽样式
-- `details` 是否具备统一 disclosure 外观
+- `details` 在编辑页与独立预览页是否具备统一 disclosure 外观，且仍能正常折叠 / 展开
+- 导出页是否仍按既有行为主动展开 `details`
 - 表格、引用、Mermaid 在 dark 模式下是否可读
 - `markdown-here` 无序列表是否恢复标记
 - `juejin` 标题层级是否正确
@@ -475,3 +479,5 @@
 - 回归样本已覆盖 `kbd`、Mermaid、多级列表、`details`。
 - 自动化测试能够阻止本轮已归因的结构性回归来源再次出现，包括标题层级变量、列表标记移除、`kbd` 缺失、关键 dark 变量缺失等。
 - 最终视觉效果仍需通过人工验收矩阵确认，自动化测试不替代主题最终观感判断。
+- 复制按钮在结构调整后仍能正常复制内容。
+- `details` 在编辑页与独立预览页保持可折叠交互，在导出页仍保持既有自动展开行为。
