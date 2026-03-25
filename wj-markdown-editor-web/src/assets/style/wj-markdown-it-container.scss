@@ -1,4 +1,3 @@
-
 .wj-markdown-it-container.wj-markdown-it-container-warning {
   --wj-markup-container-bg-color: rgb(252, 244, 220);
   --wj-markup-container-title-color: #915930;
@@ -29,39 +28,31 @@
   --wj-markup-container-icon: url(data:image/svg+xml;charset=utf-8;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAyNCAyNCc+PHBhdGggZD0nTTcuOTQxIDE4Yy0uMjk3LTEuMjczLTEuNjM3LTIuMzE0LTIuMTg3LTNhOCA4IDAgMSAxIDEyLjQ5LjAwMmMtLjU1LjY4NS0xLjg4OCAxLjcyNi0yLjE4NSAyLjk5OEg3Ljk0ek0xNiAyMHYxYTIgMiAwIDAgMS0yIDJoLTRhMiAyIDAgMCAxLTItMnYtMWg4em0tMy05Ljk5NVY2bC00LjUgNi4wMDVIMTF2NGw0LjUtNkgxM3onLz48L3N2Zz4=);
 }
 
-.wj-markdown-it-container.wj-markdown-it-container-details {
-  --wj-markup-container-bg-color: rgb(239, 240, 243);
-  --wj-markup-container-title-color: #656869;
-}
 :root[theme='dark'] {
   .wj-markdown-it-container.wj-markdown-it-container-warning {
-    --wj-markup-container-bg-color: rgb(252, 244, 220, .9);
+    --wj-markup-container-bg-color: rgb(252, 244, 220, 0.9);
   }
 
   .wj-markdown-it-container.wj-markdown-it-container-info {
-    --wj-markup-container-bg-color: rgb(239, 240, 243, .9);
+    --wj-markup-container-bg-color: rgb(239, 240, 243, 0.9);
   }
 
   .wj-markdown-it-container.wj-markdown-it-container-important {
-    --wj-markup-container-bg-color: rgb(241, 236, 252, .9);
+    --wj-markup-container-bg-color: rgb(241, 236, 252, 0.9);
   }
 
   .wj-markdown-it-container.wj-markdown-it-container-danger {
-    --wj-markup-container-bg-color: rgb(254, 228, 232, .9);
+    --wj-markup-container-bg-color: rgb(254, 228, 232, 0.9);
   }
 
   .wj-markdown-it-container.wj-markdown-it-container-tip {
-    --wj-markup-container-bg-color: rgb(221, 245, 237, .9);
-  }
-
-  .wj-markdown-it-container.wj-markdown-it-container-details {
-    --wj-markup-container-bg-color: rgb(239, 240, 243, .9);
+    --wj-markup-container-bg-color: rgb(221, 245, 237, 0.9);
   }
 }
 
 .wj-markdown-it-container {
   width: 100%;
-  border-radius: .5rem;
+  border-radius: 0.5rem;
   padding: 0.8rem;
   background-color: var(--wj-markup-container-bg-color);
   display: flex;
@@ -73,7 +64,7 @@
     display: flex;
     align-items: center;
     &:before {
-      content: " ";
+      content: ' ';
       position: absolute;
       inset-inline-start: 0;
       width: 1em;

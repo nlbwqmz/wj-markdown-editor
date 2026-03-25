@@ -16,6 +16,9 @@
   --wj-preview-muted-text-color: var(--wj-markdown-text-secondary);
   --wj-preview-subtle-text-color: var(--wj-markdown-text-tertiary);
   --wj-preview-background-color: var(--wj-preview-background-color-transparent);
+  --wj-preview-theme-background-image: none;
+  --wj-preview-theme-background-size: auto;
+  --wj-preview-theme-background-position: 0 0;
   --wj-preview-font-family: var(--preview-area-font, inherit);
   --wj-preview-font-weight: inherit;
   --wj-preview-font-size: 16px;
@@ -111,6 +114,14 @@
   --wj-preview-image-height: var(--wj-preview-size-auto);
   --wj-preview-image-box-shadow: var(--img-box-shadow);
 
+  --wj-preview-kbd-padding: 0.125em 0.45em;
+  --wj-preview-kbd-font-size: 0.85em;
+  --wj-preview-kbd-text-color: var(--wj-markdown-text-primary);
+  --wj-preview-kbd-background-color: var(--wj-markdown-bg-secondary);
+  --wj-preview-kbd-border: 1px solid var(--wj-markdown-border-primary);
+  --wj-preview-kbd-border-radius: 6px;
+  --wj-preview-kbd-box-shadow: inset 0 -1px 0 var(--wj-markdown-border-primary);
+
   --wj-preview-inline-code-font-family: var(--code-area-font, monospace);
   --wj-preview-inline-code-display: inline;
   --wj-preview-inline-code-margin: 0;
@@ -150,9 +161,15 @@
   --wj-preview-code-toolbar-user-select: var(--wj-preview-user-select-none);
   --wj-preview-code-toolbar-border-radius: 6px;
   --wj-preview-code-toolbar-background-color: var(--wj-preview-background-color-transparent);
+  --wj-preview-code-toolbar-opacity: 0.65;
+  --wj-preview-code-toolbar-hover-opacity: 1;
   --wj-preview-code-toolbar-copy-display: var(--wj-preview-display-none);
   --wj-preview-code-toolbar-copy-hover-display: var(--wj-preview-display-block);
   --wj-preview-code-toolbar-lang-hover-display: var(--wj-preview-display-none);
+  --wj-preview-mermaid-padding: 1rem;
+  --wj-preview-mermaid-background-color: var(--wj-preview-code-block-background-color);
+  --wj-preview-mermaid-border-radius: 8px;
+  --wj-preview-mermaid-text-align: center;
 
   --wj-preview-footnote-margin-top: 2em;
   --wj-preview-footnote-padding-top: 1em;
@@ -179,5 +196,5 @@
   --wj-preview-details-last-child-margin-bottom: var(--wj-preview-space-none);
   --wj-preview-summary-cursor: var(--wj-preview-cursor-pointer);
   --wj-preview-summary-font-weight: 500;
-  --wj-preview-summary-text-color: inherit;
+  --wj-preview-summary-text-color: var(--wj-markdown-text-primary);
 }
