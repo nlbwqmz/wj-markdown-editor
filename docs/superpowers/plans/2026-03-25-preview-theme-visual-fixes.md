@@ -310,10 +310,15 @@ test('基础层消费到的新变量必须在 contract 中声明', () => {
 
   for (const variableName of [
     '--wj-preview-kbd-text-color',
+    '--wj-preview-kbd-font-size',
+    '--wj-preview-kbd-border-radius',
+    '--wj-preview-kbd-box-shadow',
     '--wj-preview-code-toolbar-text-color',
     '--wj-preview-code-toolbar-background-color',
     '--wj-preview-code-toolbar-hover-opacity',
     '--wj-preview-mermaid-background-color',
+    '--wj-preview-mermaid-padding',
+    '--wj-preview-mermaid-border-radius',
     '--wj-preview-mermaid-text-align',
     '--wj-preview-theme-background-image',
     '--wj-preview-theme-background-size',
@@ -340,14 +345,19 @@ test('基础层消费到的新变量必须在 contract 中声明', () => {
 ```scss
 .wj-preview-theme {
   --wj-preview-kbd-padding: 0.125em 0.45em;
+  --wj-preview-kbd-font-size: 0.85em;
   --wj-preview-kbd-text-color: var(--wj-markdown-text-primary);
   --wj-preview-kbd-background-color: var(--wj-markdown-bg-secondary);
   --wj-preview-kbd-border: 1px solid var(--wj-markdown-border-primary);
+  --wj-preview-kbd-border-radius: 6px;
+  --wj-preview-kbd-box-shadow: inset 0 -1px 0 var(--wj-markdown-border-primary);
   --wj-preview-code-toolbar-text-color: var(--wj-markdown-text-secondary);
   --wj-preview-code-toolbar-background-color: var(--wj-markdown-bg-secondary);
   --wj-preview-code-toolbar-opacity: 0.65;
   --wj-preview-code-toolbar-hover-opacity: 1;
+  --wj-preview-mermaid-padding: 1rem;
   --wj-preview-mermaid-background-color: var(--wj-preview-code-block-background-color);
+  --wj-preview-mermaid-border-radius: 8px;
   --wj-preview-mermaid-text-align: center;
   --wj-preview-theme-background-image: none;
   --wj-preview-theme-background-size: auto;
