@@ -1188,6 +1188,17 @@ test('mk-cute 主题应通过首末段变量恢复单段引用块节奏', () => 
   )
 })
 
+test('mk-cute 主题表格外边框必须消费表格边框色变量', () => {
+  const source = readSource('../preview-theme/theme/mk-cute.scss')
+
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-table-border',
+    '1px solid var\\(--wj-preview-table-border-color\\)',
+  )
+})
+
 test('cyanosis 主题应通过首末段变量恢复单段引用块节奏', () => {
   const source = readSource('../preview-theme/theme/cyanosis.scss')
 
@@ -1296,6 +1307,7 @@ test('mk-cute 主题 dark 分支应只通过变量覆盖运行时 token', () => 
   assertDarkThemeBranchUsesVariableOverridesOnly(source, '.preview-theme-mk-cute')
   assertDarkThemeBranchHasRequiredVariables(source, '.preview-theme-mk-cute', [
     '--wj-preview-text-color',
+    '--wj-preview-table-header-text-color',
     '--wj-preview-inline-code-background-color',
     '--wj-preview-code-block-background-color',
   ])
@@ -1304,6 +1316,12 @@ test('mk-cute 主题 dark 分支应只通过变量覆盖运行时 token', () => 
     '.preview-theme-mk-cute',
     '--wj-preview-text-color',
     '#36ace1',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-mk-cute',
+    '--wj-preview-table-header-text-color',
+    'var\\(--wj-markdown-text-primary\\)',
   )
   assertDarkThemeBranchVariableValue(
     source,
@@ -1430,6 +1448,7 @@ test('7.5.7 矩阵要求的 dark 分支 token 必须全部覆盖', () => {
       requiredVariables: [
         '--wj-preview-table-border-color',
         '--wj-preview-table-header-background-color',
+        '--wj-preview-table-header-text-color',
         '--wj-preview-table-row-even-background-color',
         '--wj-preview-mermaid-background-color',
         '--wj-preview-theme-background-image',

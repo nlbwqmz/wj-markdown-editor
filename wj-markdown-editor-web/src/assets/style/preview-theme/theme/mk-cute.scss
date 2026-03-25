@@ -54,7 +54,7 @@
   --wj-preview-table-max-width: 100%;
   --wj-preview-table-overflow-x: auto;
   --wj-preview-table-font-size: 12px;
-  --wj-preview-table-border: 1px solid #f6f6f6;
+  --wj-preview-table-border: 1px solid var(--wj-preview-table-border-color);
   --wj-preview-table-border-color: #f6f6f6;
   --wj-preview-table-header-background-color: #f6f6f6;
   --wj-preview-table-header-text-color: #000;
@@ -100,6 +100,7 @@
     --wj-preview-mk-cute-code-background-color: rgb(30, 34, 42);
     --wj-preview-table-border-color: rgba(54, 172, 225, 0.3);
     --wj-preview-table-header-background-color: rgba(54, 172, 225, 0.22);
+    --wj-preview-table-header-text-color: var(--wj-markdown-text-primary);
     --wj-preview-table-row-even-background-color: rgba(54, 172, 225, 0.08);
     --wj-preview-mermaid-background-color: rgb(30, 34, 42);
     --wj-preview-inline-code-background-color: rgb(30, 34, 42);
