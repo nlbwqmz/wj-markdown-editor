@@ -65,20 +65,21 @@ const previewThemeFiles = [
 ]
 
 const previewThemeForbiddenStructurePatterns = [
-  ['.highlight', /(?:^|[^\w-])\.highlight(?=$|[^\w-])/u],
-  ['.hljs*', /(?:^|[^\w-])\.hljs(?:-[\w-]+)?(?=$|[^\w-])/u],
-  ['.pre-container*', /(?:^|[^\w-])\.pre-container(?:-[\w-]+)?(?=$|[^\w-])/u],
+  ['.highlight', /(?:^|[^\w-])(?:[a-z][\w-]*|\*)?\.highlight(?=$|[^\w-])/u],
+  ['.hljs*', /(?:^|[^\w-])(?:[a-z][\w-]*|\*)?\.hljs(?:-[\w-]+)?(?=$|[^\w-])/u],
+  ['.pre-container*', /(?:^|[^\w-])(?:[a-z][\w-]*|\*)?\.pre-container(?:-[\w-]+)?(?=$|[^\w-])/u],
   ['pre > code', /(?:^|[^\w-])pre\s*>\s*code(?=$|[^\w-])/u],
   ['pre code', /(?:^|[^\w-])pre\s+code(?=$|[^\w-])/u],
   ['pre.mermaid*', /(?:^|[^\w-])pre\.(?:mermaid|mermaid-cache)(?=$|[^\w-])/u],
 ]
 
 const previewThemeForbiddenSelectionPatterns = [
-  ['.hljs*::selection', /(?:^|[^\w-])\.hljs(?:-[\w-]+)?\b[^,{]*::selection(?=$|[^\w-])/u],
+  ['.hljs*::selection', /(?:^|[^\w-])(?:[a-z][\w-]*|\*)?\.hljs(?:-[\w-]+)?\b[^,{]*::selection(?=$|[^\w-])/u],
   ['pre code*::selection', /(?:^|[^\w-])pre(?:\s*>\s*|\s+)code\b[^,{]*::selection(?=$|[^\w-])/u],
 ]
 
 const previewThemeForbiddenVariablePrefixes = [
+  '--wj-preview-pre-',
   '--wj-preview-code-block-',
   '--wj-preview-code-toolbar-',
   '--wj-preview-mermaid-',
@@ -97,6 +98,21 @@ test('结构选择器模式必须把 .hljs 本体和 .hljs-* token 选择器都�
     true,
     '结构禁区必须命中 .hljs-* token 选择器',
   )
+  assert.equal(
+    structurePatterns.some(pattern => pattern.test('.wj-preview-theme div.highlight { color: inherit; }')),
+    true,
+    '结构禁区必须命中带标签前缀的 .highlight',
+  )
+  assert.equal(
+    structurePatterns.some(pattern => pattern.test('.wj-preview-theme div.pre-container { color: inherit; }')),
+    true,
+    '结构禁区必须命中带标签前缀的 .pre-container',
+  )
+  assert.equal(
+    structurePatterns.some(pattern => pattern.test('.wj-preview-theme code.hljs { color: inherit; }')),
+    true,
+    '结构禁区必须命中带标签前缀的 .hljs',
+  )
 })
 
 test('代码块 selection 模式必须允许 inline code 选择器并继续拦截 fenced code block 上下文', () => {
@@ -111,6 +127,11 @@ test('代码块 selection 模式必须允许 inline code 选择器并继续拦�
     selectionPatterns.some(pattern => pattern.test('.wj-preview-theme .hljs-keyword::selection { background: red; }')),
     true,
     'selection 禁区必须命中 .hljs-*::selection',
+  )
+  assert.equal(
+    selectionPatterns.some(pattern => pattern.test('.wj-preview-theme code.hljs::selection { background: red; }')),
+    true,
+    'selection 禁区必须命中带标签前缀的 .hljs::selection',
   )
   assert.equal(
     selectionPatterns.some(pattern => pattern.test('.wj-preview-theme :not(pre) > code::selection { background: red; }')),
@@ -266,6 +287,18 @@ test('preview theme 文件不得继续声明 fenced code block / mermaid 变量�
   })
 })
 
+test('preview theme 文件不得继续声明 pre 外壳变量族', () => {
+  previewThemeFiles.forEach((fileName) => {
+    const source = readPreviewThemeSource(fileName)
+
+    assert.doesNotMatch(
+      source,
+      /^\s*--wj-preview-pre-[a-z0-9-]+\s*:/mu,
+      `${fileName} 不得继续声明变量族：--wj-preview-pre-*`,
+    )
+  })
+})
+
 test('preview theme 文件不得继续命中 fenced code block / mermaid 结构选择器', () => {
   previewThemeFiles.forEach((fileName) => {
     const source = readPreviewThemeSource(fileName)
@@ -292,4 +325,14 @@ test('preview theme 文件不得继续命中代码块相关 ::selection 选择�
       )
     })
   })
+})
+
+test('code-block-base.scss 不得继续消费 preview theme 的 pre 外壳变量', () => {
+  const codeBlockBaseSource = readSource('../code-block/code-block-base.scss')
+
+  assert.doesNotMatch(
+    codeBlockBaseSource,
+    /var\(--wj-preview-pre-[a-z0-9-]+/u,
+    'code-block-base.scss 不得继续消费 --wj-preview-pre-* 变量',
+  )
 })
