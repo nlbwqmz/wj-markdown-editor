@@ -75,6 +75,10 @@ $paragraph-space: 22px;
   --wj-preview-task-list-padding-inline-start: 0;
   --wj-preview-task-list-style: none;
 
+  --wj-preview-kbd-text-color: #{$color-text};
+  --wj-preview-kbd-background-color: #{$color-background};
+  --wj-preview-kbd-border: 1px solid #{$color-border};
+
   --wj-preview-inline-code-font-size: 0.85em;
   --wj-preview-inline-code-font-weight: 400;
   --wj-preview-inline-code-padding: 0.165em 0.5em;
@@ -95,6 +99,9 @@ $paragraph-space: 22px;
 :root[theme='dark'] {
   .wj-preview-theme.preview-theme-vuepress {
     --wj-preview-text-color: var(--wj-markdown-text-primary);
+    --wj-preview-blockquote-text-color: var(--wj-markdown-text-primary);
+    --wj-preview-blockquote-background-color: var(--wj-markdown-bg-secondary);
+    --wj-preview-blockquote-border-color: rgba(66, 185, 131, 0.45);
     --wj-preview-inline-code-text-color: var(--wj-markdown-text-primary);
     --wj-preview-inline-code-background-color: rgba(171, 178, 191, 0.2);
   }

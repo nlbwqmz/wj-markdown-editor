@@ -65,6 +65,10 @@
   --wj-preview-table-cell-line-height: 24px;
   --wj-preview-table-cell-min-width: 120px;
 
+  --wj-preview-kbd-text-color: #fff;
+  --wj-preview-kbd-background-color: var(--wj-preview-mk-cute-secondary-color);
+  --wj-preview-kbd-border: 1px solid var(--wj-preview-mk-cute-theme-color);
+
   --wj-preview-inline-code-margin: 0 4px;
   --wj-preview-inline-code-padding: 0.24em 0.46em;
   --wj-preview-inline-code-border-radius: 2px;
@@ -83,19 +87,28 @@
   --wj-preview-task-list-style: none;
   --wj-preview-task-list-padding-inline-start: 0;
 
-  background-image:
+  --wj-preview-theme-background-image:
     linear-gradient(90deg, rgba(217, 234, 251, 0.25) 3%, rgba(0, 0, 0, 0) 3%),
     linear-gradient(360deg, rgba(217, 234, 251, 0.25) 3%, rgba(0, 0, 0, 0) 3%);
-  background-size: 20px 20px;
-  background-position: center center;
+  --wj-preview-theme-background-size: 20px 20px;
+  --wj-preview-theme-background-position: center center;
 }
 
 :root[theme='dark'] {
   .wj-preview-theme.preview-theme-mk-cute {
     --wj-preview-text-color: #36ace1;
     --wj-preview-mk-cute-code-background-color: rgb(30, 34, 42);
+    --wj-preview-table-border-color: rgba(54, 172, 225, 0.3);
+    --wj-preview-table-header-background-color: rgba(54, 172, 225, 0.22);
+    --wj-preview-table-row-even-background-color: rgba(54, 172, 225, 0.08);
+    --wj-preview-mermaid-background-color: rgb(30, 34, 42);
     --wj-preview-inline-code-background-color: rgb(30, 34, 42);
     --wj-preview-code-block-background-color: rgb(30, 34, 42);
+    --wj-preview-theme-background-image:
+      linear-gradient(90deg, rgba(54, 172, 225, 0.08) 3%, rgba(0, 0, 0, 0) 3%),
+      linear-gradient(360deg, rgba(54, 172, 225, 0.08) 3%, rgba(0, 0, 0, 0) 3%);
+    --wj-preview-theme-background-size: 20px 20px;
+    --wj-preview-theme-background-position: center center;
   }
 }
 

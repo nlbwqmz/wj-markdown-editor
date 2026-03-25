@@ -16,9 +16,9 @@ $line-space: 22px;
   --wj-preview-h1-font-size: 24px;
   --wj-preview-h2-font-size: 20px;
   --wj-preview-h3-font-size: 18px;
-  --wj-preview-h4-font-size: 20px;
-  --wj-preview-h5-font-size: 20px;
-  --wj-preview-h6-font-size: 20px;
+  --wj-preview-h4-font-size: 17px;
+  --wj-preview-h5-font-size: 16px;
+  --wj-preview-h6-font-size: 15px;
 
   --wj-preview-paragraph-margin: #{$line-space} 0;
 
@@ -62,6 +62,10 @@ $line-space: 22px;
   --wj-preview-task-list-padding-inline-start: 0;
   --wj-preview-task-list-style: none;
 
+  --wj-preview-kbd-text-color: #4a4a4a;
+  --wj-preview-kbd-background-color: #f6f6f6;
+  --wj-preview-kbd-border: 1px solid #d9d9d9;
+
   --wj-preview-inline-code-font-size: 0.87em;
   --wj-preview-inline-code-padding: 0.065em 0.4em;
   --wj-preview-inline-code-border-radius: 6px;
@@ -81,6 +85,13 @@ $line-space: 22px;
 :root[theme='dark'] {
   .wj-preview-theme.preview-theme-juejin {
     --wj-preview-text-color: var(--wj-markdown-text-primary);
+    --wj-preview-blockquote-text-color: var(--wj-markdown-text-secondary);
+    --wj-preview-blockquote-background-color: var(--wj-markdown-bg-secondary);
+    --wj-preview-blockquote-border-color: var(--wj-markdown-border-primary);
+    --wj-preview-table-header-background-color: var(--wj-markdown-bg-secondary);
+    --wj-preview-table-header-text-color: var(--wj-markdown-text-primary);
+    --wj-preview-table-row-even-background-color: rgba(171, 178, 191, 0.08);
+    --wj-preview-mermaid-background-color: var(--wj-markdown-bg-secondary);
     --wj-preview-inline-code-background-color: rgba(171, 178, 191, 0.2);
   }
 }

@@ -36,6 +36,16 @@
   --wj-preview-list-item-margin-bottom: 10px;
   --wj-preview-list-nested-margin-top: 0;
   --wj-preview-list-nested-margin-bottom: 0;
+  --wj-preview-unordered-list-style: disc outside;
+
+  --wj-preview-table-border-color: #ccc;
+  --wj-preview-table-header-background-color: #009688;
+  --wj-preview-table-header-text-color: #eee;
+  --wj-preview-table-row-even-background-color: #f8f8f8;
+
+  --wj-preview-kbd-text-color: #009688;
+  --wj-preview-kbd-background-color: rgba(0, 150, 136, 0.12);
+  --wj-preview-kbd-border: 1px solid #009688;
 
   --wj-preview-inline-code-font-size: 16px;
   --wj-preview-inline-code-padding: 0 2px;
@@ -52,10 +62,19 @@
   --wj-preview-code-block-background-color: transparent;
   --wj-preview-code-block-content-background-color: inherit;
   --wj-preview-code-block-text-color: inherit;
+  --wj-preview-mermaid-background-color: transparent;
 }
 
 :root[theme='dark'] {
   .wj-preview-theme.preview-theme-markdown-here {
+    --wj-preview-blockquote-text-color: var(--wj-markdown-text-secondary);
+    --wj-preview-blockquote-background-color: rgba(0, 150, 136, 0.08);
+    --wj-preview-blockquote-border-color: rgba(0, 150, 136, 0.45);
+    --wj-preview-table-border-color: var(--wj-markdown-border-primary);
+    --wj-preview-table-header-background-color: rgba(0, 150, 136, 0.22);
+    --wj-preview-table-header-text-color: var(--wj-markdown-text-primary);
+    --wj-preview-table-row-even-background-color: rgba(0, 150, 136, 0.08);
+    --wj-preview-mermaid-background-color: var(--wj-markdown-bg-secondary);
     --wj-preview-inline-code-text-color: var(--wj-markdown-text-primary);
     --wj-preview-inline-code-background-color: var(--wj-markdown-bg-hover);
   }
@@ -87,11 +106,6 @@
     }
   }
 
-  ul {
-    list-style-type: none;
-    margin-left: -16px;
-  }
-
   ul ul,
   ul ol,
   ol ul,
@@ -119,9 +133,10 @@
   q {
     padding: 0 10px;
     margin-left: 1em;
-    color: #777;
+    color: var(--wj-preview-blockquote-text-color);
+    background-color: var(--wj-preview-blockquote-background-color);
     quotes: none;
-    border-left: 2px solid #009688;
+    border-left: var(--wj-preview-blockquote-border-width) solid var(--wj-preview-blockquote-border-color);
 
     &::before,
     &::after {
@@ -148,12 +163,11 @@
     tr {
       padding: 0;
       margin: 0;
-      background-color: white;
       border: 0;
-      border-top: 1px solid #ccc;
+      border-top: 1px solid var(--wj-preview-table-border-color);
 
       &:nth-child(2n) {
-        background-color: #f8f8f8;
+        background-color: var(--wj-preview-table-row-even-background-color);
       }
 
       th,
@@ -161,14 +175,13 @@
         padding: 5px 10px;
         margin: 0;
         font-size: 16px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--wj-preview-table-border-color);
       }
 
       th {
-        color: #eee;
+        color: var(--wj-preview-table-header-text-color);
         font-weight: bold;
-        background-color: #009688;
-        border: 1px solid #009688;
+        background-color: var(--wj-preview-table-header-background-color);
       }
     }
   }
