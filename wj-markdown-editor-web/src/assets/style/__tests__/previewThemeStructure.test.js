@@ -112,6 +112,200 @@ function getSelectorBlocks(source, selector) {
   return selectorBlocks
 }
 
+function getSelectorBlock(source, selector) {
+  const selectorBlocks = getSelectorBlocks(source, selector)
+
+  assert.notEqual(selectorBlocks.length, 0, `未找到选择器：${selector}`)
+
+  return selectorBlocks[0]
+}
+
+function getTopLevelNestedRuleEntries(blockSource) {
+  const blockBody = blockSource.slice(1, -1)
+  const ruleEntries = []
+  let braceDepth = 0
+  let bracketDepth = 0
+  let parenDepth = 0
+  let tokenStart = 0
+  let currentHeader = ''
+  let currentBlockStart = -1
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let escaped = false
+
+  for (let i = 0; i < blockBody.length; i++) {
+    const currentChar = blockBody[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (currentChar === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (!inDoubleQuote && currentChar === '\'') {
+      inSingleQuote = !inSingleQuote
+      continue
+    }
+
+    if (!inSingleQuote && currentChar === '"') {
+      inDoubleQuote = !inDoubleQuote
+      continue
+    }
+
+    if (inSingleQuote || inDoubleQuote) {
+      continue
+    }
+
+    if (currentChar === '[') {
+      bracketDepth++
+      continue
+    }
+
+    if (currentChar === ']') {
+      bracketDepth--
+      continue
+    }
+
+    if (currentChar === '(') {
+      parenDepth++
+      continue
+    }
+
+    if (currentChar === ')') {
+      parenDepth--
+      continue
+    }
+
+    if (bracketDepth > 0 || parenDepth > 0) {
+      continue
+    }
+
+    if (currentChar === '{') {
+      if (braceDepth === 0) {
+        currentHeader = blockBody.slice(tokenStart, i).trim()
+        currentBlockStart = i
+      }
+      braceDepth++
+      continue
+    }
+
+    if (currentChar === '}') {
+      braceDepth--
+      if (braceDepth === 0) {
+        if (currentHeader) {
+          ruleEntries.push({
+            selectorHeader: currentHeader,
+            blockSource: blockBody.slice(currentBlockStart, i + 1),
+          })
+        }
+        tokenStart = i + 1
+        currentHeader = ''
+        currentBlockStart = -1
+      }
+      continue
+    }
+
+    if (braceDepth === 0 && currentChar === ';') {
+      tokenStart = i + 1
+    }
+  }
+
+  return ruleEntries
+}
+
+function getTopLevelDeclarationEntries(blockSource) {
+  const blockBody = blockSource.slice(1, -1)
+  const declarationEntries = []
+  let braceDepth = 0
+  let bracketDepth = 0
+  let parenDepth = 0
+  let tokenStart = 0
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let escaped = false
+
+  for (let i = 0; i < blockBody.length; i++) {
+    const currentChar = blockBody[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (currentChar === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (!inDoubleQuote && currentChar === '\'') {
+      inSingleQuote = !inSingleQuote
+      continue
+    }
+
+    if (!inSingleQuote && currentChar === '"') {
+      inDoubleQuote = !inDoubleQuote
+      continue
+    }
+
+    if (inSingleQuote || inDoubleQuote) {
+      continue
+    }
+
+    if (currentChar === '[') {
+      bracketDepth++
+      continue
+    }
+
+    if (currentChar === ']') {
+      bracketDepth--
+      continue
+    }
+
+    if (currentChar === '(') {
+      parenDepth++
+      continue
+    }
+
+    if (currentChar === ')') {
+      parenDepth--
+      continue
+    }
+
+    if (bracketDepth > 0 || parenDepth > 0) {
+      continue
+    }
+
+    if (currentChar === '{') {
+      braceDepth++
+      continue
+    }
+
+    if (currentChar === '}') {
+      braceDepth--
+      if (braceDepth === 0) {
+        tokenStart = i + 1
+      }
+      continue
+    }
+
+    if (braceDepth === 0 && currentChar === ';') {
+      const declaration = blockBody.slice(tokenStart, i + 1).trim()
+
+      if (declaration) {
+        declarationEntries.push(declaration)
+      }
+
+      tokenStart = i + 1
+    }
+  }
+
+  return declarationEntries
+}
+
 function assertPreviewThemeDefaultIsGithub(source) {
   const previewThemeBlock = getObjectPropertyBlock(source, 'previewTheme')
   assert.match(previewThemeBlock, /default:\s*\(\)\s*=>\s*'github'/)
@@ -242,12 +436,35 @@ function assertPreviewThemeRegressionFixtureExtendedCoverage(source) {
  * @param {string} source
  */
 function assertPreviewThemeBaseConsumesExtendedSurfaceVariables(source) {
-  assert.match(source, /:where\(kbd\)\s*\{[\s\S]*?var\(--wj-preview-kbd-/u)
-  assert.match(source, /:where\(pre\.mermaid,\s*pre\.mermaid-cache\)\s*\{/u)
-  assert.match(source, /:where\(details\)\s*\{[\s\S]*?var\(--wj-preview-details-/u)
-  assert.match(source, /background-image:\s*var\(--wj-preview-theme-background-image\);/u)
-  assert.match(source, /background-size:\s*var\(--wj-preview-theme-background-size\);/u)
-  assert.match(source, /background-position:\s*var\(--wj-preview-theme-background-position\);/u)
+  const stableRootBlock = getSelectorBlock(source, '.wj-preview-theme')
+  const stableRootRuleEntries = getTopLevelNestedRuleEntries(stableRootBlock)
+  const stableRootDeclarationEntries = getTopLevelDeclarationEntries(stableRootBlock)
+
+  const semanticSurfaceAssertions = [
+    ['kbd', /kbd/u, /var\(--wj-preview-kbd-[a-z0-9-]+\)/u],
+    ['mermaid', /mermaid/u, /var\(--wj-preview-mermaid-[a-z0-9-]+\)/u],
+    ['details', /details/u, /var\(--wj-preview-details-[a-z0-9-]+\)/u],
+  ]
+
+  semanticSurfaceAssertions.forEach(([surfaceName, selectorPattern, variablePattern]) => {
+    const matchedRuleEntry = stableRootRuleEntries.find(({ selectorHeader, blockSource }) => {
+      return selectorPattern.test(selectorHeader) && variablePattern.test(blockSource)
+    })
+
+    assert.ok(matchedRuleEntry, `基础骨架未在稳定根块中承接 ${surfaceName} 语义变量`)
+  })
+
+  const rootBackgroundVariables = [
+    '--wj-preview-theme-background-image',
+    '--wj-preview-theme-background-size',
+    '--wj-preview-theme-background-position',
+  ]
+
+  rootBackgroundVariables.forEach((variableName) => {
+    const hasConsumedVariable = stableRootDeclarationEntries.some(declaration => declaration.includes(`var(${variableName})`))
+
+    assert.equal(hasConsumedVariable, true, `基础骨架未在稳定根块中承接背景变量：${variableName}`)
+  })
 }
 
 function assertRegressionFixtureAssetsExist(source) {
@@ -355,6 +572,32 @@ test('预览主题基础骨架必须消费 kbd、mermaid、details 与主题根�
   const previewThemeBaseSource = readSource('../preview-theme/preview-theme-base.scss')
 
   assertPreviewThemeBaseConsumesExtendedSurfaceVariables(previewThemeBaseSource)
+})
+
+test('基础骨架扩展语义断言不应绑定 mermaid 选择器顺序和主题根背景属性写法', () => {
+  const equivalentBaseSource = `.wj-preview-theme {
+  background:
+    var(--wj-preview-theme-background-image)
+    center / var(--wj-preview-theme-background-size)
+    no-repeat;
+  background-position: var(--wj-preview-theme-background-position);
+
+  & :where(kbd) {
+    color: var(--wj-preview-kbd-text-color);
+  }
+
+  & :where(pre.mermaid-cache, pre.mermaid) {
+    background: var(--wj-preview-mermaid-background-color);
+    text-align: var(--wj-preview-mermaid-text-align);
+  }
+
+  & :where(details, summary) {
+    border-color: var(--wj-preview-details-border);
+    color: var(--wj-preview-summary-text-color);
+  }
+}`
+
+  assert.doesNotThrow(() => assertPreviewThemeBaseConsumesExtendedSurfaceVariables(equivalentBaseSource))
 })
 
 test('预览主题回归样本引用的本地资源必须存在', () => {

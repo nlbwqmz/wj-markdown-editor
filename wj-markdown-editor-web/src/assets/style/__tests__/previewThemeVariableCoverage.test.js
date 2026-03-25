@@ -282,11 +282,23 @@ function getThemeHeadingFontSizePx(source, selector, level) {
  * @param {string} selector
  */
 function assertThemeDoesNotUseKbdSelectorForPrimarySurface(source, selector) {
-  assert.equal(
-    /(?:^|\n)\s*kbd\s*\{/u.test(source),
-    false,
-    `${selector} 不得继续使用 kbd 选择器承担主外观`,
-  )
+  const stableThemeBlocks = getSelectorBlocks(source, selector)
+
+  stableThemeBlocks.forEach((stableThemeBlock) => {
+    const stableThemeRuleEntries = getTopLevelNestedRuleEntries(stableThemeBlock)
+    const primaryKbdRuleEntry = stableThemeRuleEntries.find(({ selectorHeader }) => {
+      return selectorHeader
+        .split(',')
+        .map(entry => entry.trim())
+        .some(entry => /^kbd(?:$|[:.[#])/u.test(entry) || /^:where\(kbd(?:[\s,:.)]|$)/u.test(entry))
+    })
+
+    assert.equal(
+      Boolean(primaryKbdRuleEntry),
+      false,
+      `${selector} 不得继续通过稳定根块内的直接 kbd 选择器承担主外观`,
+    )
+  })
 }
 
 /**
@@ -676,6 +688,24 @@ test('受影响主题不得继续用 kbd 选择器承担主外观', () => {
 
     assertThemeDoesNotUseKbdSelectorForPrimarySurface(source, selector)
   })
+})
+
+test('kbd 主外观断言不应把稳定根块外或更具体局部特例误判为主路径', () => {
+  const source = `kbd {
+  color: red;
+}
+
+.wj-preview-theme.preview-theme-smart-blue {
+  --wj-preview-kbd-text-color: #135ce0;
+
+  .shortcut-hint kbd {
+    color: inherit;
+  }
+}`
+
+  assert.doesNotThrow(
+    () => assertThemeDoesNotUseKbdSelectorForPrimarySurface(source, '.preview-theme-smart-blue'),
+  )
 })
 
 test('mk-cute 主题应在主题根块声明统一变量入口', () => {
