@@ -33,10 +33,31 @@
   /* 单槽位浮层让语言标记与复制按钮在同一位置重叠切换。 */
   .pre-container-action-slot {
     display: grid;
+    align-items: center;
+    box-sizing: border-box;
     min-height: var(--wj-code-block-base-toolbar-min-height);
     max-width: var(--wj-code-block-base-action-slot-max-width);
+    padding-block: var(--wj-code-block-base-action-padding-block);
+    padding-inline: var(--wj-code-block-base-action-padding-inline);
     overflow: hidden;
+    color: var(--wj-code-block-action-color, rgba(255, 255, 255, 0.82));
     text-overflow: ellipsis;
+    border: 1px solid var(--wj-code-block-action-border-color, rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+    background: var(--wj-code-block-action-background, rgba(15, 23, 42, 0.58));
+    box-shadow: var(--wj-code-block-action-shadow, none);
+    transition:
+      color var(--wj-code-block-base-action-transition-duration) ease,
+      background-color var(--wj-code-block-base-action-transition-duration) ease,
+      border-color var(--wj-code-block-base-action-transition-duration) ease,
+      box-shadow var(--wj-code-block-base-action-transition-duration) ease;
+
+    &:focus-within {
+      color: var(--wj-code-block-action-focus-color, var(--wj-code-block-action-color, rgba(255, 255, 255, 0.96)));
+      border-color: var(--wj-code-block-action-focus-border-color, var(--wj-code-block-action-border-color, rgba(255, 255, 255, 0.28)));
+      background: var(--wj-code-block-action-focus-background, var(--wj-code-block-action-background, rgba(15, 23, 42, 0.72)));
+      box-shadow: 0 0 0 2px var(--wj-code-block-action-focus-ring-color, rgba(59, 130, 246, 0.45));
+    }
   }
 
   :where(.pre-container-action-slot > .pre-container-lang, .pre-container-action-slot > .pre-container-copy) {
@@ -50,23 +71,12 @@
     align-items: center;
     justify-content: flex-end;
     box-sizing: border-box;
-    min-height: var(--wj-code-block-base-toolbar-min-height);
-    padding: var(--wj-code-block-base-action-padding-block) var(--wj-code-block-base-action-padding-inline);
     overflow: hidden;
-    color: var(--wj-code-block-action-color, rgba(255, 255, 255, 0.82));
     font-size: var(--wj-code-block-base-action-font-size);
     line-height: var(--wj-code-block-base-action-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
-    border: 1px solid var(--wj-code-block-action-border-color, rgba(255, 255, 255, 0.14));
-    border-radius: 999px;
-    background: var(--wj-code-block-action-background, rgba(15, 23, 42, 0.58));
-    transition:
-      opacity var(--wj-code-block-base-action-transition-duration) ease,
-      color var(--wj-code-block-base-action-transition-duration) ease,
-      background-color var(--wj-code-block-base-action-transition-duration) ease,
-      border-color var(--wj-code-block-base-action-transition-duration) ease,
-      box-shadow var(--wj-code-block-base-action-transition-duration) ease;
+    transition: opacity var(--wj-code-block-base-action-transition-duration) ease, color var(--wj-code-block-base-action-transition-duration) ease;
   }
 
   :where(.pre-container-lang) {
@@ -81,9 +91,6 @@
     &:focus-visible {
       outline: none;
       color: var(--wj-code-block-action-focus-color, var(--wj-code-block-action-color, rgba(255, 255, 255, 0.96)));
-      border-color: var(--wj-code-block-action-focus-border-color, var(--wj-code-block-action-border-color, rgba(255, 255, 255, 0.28)));
-      background: var(--wj-code-block-action-focus-background, var(--wj-code-block-action-background, rgba(15, 23, 42, 0.72)));
-      box-shadow: 0 0 0 2px var(--wj-code-block-action-focus-ring-color, rgba(59, 130, 246, 0.45));
     }
   }
 

@@ -260,6 +260,7 @@ test('code-block-base.scss 的工具栏布局必须切换为单槽位浮层', ()
   const previewThemeScopeBlock = getSelectorBlockRange(codeBlockBaseSource, '.wj-preview-theme').blockSource
   const toolbarBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container-toolbar)').blockSource
   const actionSlotBlock = getSelectorBlockRange(previewThemeScopeBlock, '.pre-container-action-slot').blockSource
+  const sharedActionContentBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container-lang, .pre-container-copy)').blockSource
   const langBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container-lang)').blockSource
   const copyButtonBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container-copy)').blockSource
 
@@ -290,6 +291,11 @@ test('code-block-base.scss 的工具栏布局必须切换为单槽位浮层', ()
   )
   assert.match(
     actionSlotBlock,
+    /padding-inline\s*:[^;]+/u,
+    'code-block-base.scss 必须让 action-slot 自己承接共享浮层的 padding-inline',
+  )
+  assert.match(
+    actionSlotBlock,
     /max-width\s*:[^;]+/u,
     'code-block-base.scss 必须限制 action slot 的最大宽度，避免顶满整行',
   )
@@ -302,6 +308,61 @@ test('code-block-base.scss 的工具栏布局必须切换为单槽位浮层', ()
     actionSlotBlock,
     /text-overflow\s*:\s*ellipsis/u,
     'code-block-base.scss 必须让 action slot 超长内容显示省略号',
+  )
+  assert.match(
+    actionSlotBlock,
+    /border-radius\s*:[^;]+/u,
+    'code-block-base.scss 必须让 action-slot 自己承接共享浮层的圆角',
+  )
+  assert.match(
+    actionSlotBlock,
+    /(?:^|[;{\s])color\s*:[^;]+/u,
+    'code-block-base.scss 必须让 action-slot 自己承接共享浮层的文字颜色',
+  )
+  assert.match(
+    actionSlotBlock,
+    /background\s*:[^;]+/u,
+    'code-block-base.scss 必须让 action-slot 自己承接共享浮层的背景',
+  )
+  assert.match(
+    actionSlotBlock,
+    /(?:^|[;{\s])border\s*:[^;]+/u,
+    'code-block-base.scss 必须让 action-slot 自己承接共享浮层的边框',
+  )
+  assert.match(
+    actionSlotBlock,
+    /box-shadow\s*:[^;]+/u,
+    'code-block-base.scss 必须让 action-slot 自己承接共享浮层的阴影',
+  )
+  assert.doesNotMatch(
+    sharedActionContentBlock,
+    /padding-inline\s*:[^;]+/u,
+    'code-block-base.scss 不得再让 lang/copy 内容层各自承接共享浮层的 padding-inline',
+  )
+  assert.doesNotMatch(
+    sharedActionContentBlock,
+    /border-radius\s*:[^;]+/u,
+    'code-block-base.scss 不得再让 lang/copy 内容层各自承接共享浮层的圆角',
+  )
+  assert.doesNotMatch(
+    sharedActionContentBlock,
+    /(?:^|[;{\s])color\s*:[^;]+/u,
+    'code-block-base.scss 不得再让 lang/copy 内容层各自承接共享浮层的文字颜色',
+  )
+  assert.doesNotMatch(
+    sharedActionContentBlock,
+    /background\s*:[^;]+/u,
+    'code-block-base.scss 不得再让 lang/copy 内容层各自承接共享浮层的背景',
+  )
+  assert.doesNotMatch(
+    sharedActionContentBlock,
+    /(?:^|[;{\s])border\s*:[^;]+/u,
+    'code-block-base.scss 不得再让 lang/copy 内容层各自承接共享浮层的边框',
+  )
+  assert.doesNotMatch(
+    sharedActionContentBlock,
+    /box-shadow\s*:[^;]+/u,
+    'code-block-base.scss 不得再让 lang/copy 内容层各自承接共享浮层的阴影',
   )
   assert.match(
     langBlock,
