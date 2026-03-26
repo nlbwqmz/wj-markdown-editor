@@ -134,7 +134,7 @@
 
 ```html
 <div class="pre-container">
-  <div class="pre-container-toolbar" aria-hidden="true">
+  <div class="pre-container-toolbar">
     <div class="pre-container-action-slot">
       <div class="pre-container-lang">javascript</div>
       <div
@@ -156,7 +156,8 @@
 
 1. `pre-container-action-slot` 是本轮新增的唯一结构包装节点。
 2. 语言标记和复制按钮都位于这个包装节点内，后续交互只在此槽位中切换。
-3. `aria-hidden="true"` 不应直接挂在整个 toolbar 上，如果实现阶段会影响按钮可访问性，则应去掉该属性，仅保留视觉层定位职责。
+3. 复制按钮及其祖先链路不得使用 `aria-hidden="true"`，避免把按钮移出可访问树。
+4. `pre-container-toolbar` 仅承担视觉定位职责，不承担可访问性裁剪职责。
 
 ### 6.3 交互规则
 
@@ -321,14 +322,19 @@
 建议采用以下组合控制：
 
 1. `opacity`
-2. `visibility`
-3. `pointer-events`
-4. `transform` 或轻微位移动画（可选）
+2. `pointer-events`
+3. `transform` 或轻微位移动画（可选）
+
+其中需要明确：
+
+1. 复制按钮默认态可以视觉隐藏，但必须保持可聚焦。
+2. 复制按钮及其祖先不得使用 `display: none`、`visibility: hidden`、`hidden` 或 `aria-hidden="true"`。
+3. 若需要阻断鼠标点击，只能通过 `pointer-events` 控制，不得破坏键盘聚焦路径。
 
 默认态下：
 
 - 语言标记可见、可读。
-- 复制按钮透明且不接收鼠标事件。
+- 复制按钮透明且不接收鼠标事件，但仍保留在顺序焦点路径中。
 
 hover / focus-within 态下：
 
@@ -381,7 +387,7 @@ hover / focus-within 态下：
 本文件负责运行时采样与结构层变量注入：
 
 1. 在代码主题加载完成并预览刷新完成后读取 `.hljs` 计算样式。
-2. 将结果写入预览根节点或等价作用域。
+2. 将结果写入 `MarkdownPreview.vue` 当前预览根节点，不写入全局作用域。
 3. 与现有 `codeThemeUtil.js` 动态注入链路保持顺序一致。
 
 ### 10.4 `codeThemeUtil.js`
