@@ -31,7 +31,7 @@
   }
 
   /* 单槽位浮层让语言标记与复制按钮在同一位置重叠切换。 */
-  :where(.pre-container-action-slot) {
+  .pre-container-action-slot {
     display: grid;
     min-height: var(--wj-code-block-base-toolbar-min-height);
     max-width: var(--wj-code-block-base-action-slot-max-width);
