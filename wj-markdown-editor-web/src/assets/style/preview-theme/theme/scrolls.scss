@@ -53,6 +53,7 @@
   --wj-preview-table-font-size: 12px;
   --wj-preview-table-border: 1px solid var(--wj-preview-scrolls-table-border-color);
   --wj-preview-table-border-color: var(--wj-preview-scrolls-table-border-color);
+  --wj-preview-table-body-background-color: #fff7e563;
   --wj-preview-table-header-background-color: #ffe3b0a8;
   --wj-preview-table-header-text-align: left;
   --wj-preview-table-cell-padding: 7px;
@@ -78,9 +79,14 @@
 :root[theme='dark'] {
   .wj-preview-theme.preview-theme-scrolls {
     --wj-preview-text-color: var(--wj-markdown-text-primary);
-    --wj-preview-table-border-color: rgba(204, 161, 82, 0.3);
-    --wj-preview-table-header-background-color: rgba(204, 161, 82, 0.16);
-    --wj-preview-table-row-even-background-color: rgba(204, 161, 82, 0.08);
+    --wj-preview-table-font-size: 13px;
+    --wj-preview-table-border: 1px solid rgba(204, 161, 82, 0.34);
+    --wj-preview-table-border-color: rgba(204, 161, 82, 0.34);
+    --wj-preview-table-body-background-color: transparent;
+    --wj-preview-table-header-background-color: rgba(204, 161, 82, 0.2);
+    --wj-preview-table-header-text-color: #f4dfb6;
+    --wj-preview-table-row-even-background-color: rgba(204, 161, 82, 0.1);
+    --wj-preview-table-cell-border: 1px solid rgba(204, 161, 82, 0.18);
   }
 }
 
@@ -162,10 +168,6 @@
   thead {
     display: table-header-group;
     border-bottom: 1px solid var(--wj-preview-table-border-color);
-  }
-
-  tbody {
-    background: #fff7e563;
   }
 
   del {

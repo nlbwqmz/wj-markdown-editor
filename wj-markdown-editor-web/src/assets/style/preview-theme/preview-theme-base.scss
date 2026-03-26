@@ -166,6 +166,10 @@
     text-align: var(--wj-preview-table-header-text-align);
   }
 
+  & :where(tbody) {
+    background-color: var(--wj-preview-table-body-background-color);
+  }
+
   & :where(th, td) {
     padding: var(--wj-preview-table-cell-padding);
     border: var(--wj-preview-table-cell-border);
@@ -192,6 +196,10 @@
     max-width: var(--wj-preview-image-max-width);
     height: var(--wj-preview-image-height);
     box-shadow: var(--wj-preview-image-box-shadow);
+  }
+
+  & :where(audio) {
+    color-scheme: var(--wj-preview-audio-color-scheme);
   }
 
   & :where(kbd) {

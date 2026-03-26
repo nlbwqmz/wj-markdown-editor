@@ -414,6 +414,12 @@ function getDarkThemeSelectorBlock(source, selector) {
   return getSelectorBlock(darkThemeBlock, selector)
 }
 
+function getLightThemeSelectorBlock(source, selector) {
+  const lightThemeBlock = getSelectorBlock(source, ':root[theme=\'light\']')
+
+  return getSelectorBlock(lightThemeBlock, selector)
+}
+
 function assertDarkThemeBranchUsesVariableOverridesOnly(source, selector) {
   const darkThemeSelectorBlock = getDarkThemeSelectorBlock(source, selector)
   const normalizedBlockBody = darkThemeSelectorBlock
@@ -736,14 +742,26 @@ test('juejin 主题标题层级必须满足 h3 > h4 > h5 > h6', () => {
   )
 })
 
-test('juejin 明亮模式必须保留表格斑马纹变量', () => {
+test('juejin 明亮模式表格必须升级为更清晰的字号、边框与斑马纹', () => {
   const source = readSource('../preview-theme/theme/juejin.scss')
 
   assertThemeRootVariableValue(
     source,
     '.preview-theme-juejin',
+    '--wj-preview-table-font-size',
+    '14px',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-juejin',
+    '--wj-preview-table-cell-border',
+    '1px solid var\\(--wj-preview-table-border-color\\)',
+  )
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-juejin',
     '--wj-preview-table-row-even-background-color',
-    '#fcfcfc',
+    '#f9fafb',
   )
 })
 
@@ -793,12 +811,19 @@ test('markdown-here 主题应保留引用块段落间距变量的原始文风', 
   )
 })
 
-test('juejin 主题 dark 分支应只覆盖 inline code 相关语义并保留 code block 分离', () => {
+test('juejin 主题 dark 分支必须覆盖引用块与表格修复所需变量', () => {
   const source = readSource('../preview-theme/theme/juejin.scss')
 
   assertDarkThemeBranchUsesVariableOverridesOnly(source, '.preview-theme-juejin')
   assertDarkThemeBranchHasRequiredVariables(source, '.preview-theme-juejin', [
     '--wj-preview-text-color',
+    '--wj-preview-blockquote-text-color',
+    '--wj-preview-blockquote-background-color',
+    '--wj-preview-blockquote-border-color',
+    '--wj-preview-table-border-color',
+    '--wj-preview-table-header-background-color',
+    '--wj-preview-table-header-text-color',
+    '--wj-preview-table-row-even-background-color',
     '--wj-preview-inline-code-background-color',
   ])
   assertDarkThemeBranchVariableValue(
@@ -806,6 +831,48 @@ test('juejin 主题 dark 分支应只覆盖 inline code 相关语义并保留 co
     '.preview-theme-juejin',
     '--wj-preview-text-color',
     'var\\(--wj-markdown-text-primary\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-juejin',
+    '--wj-preview-blockquote-text-color',
+    'var\\(--wj-markdown-text-primary\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-juejin',
+    '--wj-preview-blockquote-background-color',
+    'rgba\\(171, 178, 191, 0\\.08\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-juejin',
+    '--wj-preview-blockquote-border-color',
+    'rgba\\(94, 129, 255, 0\\.62\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-juejin',
+    '--wj-preview-table-border-color',
+    'var\\(--wj-markdown-border-primary\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-juejin',
+    '--wj-preview-table-header-background-color',
+    'rgba\\(171, 178, 191, 0\\.14\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-juejin',
+    '--wj-preview-table-header-text-color',
+    'var\\(--wj-markdown-text-primary\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-juejin',
+    '--wj-preview-table-row-even-background-color',
+    'rgba\\(171, 178, 191, 0\\.08\\)',
   )
   assertDarkThemeBranchVariableValue(
     source,
@@ -1130,9 +1197,36 @@ test('scrolls 主题应在主题根块声明统一变量入口', () => {
     '--wj-preview-blockquote-first-child-margin-top',
     '--wj-preview-blockquote-last-child-margin-bottom',
     '--wj-preview-table-border-color',
+    '--wj-preview-table-body-background-color',
     '--wj-preview-table-header-background-color',
     '--wj-preview-task-list-style',
   ])
+})
+
+test('github 主题稳定根块不得继续承接音频表面与几何变量', () => {
+  const source = readSource('../preview-theme/theme/github.scss')
+  const stableRootBlock = getSelectorBlocks(source, '.preview-theme-github')
+    .find(block => block.includes('--wj-preview-text-color'))
+
+  assert.ok(stableRootBlock, 'github 主题稳定根块必须存在统一变量入口')
+  assert.doesNotMatch(stableRootBlock, /--wj-preview-audio-background-color\s*:/u)
+  assert.doesNotMatch(stableRootBlock, /--wj-preview-audio-border\s*:/u)
+  assert.doesNotMatch(stableRootBlock, /--wj-preview-audio-border-radius\s*:/u)
+})
+
+test('github 主题亮暗分支必须只同步音频色彩模式', () => {
+  const source = readSource('../preview-theme/theme/github.scss')
+  const darkRootBlock = getDarkThemeSelectorBlock(source, '.preview-theme-github')
+  const lightRootBlock = getLightThemeSelectorBlock(source, '.preview-theme-github')
+
+  assert.match(darkRootBlock, /--wj-preview-audio-color-scheme:\s*dark;/u)
+  assert.match(lightRootBlock, /--wj-preview-audio-color-scheme:\s*light;/u)
+  assert.doesNotMatch(darkRootBlock, /--wj-preview-audio-background-color\s*:/u)
+  assert.doesNotMatch(darkRootBlock, /--wj-preview-audio-border\s*:/u)
+  assert.doesNotMatch(darkRootBlock, /--wj-preview-audio-border-radius\s*:/u)
+  assert.doesNotMatch(lightRootBlock, /--wj-preview-audio-background-color\s*:/u)
+  assert.doesNotMatch(lightRootBlock, /--wj-preview-audio-border\s*:/u)
+  assert.doesNotMatch(lightRootBlock, /--wj-preview-audio-border-radius\s*:/u)
 })
 
 test('smart-blue 主题应通过首末段变量恢复单段引用块节奏', () => {
@@ -1407,12 +1501,19 @@ test('cyanosis 主题 dark 分支应只通过变量覆盖运行时 token', () =>
   )
 })
 
-test('scrolls 主题 dark 分支应只通过变量覆盖运行时 token', () => {
+test('scrolls 主题 dark 分支必须覆盖暗黑表格修复所需变量', () => {
   const source = readSource('../preview-theme/theme/scrolls.scss')
 
   assertDarkThemeBranchUsesVariableOverridesOnly(source, '.preview-theme-scrolls')
   assertDarkThemeBranchHasRequiredVariables(source, '.preview-theme-scrolls', [
     '--wj-preview-text-color',
+    '--wj-preview-table-border',
+    '--wj-preview-table-border-color',
+    '--wj-preview-table-body-background-color',
+    '--wj-preview-table-header-background-color',
+    '--wj-preview-table-header-text-color',
+    '--wj-preview-table-row-even-background-color',
+    '--wj-preview-table-cell-border',
   ])
   assertDarkThemeBranchVariableValue(
     source,
@@ -1420,6 +1521,60 @@ test('scrolls 主题 dark 分支应只通过变量覆盖运行时 token', () => 
     '--wj-preview-text-color',
     'var\\(--wj-markdown-text-primary\\)',
   )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-table-border',
+    '1px solid rgba\\(204, 161, 82, 0\\.34\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-table-border-color',
+    'rgba\\(204, 161, 82, 0\\.34\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-table-body-background-color',
+    'transparent',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-table-header-background-color',
+    'rgba\\(204, 161, 82, 0\\.2\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-table-header-text-color',
+    '#f4dfb6',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-table-row-even-background-color',
+    'rgba\\(204, 161, 82, 0\\.1\\)',
+  )
+  assertDarkThemeBranchVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-table-cell-border',
+    '1px solid rgba\\(204, 161, 82, 0\\.18\\)',
+  )
+})
+
+test('scrolls 主题不得继续通过 tbody 硬编码表格底纹', () => {
+  const source = readSource('../preview-theme/theme/scrolls.scss')
+
+  assertThemeRootVariableValue(
+    source,
+    '.preview-theme-scrolls',
+    '--wj-preview-table-body-background-color',
+    '#fff7e563',
+  )
+  assert.doesNotMatch(source, /tbody\s*\{[\s\S]*?background\s*:\s*#fff7e563\s*;[\s\S]*?\}/u)
 })
 
 test('7.5.7 矩阵要求的 dark 分支 token 必须全部覆盖', () => {

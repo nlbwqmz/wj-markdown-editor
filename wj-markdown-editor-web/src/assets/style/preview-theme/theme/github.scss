@@ -2,6 +2,7 @@
 :root[theme='dark'] {
   .wj-preview-theme.preview-theme-github {
     color-scheme: dark;
+    --wj-preview-audio-color-scheme: dark;
     --focus-outlineColor: #1f6feb;
     --fgColor-default: #f0f6fc;
     --fgColor-muted: #9198a1;
@@ -28,6 +29,7 @@
 :root[theme='light'] {
   .wj-preview-theme.preview-theme-github {
     color-scheme: light;
+    --wj-preview-audio-color-scheme: light;
     --focus-outlineColor: #0969da;
     --fgColor-default: #1f2328;
     --fgColor-muted: #59636e;

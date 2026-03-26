@@ -99,6 +99,7 @@
   --wj-preview-table-border: none;
   --wj-preview-table-border-color: var(--wj-markdown-border-primary);
   --wj-preview-table-border-collapse: collapse;
+  --wj-preview-table-body-background-color: var(--wj-preview-background-color-transparent);
   --wj-preview-table-header-background-color: var(--wj-markdown-bg-secondary);
   --wj-preview-table-header-text-color: inherit;
   --wj-preview-table-header-text-align: inherit;
@@ -113,6 +114,8 @@
   --wj-preview-image-max-width: 100%;
   --wj-preview-image-height: var(--wj-preview-size-auto);
   --wj-preview-image-box-shadow: var(--img-box-shadow);
+
+  --wj-preview-audio-color-scheme: normal;
 
   --wj-preview-kbd-padding: 0.125em 0.45em;
   --wj-preview-kbd-font-size: 0.85em;
@@ -166,4 +169,10 @@
   --wj-preview-summary-cursor: var(--wj-preview-cursor-pointer);
   --wj-preview-summary-font-weight: 500;
   --wj-preview-summary-text-color: var(--wj-markdown-text-primary);
+}
+
+:root[theme='dark'] {
+  .wj-preview-theme:not(.preview-theme-github) {
+    --wj-preview-audio-color-scheme: dark;
+  }
 }

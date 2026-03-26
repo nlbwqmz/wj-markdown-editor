@@ -42,17 +42,19 @@ $line-space: 22px;
   --wj-preview-blockquote-last-child-margin-bottom: 10px;
 
   --wj-preview-table-display: inline-block;
-  --wj-preview-table-width: auto;
+  --wj-preview-table-width: max-content;
   --wj-preview-table-max-width: 100%;
   --wj-preview-table-overflow-x: auto;
-  --wj-preview-table-font-size: 12px;
-  --wj-preview-table-border-collapse: separate;
-  --wj-preview-table-header-background-color: #f6f6f6;
-  --wj-preview-table-header-text-color: #000;
+  --wj-preview-table-font-size: 14px;
+  --wj-preview-table-border: 1px solid var(--wj-preview-table-border-color);
+  --wj-preview-table-border-color: #ececec;
+  --wj-preview-table-border-collapse: collapse;
+  --wj-preview-table-header-background-color: #f7f8fa;
+  --wj-preview-table-header-text-color: #1f2329;
   --wj-preview-table-header-text-align: left;
-  --wj-preview-table-row-even-background-color: #fcfcfc;
-  --wj-preview-table-cell-padding: 12px 7px;
-  --wj-preview-table-cell-border: none;
+  --wj-preview-table-row-even-background-color: #f9fafb;
+  --wj-preview-table-cell-padding: 10px 14px;
+  --wj-preview-table-cell-border: 1px solid var(--wj-preview-table-border-color);
   --wj-preview-table-cell-line-height: 24px;
   --wj-preview-table-cell-min-width: 120px;
 
@@ -79,10 +81,11 @@ $line-space: 22px;
 :root[theme='dark'] {
   .wj-preview-theme.preview-theme-juejin {
     --wj-preview-text-color: var(--wj-markdown-text-primary);
-    --wj-preview-blockquote-text-color: var(--wj-markdown-text-secondary);
-    --wj-preview-blockquote-background-color: var(--wj-markdown-bg-secondary);
-    --wj-preview-blockquote-border-color: var(--wj-markdown-border-primary);
-    --wj-preview-table-header-background-color: var(--wj-markdown-bg-secondary);
+    --wj-preview-blockquote-text-color: var(--wj-markdown-text-primary);
+    --wj-preview-blockquote-background-color: rgba(171, 178, 191, 0.08);
+    --wj-preview-blockquote-border-color: rgba(94, 129, 255, 0.62);
+    --wj-preview-table-border-color: var(--wj-markdown-border-primary);
+    --wj-preview-table-header-background-color: rgba(171, 178, 191, 0.14);
     --wj-preview-table-header-text-color: var(--wj-markdown-text-primary);
     --wj-preview-table-row-even-background-color: rgba(171, 178, 191, 0.08);
     --wj-preview-inline-code-background-color: rgba(171, 178, 191, 0.2);
@@ -106,11 +109,6 @@ $line-space: 22px;
 
   h6 {
     margin-top: 5px;
-  }
-
-  table {
-    display: inline-block !important;
-    border: solid 1px #f6f6f6;
   }
 
   blockquote {
