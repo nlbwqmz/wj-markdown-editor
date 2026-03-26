@@ -22,6 +22,14 @@ function getToolbarLangInfo(renderedHtml) {
   }
 }
 
+function assertActionSlotContainsLangAndCopy(renderedHtml) {
+  assert.match(
+    renderedHtml,
+    /<div class="[^"]*\bpre-container-action-slot\b[^"]*">\s*<div class="[^"]*\bpre-container-lang\b[^"]*">[^<]*<\/div>\s*<div class="[^"]*\bpre-container-copy\b[^"]*"[^>]*><\/div>\s*<\/div>/u,
+    '显式语言代码块必须在单槽位内同时输出语言标签和复制按钮',
+  )
+}
+
 function getStableAutoDetectFixture() {
   const candidates = [
     '[core]\nname=value',
@@ -70,6 +78,10 @@ test('显式语言且可识别时必须输出标准高亮 DOM 契约', () => {
   assert.equal(codeClassTokens.has('language-js'), true)
   assert.equal(codeClassTokens.has('language-javascript'), true)
   assert.match(renderedHtml, /pre-container-toolbar/u)
+  assert.match(renderedHtml, /pre-container-action-slot/u)
+  assert.match(renderedHtml, /pre-container-lang/u)
+  assert.match(renderedHtml, /pre-container-copy/u)
+  assertActionSlotContainsLangAndCopy(renderedHtml)
   assert.equal(toolbarLangInfo.classTokens.has('hidden'), false)
   assert.equal(toolbarLangInfo.text, 'js')
   assert.doesNotMatch(renderedHtml, /<pre class="[^"]*\bhljs\b/u)
@@ -85,9 +97,20 @@ test('显式语言但未识别时不得输出伪造的 language class 且仍显�
   const toolbarLangInfo = getToolbarLangInfo(renderedHtml)
 
   assert.deepEqual([...codeClassTokens].sort(), ['hljs'])
+  assert.match(renderedHtml, /pre-container-action-slot/u)
+  assertActionSlotContainsLangAndCopy(renderedHtml)
   assert.doesNotMatch(renderedHtml, /\blanguage-[^"\s]+/u)
   assert.equal(toolbarLangInfo.classTokens.has('hidden'), false)
   assert.equal(toolbarLangInfo.text, 'FooLang')
+})
+
+test('普通 fenced code block 不得把正文语义色 utility class 写死到 DOM', () => {
+  const md = new MarkdownIt()
+  md.use(codeBlockPlugin)
+
+  const renderedHtml = md.render('```js\nconsole.log(1)\n```')
+
+  assert.doesNotMatch(renderedHtml, /var\(--wj-markdown-text-secondary\)/u)
 })
 
 test('未显式语言但自动识别成功时只输出检测出的 language class 且隐藏语言标签', () => {

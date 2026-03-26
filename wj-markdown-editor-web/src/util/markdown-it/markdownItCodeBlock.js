@@ -158,8 +158,10 @@ function renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md) {
   return html`
   <div class="pre-container">
     <div class="pre-container-toolbar">
-      <div class="font-bold op-80 color-[var(--wj-markdown-text-secondary)] pre-container-lang font-size-3 line-height-3 ${languageMeta.toolbarLangHidden ? 'hidden' : ''}">${escapedToolbarLabel}</div>
-      <div class="i-tabler:copy cursor-pointer op-80 color-[var(--wj-markdown-text-secondary)] pre-container-copy font-size-3.5 hover:op-100" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${encodedCode}')" onkeydown="${createCopyCodeKeydownHandler(encodedCode)}"></div>
+      <div class="pre-container-action-slot">
+        <div class="font-bold op-80 pre-container-lang font-size-3 line-height-3 ${languageMeta.toolbarLangHidden ? 'hidden' : ''}">${escapedToolbarLabel}</div>
+        <div class="i-tabler:copy cursor-pointer op-80 pre-container-copy font-size-3.5 hover:op-100" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${encodedCode}')" onkeydown="${createCopyCodeKeydownHandler(encodedCode)}"></div>
+      </div>
     </div>
     <pre${preAttrs ? ` ${preAttrs}` : ''}>
       <code class="${languageMeta.codeClassName}">`
@@ -171,8 +173,7 @@ function renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md) {
 }
 
 export default function codeBlockPlugin(md) {
-  const defaultRenderer = md.renderer.rules.fence.bind(md.renderer.rules)
-  md.renderer.rules.fence = (tokens, idx, options, env, slf) => {
+  md.renderer.rules.fence = (tokens, idx) => {
     const token = tokens[idx]
     const code = token.content.trim()
     const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
@@ -190,6 +191,5 @@ export default function codeBlockPlugin(md) {
         return renderStandardCodeBlockHtml(token, encodedCode, createFallbackCodeBlockLanguageMeta(info, code, md), md)
       }
     }
-    return defaultRenderer(tokens, idx, options, env, slf)
   }
 }
