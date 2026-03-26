@@ -1,12 +1,12 @@
 .wj-preview-theme {
   --wj-code-block-base-block-margin: 1em 0;
   --wj-code-block-base-border-radius: var(--wj-preview-code-block-border-radius, 8px);
-  --wj-code-block-base-toolbar-inset-block: 8px;
-  --wj-code-block-base-toolbar-inset-inline: 8px;
+  --wj-code-block-base-toolbar-inset-block: 2px;
+  --wj-code-block-base-toolbar-inset-inline: 4px;
   --wj-code-block-base-toolbar-min-height: 28px;
-  --wj-code-block-base-action-slot-max-width: min(40%, 220px);
   --wj-code-block-base-action-font-size: 12px;
-  --wj-code-block-base-action-line-height: 1.4;
+  --wj-code-block-base-action-height: 16px;
+  --wj-code-block-base-action-line-height: 16px;
   --wj-code-block-base-action-padding-block: 4px;
   --wj-code-block-base-action-padding-inline: 8px;
   --wj-code-block-base-action-transition-duration: 0.18s;
@@ -17,7 +17,6 @@
 
   :where(.pre-container) {
     position: relative;
-    overflow: hidden;
     margin: var(--wj-code-block-base-block-margin);
     border-radius: var(--wj-code-block-base-border-radius);
   }
@@ -27,68 +26,33 @@
     top: var(--wj-code-block-base-toolbar-inset-block);
     right: var(--wj-code-block-base-toolbar-inset-inline);
     z-index: 1;
-    display: flex;
-    justify-content: flex-end;
-    max-width: calc(100% - (var(--wj-code-block-base-toolbar-inset-inline) * 2));
     pointer-events: none;
   }
 
   /* 单槽位浮层让语言标记与复制按钮在同一位置重叠切换。 */
   .pre-container-action-slot {
-    display: grid;
+    display: flex;
     align-items: center;
     box-sizing: border-box;
-    min-height: var(--wj-code-block-base-toolbar-min-height);
-    max-width: var(--wj-code-block-base-action-slot-max-width);
-    padding-block: var(--wj-code-block-base-action-padding-block);
-    padding-inline: var(--wj-code-block-base-action-padding-inline);
     overflow: hidden;
+    pointer-events: none;
     color: var(--wj-code-block-action-color, rgba(255, 255, 255, 0.82));
     text-overflow: ellipsis;
-    border: 1px solid var(--wj-code-block-action-border-color, rgba(255, 255, 255, 0.14));
-    border-radius: 999px;
-    background: var(--wj-code-block-action-background, rgba(15, 23, 42, 0.58));
-    box-shadow: var(--wj-code-block-action-shadow, none);
-    transition:
-      color var(--wj-code-block-base-action-transition-duration) ease,
-      background-color var(--wj-code-block-base-action-transition-duration) ease,
-      border-color var(--wj-code-block-base-action-transition-duration) ease,
-      box-shadow var(--wj-code-block-base-action-transition-duration) ease;
+    transition: color var(--wj-code-block-base-action-transition-duration) ease;
 
     &:focus-within {
       color: var(--wj-code-block-action-focus-color, var(--wj-code-block-action-color, rgba(255, 255, 255, 0.96)));
-      border-color: var(
-        --wj-code-block-action-focus-border-color,
-        var(--wj-code-block-action-border-color, rgba(255, 255, 255, 0.28))
-      );
-      background: var(
-        --wj-code-block-action-focus-background,
-        var(--wj-code-block-action-background, rgba(15, 23, 42, 0.72))
-      );
-      box-shadow: 0 0 0 2px var(--wj-code-block-action-focus-ring-color, rgba(59, 130, 246, 0.45));
     }
   }
 
-  .pre-container-action-slot > .pre-container-lang,
-  .pre-container-action-slot > .pre-container-copy {
-    grid-area: 1 / 1;
-    min-width: 0;
-    max-width: 100%;
-  }
-
   :where(.pre-container-lang, .pre-container-copy) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-end;
-    box-sizing: border-box;
+    line-height: var(--wj-code-block-base-action-line-height);
+    height: var(--wj-code-block-base-action-height);
     overflow: hidden;
     font-size: var(--wj-code-block-base-action-font-size);
-    line-height: var(--wj-code-block-base-action-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
-    transition:
-      opacity var(--wj-code-block-base-action-transition-duration) ease,
-      color var(--wj-code-block-base-action-transition-duration) ease;
+    transition: color var(--wj-code-block-base-action-transition-duration) ease;
   }
 
   :where(.pre-container-lang) {
@@ -98,7 +62,7 @@
 
   :where(.pre-container-copy) {
     cursor: pointer;
-    opacity: 0;
+    display: none;
     pointer-events: none;
 
     &:focus-visible {
@@ -110,12 +74,12 @@
   /* hover 与 focus-within 共用同一套显隐切换，避免破坏键盘访问路径。 */
   :where(.pre-container:hover, .pre-container:focus-within) {
     :where(.pre-container-lang) {
-      opacity: 0;
+      display: none;
       pointer-events: none;
     }
 
     :where(.pre-container-copy) {
-      opacity: 1;
+      display: block;
       pointer-events: auto;
     }
   }

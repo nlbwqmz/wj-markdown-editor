@@ -145,8 +145,31 @@ ___
 
 ### JavaScript 代码块
 
+```java
+/**
+ * 按主键更新导线标点
+ *
+ * @param uuid 杆塔主键
+ * @param points 导线标点
+ * @return 修改成功时间
+ */
+@Override
+public String updatePolePoints(String uuid, String points) {
+  PoleDO existedPole = poleMapper.queryByUuid(uuid);
+  if (Objects.isNull(existedPole)) {
+    throw new FwpException(StatusCodeEnum.POLE_NOT_EXISTED);
+  }
+
+  PoleDO updatePole = new PoleDO();
+  updatePole.setUuid(uuid);
+  updatePole.setPoints(points);
+  poleMapper.updateByPrimarySelectivePole(updatePole);
+  return LocalDateTime.now().format(DATE_TIME_FORMATTER);
+}
+```
+
 ```js
-function previewThemeSample(themeName) {
+function previewThemeSample(themeName) {function previewThemeSample(themeName) {function previewThemeSample(themeName) {function previewThemeSample(themeName) {function previewThemeSample(themeName) {
   const supportsDarkMode = true
   console.log('----------------------------------------------------------------------------')
   return {
