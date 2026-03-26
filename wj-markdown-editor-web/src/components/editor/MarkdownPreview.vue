@@ -5,6 +5,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useCommonStore } from '@/stores/counter.js'
+import { syncCodeBlockActionVariables } from '@/util/codeBlockActionStyleUtil.js'
 import { loadCodeTheme } from '@/util/codeThemeUtil.js'
 import { handlePreviewHashAnchorClick } from '@/util/editor/previewAnchorLinkScrollUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
@@ -37,6 +38,7 @@ const emits = defineEmits(['refreshComplete', 'anchorChange', 'assetContextmenu'
 
 const store = useCommonStore()
 const { t } = useI18n()
+const previewShellRef = ref()
 
 /**
  * 根据全局主题获取 mermaid 主题
@@ -60,6 +62,17 @@ function initMermaid() {
 }
 
 const previewRef = ref()
+
+const previewShellStyle = {
+  'fontFamily': 'var(--preview-area-font)',
+  // 在样式层完成新旧变量名桥接，避免把兼容逻辑扩散到 helper 内部。
+  '--wj-code-block-action-color': 'var(--wj-code-block-action-fg-muted)',
+  '--wj-code-block-action-focus-color': 'var(--wj-code-block-action-fg)',
+  '--wj-code-block-action-border-color': 'var(--wj-code-block-action-border)',
+  '--wj-code-block-action-focus-border-color': 'var(--wj-code-block-action-border)',
+  '--wj-code-block-action-background': 'var(--wj-code-block-action-bg)',
+  '--wj-code-block-action-focus-background': 'var(--wj-code-block-action-bg)',
+}
 
 const imageSrcList = ref([])
 const imagePreviewVisible = ref(false)
@@ -96,6 +109,13 @@ function clearPreviewRefreshScheduler() {
     clearTimeout(previewRefreshTimer)
     previewRefreshTimer = null
   }
+}
+
+/**
+ * 将当前代码主题派生出的结构层变量同步到预览壳节点。
+ */
+function refreshCodeBlockActionVariables() {
+  syncCodeBlockActionVariables(previewShellRef.value)
 }
 
 function getAssetInfoFromDom(assetDom, event) {
@@ -359,6 +379,7 @@ watch(() => store.config.theme.global, () => {
 watch(() => props.codeTheme, async (newTheme) => {
   if (newTheme) {
     await loadCodeTheme(newTheme)
+    refreshCodeBlockActionVariables()
   }
 }, { immediate: true })
 
@@ -393,6 +414,7 @@ async function refreshPreview(doc, forceRefreshMermaid = false) {
   if (currentRefreshSequence !== previewRefreshSequence) {
     return
   }
+  refreshCodeBlockActionVariables()
   updatePreviewAssetMetadata()
   pushAnchorList()
   emits('refreshComplete')
@@ -469,7 +491,7 @@ onBeforeRouteLeave(() => {
 <template>
   <a-watermark v-bind="watermark && watermark.enabled ? watermark : {}">
     <!-- 使用伪元素防止首个子元素导致margin塌陷 -->
-    <div style="font-family: var(--preview-area-font);" class="wj-preview-theme backface-hidden pos-relative w-full p-2 before:table before:content-['']" :class="`code-theme-${codeTheme} preview-theme-${previewTheme}`">
+    <div ref="previewShellRef" :style="previewShellStyle" class="wj-preview-theme backface-hidden pos-relative w-full p-2 before:table before:content-['']" :class="`code-theme-${codeTheme} preview-theme-${previewTheme}`">
       <div ref="previewRef" class="wj-scrollbar w-full" />
     </div>
   </a-watermark>
