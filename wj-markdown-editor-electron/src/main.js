@@ -1,6 +1,7 @@
 import { app, Menu, protocol, shell } from 'electron'
 import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
+import { applyWindowsAppIdentity } from './util/appIdentityUtil.js'
 import { handleSecondInstanceOpenRequest, handleStartupOpenRequest } from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
 import { createDocumentOpenFailureNotificationPublisher } from './util/document-session/documentOpenFailureNotificationUtil.js'
@@ -20,6 +21,10 @@ import settingUtil from './util/win/settingUtil.js'
 import './util/channel/ipcMainUtil.js'
 
 app.commandLine.appendSwitch('--disable-http-cache')
+// Windows 系统通知需要稳定的应用身份，避免标题栏回退成 Electron 默认值。
+applyWindowsAppIdentity({
+  appApi: app,
+})
 /**
  * 配置应用级 GPU 行为。
  *

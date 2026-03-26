@@ -1,15 +1,11 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { dialog, Notification } from 'electron'
 import fs from 'fs-extra'
+import { APP_NOTIFICATION_ICON_PATH } from '../appIdentityUtil.js'
 import {
   isMarkdownFilePath,
   resolveDocumentOpenPath,
 } from './documentOpenTargetUtil.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const EXTERNAL_CHANGE_NOTIFICATION_ICON_PATH = path.resolve(__dirname, '../../../icon/256x256.png')
 
 // 从多种 payload 形态里提取目标路径。
 // 兼容层有时直接传字符串，有时传对象，这里统一收口成 path 或 null。
@@ -187,7 +183,7 @@ export function createDocumentEffectService({
   dialogApi = dialog,
   notificationApi = Notification,
   createSystemNotification = options => new notificationApi(options),
-  notificationIconPath = EXTERNAL_CHANGE_NOTIFICATION_ICON_PATH,
+  notificationIconPath = APP_NOTIFICATION_ICON_PATH,
   recentStore = {
     add: async () => {},
     remove: async () => {},

@@ -1,10 +1,6 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { dialog, Notification } from 'electron'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const OPEN_FAILURE_NOTIFICATION_ICON_PATH = path.resolve(__dirname, '../../../icon/256x256.png')
+import { APP_NOTIFICATION_ICON_PATH } from '../appIdentityUtil.js'
 
 function getLanguage(getConfig) {
   return getConfig?.()?.language || 'zh-CN'
@@ -73,7 +69,7 @@ export function createDocumentOpenFailureNotificationPublisher({
   getConfig = () => ({}),
   notificationApi = Notification,
   createSystemNotification = options => new notificationApi(options),
-  notificationIconPath = OPEN_FAILURE_NOTIFICATION_ICON_PATH,
+  notificationIconPath = APP_NOTIFICATION_ICON_PATH,
   dialogApi = dialog,
   resolveWindowById = () => null,
   listWindows = () => [],
