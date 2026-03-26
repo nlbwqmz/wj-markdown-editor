@@ -1,12 +1,3 @@
-import { useCommonStore } from '@/stores/counter.js'
-import markdownItAudio from '@/util/markdown-it/markdownItAudio.js'
-import MarkdownItCodeBlock from '@/util/markdown-it/markdownItCodeBlock.js'
-import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
-import markdownItImage from '@/util/markdown-it/markdownItImage.js'
-import markdownItLineNumber from '@/util/markdown-it/markdownItLineNumber.js'
-import markdownItLink from '@/util/markdown-it/markdownItLink.js'
-import markdownItTextColor from '@/util/markdown-it/markdownItTextColor.js'
-import markdownItVideo from '@/util/markdown-it/markdownItVideo.js'
 import { footnote } from '@mdit/plugin-footnote'
 import { imgSize } from '@mdit/plugin-img-size'
 import MarkdownItKatex from '@vscode/markdown-it-katex'
@@ -20,6 +11,16 @@ import MarkdownItMark from 'markdown-it-mark'
 import MarkdownItSub from 'markdown-it-sub'
 import MarkdownItSup from 'markdown-it-sup'
 import MarkdownItTaskLists from 'markdown-it-task-lists'
+import { useCommonStore } from '@/stores/counter.js'
+import markdownItAudio from '@/util/markdown-it/markdownItAudio.js'
+import MarkdownItCodeBlock from '@/util/markdown-it/markdownItCodeBlock.js'
+import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
+import markdownItImage from '@/util/markdown-it/markdownItImage.js'
+import markdownItKatexLineNumber from '@/util/markdown-it/markdownItKatexLineNumber.js'
+import markdownItLineNumber from '@/util/markdown-it/markdownItLineNumber.js'
+import markdownItLink from '@/util/markdown-it/markdownItLink.js'
+import markdownItTextColor from '@/util/markdown-it/markdownItTextColor.js'
+import markdownItVideo from '@/util/markdown-it/markdownItVideo.js'
 
 const md = new MarkdownIt({
   html: true,
@@ -53,6 +54,9 @@ markdownItLink(md)
 
 // 添加原始文本对应的行号区域
 markdownItLineNumber(md)
+
+// 给 KaTeX 块级公式根节点补充行号属性
+markdownItKatexLineNumber(md)
 
 // 容器
 markdownItContainerUtil.createContainerPlugin(md, ['info', 'warning', 'danger', 'tip', 'important', 'details'])
