@@ -60,6 +60,26 @@ function assertSingleActionSlotToolbarContract(renderedHtml) {
   return toolbarStructure
 }
 
+function assertClassTokensDoNotContain(toolbarStructure, classKey, forbiddenTokens, messagePrefix) {
+  forbiddenTokens.forEach((forbiddenToken) => {
+    assert.equal(
+      toolbarStructure[classKey].has(forbiddenToken),
+      false,
+      `${messagePrefix} 不得继续依赖 utility class：${forbiddenToken}`,
+    )
+  })
+}
+
+function assertClassTokensDoNotMatch(toolbarStructure, classKey, forbiddenPatterns, messagePrefix) {
+  forbiddenPatterns.forEach((forbiddenPattern) => {
+    assert.equal(
+      [...toolbarStructure[classKey]].some(classToken => forbiddenPattern.test(classToken)),
+      false,
+      `${messagePrefix} 不得继续依赖 utility class 模式：${forbiddenPattern}`,
+    )
+  })
+}
+
 function getStableAutoDetectFixture() {
   const candidates = [
     '[core]\nname=value',
@@ -113,6 +133,20 @@ test('显式语言且可识别时必须输出标准高亮 DOM 契约', () => {
   assert.equal(toolbarStructure.langText, 'js')
   assert.doesNotMatch(renderedHtml, /<pre class="[^"]*\bhljs\b/u)
   assert.doesNotMatch(renderedHtml, /\b(?:relative|absolute|top-0|right-0)\b/u)
+})
+
+test('普通 fenced code block 的 action-slot/lang/copy 不得继续依赖 styling utility class', () => {
+  const md = new MarkdownIt()
+  md.use(codeBlockPlugin)
+
+  const renderedHtml = md.render('```js\nconsole.log(1)\n```')
+  const toolbarStructure = assertSingleActionSlotToolbarContract(renderedHtml)
+
+  assertClassTokensDoNotContain(toolbarStructure, 'actionSlotClassTokens', ['flex', 'items-center', 'w-full'], 'action-slot 节点')
+  assertClassTokensDoNotContain(toolbarStructure, 'langClassTokens', ['font-bold'], '语言标签节点')
+  assertClassTokensDoNotContain(toolbarStructure, 'copyClassTokens', ['cursor-pointer'], '复制按钮节点')
+  assertClassTokensDoNotMatch(toolbarStructure, 'langClassTokens', [/^op-/u, /^font-size-/u, /^line-height-/u], '语言标签节点')
+  assertClassTokensDoNotMatch(toolbarStructure, 'copyClassTokens', [/^op-/u, /^hover:op-/u, /^font-size-/u, /^line-height-/u], '复制按钮节点')
 })
 
 test('显式语言但未识别时不得输出伪造的 language class 且仍显示原始标签', () => {

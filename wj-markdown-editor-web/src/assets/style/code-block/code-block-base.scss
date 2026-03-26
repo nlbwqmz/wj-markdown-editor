@@ -10,7 +10,10 @@
   --wj-code-block-base-action-padding-block: 4px;
   --wj-code-block-base-action-padding-inline: 8px;
   --wj-code-block-base-action-transition-duration: 0.18s;
-  --wj-code-block-base-mermaid-border-radius: var(--wj-preview-mermaid-border-radius, var(--wj-code-block-base-border-radius));
+  --wj-code-block-base-mermaid-border-radius: var(
+    --wj-preview-mermaid-border-radius,
+    var(--wj-code-block-base-border-radius)
+  );
 
   :where(.pre-container) {
     position: relative;
@@ -54,13 +57,20 @@
 
     &:focus-within {
       color: var(--wj-code-block-action-focus-color, var(--wj-code-block-action-color, rgba(255, 255, 255, 0.96)));
-      border-color: var(--wj-code-block-action-focus-border-color, var(--wj-code-block-action-border-color, rgba(255, 255, 255, 0.28)));
-      background: var(--wj-code-block-action-focus-background, var(--wj-code-block-action-background, rgba(15, 23, 42, 0.72)));
+      border-color: var(
+        --wj-code-block-action-focus-border-color,
+        var(--wj-code-block-action-border-color, rgba(255, 255, 255, 0.28))
+      );
+      background: var(
+        --wj-code-block-action-focus-background,
+        var(--wj-code-block-action-background, rgba(15, 23, 42, 0.72))
+      );
       box-shadow: 0 0 0 2px var(--wj-code-block-action-focus-ring-color, rgba(59, 130, 246, 0.45));
     }
   }
 
-  :where(.pre-container-action-slot > .pre-container-lang, .pre-container-action-slot > .pre-container-copy) {
+  .pre-container-action-slot > .pre-container-lang,
+  .pre-container-action-slot > .pre-container-copy {
     grid-area: 1 / 1;
     min-width: 0;
     max-width: 100%;
@@ -76,7 +86,9 @@
     line-height: var(--wj-code-block-base-action-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
-    transition: opacity var(--wj-code-block-base-action-transition-duration) ease, color var(--wj-code-block-base-action-transition-duration) ease;
+    transition:
+      opacity var(--wj-code-block-base-action-transition-duration) ease,
+      color var(--wj-code-block-base-action-transition-duration) ease;
   }
 
   :where(.pre-container-lang) {
@@ -85,6 +97,7 @@
   }
 
   :where(.pre-container-copy) {
+    cursor: pointer;
     opacity: 0;
     pointer-events: none;
 

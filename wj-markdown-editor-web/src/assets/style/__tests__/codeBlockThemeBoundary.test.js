@@ -260,6 +260,7 @@ test('code-block-base.scss 的工具栏布局必须切换为单槽位浮层', ()
   const previewThemeScopeBlock = getSelectorBlockRange(codeBlockBaseSource, '.wj-preview-theme').blockSource
   const toolbarBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container-toolbar)').blockSource
   const actionSlotBlock = getSelectorBlockRange(previewThemeScopeBlock, '.pre-container-action-slot').blockSource
+  const actionSlotChildBlock = getSelectorBlockRange(previewThemeScopeBlock, '.pre-container-action-slot > .pre-container-lang,\n  .pre-container-action-slot > .pre-container-copy').blockSource
   const sharedActionContentBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container-lang, .pre-container-copy)').blockSource
   const langBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container-lang)').blockSource
   const copyButtonBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container-copy)').blockSource
@@ -288,6 +289,21 @@ test('code-block-base.scss 的工具栏布局必须切换为单槽位浮层', ()
     actionSlotBlock,
     /display\s*:\s*grid/u,
     'code-block-base.scss 必须在 action-slot 布局块中承接 display: grid',
+  )
+  assert.match(
+    codeBlockBaseSource,
+    /\n\s*\.pre-container-action-slot > \.pre-container-lang,[\t\v\f\r \xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*\n\s*\.pre-container-action-slot > \.pre-container-copy\s*\{/u,
+    'code-block-base.scss 必须用显式子节点选择器硬保护单槽位重叠契约',
+  )
+  assert.doesNotMatch(
+    codeBlockBaseSource,
+    /:where\(\.pre-container-action-slot > \.pre-container-lang, \.pre-container-action-slot > \.pre-container-copy\)\s*\{/u,
+    'code-block-base.scss 不得继续用 :where(...) 声明单槽位重叠的子节点规则',
+  )
+  assert.match(
+    actionSlotChildBlock,
+    /grid-area\s*:\s*1\s*\/\s*1/u,
+    'code-block-base.scss 必须锁住 action-slot 子节点共享同一槽位的 grid-area: 1 / 1',
   )
   assert.match(
     actionSlotBlock,
