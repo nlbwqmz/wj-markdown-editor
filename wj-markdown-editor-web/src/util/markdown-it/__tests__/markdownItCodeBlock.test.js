@@ -22,12 +22,25 @@ function getToolbarLangInfo(renderedHtml) {
   }
 }
 
-function assertActionSlotContainsLangAndCopy(renderedHtml) {
-  assert.match(
-    renderedHtml,
-    /<div class="[^"]*\bpre-container-action-slot\b[^"]*">\s*<div class="[^"]*\bpre-container-lang\b[^"]*">[^<]*<\/div>\s*<div class="[^"]*\bpre-container-copy\b[^"]*"[^>]*><\/div>\s*<\/div>/u,
-    '显式语言代码块必须在单槽位内同时输出语言标签和复制按钮',
+function countClassOccurrences(renderedHtml, className) {
+  const pattern = new RegExp(`class="[^"]*\\b${className}\\b[^"]*"`, 'gu')
+  return [...renderedHtml.matchAll(pattern)].length
+}
+
+function getExplicitToolbarStructure(renderedHtml) {
+  const match = renderedHtml.match(
+    /<div class="([^"]*\bpre-container-toolbar\b[^"]*)">\s*<div class="([^"]*\bpre-container-action-slot\b[^"]*)">\s*<div class="([^"]*\bpre-container-lang\b[^"]*)">([^<]*)<\/div>\s*<div class="([^"]*\bpre-container-copy\b[^"]*)"[^>]*><\/div>\s*<\/div>\s*<\/div>\s*<pre/u,
   )
+
+  assert.ok(match, '显式语言代码块必须保持 toolbar -> action-slot -> lang/copy 的单槽位 DOM 结构')
+
+  return {
+    toolbarClassTokens: new Set(match[1].split(/\s+/u).filter(Boolean)),
+    actionSlotClassTokens: new Set(match[2].split(/\s+/u).filter(Boolean)),
+    langClassTokens: new Set(match[3].split(/\s+/u).filter(Boolean)),
+    langText: match[4],
+    copyClassTokens: new Set(match[5].split(/\s+/u).filter(Boolean)),
+  }
 }
 
 function getStableAutoDetectFixture() {
@@ -72,18 +85,28 @@ test('显式语言且可识别时必须输出标准高亮 DOM 契约', () => {
   const renderedHtml = md.render('```js\nconsole.log(1)\n```')
   const codeClassTokens = getCodeClassTokens(renderedHtml)
   const toolbarLangInfo = getToolbarLangInfo(renderedHtml)
+  const toolbarStructure = getExplicitToolbarStructure(renderedHtml)
 
   assert.match(renderedHtml, /<pre(?:\s[^>]*)?>\s*<code class="[^"]*\bhljs\b/u)
   assert.equal(codeClassTokens.has('hljs'), true)
   assert.equal(codeClassTokens.has('language-js'), true)
   assert.equal(codeClassTokens.has('language-javascript'), true)
-  assert.match(renderedHtml, /pre-container-toolbar/u)
-  assert.match(renderedHtml, /pre-container-action-slot/u)
-  assert.match(renderedHtml, /pre-container-lang/u)
-  assert.match(renderedHtml, /pre-container-copy/u)
-  assertActionSlotContainsLangAndCopy(renderedHtml)
+  assert.equal(countClassOccurrences(renderedHtml, 'pre-container-toolbar'), 1)
+  assert.equal(countClassOccurrences(renderedHtml, 'pre-container-action-slot'), 1)
+  assert.equal(countClassOccurrences(renderedHtml, 'pre-container-lang'), 1)
+  assert.equal(countClassOccurrences(renderedHtml, 'pre-container-copy'), 1)
+  assert.equal(toolbarStructure.toolbarClassTokens.has('pre-container-toolbar'), true)
+  assert.equal(toolbarStructure.actionSlotClassTokens.has('pre-container-action-slot'), true)
+  assert.equal(toolbarStructure.actionSlotClassTokens.has('flex'), true)
+  assert.equal(toolbarStructure.actionSlotClassTokens.has('items-center'), true)
+  assert.equal(toolbarStructure.actionSlotClassTokens.has('w-full'), true)
   assert.equal(toolbarLangInfo.classTokens.has('hidden'), false)
   assert.equal(toolbarLangInfo.text, 'js')
+  assert.equal(toolbarStructure.langClassTokens.has('pre-container-lang'), true)
+  assert.equal(toolbarStructure.copyClassTokens.has('pre-container-copy'), true)
+  assert.equal(toolbarStructure.langText, 'js')
+  assert.doesNotMatch(renderedHtml, /<div class="[^"]*\bpre-container-toolbar\b[^"]*">\s*<div class="[^"]*\bpre-container-lang\b/u)
+  assert.doesNotMatch(renderedHtml, /<div class="[^"]*\bpre-container-toolbar\b[^"]*">\s*<div class="[^"]*\bpre-container-copy\b/u)
   assert.doesNotMatch(renderedHtml, /<pre class="[^"]*\bhljs\b/u)
   assert.doesNotMatch(renderedHtml, /\b(?:relative|absolute|top-0|right-0)\b/u)
 })
@@ -95,13 +118,19 @@ test('显式语言但未识别时不得输出伪造的 language class 且仍显�
   const renderedHtml = md.render('```FooLang\nbody\n```')
   const codeClassTokens = getCodeClassTokens(renderedHtml)
   const toolbarLangInfo = getToolbarLangInfo(renderedHtml)
+  const toolbarStructure = getExplicitToolbarStructure(renderedHtml)
 
   assert.deepEqual([...codeClassTokens].sort(), ['hljs'])
-  assert.match(renderedHtml, /pre-container-action-slot/u)
-  assertActionSlotContainsLangAndCopy(renderedHtml)
+  assert.equal(countClassOccurrences(renderedHtml, 'pre-container-action-slot'), 1)
+  assert.equal(countClassOccurrences(renderedHtml, 'pre-container-lang'), 1)
+  assert.equal(countClassOccurrences(renderedHtml, 'pre-container-copy'), 1)
+  assert.equal(toolbarStructure.actionSlotClassTokens.has('flex'), true)
+  assert.equal(toolbarStructure.actionSlotClassTokens.has('items-center'), true)
+  assert.equal(toolbarStructure.actionSlotClassTokens.has('w-full'), true)
   assert.doesNotMatch(renderedHtml, /\blanguage-[^"\s]+/u)
   assert.equal(toolbarLangInfo.classTokens.has('hidden'), false)
   assert.equal(toolbarLangInfo.text, 'FooLang')
+  assert.equal(toolbarStructure.langText, 'FooLang')
 })
 
 test('普通 fenced code block 不得把正文语义色 utility class 写死到 DOM', () => {

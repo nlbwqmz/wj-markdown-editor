@@ -158,7 +158,7 @@ function renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md) {
   return html`
   <div class="pre-container">
     <div class="pre-container-toolbar">
-      <div class="pre-container-action-slot">
+      <div class="pre-container-action-slot flex items-center w-full">
         <div class="font-bold op-80 pre-container-lang font-size-3 line-height-3 ${languageMeta.toolbarLangHidden ? 'hidden' : ''}">${escapedToolbarLabel}</div>
         <div class="i-tabler:copy cursor-pointer op-80 pre-container-copy font-size-3.5 hover:op-100" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${encodedCode}')" onkeydown="${createCopyCodeKeydownHandler(encodedCode)}"></div>
       </div>
