@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 
 import hljs from 'highlight.js'
 import MarkdownIt from 'markdown-it'
@@ -97,6 +98,10 @@ function getStableAutoDetectFixture() {
     code: matchedCandidate,
     detectedLanguage,
   }
+}
+
+function toMermaidCacheKey(source) {
+  return createHash('sha256').update(source.replace(/\s+/gu, ''), 'utf8').digest('hex')
 }
 
 test('普通 fenced code block 必须输出可访问的复制按钮结构', () => {
@@ -235,12 +240,26 @@ test('普通 fenced code block 在高亮抛错时仍必须输出稳定 shell 并
 test('mermaid fenced code block 必须保持独立分支输出', () => {
   const md = new MarkdownIt()
   md.use(codeBlockPlugin)
+  const source = 'graph TD\nA-->B'
 
-  const renderedHtml = md.render('```mermaid\ngraph TD\nA-->B\n```')
+  const renderedHtml = md.render(`\`\`\`mermaid\n${source}\n\`\`\``)
 
-  assert.match(renderedHtml, /^<pre class="mermaid" data-code="graphTDA-->B"/u)
+  assert.equal(renderedHtml.startsWith(`<pre class="mermaid" data-code="${toMermaidCacheKey(source)}"`), true)
   assert.match(renderedHtml, />\s*graph TD\s*A-->B\s*<\/pre>/u)
   assert.doesNotMatch(renderedHtml, /pre-container-toolbar/u)
   assert.doesNotMatch(renderedHtml, /pre-container-copy/u)
   assert.doesNotMatch(renderedHtml, /\bhljs\b/u)
+})
+
+test('mermaid fenced code block 的缓存键必须安全编码，不能被节点标签中的引号截断', () => {
+  const md = new MarkdownIt()
+  md.use(codeBlockPlugin)
+  const source = `flowchart TD
+    A["EntryAbility<br/>应用启动"] --> B["OfferDatabaseRuntime<br/>注册 Context"]`
+
+  const renderedHtml = md.render(`\`\`\`mermaid\n${source}\n\`\`\``)
+
+  assert.equal(renderedHtml.startsWith(`<pre class="mermaid" data-code="${toMermaidCacheKey(source)}"`), true)
+  assert.match(renderedHtml, />\s*flowchart TD[\s\S]*A\["EntryAbility<br\/>应用启动"\] --> B\["OfferDatabaseRuntime<br\/>注册 Context"\]\s*<\/pre>/u)
+  assert.doesNotMatch(renderedHtml, /data-code="flowchartTDA\["EntryAbility/u)
 })

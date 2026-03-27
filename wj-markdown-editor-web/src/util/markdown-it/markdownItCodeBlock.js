@@ -1,5 +1,6 @@
 // @unocss-include
 import hljs from 'highlight.js'
+import { sha256 } from 'js-sha256'
 
 const COPY_CODE_LABEL = '复制'
 const canonicalLanguageKeyByAlias = createCanonicalLanguageKeyByAlias()
@@ -15,6 +16,15 @@ function strToBase64(str) {
   const bytes = new TextEncoder().encode(str)
   const binString = String.fromCodePoint(...bytes)
   return btoa(binString)
+}
+
+/**
+ * 生成 Mermaid 代码块的缓存键。
+ * 仅用于 DOM 属性与缓存复用匹配，避免原始源码中的引号等字符破坏 HTML 属性。
+ * 使用同步 SHA-256 库，保持 markdown-it fence 渲染链路不变。
+ */
+function createMermaidCacheKey(content) {
+  return sha256(content.replace(/\s+/gu, ''))
 }
 
 function createCopyCodeKeydownHandler(encodedCode) {
@@ -181,7 +191,7 @@ export default function codeBlockPlugin(md) {
     const encodedCode = strToBase64(code)
     if (lang === 'mermaid') {
       const content = removeTripleBackticks(code)
-      return `<pre class="mermaid" data-code="${content.replace(/\s/g, '')}" ${parseAttrs(token.attrs)}>\n${content}\n</pre>\n`
+      return `<pre class="mermaid" data-code="${createMermaidCacheKey(content)}" ${parseAttrs(token.attrs)}>\n${content}\n</pre>\n`
     } else {
       try {
         const languageMeta = resolveCodeBlockLanguageMeta(info, code)
