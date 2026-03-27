@@ -36,6 +36,34 @@ export function resolvePreviewInlineCodeElement(target) {
   return inlineCodeElement
 }
 
+const PREVIEW_INLINE_CODE_COPYABLE_ATTRIBUTE = 'data-wj-inline-code-copyable'
+
+/**
+ * 同步预览区行内代码的可复制 metadata，供样式与交互共用同一套判定。
+ *
+ * @param {{
+ *   enabled: boolean,
+ *   previewRoot?: { querySelectorAll?: (selector: string) => Iterable<any> } | null,
+ * }} params
+ */
+export function syncPreviewInlineCodeCopyMetadata(params) {
+  const {
+    enabled,
+    previewRoot,
+  } = params
+
+  const inlineCodeElementList = previewRoot?.querySelectorAll?.('code, tt, samp') || []
+  for (const inlineCodeElement of inlineCodeElementList) {
+    const isCopyable = enabled && resolvePreviewInlineCodeElement(inlineCodeElement) === inlineCodeElement
+    if (isCopyable) {
+      inlineCodeElement.setAttribute(PREVIEW_INLINE_CODE_COPYABLE_ATTRIBUTE, 'true')
+      continue
+    }
+
+    inlineCodeElement.removeAttribute(PREVIEW_INLINE_CODE_COPYABLE_ATTRIBUTE)
+  }
+}
+
 /**
  * 根据开关状态、点击目标与选区状态，返回本次应复制的文本。
  *

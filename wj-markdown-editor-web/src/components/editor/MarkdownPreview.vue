@@ -9,7 +9,7 @@ import { syncCodeBlockActionVariables } from '@/util/codeBlockActionStyleUtil.js
 import { loadCodeTheme } from '@/util/codeThemeUtil.js'
 import { handlePreviewHashAnchorClick } from '@/util/editor/previewAnchorLinkScrollUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
-import { copyTextWithFeedback, getPreviewInlineCodeCopyText } from '@/util/previewInlineCodeCopyUtil.js'
+import { copyTextWithFeedback, getPreviewInlineCodeCopyText, syncPreviewInlineCodeCopyMetadata } from '@/util/previewInlineCodeCopyUtil.js'
 import { settleMermaidRender } from '@/util/previewMermaidRenderUtil.js'
 
 const props = defineProps({
@@ -283,6 +283,16 @@ function updatePreviewAssetMetadata() {
   })
 }
 
+/**
+ * 同步预览区行内代码复制交互 metadata。
+ */
+function updatePreviewInlineCodeCopyMetadata() {
+  syncPreviewInlineCodeCopyMetadata({
+    enabled: store.config.markdown.inlineCodeClickCopy,
+    previewRoot: previewRef.value,
+  })
+}
+
 const latestAnchorList = ref([])
 
 /**
@@ -398,6 +408,10 @@ watch(() => store.config.theme.global, () => {
   refreshPreviewImmediately(props.content, true)
 })
 
+watch(() => store.config.markdown.inlineCodeClickCopy, () => {
+  updatePreviewInlineCodeCopyMetadata()
+})
+
 // 监听 codeTheme 变化，动态加载主题 CSS
 watch(() => props.codeTheme, async (newTheme) => {
   if (newTheme) {
@@ -439,6 +453,7 @@ async function refreshPreview(doc, forceRefreshMermaid = false) {
   }
   refreshCodeBlockActionVariables()
   updatePreviewAssetMetadata()
+  updatePreviewInlineCodeCopyMetadata()
   pushAnchorList()
   emits('refreshComplete')
 }

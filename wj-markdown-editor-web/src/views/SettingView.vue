@@ -540,10 +540,10 @@ function reset() {
           <a-descriptions-item :label="$t('config.editor.inlineCodeClickCopy')">
             <a-radio-group v-model:value="config.markdown.inlineCodeClickCopy" button-style="solid">
               <a-radio-button :value="true">
-                {{ $t('config.yes') }}
+                {{ $t('config.editor.inlineCodeClickCopyOption.copy') }}
               </a-radio-button>
               <a-radio-button :value="false">
-                {{ $t('config.no') }}
+                {{ $t('config.saveOption.noOperation') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>

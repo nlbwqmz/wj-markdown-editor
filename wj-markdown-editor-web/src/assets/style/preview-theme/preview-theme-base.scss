@@ -213,6 +213,10 @@
     box-shadow: var(--wj-preview-kbd-box-shadow);
   }
 
+  & :where([data-wj-inline-code-copyable='true']:hover) {
+    cursor: var(--wj-preview-inline-code-copy-cursor);
+  }
+
   & :where(:not(pre) > code, :not(pre) > tt, :not(pre) > samp) {
     display: var(--wj-preview-inline-code-display);
     margin: var(--wj-preview-inline-code-margin);

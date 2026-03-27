@@ -88,9 +88,9 @@ onUnmounted(() => {
           <div class="h-full w-full">
             <MarkdownPreview
               :content="content"
+              :code-theme="commonStore.config.theme.code"
+              :preview-theme="commonStore.config.theme.preview"
               :preview-scroll-container="() => previewContainerRef"
-              code-theme="atom-one-dark"
-              preview-theme="github"
               @refresh-complete="onPreviewRefreshComplete"
               @anchor-change="onAnchorChange"
             />

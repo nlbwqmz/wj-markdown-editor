@@ -17,18 +17,21 @@ function requirePreviewInlineCodeCopyUtil() {
     copyTextWithFeedback,
     getPreviewInlineCodeCopyText,
     hasExpandedTextSelection,
+    syncPreviewInlineCodeCopyMetadata,
     resolvePreviewInlineCodeElement,
   } = previewInlineCodeCopyUtilModule
 
   assert.equal(typeof copyTextWithFeedback, 'function')
   assert.equal(typeof getPreviewInlineCodeCopyText, 'function')
   assert.equal(typeof hasExpandedTextSelection, 'function')
+  assert.equal(typeof syncPreviewInlineCodeCopyMetadata, 'function')
   assert.equal(typeof resolvePreviewInlineCodeElement, 'function')
 
   return {
     copyTextWithFeedback,
     getPreviewInlineCodeCopyText,
     hasExpandedTextSelection,
+    syncPreviewInlineCodeCopyMetadata,
     resolvePreviewInlineCodeElement,
   }
 }
@@ -64,6 +67,35 @@ function createInlineCodeDomStub({ text = 'const answer = 42', insideLink = fals
   return {
     childNode,
     inlineCodeNode,
+  }
+}
+
+function createMetadataElementStub({ insideLink = false, insidePre = false } = {}) {
+  const attributeMap = new Map()
+  const linkNode = insideLink ? { tagName: 'A' } : null
+  const preNode = insidePre ? { tagName: 'PRE' } : null
+  return {
+    closest(selector) {
+      if (selector === 'code, tt, samp') {
+        return this
+      }
+      if (selector === 'a[href]') {
+        return linkNode
+      }
+      if (selector === 'pre') {
+        return preNode
+      }
+      return null
+    },
+    setAttribute(name, value) {
+      attributeMap.set(name, value)
+    },
+    removeAttribute(name) {
+      attributeMap.delete(name)
+    },
+    getAttribute(name) {
+      return attributeMap.has(name) ? attributeMap.get(name) : null
+    },
   }
 }
 
@@ -186,4 +218,42 @@ test('复制文本工具必须区分空内容、成功与失败三种结果', as
     ok: false,
     reason: 'write-failed',
   })
+})
+
+test('同步 preview inline code metadata 时，只应标记真正可复制的行内代码节点', () => {
+  const { syncPreviewInlineCodeCopyMetadata } = requirePreviewInlineCodeCopyUtil()
+  const copyableNode = createMetadataElementStub()
+  const linkNode = createMetadataElementStub({ insideLink: true })
+  const preNode = createMetadataElementStub({ insidePre: true })
+
+  syncPreviewInlineCodeCopyMetadata({
+    enabled: true,
+    previewRoot: {
+      querySelectorAll() {
+        return [copyableNode, linkNode, preNode]
+      },
+    },
+  })
+
+  assert.equal(copyableNode.getAttribute('data-wj-inline-code-copyable'), 'true')
+  assert.equal(linkNode.getAttribute('data-wj-inline-code-copyable'), null)
+  assert.equal(preNode.getAttribute('data-wj-inline-code-copyable'), null)
+})
+
+test('关闭开关后，应移除旧的 preview inline code metadata 标记', () => {
+  const { syncPreviewInlineCodeCopyMetadata } = requirePreviewInlineCodeCopyUtil()
+  const copyableNode = createMetadataElementStub()
+
+  copyableNode.setAttribute('data-wj-inline-code-copyable', 'true')
+
+  syncPreviewInlineCodeCopyMetadata({
+    enabled: false,
+    previewRoot: {
+      querySelectorAll() {
+        return [copyableNode]
+      },
+    },
+  })
+
+  assert.equal(copyableNode.getAttribute('data-wj-inline-code-copyable'), null)
 })

@@ -178,7 +178,10 @@ export default {
       highlightMatchingBracket: 'Highlight matching bracket',
       autoCloseBracket: 'Auto close bracket',
       typographer: 'Typographer',
-      inlineCodeClickCopy: 'Copy when clicking inline code',
+      inlineCodeClickCopy: 'Click inline code',
+      inlineCodeClickCopyOption: {
+        copy: 'Copy',
+      },
       typographerOption: {
         tipTitle: 'Conversion rules',
       },

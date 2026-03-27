@@ -178,7 +178,10 @@ export default {
       highlightMatchingBracket: '突出匹配括号',
       autoCloseBracket: '自动闭合括号',
       typographer: '智能标点',
-      inlineCodeClickCopy: '点击行内代码时复制',
+      inlineCodeClickCopy: '点击行内代码',
+      inlineCodeClickCopyOption: {
+        copy: '复制',
+      },
       typographerOption: {
         tipTitle: '转换规则',
       },
