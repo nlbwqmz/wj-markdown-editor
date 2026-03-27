@@ -97,6 +97,7 @@ const store = useCommonStore()
 const toolbarList = ref([])
 const shortcutKeyList = ref([])
 let splitInstance
+let splitGutterSyncElements = []
 
 const editorSearchBarVisible = computed(() => store.editorSearchBarVisible)
 const associationHighlightEnabled = computed(() => props.associationHighlight === true)
@@ -609,10 +610,62 @@ function resolveSplitColumnGutters() {
 }
 
 /**
+ * 把当前布局的计算后列宽快照写回行内样式。
+ * split-grid 在拖拽开始时会重新读取轨道定义，这里用于给它提供稳定的 px 结果。
+ */
+function syncInlineGridTemplateColumnsFromComputedStyle() {
+  if (!editorContainer.value) {
+    return
+  }
+
+  const computedGridTemplateColumns = window.getComputedStyle(editorContainer.value).gridTemplateColumns
+  if (!computedGridTemplateColumns) {
+    return
+  }
+
+  editorContainer.value.style['grid-template-columns'] = computedGridTemplateColumns
+}
+
+/**
+ * 给当前 gutter 绑定“拖拽前同步列宽”的 capture 监听。
+ * 这样可以确保 split-grid 自己的 mousedown / touchstart 处理前，已经拿到稳定的行内轨道定义。
+ *
+ * @param {Array<{ element: HTMLElement | undefined }>} columnGutters
+ */
+function bindSplitGutterSyncListeners(columnGutters) {
+  unbindSplitGutterSyncListeners()
+
+  splitGutterSyncElements = Array.from(new Set(
+    columnGutters
+      .map(({ element }) => element)
+      .filter(Boolean),
+  ))
+
+  for (const element of splitGutterSyncElements) {
+    element.addEventListener('mousedown', syncInlineGridTemplateColumnsFromComputedStyle, true)
+    element.addEventListener('touchstart', syncInlineGridTemplateColumnsFromComputedStyle, true)
+  }
+}
+
+/**
+ * 解绑当前 gutter 上的拖拽前同步监听，避免布局切换后继续引用旧 DOM。
+ */
+function unbindSplitGutterSyncListeners() {
+  for (const element of splitGutterSyncElements) {
+    element.removeEventListener('mousedown', syncInlineGridTemplateColumnsFromComputedStyle, true)
+    element.removeEventListener('touchstart', syncInlineGridTemplateColumnsFromComputedStyle, true)
+  }
+
+  splitGutterSyncElements = []
+}
+
+/**
  * 释放当前 Split 实例和它留下的行内列宽。
  * 这样布局切换到另一套列模板时，不会继续沿用旧的拖拽结果。
  */
 function destroySplitLayout() {
+  unbindSplitGutterSyncListeners()
+
   if (editorContainer.value) {
     editorContainer.value.style['grid-template-columns'] = ''
   }
@@ -632,6 +685,8 @@ function resetSplitLayout() {
   if (columnGutters.length === 0) {
     return
   }
+
+  bindSplitGutterSyncListeners(columnGutters)
 
   splitInstance = Split({
     columnGutters,
@@ -923,13 +978,19 @@ defineExpose({
     class="grid grid-rows-[auto_1fr] grid-cols-1 h-full w-full"
   >
     <EditorToolbar :toolbar-list="toolbarList" />
+    <!--
+      已知取舍：
+      编辑页面板 DOM 顺序当前固定为 editor -> preview -> menu。
+      左侧布局只通过 grid-template-areas 做视觉重排，暂不为新布局额外调整键盘 Tab / 读屏顺序。
+      后续如果要补齐这部分可访问性语义，需要按 layoutMode.columnOrder 真正重排渲染顺序。
+    -->
     <div ref="editorContainer" class="markdown-edit-layout grid w-full overflow-hidden" :class="editorContainerClass" :style="editorContainerStyle">
       <div ref="editorRef" class="markdown-edit-layout__editor h-full overflow-auto" />
       <div v-if="previewController" ref="gutterRef" class="markdown-edit-layout__gutter markdown-edit-layout__gutter--preview h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <div
         v-if="previewController"
         ref="previewRef"
-        class="allow-search markdown-edit-layout__preview wj-scrollbar h-full p-2"
+        class="allow-search wj-scrollbar markdown-edit-layout__preview h-full p-2"
         :style="previewContainerStyle"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"
@@ -999,27 +1060,28 @@ defineExpose({
 }
 
 .markdown-edit-layout--editor-only {
-  grid-template-columns: minmax(0, 1fr) 0 minmax(0, 0fr) 0 minmax(0, 0fr);
+  // split-grid 只能解析 px / fr / % / auto，不能直接吃 minmax(...)。
+  grid-template-columns: 1fr 0px 0fr 0px 0fr;
   grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
 }
 
 .markdown-edit-layout--editor-preview {
-  grid-template-columns: minmax(0, 1fr) 2px minmax(0, 1fr) 0 minmax(0, 0fr);
+  grid-template-columns: 1fr 2px 1fr 0px 0fr;
   grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
 }
 
 .markdown-edit-layout--editor-preview-menu {
-  grid-template-columns: minmax(0, 1fr) 2px minmax(0, 1fr) 2px minmax(0, 0.4fr);
+  grid-template-columns: 1fr 2px 1fr 2px 0.4fr;
   grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
 }
 
 .markdown-edit-layout--preview-editor {
-  grid-template-columns: minmax(0, 1fr) 2px minmax(0, 1fr) 0 minmax(0, 0fr);
+  grid-template-columns: 1fr 2px 1fr 0px 0fr;
   grid-template-areas: 'preview gutter-preview editor gutter-menu menu';
 }
 
 .markdown-edit-layout--menu-preview-editor {
-  grid-template-columns: minmax(0, 0.4fr) 2px minmax(0, 1fr) 2px minmax(0, 1fr);
+  grid-template-columns: 0.4fr 2px 1fr 2px 1fr;
   grid-template-areas: 'menu gutter-menu preview gutter-preview editor';
 }
 

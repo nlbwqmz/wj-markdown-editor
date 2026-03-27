@@ -4,6 +4,7 @@ import mermaid from 'mermaid'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
+import { shouldReplaceElementBeforeAttributeSync } from '@/components/editor/markdownPreviewDomPatchUtil.js'
 import { useCommonStore } from '@/stores/counter.js'
 import { syncCodeBlockActionVariables } from '@/util/codeBlockActionStyleUtil.js'
 import { loadCodeTheme } from '@/util/codeThemeUtil.js'
@@ -346,6 +347,12 @@ function updateDOM(oldNode, newNode) {
     return
   }
 
+  if (shouldReplaceElementBeforeAttributeSync(oldNode, newNode)) {
+    const clonedNewNode = newNode.cloneNode(true)
+    oldNode.replaceWith(clonedNewNode)
+    return
+  }
+
   // 元素节点属性比对
   const oldAttributes = oldNode.attributes
   const newAttributes = newNode.attributes
@@ -366,7 +373,15 @@ function updateDOM(oldNode, newNode) {
   // 设置/更新属性
   for (const { name, value } of newAttributes) {
     if (oldNode.getAttribute(name) !== value) {
-      oldNode.setAttribute(name, value)
+      try {
+        oldNode.setAttribute(name, value)
+      } catch {
+        // 某些原生元素在属性更新过程中会立刻触发浏览器内建校验，
+        // 一旦出现真实异常，直接整节点替换能避免保留半更新状态。
+        const clonedNewNode = newNode.cloneNode(true)
+        oldNode.replaceWith(clonedNewNode)
+        return
+      }
     }
   }
 

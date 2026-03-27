@@ -18,11 +18,16 @@ const LAYOUT_MODE_MAP = {
     ],
   },
   'preview-editor': {
+    // 已知取舍：这里的 columnOrder 目前只表达“视觉列顺序”。
+    // MarkdownEdit 模板仍保持 editor -> preview -> menu 的稳定 DOM 顺序，
+    // 左侧布局依赖 grid-template-areas 做换位，暂不额外优化键盘 Tab / 读屏顺序。
     columnOrder: ['preview', 'editor'],
     gridTemplateClass: 'markdown-edit-layout--preview-editor',
     columnGutters: [{ track: 1, refKey: 'gutterRef' }],
   },
   'menu-preview-editor': {
+    // 已知取舍同上：左侧三栏模式当前也是视觉重排，不同步调整 DOM 顺序。
+    // 后续若要补齐可访问性语义，需要让渲染顺序真正跟随 columnOrder，而不是只改 grid area。
     columnOrder: ['menu', 'preview', 'editor'],
     gridTemplateClass: 'markdown-edit-layout--menu-preview-editor',
     columnGutters: [
