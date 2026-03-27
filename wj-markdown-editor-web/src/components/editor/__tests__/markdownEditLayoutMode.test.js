@@ -1,20 +1,35 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 
 const { test } = await import('node:test')
 
-let markdownEditLayoutModeModule = null
+const markdownEditLayoutModeModuleUrl = new URL('../markdownEditLayoutMode.js', import.meta.url)
 
-try {
-  markdownEditLayoutModeModule = await import('../markdownEditLayoutMode.js')
-} catch (error) {
-  const isModuleMissing = error?.code === 'ERR_MODULE_NOT_FOUND'
-    && /markdownEditLayoutMode\.js/u.test(String(error?.message))
+const markdownEditLayoutModeModule = await loadMarkdownEditLayoutModeModule()
 
-  if (isModuleMissing) {
-    markdownEditLayoutModeModule = null
-  } else {
-    throw error
+/**
+ * 按“先检查文件是否存在，再决定是否导入”的顺序探测模块。
+ * 文件不存在时返回 null；文件存在时若导入失败，必须直接抛出真实错误。
+ *
+ * @param {{
+ *   moduleUrl?: URL,
+ *   fileExists?: (url: URL) => boolean,
+ *   importModule?: (specifier: string) => Promise<unknown>,
+ * }} options
+ * @returns {Promise<unknown | null>} 返回模块导出；文件不存在时返回 null。
+ */
+async function loadMarkdownEditLayoutModeModule(options = {}) {
+  const {
+    moduleUrl = markdownEditLayoutModeModuleUrl,
+    fileExists = existsSync,
+    importModule = specifier => import(specifier),
+  } = options
+
+  if (fileExists(moduleUrl) !== true) {
+    return null
   }
+
+  return importModule(moduleUrl.href)
 }
 
 /**
@@ -31,6 +46,39 @@ function requireResolveMarkdownEditLayoutMode() {
 
   return resolveMarkdownEditLayoutMode
 }
+
+test('模块文件不存在时，模块探测会返回 null 而不是尝试导入', async () => {
+  const importCalls = []
+
+  const moduleExports = await loadMarkdownEditLayoutModeModule({
+    fileExists() {
+      return false
+    },
+    async importModule(specifier) {
+      importCalls.push(specifier)
+      return {}
+    },
+  })
+
+  assert.equal(moduleExports, null)
+  assert.deepEqual(importCalls, [])
+})
+
+test('模块文件存在但导入失败时，模块探测必须抛出原始错误', async () => {
+  const importError = new Error('boom')
+
+  await assert.rejects(
+    async () => loadMarkdownEditLayoutModeModule({
+      fileExists() {
+        return true
+      },
+      async importModule() {
+        throw importError
+      },
+    }),
+    error => error === importError,
+  )
+})
 
 test('右侧模式且大纲开启时，返回编辑区、预览区、大纲的列顺序与双分隔条', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
