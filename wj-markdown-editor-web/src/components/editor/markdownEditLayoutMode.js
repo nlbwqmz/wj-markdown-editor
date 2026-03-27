@@ -1,0 +1,70 @@
+const LAYOUT_MODE_MAP = {
+  'editor-only': {
+    columnOrder: ['editor'],
+    gridTemplateClass: 'markdown-edit-layout--editor-only',
+    columnGutters: [],
+  },
+  'editor-preview': {
+    columnOrder: ['editor', 'preview'],
+    gridTemplateClass: 'markdown-edit-layout--editor-preview',
+    columnGutters: [1],
+  },
+  'editor-preview-menu': {
+    columnOrder: ['editor', 'preview', 'menu'],
+    gridTemplateClass: 'markdown-edit-layout--editor-preview-menu',
+    columnGutters: [1, 3],
+  },
+  'preview-editor': {
+    columnOrder: ['preview', 'editor'],
+    gridTemplateClass: 'markdown-edit-layout--preview-editor',
+    columnGutters: [1],
+  },
+  'menu-preview-editor': {
+    columnOrder: ['menu', 'preview', 'editor'],
+    gridTemplateClass: 'markdown-edit-layout--menu-preview-editor',
+    columnGutters: [1, 3],
+  },
+}
+
+/**
+ * 将编辑页显示状态解析为稳定且纯粹的布局描述。
+ * 这里只负责列顺序、模板类名和分隔条轨道，不处理任何 DOM 或 Split 接线。
+ *
+ * @param {{
+ *   previewVisible?: boolean,
+ *   menuVisible?: boolean,
+ *   previewPosition?: string,
+ * }} options
+ * @returns {{
+ *   columnOrder: string[],
+ *   gridTemplateClass: string,
+ *   columnGutters: number[],
+ * }} 返回可供编辑页布局和分隔条接线消费的稳定描述对象。
+ */
+export function resolveMarkdownEditLayoutMode(options = {}) {
+  if (options.previewVisible !== true) {
+    return cloneLayoutMode('editor-only')
+  }
+
+  const resolvedPreviewPosition = options.previewPosition === 'left' ? 'left' : 'right'
+  if (options.menuVisible === true) {
+    return cloneLayoutMode(resolvedPreviewPosition === 'left' ? 'menu-preview-editor' : 'editor-preview-menu')
+  }
+
+  return cloneLayoutMode(resolvedPreviewPosition === 'left' ? 'preview-editor' : 'editor-preview')
+}
+
+/**
+ * 返回布局描述的浅拷贝，避免调用方意外修改共享静态配置。
+ *
+ * @param {keyof typeof LAYOUT_MODE_MAP} layoutModeKey
+ */
+function cloneLayoutMode(layoutModeKey) {
+  const layoutMode = LAYOUT_MODE_MAP[layoutModeKey]
+
+  return {
+    columnOrder: [...layoutMode.columnOrder],
+    gridTemplateClass: layoutMode.gridTemplateClass,
+    columnGutters: [...layoutMode.columnGutters],
+  }
+}
