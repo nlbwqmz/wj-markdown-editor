@@ -16,7 +16,10 @@ import { useViewScrollAnchor } from '@/components/editor/composables/useViewScro
 import EditorSearchBar from '@/components/editor/EditorSearchBar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import ImageNetworkModal from '@/components/editor/ImageNetworkModal.vue'
-import { resolveMarkdownEditLayoutMode } from '@/components/editor/markdownEditLayoutMode.js'
+import {
+  resolveMarkdownEditLayoutMode,
+  resolveMarkdownEditSplitColumnGutters,
+} from '@/components/editor/markdownEditLayoutMode.js'
 import { createMarkdownEditPreviewLayoutIndexWiring } from '@/components/editor/markdownEditPreviewLayoutIndexWiring.js'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
@@ -596,15 +599,13 @@ function syncLayoutControllers() {
  * @returns {Array<{ track: number, element: HTMLElement | undefined }>} 返回可直接传给 Split 的 gutter 配置。
  */
 function resolveSplitColumnGutters() {
-  return layoutMode.value.columnGutters
-    .map(({ track, refKey }) => ({
-      track,
-      element: {
-        gutterRef: gutterRef.value,
-        gutterMenuRef: gutterMenuRef.value,
-      }[refKey],
-    }))
-    .filter(({ element }) => Boolean(element))
+  const gutterRefMap = {
+    gutterRef: gutterRef.value,
+    gutterMenuRef: gutterMenuRef.value,
+  }
+
+  // 真实的 refKey -> gutter element 绑定已下沉到纯函数中，等价于 gutterRefMap[refKey]。
+  return resolveMarkdownEditSplitColumnGutters(layoutMode.value.columnGutters, gutterRefMap)
 }
 
 /**

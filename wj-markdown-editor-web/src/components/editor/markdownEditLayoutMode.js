@@ -61,6 +61,23 @@ export function resolveMarkdownEditLayoutMode(options = {}) {
 }
 
 /**
+ * 将布局 helper 返回的 gutter 描述映射为 Split 需要的运行时配置。
+ * 当某个 ref 尚未渲染完成或当前布局不需要该 gutter 时，会自动过滤掉无效项。
+ *
+ * @param {Array<{ track: number, refKey: string }> | undefined} columnGutters
+ * @param {Record<string, unknown> | undefined} gutterRefMap
+ * @returns {Array<{ track: number, element: unknown }>} 返回可直接传给 Split 的分隔条配置。
+ */
+export function resolveMarkdownEditSplitColumnGutters(columnGutters = [], gutterRefMap = {}) {
+  return columnGutters
+    .map(({ track, refKey }) => ({
+      track,
+      element: gutterRefMap[refKey],
+    }))
+    .filter(({ element }) => Boolean(element))
+}
+
+/**
  * 返回布局描述的浅拷贝，避免调用方意外修改共享静态配置。
  *
  * @param {keyof typeof LAYOUT_MODE_MAP} layoutModeKey

@@ -47,6 +47,21 @@ function requireResolveMarkdownEditLayoutMode() {
   return resolveMarkdownEditLayoutMode
 }
 
+/**
+ * 统一校验 Split gutter 绑定 helper 已经存在。
+ * RED 阶段若缺少实现，会直接失败在这里并指向缺失导出。
+ *
+ * @returns {Function} 返回待测的 resolveMarkdownEditSplitColumnGutters 函数。
+ */
+function requireResolveMarkdownEditSplitColumnGutters() {
+  assert.ok(markdownEditLayoutModeModule, '缺少 markdown edit layout mode 模块')
+
+  const { resolveMarkdownEditSplitColumnGutters } = markdownEditLayoutModeModule
+  assert.equal(typeof resolveMarkdownEditSplitColumnGutters, 'function')
+
+  return resolveMarkdownEditSplitColumnGutters
+}
+
 test('模块文件不存在时，模块探测会返回 null 而不是尝试导入', async () => {
   const importCalls = []
 
@@ -168,4 +183,45 @@ test('非法 previewPosition 会回退到 right 模式', () => {
       { track: 1, refKey: 'gutterRef' },
     ],
   })
+})
+
+test('左侧三栏布局会把 track 1 绑定到 gutterMenuRef，track 3 绑定到 gutterRef', () => {
+  const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
+  const resolveMarkdownEditSplitColumnGutters = requireResolveMarkdownEditSplitColumnGutters()
+  const gutterRef = { name: 'editor-preview-gutter' }
+  const gutterMenuRef = { name: 'menu-preview-gutter' }
+  const layoutMode = resolveMarkdownEditLayoutMode({
+    previewVisible: true,
+    menuVisible: true,
+    previewPosition: 'left',
+  })
+
+  const columnGutters = resolveMarkdownEditSplitColumnGutters(layoutMode.columnGutters, {
+    gutterRef,
+    gutterMenuRef,
+  })
+
+  assert.deepEqual(columnGutters, [
+    { track: 1, element: gutterMenuRef },
+    { track: 3, element: gutterRef },
+  ])
+})
+
+test('缺失 gutter ref 时会过滤掉无法绑定的 Split 分隔条', () => {
+  const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
+  const resolveMarkdownEditSplitColumnGutters = requireResolveMarkdownEditSplitColumnGutters()
+  const gutterMenuRef = { name: 'menu-preview-gutter' }
+  const layoutMode = resolveMarkdownEditLayoutMode({
+    previewVisible: true,
+    menuVisible: true,
+    previewPosition: 'left',
+  })
+
+  const columnGutters = resolveMarkdownEditSplitColumnGutters(layoutMode.columnGutters, {
+    gutterMenuRef,
+  })
+
+  assert.deepEqual(columnGutters, [
+    { track: 1, element: gutterMenuRef },
+  ])
 })
