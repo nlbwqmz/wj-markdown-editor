@@ -21,6 +21,7 @@ import {
   resolveMarkdownEditSplitColumnGutters,
 } from '@/components/editor/markdownEditLayoutMode.js'
 import { createMarkdownEditPreviewLayoutIndexWiring } from '@/components/editor/markdownEditPreviewLayoutIndexWiring.js'
+import { resolveMarkdownEditRenderItems } from '@/components/editor/markdownEditRenderItems.js'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { createPreviewRefreshCoordinator } from '@/components/editor/previewRefreshCoordinator.js'
@@ -528,6 +529,7 @@ const previewContainerStyle = computed(() => {
 })
 
 const editorContainerClass = computed(() => layoutMode.value.gridTemplateClass)
+const layoutRenderItems = computed(() => resolveMarkdownEditRenderItems(layoutMode.value))
 
 const modelSyncScheduler = createFlushableDebounce(() => {
   const view = editorView.value
@@ -774,6 +776,22 @@ function onAssetOpen(assetInfo) {
   emits('assetOpen', assetInfo)
 }
 
+function setEditorElement(element) {
+  editorRef.value = element
+}
+
+function setPreviewElement(element) {
+  previewRef.value = element
+}
+
+function setPreviewGutterElement(element) {
+  gutterRef.value = element
+}
+
+function setMenuGutterElement(element) {
+  gutterMenuRef.value = element
+}
+
 async function onInsertNetworkImage() {
   try {
     await onInsertImgNetwork()
@@ -978,44 +996,57 @@ defineExpose({
     class="grid grid-rows-[auto_1fr] grid-cols-1 h-full w-full"
   >
     <EditorToolbar :toolbar-list="toolbarList" />
-    <!--
-      已知取舍：
-      编辑页面板 DOM 顺序当前固定为 editor -> preview -> menu。
-      左侧布局只通过 grid-template-areas 做视觉重排，暂不为新布局额外调整键盘 Tab / 读屏顺序。
-      后续如果要补齐这部分可访问性语义，需要按 layoutMode.columnOrder 真正重排渲染顺序。
-    -->
-    <div ref="editorContainer" class="markdown-edit-layout grid w-full overflow-hidden" :class="editorContainerClass" :style="editorContainerStyle">
-      <div ref="editorRef" class="markdown-edit-layout__editor h-full overflow-auto" />
-      <div v-if="previewController" ref="gutterRef" class="markdown-edit-layout__gutter markdown-edit-layout__gutter--preview h-full cursor-col-resize bg-[#E2E2E2] op-0" />
-      <div
-        v-if="previewController"
-        ref="previewRef"
-        class="allow-search wj-scrollbar markdown-edit-layout__preview h-full p-2"
-        :style="previewContainerStyle"
-        :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
-        @scroll="syncPreviewToEditor"
-        @click="onPreviewAreaClick"
-      >
-        <MarkdownPreview
-          :content="props.modelValue"
-          :code-theme="codeTheme"
-          :preview-theme="previewTheme"
-          :preview-scroll-container="() => previewRef"
-          :watermark="watermark"
-          @refresh-complete="onRefreshComplete"
-          @anchor-change="onAnchorChange"
-          @asset-contextmenu="onAssetContextmenu"
-          @asset-open="onAssetOpen"
+    <div ref="editorContainer" data-testid="markdown-edit-layout" class="markdown-edit-layout grid w-full overflow-hidden" :class="editorContainerClass" :style="editorContainerStyle">
+      <template v-for="item in layoutRenderItems" :key="item.key">
+        <div
+          v-if="item.type === 'editor'"
+          :ref="setEditorElement"
+          data-layout-item="editor"
+          class="markdown-edit-layout__editor h-full overflow-auto"
         />
-      </div>
-      <div v-if="menuController && previewController" ref="gutterMenuRef" class="markdown-edit-layout__gutter markdown-edit-layout__gutter--menu h-full cursor-col-resize bg-[#E2E2E2] op-0" />
-      <MarkdownMenu
-        v-if="menuController && previewController"
-        :anchor-list="anchorList"
-        :get-container="() => previewRef"
-        :close="() => { menuVisible = false }"
-        class="allow-search markdown-edit-layout__menu"
-      />
+        <div
+          v-else-if="item.type === 'gutter-preview'"
+          :ref="setPreviewGutterElement"
+          data-layout-item="gutter-preview"
+          class="markdown-edit-layout__gutter markdown-edit-layout__gutter--preview h-full cursor-col-resize bg-[#E2E2E2] op-0"
+        />
+        <div
+          v-else-if="item.type === 'preview'"
+          :ref="setPreviewElement"
+          data-layout-item="preview"
+          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full p-2"
+          :style="previewContainerStyle"
+          :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
+          @scroll="syncPreviewToEditor"
+          @click="onPreviewAreaClick"
+        >
+          <MarkdownPreview
+            :content="props.modelValue"
+            :code-theme="codeTheme"
+            :preview-theme="previewTheme"
+            :preview-scroll-container="() => previewRef"
+            :watermark="watermark"
+            @refresh-complete="onRefreshComplete"
+            @anchor-change="onAnchorChange"
+            @asset-contextmenu="onAssetContextmenu"
+            @asset-open="onAssetOpen"
+          />
+        </div>
+        <div
+          v-else-if="item.type === 'gutter-menu'"
+          :ref="setMenuGutterElement"
+          data-layout-item="gutter-menu"
+          class="markdown-edit-layout__gutter markdown-edit-layout__gutter--menu h-full cursor-col-resize bg-[#E2E2E2] op-0"
+        />
+        <MarkdownMenu
+          v-else-if="item.type === 'menu'"
+          :anchor-list="anchorList"
+          :get-container="() => previewRef"
+          :close="() => { menuVisible = false }"
+          data-layout-item="menu"
+          class="allow-search markdown-edit-layout__menu"
+        />
+      </template>
     </div>
 
     <ImageNetworkModal

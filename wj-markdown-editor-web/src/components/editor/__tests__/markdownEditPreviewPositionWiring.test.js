@@ -29,7 +29,7 @@ test('MarkdownEdit 会按 layoutMode.columnGutters 的 refKey 绑定 Split 分�
   assert.ok(source.includes('refKey'))
   assert.ok(source.includes('gutterRef: gutterRef.value'))
   assert.ok(source.includes('gutterMenuRef: gutterMenuRef.value'))
-  assert.ok(source.includes('[refKey]'))
+  assert.ok(source.includes('resolveMarkdownEditSplitColumnGutters(layoutMode.value.columnGutters, gutterRefMap)'))
 })
 
 test('MarkdownEdit 的 grid-template-columns 会保持 split-grid 可解析的列语法', () => {
@@ -55,10 +55,31 @@ test('MarkdownEdit 的 grid-template-columns 会保持 split-grid 可解析的�
   }
 })
 
+test('MarkdownEdit 会接入 render items helper，并按 layoutRenderItems 动态渲染布局项', () => {
+  const source = readMarkdownEditSource()
+
+  assert.ok(source.includes('resolveMarkdownEditRenderItems'))
+  assert.ok(source.includes('const layoutRenderItems = computed(() => resolveMarkdownEditRenderItems(layoutMode.value))'))
+  assert.ok(source.includes('v-for="item in layoutRenderItems"'))
+})
+
 test('MarkdownEdit 会在 gutter 拖拽开始前同步当前计算列宽，而不是在初始化时冻结布局', () => {
   const source = readMarkdownEditSource()
 
   assert.ok(source.includes('window.getComputedStyle(editorContainer.value).gridTemplateColumns'))
   assert.ok(source.includes('addEventListener(\'mousedown\', syncInlineGridTemplateColumnsFromComputedStyle, true)'))
   assert.ok(source.includes('addEventListener(\'touchstart\', syncInlineGridTemplateColumnsFromComputedStyle, true)'))
+})
+
+test('MarkdownEdit 的布局切换仍只重置 Split，不会重新初始化或销毁编辑器实例', () => {
+  const source = readMarkdownEditSource()
+
+  assert.ok(source.includes('watch(layoutMode, () => {'))
+  assert.ok(source.includes('resetSplitLayout()'))
+  assert.ok(source.includes('initEditor({'))
+  assert.ok(source.includes('destroyEditor()'))
+  assert.equal(source.includes('watch(layoutMode, () => {\r\n  initEditor('), false)
+  assert.equal(source.includes('watch(layoutMode, () => {\r\n  destroyEditor('), false)
+  assert.equal(source.includes('watch(layoutMode, () => {\n  initEditor('), false)
+  assert.equal(source.includes('watch(layoutMode, () => {\n  destroyEditor('), false)
 })

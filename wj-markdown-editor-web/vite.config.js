@@ -36,4 +36,8 @@ export default defineConfig({
   server: {
     port: 8080,
   },
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.vitest.test.js'],
+  },
 })
