@@ -16,6 +16,7 @@ import { useViewScrollAnchor } from '@/components/editor/composables/useViewScro
 import EditorSearchBar from '@/components/editor/EditorSearchBar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import ImageNetworkModal from '@/components/editor/ImageNetworkModal.vue'
+import { resolveMarkdownEditLayoutMode } from '@/components/editor/markdownEditLayoutMode.js'
 import { createMarkdownEditPreviewLayoutIndexWiring } from '@/components/editor/markdownEditPreviewLayoutIndexWiring.js'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
@@ -79,6 +80,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  previewPosition: {
+    type: String,
+    default: () => 'right',
+  },
 })
 
 const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange', 'assetContextmenu', 'assetOpen'])
@@ -106,6 +111,11 @@ const menuVisible = ref(false)
 const menuController = ref(false)
 const previewVisible = ref(true)
 const previewController = ref(true)
+const layoutMode = computed(() => resolveMarkdownEditLayoutMode({
+  previewVisible: previewVisible.value,
+  menuVisible: menuVisible.value,
+  previewPosition: props.previewPosition,
+}))
 const gridAnimation = ref(false)
 const handledContentUpdateToken = ref(0)
 // 当前滚动锚点只跟随最近一次对外确认过的 session snapshot。
@@ -513,15 +523,7 @@ const previewContainerStyle = computed(() => {
   }
 })
 
-const editorContainerClass = computed(() => {
-  if (previewController.value && menuController.value) {
-    return 'grid-cols-[1fr_2px_1fr_2px_0.4fr]'
-  } else if (previewController.value) {
-    return 'grid-cols-[1fr_2px_1fr_0px_0fr]'
-  } else {
-    return 'grid-cols-[1fr_0px_0fr_0px_0fr]'
-  }
-})
+const editorContainerClass = computed(() => layoutMode.value.gridTemplateClass)
 
 const modelSyncScheduler = createFlushableDebounce(() => {
   const view = editorView.value
@@ -577,6 +579,64 @@ function refreshKeymap() {
   const keymapList = keymapUtil.createKeymap(shortcutKeyList.value, { 'editor-focus-line': jumpToTargetLine })
   keymapList.push(searchKeymap)
   return keymapList
+}
+
+/**
+ * 用布局 helper 的列顺序同步当前可见面板，避免组件再维护第二套“左右顺序”判断。
+ */
+function syncLayoutControllers() {
+  previewController.value = layoutMode.value.columnOrder.includes('preview')
+  menuController.value = layoutMode.value.columnOrder.includes('menu')
+}
+
+/**
+ * 按 helper 返回的 gutter 描述解析 Split 需要的真实 DOM。
+ * refKey 明确区分预览分隔条与大纲分隔条，避免左侧三栏时绑反。
+ *
+ * @returns {Array<{ track: number, element: HTMLElement | undefined }>} 返回可直接传给 Split 的 gutter 配置。
+ */
+function resolveSplitColumnGutters() {
+  return layoutMode.value.columnGutters
+    .map(({ track, refKey }) => ({
+      track,
+      element: {
+        gutterRef: gutterRef.value,
+        gutterMenuRef: gutterMenuRef.value,
+      }[refKey],
+    }))
+    .filter(({ element }) => Boolean(element))
+}
+
+/**
+ * 释放当前 Split 实例和它留下的行内列宽。
+ * 这样布局切换到另一套列模板时，不会继续沿用旧的拖拽结果。
+ */
+function destroySplitLayout() {
+  if (editorContainer.value) {
+    editorContainer.value.style['grid-template-columns'] = ''
+  }
+
+  splitInstance && splitInstance.destroy(true)
+  splitInstance = undefined
+}
+
+/**
+ * 重新按当前布局初始化 Split。
+ * 会先清理旧实例，再按 helper 描述挂载当前需要的 gutter。
+ */
+function resetSplitLayout() {
+  destroySplitLayout()
+
+  const columnGutters = resolveSplitColumnGutters()
+  if (columnGutters.length === 0) {
+    return
+  }
+
+  splitInstance = Split({
+    columnGutters,
+    minSize: 200,
+    snapOffset: 0,
+  })
 }
 
 /**
@@ -750,47 +810,27 @@ watch(() => store.config.shortcutKeyList, (newValue) => {
   reconfigureKeymap(refreshKeymap())
 }, { deep: true, immediate: true })
 
-watch(() => [menuVisible.value, previewVisible.value], () => {
+watch(layoutMode, () => {
   closePreviewSearchBar()
-
-  if (editorContainer.value) {
-    editorContainer.value.style['grid-template-columns'] = ''
-  }
-  splitInstance && splitInstance.destroy(true)
+  syncLayoutControllers()
+  destroySplitLayout()
   gridAnimation.value = true
 
-  if (menuVisible.value && previewVisible.value) {
-    previewController.value = true
-    menuController.value = true
-    nextTick(() => {
-      splitInstance = Split({
-        columnGutters: [{ track: 1, element: gutterRef.value }, { track: 3, element: gutterMenuRef.value }],
-        minSize: 200,
-        snapOffset: 0,
-      })
-      setTimeout(() => {
-        syncEditorToPreview(true)
-        restorePreviewLinkedHighlight()
-      }, 500)
-    })
-  } else if (previewVisible.value) {
-    previewController.value = true
-    menuController.value = false
-    nextTick(() => {
-      splitInstance = Split({
-        columnGutters: [{ track: 1, element: gutterRef.value }],
-        minSize: 200,
-        snapOffset: 0,
-      })
-      setTimeout(() => {
-        syncEditorToPreview(true)
-        restorePreviewLinkedHighlight()
-      }, 500)
-    })
-  } else {
-    previewController.value = false
+  if (previewController.value !== true) {
     clearLinkedHighlightDisplay()
   }
+
+  nextTick(() => {
+    resetSplitLayout()
+    if (previewController.value !== true) {
+      return
+    }
+
+    setTimeout(() => {
+      syncEditorToPreview(true)
+      restorePreviewLinkedHighlight()
+    }, 500)
+  })
 
   setTimeout(() => {
     gridAnimation.value = false
@@ -800,10 +840,9 @@ watch(() => [menuVisible.value, previewVisible.value], () => {
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
   previewSearchTargetBridge.activate()
-  splitInstance = Split({
-    columnGutters: [{ track: 1, element: gutterRef.value }],
-    minSize: 200,
-    snapOffset: 0,
+  syncLayoutControllers()
+  nextTick(() => {
+    resetSplitLayout()
   })
 
   initEditor({
@@ -865,7 +904,7 @@ onBeforeUnmount(() => {
   clearAllLinkedHighlight()
   unbindEvents()
   clearScrollTimer()
-  splitInstance && splitInstance.destroy(true)
+  destroySplitLayout()
   destroyEditor()
 })
 
@@ -883,13 +922,13 @@ defineExpose({
     class="grid grid-rows-[auto_1fr] grid-cols-1 h-full w-full"
   >
     <EditorToolbar :toolbar-list="toolbarList" />
-    <div ref="editorContainer" class="grid w-full overflow-hidden" :class="editorContainerClass" :style="editorContainerStyle">
-      <div ref="editorRef" class="h-full overflow-auto" />
-      <div v-if="previewController" ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
+    <div ref="editorContainer" class="markdown-edit-layout grid w-full overflow-hidden" :class="editorContainerClass" :style="editorContainerStyle">
+      <div ref="editorRef" class="markdown-edit-layout__editor h-full overflow-auto" />
+      <div v-if="previewController" ref="gutterRef" class="markdown-edit-layout__gutter markdown-edit-layout__gutter--preview h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <div
         v-if="previewController"
         ref="previewRef"
-        class="wj-scrollbar allow-search h-full p-2"
+        class="allow-search markdown-edit-layout__preview wj-scrollbar h-full p-2"
         :style="previewContainerStyle"
         :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
         @scroll="syncPreviewToEditor"
@@ -907,13 +946,13 @@ defineExpose({
           @asset-open="onAssetOpen"
         />
       </div>
-      <div v-if="menuController && previewController" ref="gutterMenuRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
+      <div v-if="menuController && previewController" ref="gutterMenuRef" class="markdown-edit-layout__gutter markdown-edit-layout__gutter--menu h-full cursor-col-resize bg-[#E2E2E2] op-0" />
       <MarkdownMenu
         v-if="menuController && previewController"
         :anchor-list="anchorList"
         :get-container="() => previewRef"
         :close="() => { menuVisible = false }"
-        class="allow-search"
+        class="allow-search markdown-edit-layout__menu"
       />
     </div>
 
@@ -935,6 +974,54 @@ defineExpose({
 </template>
 
 <style scoped lang="scss">
+.markdown-edit-layout__editor {
+  grid-area: editor;
+  min-width: 0;
+}
+
+.markdown-edit-layout__preview {
+  grid-area: preview;
+  min-width: 0;
+}
+
+.markdown-edit-layout__menu {
+  grid-area: menu;
+  min-width: 0;
+}
+
+.markdown-edit-layout__gutter--preview {
+  grid-area: gutter-preview;
+}
+
+.markdown-edit-layout__gutter--menu {
+  grid-area: gutter-menu;
+}
+
+.markdown-edit-layout--editor-only {
+  grid-template-columns: minmax(0, 1fr) 0 minmax(0, 0fr) 0 minmax(0, 0fr);
+  grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
+}
+
+.markdown-edit-layout--editor-preview {
+  grid-template-columns: minmax(0, 1fr) 2px minmax(0, 1fr) 0 minmax(0, 0fr);
+  grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
+}
+
+.markdown-edit-layout--editor-preview-menu {
+  grid-template-columns: minmax(0, 1fr) 2px minmax(0, 1fr) 2px minmax(0, 0.4fr);
+  grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
+}
+
+.markdown-edit-layout--preview-editor {
+  grid-template-columns: minmax(0, 1fr) 2px minmax(0, 1fr) 0 minmax(0, 0fr);
+  grid-template-areas: 'preview gutter-preview editor gutter-menu menu';
+}
+
+.markdown-edit-layout--menu-preview-editor {
+  grid-template-columns: minmax(0, 0.4fr) 2px minmax(0, 1fr) 2px minmax(0, 1fr);
+  grid-template-areas: 'menu gutter-menu preview gutter-preview editor';
+}
+
 :deep(.wj-preview-link-highlight) {
   border-radius: var(--wj-link-highlight-radius);
   // background-color: var(--wj-link-highlight-bg);

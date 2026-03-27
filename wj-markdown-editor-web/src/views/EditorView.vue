@@ -574,7 +574,7 @@ async function deletePreviewAsset() {
 
 <template>
   <!-- 主编辑器：正文、主题、水印和资源事件都在这里汇总。 -->
-  <MarkdownEdit v-if="ready" ref="markdownEditRef" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
+  <MarkdownEdit v-if="ready" ref="markdownEditRef" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" :preview-position="config.editor.previewPosition" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
   <!-- 预览资源右键菜单，仅负责展示与转发操作，不直接处理业务。 -->
   <PreviewAssetContextMenu
     :open="previewAssetMenu.open"
