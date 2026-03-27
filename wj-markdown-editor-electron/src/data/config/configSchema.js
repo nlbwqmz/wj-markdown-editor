@@ -58,9 +58,10 @@ const exportSchema = {
 const editorSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['associationHighlight'],
+  required: ['associationHighlight', 'previewPosition'],
   properties: {
     associationHighlight: { type: 'boolean' },
+    previewPosition: { enum: ['left', 'right'] },
   },
 }
 

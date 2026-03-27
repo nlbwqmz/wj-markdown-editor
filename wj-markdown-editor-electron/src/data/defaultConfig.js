@@ -42,6 +42,7 @@ export default {
   },
   editor: {
     associationHighlight: true,
+    previewPosition: 'right',
   },
   editorExtension: {
     lineNumbers: true,

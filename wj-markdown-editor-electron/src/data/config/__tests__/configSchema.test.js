@@ -72,6 +72,38 @@ describe('configSchema', () => {
     expect(() => validateConfigShape(validConfig)).not.toThrow()
   })
 
+  it('editor.previewPosition 必须接纳 left 和 right', () => {
+    const leftConfig = {
+      ...defaultConfig,
+      editor: {
+        ...defaultConfig.editor,
+        previewPosition: 'left',
+      },
+    }
+    const rightConfig = {
+      ...defaultConfig,
+      editor: {
+        ...defaultConfig.editor,
+        previewPosition: 'right',
+      },
+    }
+
+    expect(() => validateConfigShape(leftConfig)).not.toThrow()
+    expect(() => validateConfigShape(rightConfig)).not.toThrow()
+  })
+
+  it('editor.previewPosition 非法值必须被拒绝', () => {
+    const brokenConfig = {
+      ...defaultConfig,
+      editor: {
+        ...defaultConfig.editor,
+        previewPosition: 'bottom',
+      },
+    }
+
+    expect(() => validateConfigShape(brokenConfig)).toThrow()
+  })
+
   it('非法 language 必须被识别为 schema 违规', () => {
     const brokenConfig = {
       ...defaultConfig,

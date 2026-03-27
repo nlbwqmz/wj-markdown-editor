@@ -187,6 +187,34 @@ describe('configService', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
+  it('初始化时旧配置缺失 editor.previewPosition 只补默认值，不覆盖其他合法 editor 配置', async () => {
+    const loadedConfig = cloneValue(defaultConfig)
+    loadedConfig.editor = {
+      associationHighlight: false,
+    }
+    const repository = createRepositoryStub({
+      readResult: loadedConfig,
+    })
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+
+    expect(service.getConfig().editor).toEqual({
+      associationHighlight: false,
+      previewPosition: 'right',
+    })
+    expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(repository.writeConfigText.mock.calls[0][0]).editor).toEqual({
+      associationHighlight: false,
+      previewPosition: 'right',
+    })
+    expect(callback).not.toHaveBeenCalled()
+  })
+
   it('运行期写盘失败时，内存态与广播都不能前移', async () => {
     const repository = createRepositoryStub({
       writeError: new Error('disk full'),
