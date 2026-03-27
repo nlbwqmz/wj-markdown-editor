@@ -9,6 +9,7 @@ import { syncCodeBlockActionVariables } from '@/util/codeBlockActionStyleUtil.js
 import { loadCodeTheme } from '@/util/codeThemeUtil.js'
 import { handlePreviewHashAnchorClick } from '@/util/editor/previewAnchorLinkScrollUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
+import { copyTextWithFeedback, getPreviewInlineCodeCopyText } from '@/util/previewInlineCodeCopyUtil.js'
 import { settleMermaidRender } from '@/util/previewMermaidRenderUtil.js'
 
 const props = defineProps({
@@ -181,6 +182,28 @@ function handlePreviewClick(e) {
     if (targetElement) {
       targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
+    return
+  }
+
+  const inlineCodeText = getPreviewInlineCodeCopyText({
+    enabled: store.config.markdown.inlineCodeClickCopy,
+    target: e.target,
+    selection: window.getSelection?.() || null,
+  })
+  if (inlineCodeText !== null) {
+    copyTextWithFeedback({
+      text: inlineCodeText,
+      writeText: async text => await navigator.clipboard.writeText(text),
+      onEmpty() {
+        message.warning(t('message.noCopyableContent'))
+      },
+      onSuccess() {
+        message.success(t('message.copySucceeded'))
+      },
+      onError() {
+        message.error(t('message.copyFailed'))
+      },
+    }).then(() => {})
     return
   }
 

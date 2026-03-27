@@ -161,6 +161,31 @@ describe('configLoadSanitizer', () => {
     expect(sanitized.theme.global).toBe(defaultConfig.theme.global)
   })
 
+  it('markdown.inlineCodeClickCopy 缺失时必须补默认值，且同层其他合法字段保持原值', () => {
+    const loadedConfig = cloneConfig(defaultConfig)
+    delete loadedConfig.markdown.inlineCodeClickCopy
+    loadedConfig.markdown.typographer = false
+
+    const sanitized = sanitizeLoadedConfig(loadedConfig, defaultConfig, configSchema)
+
+    expect(sanitized.markdown.inlineCodeClickCopy).toBe(false)
+    expect(sanitized.markdown.typographer).toBe(false)
+  })
+
+  it('markdown.inlineCodeClickCopy 非法时必须仅回退该字段', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      markdown: {
+        ...cloneConfig(defaultConfig.markdown),
+        inlineCodeClickCopy: 'invalid',
+        typographer: false,
+      },
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.markdown.inlineCodeClickCopy).toBe(false)
+    expect(sanitized.markdown.typographer).toBe(false)
+  })
+
   it('autoSave 可变枚举数组必须保留合法项并过滤非法项', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),

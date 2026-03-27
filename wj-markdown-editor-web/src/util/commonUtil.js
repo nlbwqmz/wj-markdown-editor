@@ -2,11 +2,14 @@ import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal, Tooltip } from 'ant-design-vue'
 import { nanoid } from 'nanoid'
 import { createVNode, h } from 'vue'
+import i18n from '@/i18n/index.js'
 import router from '@/router/index.js'
 import { requestRecentRemove } from '@/util/document-session/rendererDocumentCommandUtil.js'
+import { copyTextWithFeedback } from '@/util/previewInlineCodeCopyUtil.js'
 import { convertResourceUrl, stringToHex } from '@/util/resourceUrlUtil.js'
 
 const createId = () => `wj${nanoid()}`
+const { t } = i18n.global
 
 /**
  * 防抖函数
@@ -90,14 +93,18 @@ export default {
   getUrlParam,
   initCopyCode: () => {
     window.copyCode = (code) => {
-      if (!code) {
-        message.warning('没有可复制的内容')
-        return
-      }
-      navigator.clipboard.writeText(base64ToStr(code)).then(() => {
-        message.success('复制成功')
-      }).catch(() => {
-        message.error('复制失败')
+      copyTextWithFeedback({
+        text: code ? base64ToStr(code) : '',
+        writeText: async text => await navigator.clipboard.writeText(text),
+        onEmpty() {
+          message.warning(t('message.noCopyableContent'))
+        },
+        onSuccess() {
+          message.success(t('message.copySucceeded'))
+        },
+        onError() {
+          message.error(t('message.copyFailed'))
+        },
       })
     }
   },

@@ -62,3 +62,31 @@ test('中英文文案都应提供打开 Markdown 文件失败提示', () => {
     'Failed to open the Markdown file. Please check file permissions or whether it is in use.',
   )
 })
+
+test('中英文文案都应提供复制结果提示', () => {
+  assert.equal(
+    zhCN.message.noCopyableContent,
+    '没有可复制的内容',
+  )
+  assert.equal(
+    zhCN.message.copySucceeded,
+    '复制成功',
+  )
+  assert.equal(
+    zhCN.message.copyFailed,
+    '复制失败',
+  )
+
+  assert.equal(
+    enUS.message.noCopyableContent,
+    'There is no content to copy.',
+  )
+  assert.equal(
+    enUS.message.copySucceeded,
+    'Copied successfully.',
+  )
+  assert.equal(
+    enUS.message.copyFailed,
+    'Copy failed.',
+  )
+})

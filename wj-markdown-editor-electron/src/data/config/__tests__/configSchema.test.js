@@ -8,6 +8,10 @@ describe('configSchema', () => {
     expect(() => validateConfigShape(defaultConfig)).not.toThrow()
   })
 
+  it('defaultConfig 必须提供 markdown.inlineCodeClickCopy 默认值 false', () => {
+    expect(defaultConfig.markdown.inlineCodeClickCopy).toBe(false)
+  })
+
   it('configVersion 必须接纳当前配置版本', () => {
     const validConfig = {
       ...defaultConfig,
@@ -54,6 +58,18 @@ describe('configSchema', () => {
     }
 
     expect(() => validateConfigShape(brokenConfig)).toThrow()
+  })
+
+  it('markdown.inlineCodeClickCopy 接纳布尔值 true', () => {
+    const validConfig = {
+      ...defaultConfig,
+      markdown: {
+        ...defaultConfig.markdown,
+        inlineCodeClickCopy: true,
+      },
+    }
+
+    expect(() => validateConfigShape(validConfig)).not.toThrow()
   })
 
   it('非法 language 必须被识别为 schema 违规', () => {

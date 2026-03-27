@@ -16,9 +16,10 @@ const fontFamilySchema = {
 const markdownSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['typographer'],
+  required: ['typographer', 'inlineCodeClickCopy'],
   properties: {
     typographer: { type: 'boolean' },
+    inlineCodeClickCopy: { type: 'boolean' },
   },
 }
 

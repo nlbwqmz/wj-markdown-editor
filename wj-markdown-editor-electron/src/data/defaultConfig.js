@@ -27,6 +27,7 @@ export default {
   externalFileChangeStrategy: 'prompt',
   markdown: {
     typographer: true,
+    inlineCodeClickCopy: false,
   },
   export: {
     pdf: {

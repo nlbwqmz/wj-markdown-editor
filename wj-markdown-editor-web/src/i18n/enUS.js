@@ -178,6 +178,7 @@ export default {
       highlightMatchingBracket: 'Highlight matching bracket',
       autoCloseBracket: 'Auto close bracket',
       typographer: 'Typographer',
+      inlineCodeClickCopy: 'Copy when clicking inline code',
       typographerOption: {
         tipTitle: 'Conversion rules',
       },
@@ -302,6 +303,9 @@ export default {
     exporting: 'Exporting...',
     exportSuccessfully: 'Export successfully.',
     exportFailed: 'Export failed.',
+    noCopyableContent: 'There is no content to copy.',
+    copySucceeded: 'Copied successfully.',
+    copyFailed: 'Copy failed.',
     configWriteFailed: 'Failed to save configuration. Please try again later.',
     configReadFailed: 'Failed to read configuration. The default configuration has been restored.',
     configDirectoryUnavailable: 'The configuration directory is unavailable. Please check permissions.',

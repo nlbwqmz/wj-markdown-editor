@@ -178,6 +178,7 @@ export default {
       highlightMatchingBracket: '突出匹配括号',
       autoCloseBracket: '自动闭合括号',
       typographer: '智能标点',
+      inlineCodeClickCopy: '点击行内代码时复制',
       typographerOption: {
         tipTitle: '转换规则',
       },
@@ -302,6 +303,9 @@ export default {
     exporting: '正在导出',
     exportSuccessfully: '导出成功',
     exportFailed: '导出失败',
+    noCopyableContent: '没有可复制的内容',
+    copySucceeded: '复制成功',
+    copyFailed: '复制失败',
     configWriteFailed: '配置保存失败，请稍后重试。',
     configReadFailed: '读取配置失败，已回退到默认配置。',
     configDirectoryUnavailable: '配置目录不可用，请检查权限。',
