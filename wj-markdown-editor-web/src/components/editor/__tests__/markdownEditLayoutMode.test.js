@@ -6,8 +6,15 @@ let markdownEditLayoutModeModule = null
 
 try {
   markdownEditLayoutModeModule = await import('../markdownEditLayoutMode.js')
-} catch {
-  markdownEditLayoutModeModule = null
+} catch (error) {
+  const isModuleMissing = error?.code === 'ERR_MODULE_NOT_FOUND'
+    && /markdownEditLayoutMode\.js/u.test(String(error?.message))
+
+  if (isModuleMissing) {
+    markdownEditLayoutModeModule = null
+  } else {
+    throw error
+  }
 }
 
 /**
@@ -37,7 +44,10 @@ test('右侧模式且大纲开启时，返回编辑区、预览区、大纲的�
   assert.deepEqual(layoutMode, {
     columnOrder: ['editor', 'preview', 'menu'],
     gridTemplateClass: 'markdown-edit-layout--editor-preview-menu',
-    columnGutters: [1, 3],
+    columnGutters: [
+      { track: 1, refKey: 'gutterRef' },
+      { track: 3, refKey: 'gutterMenuRef' },
+    ],
   })
 })
 
@@ -53,7 +63,10 @@ test('左侧模式且大纲开启时，返回大纲、预览区、编辑区的�
   assert.deepEqual(layoutMode, {
     columnOrder: ['menu', 'preview', 'editor'],
     gridTemplateClass: 'markdown-edit-layout--menu-preview-editor',
-    columnGutters: [1, 3],
+    columnGutters: [
+      { track: 1, refKey: 'gutterMenuRef' },
+      { track: 3, refKey: 'gutterRef' },
+    ],
   })
 })
 
@@ -69,7 +82,9 @@ test('左侧模式且大纲关闭时，返回预览区、编辑区的列顺序�
   assert.deepEqual(layoutMode, {
     columnOrder: ['preview', 'editor'],
     gridTemplateClass: 'markdown-edit-layout--preview-editor',
-    columnGutters: [1],
+    columnGutters: [
+      { track: 1, refKey: 'gutterRef' },
+    ],
   })
 })
 
@@ -101,6 +116,8 @@ test('非法 previewPosition 会回退到 right 模式', () => {
   assert.deepEqual(layoutMode, {
     columnOrder: ['editor', 'preview'],
     gridTemplateClass: 'markdown-edit-layout--editor-preview',
-    columnGutters: [1],
+    columnGutters: [
+      { track: 1, refKey: 'gutterRef' },
+    ],
   })
 })

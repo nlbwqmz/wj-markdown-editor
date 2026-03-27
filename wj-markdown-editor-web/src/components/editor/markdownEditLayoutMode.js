@@ -7,22 +7,28 @@ const LAYOUT_MODE_MAP = {
   'editor-preview': {
     columnOrder: ['editor', 'preview'],
     gridTemplateClass: 'markdown-edit-layout--editor-preview',
-    columnGutters: [1],
+    columnGutters: [{ track: 1, refKey: 'gutterRef' }],
   },
   'editor-preview-menu': {
     columnOrder: ['editor', 'preview', 'menu'],
     gridTemplateClass: 'markdown-edit-layout--editor-preview-menu',
-    columnGutters: [1, 3],
+    columnGutters: [
+      { track: 1, refKey: 'gutterRef' },
+      { track: 3, refKey: 'gutterMenuRef' },
+    ],
   },
   'preview-editor': {
     columnOrder: ['preview', 'editor'],
     gridTemplateClass: 'markdown-edit-layout--preview-editor',
-    columnGutters: [1],
+    columnGutters: [{ track: 1, refKey: 'gutterRef' }],
   },
   'menu-preview-editor': {
     columnOrder: ['menu', 'preview', 'editor'],
     gridTemplateClass: 'markdown-edit-layout--menu-preview-editor',
-    columnGutters: [1, 3],
+    columnGutters: [
+      { track: 1, refKey: 'gutterMenuRef' },
+      { track: 3, refKey: 'gutterRef' },
+    ],
   },
 }
 
@@ -38,7 +44,7 @@ const LAYOUT_MODE_MAP = {
  * @returns {{
  *   columnOrder: string[],
  *   gridTemplateClass: string,
- *   columnGutters: number[],
+ *   columnGutters: Array<{ track: number, refKey: string }>,
  * }} 返回可供编辑页布局和分隔条接线消费的稳定描述对象。
  */
 export function resolveMarkdownEditLayoutMode(options = {}) {
@@ -65,6 +71,6 @@ function cloneLayoutMode(layoutModeKey) {
   return {
     columnOrder: [...layoutMode.columnOrder],
     gridTemplateClass: layoutMode.gridTemplateClass,
-    columnGutters: [...layoutMode.columnGutters],
+    columnGutters: layoutMode.columnGutters.map(gutter => ({ ...gutter })),
   }
 }
