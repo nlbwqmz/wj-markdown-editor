@@ -448,6 +448,16 @@ function reset() {
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
+          <a-descriptions-item :label="$t('config.view.editorPreviewPosition')">
+            <a-radio-group v-model:value="config.editor.previewPosition" button-style="solid">
+              <a-radio-button value="left">
+                {{ $t('config.view.editorPreviewPositionOption.left') }}
+              </a-radio-button>
+              <a-radio-button value="right">
+                {{ $t('config.view.editorPreviewPositionOption.right') }}
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
           <a-descriptions-item :label="$t('config.view.globalTheme')">
             <a-radio-group v-model:value="config.theme.global" button-style="solid">
               <a-radio-button value="light">

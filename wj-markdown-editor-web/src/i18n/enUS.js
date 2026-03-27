@@ -160,11 +160,16 @@ export default {
     },
     view: {
       defaultShowOutline: 'Default show outline',
+      editorPreviewPosition: 'Editor preview position',
       globalTheme: 'Global theme',
       codeTheme: 'Code theme',
       previewTheme: 'Preview theme',
       previewWidth: 'Preview width',
       fontSize: 'Font size',
+      editorPreviewPositionOption: {
+        left: 'Left',
+        right: 'Right',
+      },
       globalThemeOption: {
         light: 'Light',
         dark: 'Dark',

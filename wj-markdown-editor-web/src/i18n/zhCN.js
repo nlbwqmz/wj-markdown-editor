@@ -160,11 +160,16 @@ export default {
     },
     view: {
       defaultShowOutline: '默认显示大纲',
+      editorPreviewPosition: '编辑页预览位置',
       globalTheme: '全局主题',
       codeTheme: '代码主题',
       previewTheme: '预览主题',
       previewWidth: '预览宽度',
       fontSize: '字体大小',
+      editorPreviewPositionOption: {
+        left: '左侧',
+        right: '右侧',
+      },
       globalThemeOption: {
         light: '明亮',
         dark: '暗黑',
