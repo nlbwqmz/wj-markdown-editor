@@ -92,6 +92,17 @@ describe('configSchema', () => {
     expect(() => validateConfigShape(rightConfig)).not.toThrow()
   })
 
+  it('editor.previewPosition 缺失时必须校验失败', () => {
+    const brokenConfig = {
+      ...defaultConfig,
+      editor: {
+        associationHighlight: defaultConfig.editor.associationHighlight,
+      },
+    }
+
+    expect(() => validateConfigShape(brokenConfig)).toThrow()
+  })
+
   it('editor.previewPosition 非法值必须被拒绝', () => {
     const brokenConfig = {
       ...defaultConfig,
