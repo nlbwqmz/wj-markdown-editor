@@ -424,6 +424,29 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
     expect(stat).not.toHaveBeenCalled()
   })
 
+  it('rawPath 与 resourceUrl 指向点段归一化后相同的绝对路径时，不应误判为冲突', async () => {
+    pathExists.mockResolvedValue(false)
+
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      documentPath: 'D:\\docs\\note.md',
+    }, {
+      rawPath: 'D:/assets/demo.png',
+      resourceUrl: convertResourceUrl('D:/docs/../assets/demo.png'),
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      reason: 'resolved',
+      decodedPath: 'D:/assets/demo.png',
+      exists: false,
+      isDirectory: false,
+      isFile: false,
+      path: 'D:\\assets\\demo.png',
+    })
+    expect(pathExists).toHaveBeenCalledWith('D:\\assets\\demo.png')
+    expect(stat).not.toHaveBeenCalled()
+  })
+
   it('文件存在时，应该返回文件资源信息', async () => {
     pathExists.mockResolvedValue(true)
     stat.mockResolvedValue({

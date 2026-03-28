@@ -183,11 +183,17 @@ function deriveRemoteFileName(remoteUrl, contentType) {
     return `image${imageExtension}`
   }
 
-  if (path.extname(remoteFileName)) {
-    return remoteFileName
+  const remotePathInfo = path.posix.parse(remoteFileName)
+  const normalizedBaseName = sanitizeFileName(remotePathInfo.name) || 'image'
+  if (imageExtension) {
+    return `${normalizedBaseName}${imageExtension}`
   }
 
-  return `${remoteFileName}${imageExtension}`
+  if (remotePathInfo.ext) {
+    return `${normalizedBaseName}${remotePathInfo.ext}`
+  }
+
+  return `${normalizedBaseName}.png`
 }
 
 function createTextCopySuccessResult(text, options = {}) {
@@ -596,17 +602,17 @@ export function createDocumentResourceService({
       return imageBufferResult
     }
 
-    const nativeImage = createNativeImageFromBuffer(imageBufferResult.buffer)
-    if (!nativeImage || nativeImage.isEmpty?.() === true) {
-      return createBinaryActionFailureResult(
-        runtimeSourceType === 'remote' ? 'remote-resource-not-image' : 'local-resource-not-image',
-        {
-          path: imageBufferResult.path,
-        },
-      )
-    }
-
     try {
+      const nativeImage = createNativeImageFromBuffer(imageBufferResult.buffer)
+      if (!nativeImage || nativeImage.isEmpty?.() === true) {
+        return createBinaryActionFailureResult(
+          runtimeSourceType === 'remote' ? 'remote-resource-not-image' : 'local-resource-not-image',
+          {
+            path: imageBufferResult.path,
+          },
+        )
+      }
+
       const selectedPath = dialogApi?.showSaveDialogSync?.({
         defaultPath: imageBufferResult.fileName,
       })

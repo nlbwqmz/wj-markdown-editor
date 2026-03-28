@@ -298,6 +298,87 @@ describe('documentResourceService', () => {
     expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
+  it('document.resource.save-as 在 nativeImage.createFromBuffer 抛错时必须返回结构化失败结果', async () => {
+    const { dialogApi, nativeImageApi, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-native-image-throw-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004019,
+    })
+    const windowId = bindSession(store, session)
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    readFile.mockResolvedValue(Buffer.from('png-binary'))
+    nativeImageApi.createFromBuffer.mockImplementation(() => {
+      throw new Error('decode failed')
+    })
+
+    await expect(service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: './assets/demo.png',
+        rawPath: './assets/demo.png',
+        resourceUrl: convertResourceUrl('./assets/demo.png'),
+      },
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'save-as-failed',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+    expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as 对远程图片应按 Content-Type 纠正默认扩展名', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-file-name-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004020,
+    })
+    const windowId = bindSession(store, session)
+    const remoteBuffer = Buffer.from('remote-image')
+    fetchImpl.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get(name) {
+          return name?.toLowerCase() === 'content-type' ? 'image/png' : null
+        },
+      },
+      arrayBuffer: vi.fn(async () => remoteBuffer),
+    })
+    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\picked.png')
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo.jpg?download=1',
+        rawPath: 'https://example.com/assets/demo.jpg?download=1',
+        resourceUrl: 'https://example.com/assets/demo.jpg?download=1',
+      },
+    })
+
+    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      defaultPath: 'demo.png',
+    }))
+    expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\picked.png', expect.any(Buffer))
+    expect(result).toEqual({
+      ok: true,
+      reason: 'saved',
+      targetPath: 'D:\\exports\\picked.png',
+      messageKey: 'message.saveAsSuccessfully',
+    })
+  })
+
   it('document.resource.open-in-folder 应该从 active session 解析相对资源并成功打开', async () => {
     const { service, showItemInFolder, store } = await createServiceContext()
     const session = createBoundFileSession({

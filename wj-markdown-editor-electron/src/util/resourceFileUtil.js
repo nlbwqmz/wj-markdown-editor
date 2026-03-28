@@ -354,16 +354,20 @@ function isSameResolvedPath(firstPath, secondPath) {
     return false
   }
 
-  const normalizedFirstPath = firstPath.replace(/\\/g, '/')
-  const normalizedSecondPath = secondPath.replace(/\\/g, '/')
-  const comparableFirstPath = /^[a-z]:\//i.test(normalizedFirstPath)
-    ? normalizedFirstPath.toLowerCase()
-    : normalizedFirstPath
-  const comparableSecondPath = /^[a-z]:\//i.test(normalizedSecondPath)
-    ? normalizedSecondPath.toLowerCase()
-    : normalizedSecondPath
+  const normalizeResolvedPathForCompare = (targetPath) => {
+    if (typeof targetPath !== 'string' || targetPath.trim() === '') {
+      return null
+    }
 
-  return comparableFirstPath === comparableSecondPath
+    const normalizedText = targetPath.trim()
+    if (/^[a-z]:[\\/]/i.test(normalizedText) || normalizedText.startsWith('\\\\')) {
+      return path.win32.normalize(normalizedText.replace(/\//g, '\\')).toLowerCase()
+    }
+
+    return path.posix.normalize(normalizedText.replace(/\\/g, '/'))
+  }
+
+  return normalizeResolvedPathForCompare(firstPath) === normalizeResolvedPathForCompare(secondPath)
 }
 
 function resolveLocalResourceTarget(documentContext, resourceData) {
