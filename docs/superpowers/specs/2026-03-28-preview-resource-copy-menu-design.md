@@ -121,6 +121,7 @@
   - 远程资源复制链接固定以 `rawSrc` 为权威来源
   - 远程图片下载、复制图片、另存为也固定以 `rawSrc` 为权威来源
 - `rawPath` 只服务本地资源解析：
+  - 它也必须来自可稳定回放的原始资源引用元信息，不得从 `resourceUrl` 反推
   - 它表示原始本地路径候选，可用于相对路径解析与本地文件定位
 - `resourceUrl` 是预览层最终用于渲染的资源地址：
   - 对本地资源通常是 `wj://` 或等价本地协议地址
@@ -132,6 +133,7 @@
 - 对本地资源的解析优先级固定如下：
   - 优先使用 `rawPath + requestContext` 解析原始本地路径
   - 仅在 `rawPath` 缺失或无法参与解析时，才允许回退 `resourceUrl`
+  - 当 `documentPath = null` 且 `rawPath` 为相对路径时，必须直接 fail-closed，禁止回退 `resourceUrl`
   - 如果 `rawPath` 与 `resourceUrl` 都能解析且结果不一致，必须 fail-closed，返回固定冲突错误，不继续执行资源动作
 - `markdownReference` 必须来自渲染 DOM 上可稳定回放的原始引用元信息。
 - 如果 DOM 没有足够的原始引用信息，则 `markdownReference = null`，并隐藏“复制 Markdown 引用”；不得再根据 `assetType + rawSrc` 临时拼装“最小可用引用”。
@@ -219,6 +221,7 @@
 
 #### `documentSessionRuntime.js`
 
+- 现有 `document.resource.open-in-folder` / `document.resource.delete-local` 与本次新增命令，必须统一复用同一套本地资源解析与冲突裁决规则
 - 注册新的资源类 UI 命令：
   - `document.resource.copy-absolute-path`
   - `document.resource.copy-link`
@@ -272,6 +275,7 @@
 
 统一校验规则：
 
+- 现有 `document.resource.open-in-folder` / `document.resource.delete-local` 也必须复用同一套本地解析优先级、相对路径限制与冲突 fail-closed 规则。
 - `document.resource.copy-link` 只接受可再次判定为 `remote` 的 `rawSrc`；否则返回固定失败结果。
 - `document.resource.copy-image` / `document.resource.save-as` 必须在 runtime 再次校验：
   - `sourceType = local` 时，输入必须能按本地资源规则稳定解析
@@ -335,6 +339,7 @@
   - renderer 只显示失败提示，不做任意一侧的猜测性兜底
 - 未保存文档中的相对资源：
   - 继续复用现有“相对资源需要已保存文档”语义
+  - 当 `documentPath = null` 且 `rawPath` 为相对路径时，必须直接失败，禁止回退 `resourceUrl`
 - 请求上下文过期：
   - runtime 返回 `stale-document-context`
   - 视图层静默中止或提示统一失败，不继续执行旧文档动作
