@@ -456,15 +456,15 @@ function onPreviewRefreshComplete() {
   closePreviewSearchBar()
 }
 
-function onAssetContextmenu(assetInfo) {
-  if (!assetInfo?.resourceUrl) {
+function onPreviewContextmenu(context) {
+  if (!context?.asset?.resourceUrl) {
     return
   }
   channelUtil.send({
     event: 'document.resource.open-in-folder',
     data: {
-      resourceUrl: assetInfo.resourceUrl,
-      rawPath: assetInfo.rawPath,
+      resourceUrl: context.asset.resourceUrl,
+      rawPath: context.asset.rawPath,
       requestContext: createResourceRequestContext(store.documentSessionSnapshot),
     },
   })
@@ -512,7 +512,7 @@ function onAssetOpen(assetInfo) {
             :watermark="watermark"
             @refresh-complete="onPreviewRefreshComplete"
             @anchor-change="onAnchorChange"
-            @asset-contextmenu="onAssetContextmenu"
+            @preview-contextmenu="onPreviewContextmenu"
             @asset-open="onAssetOpen"
           />
         </div>

@@ -40,7 +40,6 @@ import {
 } from '@/util/editor/previewAssetRemovalUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
 import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
-import { createPreviewResourceContext } from '@/util/editor/previewResourceContextUtil.js'
 import { createEditorViewActivationRestoreScheduler } from '@/views/editorViewActivationRestoreScheduler.js'
 
 // 预览资源右键菜单的基础状态工厂。
@@ -302,17 +301,19 @@ function closePreviewAssetMenu() {
 }
 
 // 预览区资源右键菜单入口。
-// 除了记录点击位置，也会同步捕获当下文档上下文，后续所有操作都基于这份快照校验。
-function onAssetContextmenu(assetInfo) {
-  const previewResourceContext = createPreviewResourceContext(assetInfo)
+// 子组件现在直接上浮统一 context，宿主只负责记录菜单状态和捕获当前会话上下文。
+function onPreviewContextmenu(context) {
+  if (!context?.asset) {
+    return
+  }
   previewAssetMenu.value = {
     open: true,
-    x: previewResourceContext?.menuPosition?.x ?? assetInfo.clientX ?? 0,
-    y: previewResourceContext?.menuPosition?.y ?? assetInfo.clientY ?? 0,
-    asset: assetInfo,
+    x: context.menuPosition?.x ?? 0,
+    y: context.menuPosition?.y ?? 0,
+    asset: context.asset,
     actionContext: previewAssetSessionController.captureActionContext(),
     items: buildPreviewContextMenuItems({
-      context: previewResourceContext,
+      context,
       profile: 'editor-preview',
       t,
     }),
@@ -595,7 +596,7 @@ async function deletePreviewAsset() {
 
 <template>
   <!-- 主编辑器：正文、主题、水印和资源事件都在这里汇总。 -->
-  <MarkdownEdit v-if="ready" ref="markdownEditRef" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" :preview-position="config.editor.previewPosition" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
+  <MarkdownEdit v-if="ready" ref="markdownEditRef" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" :preview-position="config.editor.previewPosition" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @preview-contextmenu="onPreviewContextmenu" @asset-open="onAssetOpen" />
   <!-- 预览资源右键菜单，仅负责展示与转发操作，不直接处理业务。 -->
   <PreviewAssetContextMenu
     :open="previewAssetMenu.open"
