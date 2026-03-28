@@ -51,25 +51,61 @@ function isStableLocalSource(value) {
     return false
   }
 
-  if (value.startsWith('/') || value.startsWith('./') || value.startsWith('../')) {
-    return true
-  }
-
   if (/^[a-z][a-z\d+.-]*:/iu.test(value)) {
     return false
+  }
+
+  if (value.startsWith('/') || value.startsWith('./') || value.startsWith('../')) {
+    return true
   }
 
   if (/[\\/]/u.test(value)) {
     return true
   }
 
-  return /^[^/?][^./?]*\.[^/?]+(?:\?.*)?$/u.test(value)
+  return false
+}
+
+/**
+ * 判断输入是否属于危险的未知来源形态。
+ * 这类输入一旦混入上下文，即使有稳定来源也要 fail-closed。
+ * @param {string | null} value - 待判定的来源字符串
+ * @returns {boolean} 是否为危险未知来源
+ */
+function isDangerousUnknownSource(value) {
+  if (!value) {
+    return false
+  }
+
+  if (value.startsWith('#') || value.startsWith('//') || value.startsWith('?') || value.startsWith('&')) {
+    return true
+  }
+
+  return /^[a-z][a-z\d+.-]*:/iu.test(value)
+}
+
+/**
+ * 判断输入是否属于弱本地形态。
+ * 这类输入本身不足以单独判定为 local，但不应该把明确的 wj:// 本地来源否掉。
+ * @param {string | null} value - 待判定的来源字符串
+ * @returns {boolean} 是否为弱本地形态
+ */
+function isWeakLocalSource(value) {
+  if (!value || isDangerousUnknownSource(value)) {
+    return false
+  }
+
+  if (value === '.' || value === '..') {
+    return false
+  }
+
+  return !/[\\/#?&]/u.test(value)
 }
 
 /**
  * 把单个来源字符串归类为本地、远程或未知。
  * @param {unknown} value - 待归类的来源输入
- * @returns {'local' | 'remote' | 'unknown' | null} 来源分类
+ * @returns {'local' | 'remote' | 'weak-local' | 'dangerous' | 'unknown' | null} 来源分类
  */
 function classifySourceCandidate(value) {
   const normalizedValue = normalizeStringValue(value)
@@ -83,6 +119,14 @@ function classifySourceCandidate(value) {
 
   if (isStableLocalSource(normalizedValue)) {
     return 'local'
+  }
+
+  if (isDangerousUnknownSource(normalizedValue)) {
+    return 'dangerous'
+  }
+
+  if (isWeakLocalSource(normalizedValue)) {
+    return 'weak-local'
   }
 
   return 'unknown'
@@ -100,14 +144,15 @@ function resolveSourceType(assetInfo) {
     classifySourceCandidate(assetInfo?.rawPath),
   ].filter(Boolean)
 
-  if (candidateTypeList.includes('unknown')) {
+  if (candidateTypeList.includes('dangerous') || candidateTypeList.includes('unknown')) {
     return null
   }
 
   const hasLocalSource = candidateTypeList.includes('local')
   const hasRemoteSource = candidateTypeList.includes('remote')
+  const hasWeakLocalSource = candidateTypeList.includes('weak-local')
 
-  if (hasLocalSource && hasRemoteSource) {
+  if (hasRemoteSource && (hasLocalSource || hasWeakLocalSource)) {
     return null
   }
 
