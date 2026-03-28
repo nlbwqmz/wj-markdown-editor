@@ -540,6 +540,29 @@ describe('previewView 预览资源菜单宿主接线', () => {
     })
   })
 
+  it('纯预览页选择 resource.save-as 在非取消失败时，不得展示内部 reason，必须回退到 message.saveAsFailed', async () => {
+    previewViewHostState.channelSend.mockResolvedValue({
+      ok: false,
+      reason: 'write-failed',
+      error: {
+        message: 'disk exploded',
+      },
+    })
+
+    const wrapper = await mountPreviewView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+    })
+    await wrapper.get('[data-menu-key="resource.save-as"]').trigger('click')
+    await flushPreviewView()
+
+    expect(previewViewHostState.messageError).toHaveBeenCalledWith('message.saveAsFailed')
+    expect(previewViewHostState.messageError).not.toHaveBeenCalledWith('write-failed')
+    expect(previewViewHostState.messageError).not.toHaveBeenCalledWith('disk exploded')
+    expect(previewViewHostState.messageError).not.toHaveBeenCalledWith('save-as-failed')
+  })
+
   it('纯预览页选择 resource.open-in-folder 时，会继续发送 document.resource.open-in-folder', async () => {
     const wrapper = await mountPreviewView()
 

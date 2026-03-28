@@ -91,6 +91,17 @@ test('中英文文案都应提供复制结果提示', () => {
   )
 })
 
+test('中英文文案都应提供另存为失败提示', () => {
+  assert.equal(
+    zhCN.message.saveAsFailed,
+    '另存为失败',
+  )
+  assert.equal(
+    enUS.message.saveAsFailed,
+    'Save as failed.',
+  )
+})
+
 test('中英文文案都应提供预览资源菜单新增标签', () => {
   assert.equal(
     zhCN.previewAssetMenu.copyAbsolutePath,

@@ -581,6 +581,29 @@ describe('editorView 预览资源菜单宿主接线', () => {
     expect(editorViewHostState.messageError).not.toHaveBeenCalled()
   })
 
+  it('选择 resource.save-as 在非取消失败时，不得展示内部 reason，必须回退到 message.saveAsFailed', async () => {
+    editorViewHostState.channelSend.mockResolvedValue({
+      ok: false,
+      reason: 'write-failed',
+      error: {
+        message: 'disk exploded',
+      },
+    })
+
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
+    await wrapper.get('[data-menu-key="resource.save-as"]').trigger('click')
+    await flushEditorView()
+
+    expect(editorViewHostState.messageError).toHaveBeenCalledWith('message.saveAsFailed')
+    expect(editorViewHostState.messageError).not.toHaveBeenCalledWith('write-failed')
+    expect(editorViewHostState.messageError).not.toHaveBeenCalledWith('disk exploded')
+    expect(editorViewHostState.messageError).not.toHaveBeenCalledWith('save-as-failed')
+  })
+
   it('选择 resource.open-in-folder 时，会沿用现有打开目录逻辑发出 document.resource.open-in-folder', async () => {
     const wrapper = await mountEditorView()
 

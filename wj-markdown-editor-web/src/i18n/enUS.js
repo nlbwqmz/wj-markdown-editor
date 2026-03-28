@@ -308,6 +308,7 @@ export default {
     uploadingImage: 'Uploading image...',
     imageUploadedSuccessfully: 'Image uploaded successfully.',
     saveAsSuccessfully: 'Save as successfully.',
+    saveAsFailed: 'Save as failed.',
     cancelSaveAs: 'Cancel save as.',
     saveSuccessfully: 'Save successfully.',
     cancelSave: 'Cancel save.',

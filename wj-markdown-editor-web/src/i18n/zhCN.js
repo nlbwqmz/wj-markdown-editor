@@ -308,6 +308,7 @@ export default {
     uploadingImage: '正在上传图片',
     imageUploadedSuccessfully: '图片上传成功',
     saveAsSuccessfully: '另存为成功',
+    saveAsFailed: '另存为失败',
     cancelSaveAs: '取消另存为',
     saveSuccessfully: '保存成功',
     cancelSave: '取消保存',

@@ -329,21 +329,6 @@ function showPreviewAssetActionFailure(result, options = {}) {
     : null
   if (fallbackMessageKey) {
     message.error(t(fallbackMessageKey))
-    return
-  }
-
-  const fallbackText = typeof options.fallbackText === 'string' && options.fallbackText.trim()
-    ? options.fallbackText
-    : null
-  const rawMessage = typeof result?.message === 'string' && result.message.trim()
-    ? result.message
-    : typeof result?.reason === 'string' && result.reason.trim()
-      ? result.reason
-      : typeof result?.error?.message === 'string' && result.error.message.trim()
-        ? result.error.message
-        : fallbackText
-  if (rawMessage) {
-    message.error(rawMessage)
   }
 }
 
@@ -535,7 +520,7 @@ async function savePreviewAssetAs() {
   }
 
   showPreviewAssetActionFailure(result, {
-    fallbackText: 'save-as-failed',
+    fallbackMessageKey: 'message.saveAsFailed',
   })
 }
 
