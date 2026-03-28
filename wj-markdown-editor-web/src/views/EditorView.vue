@@ -40,6 +40,7 @@ import {
 } from '@/util/editor/previewAssetRemovalUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
 import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
+import { copyTextWithFeedback } from '@/util/previewInlineCodeCopyUtil.js'
 import { createEditorViewActivationRestoreScheduler } from '@/views/editorViewActivationRestoreScheduler.js'
 
 // 预览资源右键菜单的基础状态工厂。
@@ -300,6 +301,124 @@ function closePreviewAssetMenu() {
   previewAssetMenu.value = createPreviewAssetMenuState()
 }
 
+// 统一提取 runtime 结构化失败文案 key。
+// 资源命令失败时优先吃 messageKey，避免 renderer 自己猜测具体错误语义。
+function getPreviewAssetActionFailureMessageKey(result) {
+  if (typeof result?.messageKey === 'string' && result.messageKey) {
+    return result.messageKey
+  }
+
+  if (typeof result?.error?.messageKey === 'string' && result.error.messageKey) {
+    return result.error.messageKey
+  }
+
+  return null
+}
+
+// 统一展示资源动作失败提示。
+// 若主进程已返回结构化 messageKey，则直接使用；否则回退到调用方提供的通用提示。
+function showPreviewAssetActionFailure(result, options = {}) {
+  const messageKey = getPreviewAssetActionFailureMessageKey(result)
+  if (messageKey) {
+    message.warning(t(messageKey))
+    return
+  }
+
+  const fallbackMessageKey = typeof options.fallbackMessageKey === 'string'
+    ? options.fallbackMessageKey
+    : null
+  if (fallbackMessageKey) {
+    message.error(t(fallbackMessageKey))
+    return
+  }
+
+  const fallbackText = typeof options.fallbackText === 'string' && options.fallbackText.trim()
+    ? options.fallbackText
+    : null
+  const rawMessage = typeof result?.message === 'string' && result.message.trim()
+    ? result.message
+    : typeof result?.reason === 'string' && result.reason.trim()
+      ? result.reason
+      : typeof result?.error?.message === 'string' && result.error.message.trim()
+        ? result.error.message
+        : fallbackText
+  if (rawMessage) {
+    message.error(rawMessage)
+  }
+}
+
+// 菜单动作必须读取菜单打开瞬间冻结的上下文。
+// 一旦文档已切换，就立刻关闭菜单并放弃对旧文档的命令发送。
+function resolvePreviewAssetMenuActionTarget(options = {}) {
+  const assetInfo = previewAssetMenu.value.asset
+  const actionContext = previewAssetMenu.value.actionContext
+  const requireResourceUrl = options.requireResourceUrl !== false
+  if (!assetInfo || previewAssetSessionController.isActiveContext(actionContext) !== true) {
+    closePreviewAssetMenu()
+    return null
+  }
+
+  if (requireResourceUrl && !assetInfo.resourceUrl) {
+    closePreviewAssetMenu()
+    return null
+  }
+
+  return {
+    assetInfo,
+    actionContext,
+    requestContext: previewAssetSessionController.createRequestContext(actionContext),
+  }
+}
+
+// 资源复制/另存为统一复用同一份 payload，避免不同动作漂移出不同字段矩阵。
+function createPreviewAssetRuntimePayload(actionTarget) {
+  return {
+    sourceType: actionTarget.assetInfo?.sourceType ?? null,
+    resourceUrl: actionTarget.assetInfo?.resourceUrl ?? null,
+    rawSrc: actionTarget.assetInfo?.rawSrc ?? null,
+    rawPath: actionTarget.assetInfo?.rawPath ?? null,
+    requestContext: actionTarget.requestContext,
+  }
+}
+
+// 统一执行“runtime 返回文本，再由 renderer 写入文本剪贴板”的动作。
+async function copyPreviewAssetTextFromRuntime(runtimeEvent) {
+  const actionTarget = resolvePreviewAssetMenuActionTarget()
+  if (!actionTarget) {
+    return
+  }
+
+  const result = await channelUtil.send({
+    event: runtimeEvent,
+    data: createPreviewAssetRuntimePayload(actionTarget),
+  })
+  if (previewAssetSessionController.isActiveContext(actionTarget.actionContext) !== true) {
+    closePreviewAssetMenu()
+    return
+  }
+
+  if (result?.ok === true) {
+    await copyTextWithFeedback({
+      text: typeof result.text === 'string' ? result.text : '',
+      writeText: async text => await navigator.clipboard.writeText(text),
+      onSuccess() {
+        message.success(t('message.copySucceeded'))
+      },
+      onEmpty() {
+        message.error(t('message.copyFailed'))
+      },
+      onError() {
+        message.error(t('message.copyFailed'))
+      },
+    })
+    return
+  }
+
+  showPreviewAssetActionFailure(result, {
+    fallbackMessageKey: 'message.copyFailed',
+  })
+}
+
 // 预览区资源右键菜单入口。
 // 子组件现在直接上浮统一 context，宿主只负责记录菜单状态和捕获当前会话上下文。
 function onPreviewContextmenu(context) {
@@ -322,8 +441,33 @@ function onPreviewContextmenu(context) {
 
 // 统一把菜单 actionKey 路由回现有资源业务分支，避免展示层组件再承载业务语义。
 function onPreviewAssetMenuSelect(actionKey) {
+  if (actionKey === 'resource.copy-absolute-path') {
+    copyPreviewAssetAbsolutePath().then(() => {})
+    return
+  }
+
+  if (actionKey === 'resource.copy-link') {
+    copyPreviewAssetLink().then(() => {})
+    return
+  }
+
+  if (actionKey === 'resource.copy-image') {
+    copyPreviewAssetImage().then(() => {})
+    return
+  }
+
+  if (actionKey === 'resource.save-as') {
+    savePreviewAssetAs().then(() => {})
+    return
+  }
+
   if (actionKey === 'resource.open-in-folder') {
     openPreviewAssetInExplorer()
+    return
+  }
+
+  if (actionKey === 'resource.copy-markdown-reference') {
+    copyPreviewAssetMarkdownReference().then(() => {})
     return
   }
 
@@ -332,21 +476,106 @@ function onPreviewAssetMenuSelect(actionKey) {
   }
 }
 
+async function copyPreviewAssetAbsolutePath() {
+  await copyPreviewAssetTextFromRuntime('document.resource.copy-absolute-path')
+}
+
+async function copyPreviewAssetLink() {
+  await copyPreviewAssetTextFromRuntime('document.resource.copy-link')
+}
+
+// 图片复制由 runtime 直接写系统剪贴板，renderer 只负责提示结果。
+async function copyPreviewAssetImage() {
+  const actionTarget = resolvePreviewAssetMenuActionTarget()
+  if (!actionTarget) {
+    return
+  }
+
+  const result = await channelUtil.send({
+    event: 'document.resource.copy-image',
+    data: createPreviewAssetRuntimePayload(actionTarget),
+  })
+  if (previewAssetSessionController.isActiveContext(actionTarget.actionContext) !== true) {
+    closePreviewAssetMenu()
+    return
+  }
+
+  if (result?.ok === true) {
+    message.success(t('message.copySucceeded'))
+    return
+  }
+
+  showPreviewAssetActionFailure(result, {
+    fallbackMessageKey: 'message.copyFailed',
+  })
+}
+
+async function savePreviewAssetAs() {
+  const actionTarget = resolvePreviewAssetMenuActionTarget()
+  if (!actionTarget) {
+    return
+  }
+
+  const result = await channelUtil.send({
+    event: 'document.resource.save-as',
+    data: createPreviewAssetRuntimePayload(actionTarget),
+  })
+  if (previewAssetSessionController.isActiveContext(actionTarget.actionContext) !== true) {
+    closePreviewAssetMenu()
+    return
+  }
+
+  if (result?.ok === true) {
+    message.success(t(result.messageKey || 'message.saveAsSuccessfully'))
+    return
+  }
+
+  if (result?.ok === false && result.cancelled === true && result.reason === 'cancelled') {
+    return
+  }
+
+  showPreviewAssetActionFailure(result, {
+    fallbackText: 'save-as-failed',
+  })
+}
+
+async function copyPreviewAssetMarkdownReference() {
+  const actionTarget = resolvePreviewAssetMenuActionTarget({
+    requireResourceUrl: false,
+  })
+  const markdownReference = actionTarget?.assetInfo?.markdownReference
+  if (!actionTarget || typeof markdownReference !== 'string') {
+    return
+  }
+
+  await copyTextWithFeedback({
+    text: markdownReference,
+    writeText: async text => await navigator.clipboard.writeText(text),
+    onSuccess() {
+      message.success(t('message.copySucceeded'))
+    },
+    onEmpty() {
+      message.error(t('message.copyFailed'))
+    },
+    onError() {
+      message.error(t('message.copyFailed'))
+    },
+  })
+}
+
 // 从右键菜单里打开资源所在目录。
 // 如果菜单携带的上下文已经失效，说明用户可能切换过文档，此时直接关闭菜单并放弃操作。
 function openPreviewAssetInExplorer() {
-  const assetInfo = previewAssetMenu.value.asset
-  const actionContext = previewAssetMenu.value.actionContext
-  if (!assetInfo?.resourceUrl || previewAssetSessionController.isActiveContext(actionContext) !== true) {
-    closePreviewAssetMenu()
+  const actionTarget = resolvePreviewAssetMenuActionTarget()
+  if (!actionTarget) {
     return
   }
   channelUtil.send({
     event: 'document.resource.open-in-folder',
     data: {
-      resourceUrl: assetInfo.resourceUrl,
-      rawPath: assetInfo.rawPath,
-      requestContext: previewAssetSessionController.createRequestContext(actionContext),
+      resourceUrl: actionTarget.assetInfo.resourceUrl,
+      rawPath: actionTarget.assetInfo.rawPath,
+      requestContext: actionTarget.requestContext,
     },
   })
 }

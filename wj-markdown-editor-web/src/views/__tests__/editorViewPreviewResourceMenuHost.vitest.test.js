@@ -8,26 +8,14 @@ const editorViewHostState = vi.hoisted(() => {
   return {
     store: null,
     snapshot: null,
-    previewResourceContext: {
-      type: 'resource',
-      menuPosition: {
-        x: 180,
-        y: 260,
-      },
-      asset: {
-        kind: 'image',
-        rawSrc: 'assets/demo.png',
-        rawPath: 'assets/demo.png',
-        resourceUrl: 'wj://document-resource/assets/demo.png',
-        occurrence: 1,
-        lineStart: 1,
-        lineEnd: 1,
-      },
-    },
+    previewResourceContext: null,
     channelSend: vi.fn(),
     channelSendSync: vi.fn(),
     modalConfirm: vi.fn(),
     messageWarning: vi.fn(),
+    messageSuccess: vi.fn(),
+    messageError: vi.fn(),
+    clipboardWriteText: vi.fn(),
     requestDocumentEdit: vi.fn(),
     requestDocumentSave: vi.fn(),
     requestDocumentSessionSnapshot: vi.fn(),
@@ -37,6 +25,45 @@ const editorViewHostState = vi.hoisted(() => {
     registerRouteLeave: vi.fn(),
   }
 })
+
+function createPreviewResourceContext({
+  sourceType = 'local',
+  assetType = 'image',
+  markdownReference = '![demo](assets/demo.png)',
+} = {}) {
+  return {
+    type: 'resource',
+    menuPosition: {
+      x: 180,
+      y: 260,
+    },
+    asset: {
+      assetType,
+      sourceType,
+      rawSrc: sourceType === 'remote' ? 'https://example.com/assets/demo.png' : 'assets/demo.png',
+      rawPath: sourceType === 'remote' ? null : 'assets/demo.png',
+      resourceUrl: sourceType === 'remote'
+        ? 'https://example.com/assets/demo.png'
+        : 'wj://document-resource/assets/demo.png',
+      markdownReference,
+      occurrence: 1,
+      lineStart: 1,
+      lineEnd: 1,
+    },
+  }
+}
+
+function createDeferred() {
+  let resolve
+  const promise = new Promise((nextResolve) => {
+    resolve = nextResolve
+  })
+
+  return {
+    promise,
+    resolve,
+  }
+}
 
 vi.mock('vue-i18n', () => ({
   useI18n() {
@@ -64,6 +91,8 @@ vi.mock('@ant-design/icons-vue', () => ({
 vi.mock('ant-design-vue', () => ({
   message: {
     warning: editorViewHostState.messageWarning,
+    success: editorViewHostState.messageSuccess,
+    error: editorViewHostState.messageError,
   },
   Modal: {
     confirm: editorViewHostState.modalConfirm,
@@ -322,14 +351,24 @@ async function mountEditorView() {
   return wrapper
 }
 
+async function openPreviewAssetMenu(wrapper, contextOptions = {}) {
+  editorViewHostState.previewResourceContext = createPreviewResourceContext(contextOptions)
+  await wrapper.get('[data-testid="emit-preview-resource-context"]').trigger('click')
+  await nextTick()
+}
+
 describe('editorView 预览资源菜单宿主接线', () => {
   beforeEach(() => {
     editorViewHostState.snapshot = createDocumentSessionSnapshot()
     editorViewHostState.store = createStore()
+    editorViewHostState.previewResourceContext = createPreviewResourceContext()
     editorViewHostState.channelSend.mockReset()
     editorViewHostState.channelSendSync.mockReset()
     editorViewHostState.modalConfirm.mockReset()
     editorViewHostState.messageWarning.mockReset()
+    editorViewHostState.messageSuccess.mockReset()
+    editorViewHostState.messageError.mockReset()
+    editorViewHostState.clipboardWriteText.mockReset()
     editorViewHostState.requestDocumentEdit.mockReset()
     editorViewHostState.requestDocumentSave.mockReset()
     editorViewHostState.requestDocumentSessionSnapshot.mockReset()
@@ -338,6 +377,7 @@ describe('editorView 预览资源菜单宿主接线', () => {
     editorViewHostState.syncClosePromptSnapshot.mockReset()
     editorViewHostState.registerRouteLeave.mockReset()
 
+    editorViewHostState.clipboardWriteText.mockResolvedValue(undefined)
     editorViewHostState.modalConfirm.mockImplementation(() => ({
       destroy: vi.fn(),
     }))
@@ -354,9 +394,17 @@ describe('editorView 预览资源菜单宿主接线', () => {
           isFile: true,
         }
       }
+
       return {
         ok: true,
       }
+    })
+
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: editorViewHostState.clipboardWriteText,
+      },
     })
   })
 
@@ -364,24 +412,181 @@ describe('editorView 预览资源菜单宿主接线', () => {
     editorViewHostState.store = null
   })
 
-  it('收到 MarkdownEdit 抛出的资源右键事件后，会把真实菜单项传给 PreviewAssetContextMenu', async () => {
+  it('收到 MarkdownEdit 抛出的本地图片资源右键事件后，会把新增菜单项和删除项一起传给 PreviewAssetContextMenu', async () => {
     const wrapper = await mountEditorView()
 
     expect(wrapper.get('[data-testid="preview-asset-context-menu-stub"]').attributes('data-open')).toBe('false')
 
-    await wrapper.get('[data-testid="emit-preview-resource-context"]').trigger('click')
-    await nextTick()
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
 
     expect(wrapper.get('[data-testid="preview-asset-context-menu-stub"]').attributes('data-open')).toBe('true')
+    expect(wrapper.find('[data-menu-key="resource.copy-absolute-path"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.copy-image"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.save-as"]').exists()).toBe(true)
     expect(wrapper.find('[data-menu-key="resource.open-in-folder"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.copy-markdown-reference"]').exists()).toBe(true)
     expect(wrapper.find('[data-menu-key="resource.delete"]').exists()).toBe(true)
+  })
+
+  it('收到 MarkdownEdit 抛出的远程图片资源右键事件后，会显示 copy-link 菜单项', async () => {
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+      markdownReference: '![demo](https://example.com/assets/demo.png)',
+    })
+
+    expect(wrapper.find('[data-menu-key="resource.copy-link"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.copy-image"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.save-as"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.copy-markdown-reference"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.delete"]').exists()).toBe(true)
+  })
+
+  it('选择 resource.copy-image 时，会发送 document.resource.copy-image，且不重复写文本剪贴板', async () => {
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
+    await wrapper.get('[data-menu-key="resource.copy-image"]').trigger('click')
+    await flushEditorView()
+
+    expect(editorViewHostState.channelSend).toHaveBeenCalledWith({
+      event: 'document.resource.copy-image',
+      data: {
+        sourceType: 'local',
+        resourceUrl: 'wj://document-resource/assets/demo.png',
+        rawSrc: 'assets/demo.png',
+        rawPath: 'assets/demo.png',
+        requestContext: {
+          sessionId: 'session-preview-menu',
+          documentPath: 'D:/docs/demo.md',
+        },
+      },
+    })
+    expect(editorViewHostState.clipboardWriteText).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageSuccess).toHaveBeenCalledWith('message.copySucceeded')
+  })
+
+  it('选择 resource.copy-absolute-path 时，必须等 runtime 返回文本后才写剪贴板', async () => {
+    const deferred = createDeferred()
+    editorViewHostState.channelSend.mockImplementation(async ({ event }) => {
+      if (event === 'document.resource.copy-absolute-path') {
+        return await deferred.promise
+      }
+      return {
+        ok: true,
+      }
+    })
+
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
+    await wrapper.get('[data-menu-key="resource.copy-absolute-path"]').trigger('click')
+    await nextTick()
+
+    expect(editorViewHostState.clipboardWriteText).not.toHaveBeenCalled()
+
+    deferred.resolve({
+      ok: true,
+      text: 'D:/docs/assets/demo.png',
+    })
+    await flushEditorView()
+
+    expect(editorViewHostState.clipboardWriteText).toHaveBeenCalledWith('D:/docs/assets/demo.png')
+    expect(editorViewHostState.messageSuccess).toHaveBeenCalledWith('message.copySucceeded')
+  })
+
+  it('选择 resource.copy-link 时，必须等 runtime 返回文本后才写剪贴板', async () => {
+    const deferred = createDeferred()
+    editorViewHostState.channelSend.mockImplementation(async ({ event }) => {
+      if (event === 'document.resource.copy-link') {
+        return await deferred.promise
+      }
+      return {
+        ok: true,
+      }
+    })
+
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+      markdownReference: '![demo](https://example.com/assets/demo.png)',
+    })
+    await wrapper.get('[data-menu-key="resource.copy-link"]').trigger('click')
+    await nextTick()
+
+    expect(editorViewHostState.clipboardWriteText).not.toHaveBeenCalled()
+
+    deferred.resolve({
+      ok: true,
+      text: 'https://example.com/assets/demo.png',
+    })
+    await flushEditorView()
+
+    expect(editorViewHostState.clipboardWriteText).toHaveBeenCalledWith('https://example.com/assets/demo.png')
+    expect(editorViewHostState.messageSuccess).toHaveBeenCalledWith('message.copySucceeded')
+  })
+
+  it('选择 resource.copy-markdown-reference 时，不经过 runtime，直接写入剪贴板', async () => {
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
+    await wrapper.get('[data-menu-key="resource.copy-markdown-reference"]').trigger('click')
+    await flushEditorView()
+
+    expect(editorViewHostState.channelSend).not.toHaveBeenCalled()
+    expect(editorViewHostState.clipboardWriteText).toHaveBeenCalledWith('![demo](assets/demo.png)')
+    expect(editorViewHostState.messageSuccess).toHaveBeenCalledWith('message.copySucceeded')
+  })
+
+  it('选择 resource.save-as 在 runtime 返回 cancelled 时必须静默结束', async () => {
+    editorViewHostState.channelSend.mockResolvedValue({
+      ok: false,
+      cancelled: true,
+      reason: 'cancelled',
+    })
+
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
+    await wrapper.get('[data-menu-key="resource.save-as"]').trigger('click')
+    await flushEditorView()
+
+    expect(editorViewHostState.channelSend).toHaveBeenCalledWith({
+      event: 'document.resource.save-as',
+      data: {
+        sourceType: 'local',
+        resourceUrl: 'wj://document-resource/assets/demo.png',
+        rawSrc: 'assets/demo.png',
+        rawPath: 'assets/demo.png',
+        requestContext: {
+          sessionId: 'session-preview-menu',
+          documentPath: 'D:/docs/demo.md',
+        },
+      },
+    })
+    expect(editorViewHostState.messageSuccess).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageWarning).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageError).not.toHaveBeenCalled()
   })
 
   it('选择 resource.open-in-folder 时，会沿用现有打开目录逻辑发出 document.resource.open-in-folder', async () => {
     const wrapper = await mountEditorView()
 
-    await wrapper.get('[data-testid="emit-preview-resource-context"]').trigger('click')
-    await nextTick()
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
     await wrapper.get('[data-menu-key="resource.open-in-folder"]').trigger('click')
     await flushEditorView()
 
@@ -401,8 +606,9 @@ describe('editorView 预览资源菜单宿主接线', () => {
   it('选择 resource.delete 时，会真正触发现有删除流程入口并拉起单引用确认', async () => {
     const wrapper = await mountEditorView()
 
-    await wrapper.get('[data-testid="emit-preview-resource-context"]').trigger('click')
-    await nextTick()
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
     await wrapper.get('[data-menu-key="resource.delete"]').trigger('click')
     await flushEditorView()
 

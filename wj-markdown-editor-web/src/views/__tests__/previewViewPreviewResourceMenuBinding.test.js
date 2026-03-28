@@ -46,23 +46,51 @@ test('纯预览页应用 snapshot 时必须同步 previewAssetSessionController�
   )
 })
 
-test('纯预览页菜单选择与资源打开都必须基于 controller requestContext 继续走 document.resource.open-in-folder', () => {
+test('纯预览页菜单选择必须覆盖新增非删除动作，并继续基于冻结 actionContext 发命令', () => {
   const source = readPreviewViewSource()
 
   assert.match(
     source,
-    /function onPreviewAssetMenuSelect\(actionKey\) \{[\s\S]*?actionKey === 'resource\.open-in-folder'[\s\S]*?openPreviewAssetInExplorer\(\)/u,
+    /function onPreviewAssetMenuSelect\(actionKey\) \{[\s\S]*?actionKey === 'resource\.copy-absolute-path'[\s\S]*?copyPreviewAssetAbsolutePath\(\)[\s\S]*?actionKey === 'resource\.copy-link'[\s\S]*?copyPreviewAssetLink\(\)[\s\S]*?actionKey === 'resource\.copy-image'[\s\S]*?copyPreviewAssetImage\(\)[\s\S]*?actionKey === 'resource\.save-as'[\s\S]*?savePreviewAssetAs\(\)[\s\S]*?actionKey === 'resource\.open-in-folder'[\s\S]*?openPreviewAssetInExplorer\(\)[\s\S]*?actionKey === 'resource\.copy-markdown-reference'[\s\S]*?copyPreviewAssetMarkdownReference\(\)/u,
   )
   assert.match(
     source,
-    /function openPreviewAssetInExplorer\(\) \{[\s\S]*?previewAssetSessionController\.isActiveContext\(actionContext\) !== true[\s\S]*?closePreviewAssetMenu\(\)[\s\S]*?event:\s*'document\.resource\.open-in-folder'[\s\S]*?requestContext:\s*previewAssetSessionController\.createRequestContext\(actionContext\)/u,
+    /function resolvePreviewAssetMenuActionTarget\(options = \{\}\) \{[\s\S]*?previewAssetSessionController\.createRequestContext\(actionContext\)/u,
   )
   assert.match(
     source,
-    /function onAssetOpen\(assetInfo\) \{[\s\S]*?const actionContext = previewAssetSessionController\.captureActionContext\(\)/u,
+    /function openPreviewAssetInExplorer\(\) \{[\s\S]*?resolvePreviewAssetMenuActionTarget\(\)[\s\S]*?event:\s*'document\.resource\.open-in-folder'[\s\S]*?requestContext:\s*actionTarget\.requestContext/u,
   )
   assert.match(
     source,
-    /function onAssetOpen\(assetInfo\) \{[\s\S]*?event:\s*'document\.resource\.open-in-folder'[\s\S]*?requestContext:\s*previewAssetSessionController\.createRequestContext\(actionContext\)/u,
+    /function onAssetOpen\(assetInfo\) \{[\s\S]*?const actionContext = previewAssetSessionController\.captureActionContext\(\)[\s\S]*?event:\s*'document\.resource\.open-in-folder'[\s\S]*?requestContext:\s*previewAssetSessionController\.createRequestContext\(actionContext\)/u,
+  )
+  assert.match(
+    source,
+    /function copyPreviewAssetAbsolutePath\(\) \{[\s\S]*?copyPreviewAssetTextFromRuntime\('document\.resource\.copy-absolute-path'\)/u,
+  )
+  assert.match(
+    source,
+    /function copyPreviewAssetLink\(\) \{[\s\S]*?copyPreviewAssetTextFromRuntime\('document\.resource\.copy-link'\)/u,
+  )
+  assert.match(
+    source,
+    /function copyPreviewAssetImage\(\) \{[\s\S]*?event:\s*'document\.resource\.copy-image'/u,
+  )
+  assert.match(
+    source,
+    /function savePreviewAssetAs\(\) \{[\s\S]*?event:\s*'document\.resource\.save-as'/u,
+  )
+  assert.match(
+    source,
+    /copyPreviewAssetMarkdownReference\(\)[\s\S]*?markdownReference[\s\S]*?navigator\.clipboard\.writeText\(text\)/u,
+  )
+  assert.doesNotMatch(
+    source,
+    /resource\.delete/u,
+  )
+  assert.doesNotMatch(
+    source,
+    /document\.resource\.delete-local/u,
   )
 })
