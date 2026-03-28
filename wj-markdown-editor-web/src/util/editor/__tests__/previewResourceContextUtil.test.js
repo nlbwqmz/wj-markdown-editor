@@ -220,3 +220,15 @@ test('预览资源上下文遇到仅查询串输入时必须 fail-closed 返回 
     resourceUrl: '?foo=1',
   }), null)
 })
+
+test('预览资源上下文遇到 file:// 资源地址时必须 fail-closed 返回 null', () => {
+  assert.ok(previewResourceContextUtilModule, '缺少 preview resource context util')
+
+  const { createPreviewResourceContext } = previewResourceContextUtilModule
+  assert.equal(createPreviewResourceContext({
+    assetType: 'image',
+    rawSrc: 'file:///C:/docs/demo.png',
+    rawPath: 'file:///C:/docs/demo.png',
+    resourceUrl: 'file:///C:/docs/demo.png',
+  }), null)
+})

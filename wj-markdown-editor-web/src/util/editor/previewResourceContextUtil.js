@@ -7,6 +7,7 @@ const DANGEROUS_SCHEME_SET = new Set([
   'chrome',
   'data',
   'edge',
+  'file',
   'ftp',
   'ftps',
   'http',
@@ -80,7 +81,7 @@ function isStableLocalSource(value) {
     return false
   }
 
-  if (/^wj:\/\//iu.test(value) || /^file:\/\//iu.test(value)) {
+  if (/^wj:\/\//iu.test(value)) {
     return true
   }
 
