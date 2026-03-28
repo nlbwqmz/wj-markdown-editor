@@ -382,6 +382,48 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
     stat.mockReset()
   })
 
+  it('rawPath 和 resourceUrl 同时可解析但目标不一致时，应该返回固定冲突错误', async () => {
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      documentPath: 'D:\\docs\\note.md',
+    }, {
+      rawPath: './assets/from-raw.png',
+      resourceUrl: convertResourceUrl('./assets/from-url.png'),
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'resource-path-conflict',
+      decodedPath: './assets/from-raw.png',
+      exists: false,
+      isDirectory: false,
+      isFile: false,
+      path: 'D:\\docs\\assets\\from-raw.png',
+    })
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+  })
+
+  it('documentPath 为 null 且 rawPath 是相对路径时，禁止回退到 resourceUrl', async () => {
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      documentPath: null,
+    }, {
+      rawPath: './assets/demo.png',
+      resourceUrl: convertResourceUrl('D:/images/demo.png'),
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'relative-resource-without-document',
+      decodedPath: './assets/demo.png',
+      exists: false,
+      isDirectory: false,
+      isFile: false,
+      path: null,
+    })
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+  })
+
   it('文件存在时，应该返回文件资源信息', async () => {
     pathExists.mockResolvedValue(true)
     stat.mockResolvedValue({

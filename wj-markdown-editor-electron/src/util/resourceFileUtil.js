@@ -14,6 +14,16 @@ function createResolveResult(ok, reason, options = {}) {
   }
 }
 
+function createResolvedTargetResult(ok, reason, options = {}) {
+  return {
+    ok,
+    reason,
+    decodedPath: options.decodedPath ?? null,
+    path: options.path ?? null,
+    fallbackPath: options.fallbackPath ?? null,
+  }
+}
+
 function getLocalResourceFailureMessageKey(reason) {
   if (reason === 'not-found') {
     return 'message.theFileDoesNotExist'
@@ -28,6 +38,9 @@ function getLocalResourceFailureMessageKey(reason) {
     return 'message.openResourceLocationFailed'
   }
   if (reason === 'invalid-resource-url' || reason === 'invalid-resource-payload') {
+    return 'message.invalidLocalResourceLink'
+  }
+  if (reason === 'resource-path-conflict') {
     return 'message.invalidLocalResourceLink'
   }
   return null
@@ -70,6 +83,63 @@ function createComparableKey(resolvedPath) {
   const normalizedPath = resolvedPath.replace(/\\/g, '/')
   const comparablePath = /^[a-z]:\//i.test(normalizedPath) ? normalizedPath.toLowerCase() : normalizedPath
   return `wj-local-file:${comparablePath}`
+}
+
+function normalizeStringValue(value) {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmedValue = value.trim()
+  return trimmedValue || null
+}
+
+function isWindowsAbsolutePath(targetPath) {
+  return typeof targetPath === 'string' && /^[a-z]:[\\/]/i.test(targetPath)
+}
+
+const DANGEROUS_SCHEME_SET = new Set([
+  'about',
+  'blob',
+  'chrome',
+  'data',
+  'edge',
+  'file',
+  'ftp',
+  'ftps',
+  'http',
+  'https',
+  'javascript',
+  'mailto',
+  'sftp',
+  'smb',
+  'ssh',
+  'tel',
+  'view-source',
+  'ws',
+  'wss',
+])
+
+function getScheme(targetPath) {
+  if (typeof targetPath !== 'string') {
+    return null
+  }
+
+  const schemeMatch = /^([a-z][a-z\d+.-]*):/i.exec(targetPath)
+  return schemeMatch ? schemeMatch[1].toLowerCase() : null
+}
+
+function isDangerousExplicitSource(targetPath) {
+  const scheme = getScheme(targetPath)
+  if (!scheme) {
+    return false
+  }
+
+  if (DANGEROUS_SCHEME_SET.has(scheme)) {
+    return true
+  }
+
+  return targetPath.slice(scheme.length + 1).startsWith('//')
 }
 
 function normalizeResourceOpenInput(resourceData) {
@@ -116,18 +186,41 @@ function attachResourceErrorContext(error, { decodedPath, resolvedPath }) {
   return error
 }
 
-function resolveRawLocalPath(documentContext, rawPath) {
-  if (!rawPath || typeof rawPath !== 'string') {
+function resolveDecodedLocalPath(documentContext, decodedPath) {
+  if (!decodedPath || typeof decodedPath !== 'string') {
     return null
   }
-  if (path.isAbsolute(rawPath)) {
-    return path.normalize(rawPath)
+
+  if (path.isAbsolute(decodedPath)) {
+    return path.normalize(decodedPath)
   }
+
   const documentPath = getDocumentPathFromContext(documentContext)
   if (!documentPath) {
     return null
   }
-  return path.resolve(path.dirname(documentPath), rawPath)
+
+  return path.resolve(path.dirname(documentPath), decodedPath)
+}
+
+function resolveDecodedAbsolutePath(decodedPath, options = {}) {
+  if (path.isAbsolute(decodedPath) !== true) {
+    return null
+  }
+
+  if (options.normalizeAbsolutePath === true) {
+    return path.normalize(decodedPath)
+  }
+
+  return decodedPath
+}
+
+function resolveRawLocalPath(documentContext, rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') {
+    return null
+  }
+
+  return resolveDecodedLocalPath(documentContext, decodeRawLocalPath(rawPath))
 }
 
 function decodeRawLocalPath(rawPath) {
@@ -156,132 +249,245 @@ function extractRawPathname(rawPath) {
   return rawPath.slice(0, Math.min(...suffixIndexList))
 }
 
-function getLocalResourceComparableKey(documentContext, rawPath) {
-  if (!rawPath || typeof rawPath !== 'string') {
+function resolveRawPathFallbackPath(documentContext, rawPath) {
+  const normalizedRawPath = normalizeStringValue(rawPath)
+  if (!normalizedRawPath) {
     return null
   }
 
-  const trimmedRawPath = rawPath.trim()
-  if (!trimmedRawPath || trimmedRawPath.startsWith('#') || trimmedRawPath.startsWith('//')) {
+  const pathname = extractRawPathname(normalizedRawPath)
+  if (pathname === normalizedRawPath) {
     return null
   }
 
-  const hasExplicitScheme = /^[a-z][a-z\d+.-]*:/i.test(trimmedRawPath)
-  const isWindowsAbsolutePath = /^[a-z]:[\\/]/i.test(trimmedRawPath)
-  if (hasExplicitScheme && !isWindowsAbsolutePath) {
-    return null
-  }
-
-  const exactResolvedPath = resolveRawLocalPath(documentContext, trimmedRawPath)
-  if (pathExistsSyncSafe(exactResolvedPath)) {
-    return createComparableKey(exactResolvedPath)
-  }
-
-  const pathname = extractRawPathname(trimmedRawPath)
-  if (pathname !== trimmedRawPath) {
-    const pathnameResolvedPath = resolveRawLocalPath(documentContext, pathname)
-    if (pathExistsSyncSafe(pathnameResolvedPath)) {
-      return createComparableKey(pathnameResolvedPath)
-    }
-    return null
-  }
-
-  return createComparableKey(exactResolvedPath)
+  return resolveRawLocalPath(documentContext, pathname)
 }
 
-async function enrichResolvedPath(decodedPath, resolvedPath) {
-  try {
-    if (!await fs.pathExists(resolvedPath)) {
-      return createResolveResult(true, 'resolved', {
-        decodedPath,
-        path: resolvedPath,
-      })
-    }
+function createRawPathCandidate(documentContext, rawPath) {
+  const normalizedRawPath = normalizeStringValue(rawPath)
+  if (!normalizedRawPath) {
+    return createResolvedTargetResult(false, 'missing-raw-path')
+  }
 
-    const resourceStat = await fs.stat(resolvedPath)
-    return createResolveResult(true, 'resolved', {
+  if (normalizedRawPath.startsWith('#') || normalizedRawPath.startsWith('//')) {
+    return {
+      participates: false,
+    }
+  }
+
+  const decodedPath = decodeRawLocalPath(normalizedRawPath)
+  if (isDangerousExplicitSource(decodedPath) && !isWindowsAbsolutePath(decodedPath)) {
+    return {
+      participates: false,
+    }
+  }
+
+  const resolvedPath = resolveDecodedAbsolutePath(decodedPath, {
+    normalizeAbsolutePath: true,
+  }) || resolveDecodedLocalPath(documentContext, decodedPath)
+  if (!resolvedPath) {
+    return {
+      participates: true,
+      ...createResolvedTargetResult(false, 'relative-resource-without-document', {
+        decodedPath,
+      }),
+    }
+  }
+
+  return {
+    participates: true,
+    ...createResolvedTargetResult(true, 'resolved', {
       decodedPath,
       path: resolvedPath,
-      exists: true,
-      isDirectory: resourceStat.isDirectory(),
-      isFile: resourceStat.isFile(),
-    })
-  } catch (error) {
-    throw attachResourceErrorContext(error, {
-      decodedPath,
-      resolvedPath,
-    })
+      fallbackPath: resolveRawPathFallbackPath(documentContext, normalizedRawPath),
+    }),
   }
 }
 
-async function resolveLocalResource(documentContext, resourceUrl) {
-  if (!resourceUrl || typeof resourceUrl !== 'string' || !resourceUrl.startsWith('wj://')) {
-    return createResolveResult(false, 'invalid-resource-url')
+function createResourceUrlCandidate(documentContext, resourceUrl) {
+  const normalizedResourceUrl = normalizeStringValue(resourceUrl)
+  if (!normalizedResourceUrl) {
+    return {
+      participates: false,
+    }
+  }
+
+  if (!normalizedResourceUrl.startsWith('wj://')) {
+    return {
+      participates: false,
+    }
   }
 
   let decodedPath = null
   try {
-    decodedPath = commonUtil.decodeWjUrl(resourceUrl)
+    decodedPath = commonUtil.decodeWjUrl(normalizedResourceUrl)
   } catch {
-    return createResolveResult(false, 'invalid-resource-payload')
+    return {
+      participates: true,
+      ...createResolvedTargetResult(false, 'invalid-resource-payload'),
+    }
   }
 
-  if (path.isAbsolute(decodedPath)) {
-    return await enrichResolvedPath(decodedPath, decodedPath)
+  const resolvedPath = resolveDecodedAbsolutePath(decodedPath, {
+    normalizeAbsolutePath: false,
+  }) || resolveDecodedLocalPath(documentContext, decodedPath)
+  if (!resolvedPath) {
+    return {
+      participates: true,
+      ...createResolvedTargetResult(false, 'relative-resource-without-document', {
+        decodedPath,
+      }),
+    }
   }
 
-  const documentPath = getDocumentPathFromContext(documentContext)
-  if (!documentPath) {
-    return createResolveResult(false, 'relative-resource-without-document', {
+  return {
+    participates: true,
+    ...createResolvedTargetResult(true, 'resolved', {
       decodedPath,
+      path: resolvedPath,
+    }),
+  }
+}
+
+function isSameResolvedPath(firstPath, secondPath) {
+  if (!firstPath || !secondPath) {
+    return false
+  }
+
+  const normalizedFirstPath = firstPath.replace(/\\/g, '/')
+  const normalizedSecondPath = secondPath.replace(/\\/g, '/')
+  const comparableFirstPath = /^[a-z]:\//i.test(normalizedFirstPath)
+    ? normalizedFirstPath.toLowerCase()
+    : normalizedFirstPath
+  const comparableSecondPath = /^[a-z]:\//i.test(normalizedSecondPath)
+    ? normalizedSecondPath.toLowerCase()
+    : normalizedSecondPath
+
+  return comparableFirstPath === comparableSecondPath
+}
+
+function resolveLocalResourceTarget(documentContext, resourceData) {
+  const normalizedResourceData = normalizeResourceOpenInput(resourceData)
+  const rawPathCandidate = createRawPathCandidate(documentContext, normalizedResourceData.rawPath)
+  const resourceUrlCandidate = createResourceUrlCandidate(documentContext, normalizedResourceData.resourceUrl)
+
+  if (rawPathCandidate.participates === true) {
+    if (rawPathCandidate.ok !== true) {
+      return createResolvedTargetResult(false, rawPathCandidate.reason, {
+        decodedPath: rawPathCandidate.decodedPath,
+        path: rawPathCandidate.path,
+      })
+    }
+
+    if (resourceUrlCandidate.participates === true
+      && resourceUrlCandidate.ok === true
+      && isSameResolvedPath(rawPathCandidate.path, resourceUrlCandidate.path) !== true) {
+      return createResolvedTargetResult(false, 'resource-path-conflict', {
+        decodedPath: rawPathCandidate.decodedPath,
+        path: rawPathCandidate.path,
+      })
+    }
+
+    return createResolvedTargetResult(true, 'resolved', {
+      decodedPath: rawPathCandidate.decodedPath,
+      path: rawPathCandidate.path,
+      fallbackPath: rawPathCandidate.fallbackPath,
     })
   }
 
-  return await enrichResolvedPath(
-    decodedPath,
-    path.resolve(path.dirname(documentPath), decodedPath),
-  )
+  if (resourceUrlCandidate.participates === true) {
+    return createResolvedTargetResult(resourceUrlCandidate.ok, resourceUrlCandidate.reason, {
+      decodedPath: resourceUrlCandidate.decodedPath,
+      path: resourceUrlCandidate.path,
+      fallbackPath: resourceUrlCandidate.fallbackPath,
+    })
+  }
+
+  return createResolvedTargetResult(false, 'invalid-resource-url')
+}
+
+function getCandidateResolvedPathList(target, options = {}) {
+  const resolvedPathList = []
+  if (target?.path) {
+    resolvedPathList.push(target.path)
+  }
+
+  if (options.preferPathnameFallback === true
+    && target?.fallbackPath
+    && isSameResolvedPath(target.path, target.fallbackPath) !== true) {
+    resolvedPathList.push(target.fallbackPath)
+  }
+
+  return resolvedPathList
+}
+
+async function enrichResolvedPath(decodedPath, target, options = {}) {
+  const resolvedPathList = getCandidateResolvedPathList(target, options)
+  let inspectedPath = target?.path ?? null
+  try {
+    for (const resolvedPath of resolvedPathList) {
+      inspectedPath = resolvedPath
+      if (!await fs.pathExists(resolvedPath)) {
+        continue
+      }
+
+      const resourceStat = await fs.stat(resolvedPath)
+      return createResolveResult(true, 'resolved', {
+        decodedPath,
+        path: resolvedPath,
+        exists: true,
+        isDirectory: resourceStat.isDirectory(),
+        isFile: resourceStat.isFile(),
+      })
+    }
+
+    return createResolveResult(true, 'resolved', {
+      decodedPath,
+      path: target?.path ?? null,
+    })
+  } catch (error) {
+    throw attachResourceErrorContext(error, {
+      decodedPath,
+      resolvedPath: inspectedPath,
+    })
+  }
+}
+
+async function resolveLocalResource(documentContext, resourceData, options = {}) {
+  const target = resolveLocalResourceTarget(documentContext, resourceData)
+  if (target.ok !== true) {
+    return createResolveResult(false, target.reason, {
+      decodedPath: target.decodedPath,
+      path: target.path,
+    })
+  }
+
+  return await enrichResolvedPath(target.decodedPath, target, {
+    preferPathnameFallback: options.preferPathnameFallback === true,
+  })
 }
 
 /**
  * 解析本地资源对应的真实文件路径
  * @param {object} documentContext - 当前文档上下文
- * @param {string} resourceUrl - wj 协议资源地址
+ * @param {string | object} resourceData - 资源地址或带原始路径的资源负载
  * @returns {string | null} 解析后的本地文件路径，无法解析时返回 null
  */
-function resolveLocalResourcePath(documentContext, resourceUrl) {
-  if (!resourceUrl || typeof resourceUrl !== 'string' || !resourceUrl.startsWith('wj://')) {
-    return null
-  }
-
-  let decodedPath = null
-  try {
-    decodedPath = commonUtil.decodeWjUrl(resourceUrl)
-  } catch {
-    return null
-  }
-
-  if (path.isAbsolute(decodedPath)) {
-    return decodedPath
-  }
-  const documentPath = getDocumentPathFromContext(documentContext)
-  if (!documentPath) {
-    return null
-  }
-
-  return path.resolve(path.dirname(documentPath), decodedPath)
+function resolveLocalResourcePath(documentContext, resourceData) {
+  const target = resolveLocalResourceTarget(documentContext, resourceData)
+  return target.ok === true ? target.path : null
 }
 
 /**
  * 删除本地资源文件，不存在时直接忽略
  * @param {object} documentContext - 当前文档上下文
- * @param {string} resourceUrl - wj 协议资源地址
+ * @param {string | object} resourceData - 资源地址或带原始路径的资源负载
  * @returns {Promise<object>} 结构化删除结果
  */
-async function deleteLocalResource(documentContext, resourceUrl) {
-  let resolvedPath = resolveLocalResourcePath(documentContext, resourceUrl)
+async function deleteLocalResource(documentContext, resourceData) {
+  let resolvedPath = resolveLocalResourcePath(documentContext, resourceData)
   try {
-    const resourceInfo = await resolveLocalResource(documentContext, resourceUrl)
+    const resourceInfo = await resolveLocalResource(documentContext, resourceData)
     resolvedPath = resourceInfo.path
     if (resourceInfo.ok !== true) {
       return createDeleteResult(false, false, resourceInfo.reason, resourceInfo.path)
@@ -309,25 +515,14 @@ async function deleteLocalResource(documentContext, resourceUrl) {
 }
 
 async function openLocalResourceInFolder(documentContext, resourceUrl, showItemInFolder) {
-  const { resourceUrl: normalizedResourceUrl, rawPath } = normalizeResourceOpenInput(resourceUrl)
-  let resolvedPath = resolveLocalResourcePath(documentContext, normalizedResourceUrl)
+  let resolvedPath = resolveLocalResourcePath(documentContext, resourceUrl)
   try {
-    const resourceInfo = await resolveLocalResource(documentContext, normalizedResourceUrl)
+    const resourceInfo = await resolveLocalResource(documentContext, resourceUrl, {
+      preferPathnameFallback: true,
+    })
     resolvedPath = resourceInfo.path
     if (resourceInfo.ok !== true) {
       return createOpenFolderResult(false, false, resourceInfo.reason, resourceInfo.path)
-    }
-
-    if (resourceInfo.exists !== true && rawPath) {
-      const pathname = extractRawPathname(rawPath)
-      if (pathname !== rawPath) {
-        const pathnameResolvedPath = resolveRawLocalPath(documentContext, decodeRawLocalPath(pathname))
-        if (pathnameResolvedPath && await fs.pathExists(pathnameResolvedPath)) {
-          resolvedPath = pathnameResolvedPath
-          showItemInFolder(pathnameResolvedPath)
-          return createOpenFolderResult(true, true, 'opened', pathnameResolvedPath)
-        }
-      }
     }
 
     if (resourceInfo.exists !== true) {
@@ -347,7 +542,9 @@ async function openLocalResourceInFolder(documentContext, resourceUrl, showItemI
 async function getLocalResourceInfo(documentContext, resourceUrl) {
   let resolvedPath = resolveLocalResourcePath(documentContext, resourceUrl)
   try {
-    const resolveResult = await resolveLocalResource(documentContext, resourceUrl)
+    const resolveResult = await resolveLocalResource(documentContext, resourceUrl, {
+      preferPathnameFallback: true,
+    })
     return createResourceInfoResult(resolveResult.ok, resolveResult.path, resolveResult)
   } catch (error) {
     resolvedPath = error?.resourcePath ?? resolvedPath
@@ -358,12 +555,36 @@ async function getLocalResourceInfo(documentContext, resourceUrl) {
   }
 }
 
+function getLocalResourceComparableKey(documentContext, resourceData) {
+  const target = resolveLocalResourceTarget(
+    documentContext,
+    typeof resourceData === 'string'
+      ? { rawPath: resourceData }
+      : resourceData,
+  )
+  if (target.ok !== true) {
+    return null
+  }
+
+  const resolvedPathList = getCandidateResolvedPathList(target, {
+    preferPathnameFallback: true,
+  })
+  for (const resolvedPath of resolvedPathList) {
+    if (pathExistsSyncSafe(resolvedPath)) {
+      return createComparableKey(resolvedPath)
+    }
+  }
+
+  return createComparableKey(target.path)
+}
+
 export default {
   getLocalResourceFailureMessageKey,
   getLocalResourceComparableKey,
   openLocalResourceInFolder,
   getLocalResourceInfo,
   resolveLocalResource,
+  resolveLocalResourceTarget,
   resolveLocalResourcePath,
   deleteLocalResource,
 }

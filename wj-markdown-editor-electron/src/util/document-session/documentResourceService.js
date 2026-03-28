@@ -1,5 +1,38 @@
+import path from 'node:path'
 import resourceFileUtil from '../resourceFileUtil.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
+
+const DANGEROUS_SCHEME_SET = new Set([
+  'about',
+  'blob',
+  'chrome',
+  'data',
+  'edge',
+  'file',
+  'ftp',
+  'ftps',
+  'javascript',
+  'mailto',
+  'sftp',
+  'smb',
+  'ssh',
+  'tel',
+  'view-source',
+  'ws',
+  'wss',
+])
+
+const IMAGE_CONTENT_TYPE_EXTENSION_MAP = new Map([
+  ['image/png', '.png'],
+  ['image/jpeg', '.jpg'],
+  ['image/jpg', '.jpg'],
+  ['image/gif', '.gif'],
+  ['image/webp', '.webp'],
+  ['image/svg+xml', '.svg'],
+  ['image/bmp', '.bmp'],
+  ['image/x-icon', '.ico'],
+  ['image/vnd.microsoft.icon', '.ico'],
+])
 
 function normalizeComparablePath(targetPath) {
   if (typeof targetPath !== 'string' || targetPath.trim() === '') {
@@ -22,22 +55,187 @@ function getSessionByWindowIdOrThrow(store, windowId) {
   return session
 }
 
+function normalizeStringValue(value) {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmedValue = value.trim()
+  return trimmedValue || null
+}
+
+function normalizeSourceType(value) {
+  return value === 'local' || value === 'remote' ? value : null
+}
+
+function getSourceScheme(value) {
+  const normalizedValue = normalizeStringValue(value)
+  if (!normalizedValue) {
+    return null
+  }
+
+  const schemeMatch = /^([a-z][a-z\d+.-]*):/i.exec(normalizedValue)
+  return schemeMatch ? schemeMatch[1].toLowerCase() : null
+}
+
+function classifySourceCandidate(value) {
+  const normalizedValue = normalizeStringValue(value)
+  if (!normalizedValue) {
+    return null
+  }
+
+  if (/^https?:\/\//i.test(normalizedValue)) {
+    return 'remote'
+  }
+
+  if (normalizedValue.startsWith('wj://')) {
+    return 'local'
+  }
+
+  if (normalizedValue.startsWith('#') || normalizedValue.startsWith('//')) {
+    return 'dangerous'
+  }
+
+  const scheme = getSourceScheme(normalizedValue)
+  if (!scheme) {
+    return 'local'
+  }
+
+  if (/^[a-z]:[\\/]/i.test(normalizedValue)) {
+    return 'local'
+  }
+
+  if (DANGEROUS_SCHEME_SET.has(scheme) || normalizedValue.slice(scheme.length + 1).startsWith('//')) {
+    return 'dangerous'
+  }
+
+  return 'local'
+}
+
+function resolveRuntimeSourceType(payload) {
+  const candidateTypeList = [
+    classifySourceCandidate(payload?.resourceUrl),
+    classifySourceCandidate(payload?.rawSrc),
+    classifySourceCandidate(payload?.rawPath),
+  ].filter(Boolean)
+
+  if (candidateTypeList.length === 0 || candidateTypeList.includes('dangerous')) {
+    return null
+  }
+
+  const hasLocalSource = candidateTypeList.includes('local')
+  const hasRemoteSource = candidateTypeList.includes('remote')
+  if (hasLocalSource && hasRemoteSource) {
+    return null
+  }
+
+  if (hasRemoteSource) {
+    return 'remote'
+  }
+
+  return hasLocalSource ? 'local' : null
+}
+
+function normalizeContentType(contentType) {
+  const normalizedContentType = normalizeStringValue(contentType)
+  if (!normalizedContentType) {
+    return null
+  }
+
+  return normalizedContentType.split(';')[0].trim().toLowerCase()
+}
+
+function getImageExtensionFromContentType(contentType) {
+  return IMAGE_CONTENT_TYPE_EXTENSION_MAP.get(normalizeContentType(contentType)) || null
+}
+
+function sanitizeFileName(fileName) {
+  const normalizedFileName = normalizeStringValue(fileName)
+  if (!normalizedFileName) {
+    return null
+  }
+
+  const safeFileName = normalizedFileName.replace(/[<>:"/\\|?*]/g, '-')
+  return safeFileName || null
+}
+
+function deriveLocalFileName(targetPath) {
+  const normalizedPath = normalizeStringValue(targetPath)
+  if (!normalizedPath) {
+    return 'image.png'
+  }
+
+  return sanitizeFileName(path.basename(normalizedPath)) || 'image.png'
+}
+
+function deriveRemoteFileName(remoteUrl, contentType) {
+  let remoteFileName = null
+  try {
+    const urlObject = new URL(remoteUrl)
+    const pathName = typeof urlObject.pathname === 'string' ? decodeURIComponent(urlObject.pathname) : ''
+    remoteFileName = sanitizeFileName(path.posix.basename(pathName))
+  } catch {
+    remoteFileName = null
+  }
+
+  const imageExtension = getImageExtensionFromContentType(contentType) || '.png'
+  if (!remoteFileName || remoteFileName === '.') {
+    return `image${imageExtension}`
+  }
+
+  if (path.extname(remoteFileName)) {
+    return remoteFileName
+  }
+
+  return `${remoteFileName}${imageExtension}`
+}
+
+function createTextCopySuccessResult(text, options = {}) {
+  return {
+    ok: true,
+    reason: 'copied',
+    text,
+    ...(options.path ? { path: options.path } : {}),
+  }
+}
+
+function createTextCopyFailureResult(reason, options = {}) {
+  return {
+    ok: false,
+    reason,
+    text: null,
+    ...(options.path !== undefined ? { path: options.path } : {}),
+  }
+}
+
+function createBinaryActionFailureResult(reason, options = {}) {
+  return {
+    ok: false,
+    reason,
+    ...(options.path ? { path: options.path } : {}),
+  }
+}
+
 function normalizeResourcePayload(payload) {
   if (typeof payload === 'string') {
     return {
+      sourceType: null,
       resourceUrl: payload,
+      rawSrc: null,
       rawPath: null,
       requestContext: null,
     }
   }
 
   return {
-    resourceUrl: typeof payload?.resourceUrl === 'string' ? payload.resourceUrl : null,
-    rawPath: typeof payload?.rawPath === 'string' ? payload.rawPath : null,
+    sourceType: normalizeSourceType(payload?.sourceType),
+    resourceUrl: normalizeStringValue(payload?.resourceUrl),
+    rawSrc: normalizeStringValue(payload?.rawSrc),
+    rawPath: normalizeStringValue(payload?.rawPath),
     requestContext: payload?.requestContext && typeof payload.requestContext === 'object'
       ? {
-          sessionId: typeof payload.requestContext.sessionId === 'string' ? payload.requestContext.sessionId : null,
-          documentPath: typeof payload.requestContext.documentPath === 'string' ? payload.requestContext.documentPath : null,
+          sessionId: normalizeStringValue(payload.requestContext.sessionId),
+          documentPath: normalizeStringValue(payload.requestContext.documentPath),
         }
       : null,
   }
@@ -45,9 +243,14 @@ function normalizeResourcePayload(payload) {
 
 function normalizeComparablePayload(payload) {
   if (typeof payload === 'string') {
-    return payload
+    return {
+      rawPath: payload,
+    }
   }
-  return typeof payload?.rawPath === 'string' ? payload.rawPath : null
+  return {
+    rawPath: normalizeStringValue(payload?.rawPath),
+    resourceUrl: normalizeStringValue(payload?.resourceUrl),
+  }
 }
 
 function createResourceContext(session) {
@@ -72,6 +275,11 @@ function createResourceContext(session) {
 export function createDocumentResourceService({
   store,
   showItemInFolder = () => {},
+  dialogApi = null,
+  clipboardApi = null,
+  nativeImageApi = null,
+  fetchImpl = null,
+  fsModule = null,
 }) {
   function isStaleRequestContext(session, requestContext) {
     if (!requestContext) {
@@ -96,65 +304,332 @@ export function createDocumentResourceService({
     return createResourceContext(session)
   }
 
-  async function openInFolder({ windowId, payload }) {
+  function getFreshActionContext(windowId, payload, staleResultFactory) {
     const session = getSessionByWindowIdOrThrow(store, windowId)
     const normalizedPayload = normalizeResourcePayload(payload)
     if (isStaleRequestContext(session, normalizedPayload.requestContext)) {
       return {
-        ok: false,
-        opened: false,
-        reason: 'stale-document-context',
-        path: null,
+        error: staleResultFactory(),
       }
     }
 
-    const documentContext = createResourceContext(session)
-    return await resourceFileUtil.openLocalResourceInFolder(
-      documentContext,
+    return {
+      session,
       normalizedPayload,
+      documentContext: createResourceContext(session),
+    }
+  }
+
+  function isSourceTypeAccepted(payload, expectedSourceType) {
+    const runtimeSourceType = resolveRuntimeSourceType(payload)
+    if (runtimeSourceType !== expectedSourceType) {
+      return false
+    }
+
+    if (payload?.sourceType && payload.sourceType !== runtimeSourceType) {
+      return false
+    }
+
+    return true
+  }
+
+  async function readLocalImageBuffer(documentContext, payload) {
+    const resourceInfo = await resourceFileUtil.resolveLocalResource(documentContext, payload, {
+      preferPathnameFallback: true,
+    })
+    if (resourceInfo.ok !== true) {
+      return createBinaryActionFailureResult(resourceInfo.reason, {
+        path: resourceInfo.path,
+      })
+    }
+
+    if (resourceInfo.exists !== true) {
+      return createBinaryActionFailureResult('not-found', {
+        path: resourceInfo.path,
+      })
+    }
+
+    if (resourceInfo.isDirectory === true) {
+      return createBinaryActionFailureResult('directory-not-allowed', {
+        path: resourceInfo.path,
+      })
+    }
+
+    if (resourceInfo.isFile !== true) {
+      return createBinaryActionFailureResult('unsupported-target', {
+        path: resourceInfo.path,
+      })
+    }
+
+    try {
+      const buffer = await fsModule?.readFile?.(resourceInfo.path)
+      return {
+        ok: true,
+        buffer,
+        path: resourceInfo.path,
+        fileName: deriveLocalFileName(resourceInfo.path),
+      }
+    } catch {
+      return createBinaryActionFailureResult('read-local-resource-failed', {
+        path: resourceInfo.path,
+      })
+    }
+  }
+
+  async function fetchRemoteImageBuffer(remoteUrl) {
+    if (typeof fetchImpl !== 'function') {
+      return createBinaryActionFailureResult('remote-fetch-not-configured')
+    }
+
+    let response = null
+    try {
+      response = await fetchImpl(remoteUrl)
+    } catch {
+      return createBinaryActionFailureResult('remote-resource-fetch-failed')
+    }
+
+    if (!response?.ok) {
+      return createBinaryActionFailureResult('remote-resource-fetch-failed')
+    }
+
+    const contentType = normalizeContentType(response.headers?.get?.('content-type'))
+    if (!contentType?.startsWith('image/')) {
+      return createBinaryActionFailureResult('remote-resource-not-image')
+    }
+
+    try {
+      const arrayBuffer = await response.arrayBuffer()
+      return {
+        ok: true,
+        buffer: Buffer.from(arrayBuffer),
+        fileName: deriveRemoteFileName(remoteUrl, contentType),
+        contentType,
+      }
+    } catch {
+      return createBinaryActionFailureResult('remote-resource-fetch-failed')
+    }
+  }
+
+  function createNativeImageFromBuffer(buffer) {
+    if (typeof nativeImageApi?.createFromBuffer !== 'function') {
+      return null
+    }
+
+    return nativeImageApi.createFromBuffer(buffer)
+  }
+
+  async function openInFolder({ windowId, payload }) {
+    const actionContext = getFreshActionContext(windowId, payload, () => ({
+      ok: false,
+      opened: false,
+      reason: 'stale-document-context',
+      path: null,
+    }))
+    if (actionContext.error) {
+      return actionContext.error
+    }
+
+    return await resourceFileUtil.openLocalResourceInFolder(
+      actionContext.documentContext,
+      actionContext.normalizedPayload,
       showItemInFolder,
     )
   }
 
   async function deleteLocal({ windowId, payload }) {
-    const session = getSessionByWindowIdOrThrow(store, windowId)
-    const normalizedPayload = normalizeResourcePayload(payload)
-    if (isStaleRequestContext(session, normalizedPayload.requestContext)) {
-      return {
-        ok: false,
-        removed: false,
-        reason: 'stale-document-context',
-        path: null,
-      }
+    const actionContext = getFreshActionContext(windowId, payload, () => ({
+      ok: false,
+      removed: false,
+      reason: 'stale-document-context',
+      path: null,
+    }))
+    if (actionContext.error) {
+      return actionContext.error
     }
 
-    const documentContext = createResourceContext(session)
     return await resourceFileUtil.deleteLocalResource(
-      documentContext,
-      normalizedPayload.resourceUrl,
+      actionContext.documentContext,
+      actionContext.normalizedPayload,
     )
   }
 
   async function getInfo({ windowId, payload }) {
-    const session = getSessionByWindowIdOrThrow(store, windowId)
-    const normalizedPayload = normalizeResourcePayload(payload)
-    if (isStaleRequestContext(session, normalizedPayload.requestContext)) {
-      return {
-        ok: false,
-        reason: 'stale-document-context',
-        decodedPath: null,
-        exists: false,
-        isDirectory: false,
-        isFile: false,
-        path: null,
-      }
+    const actionContext = getFreshActionContext(windowId, payload, () => ({
+      ok: false,
+      reason: 'stale-document-context',
+      decodedPath: null,
+      exists: false,
+      isDirectory: false,
+      isFile: false,
+      path: null,
+    }))
+    if (actionContext.error) {
+      return actionContext.error
     }
 
-    const documentContext = createResourceContext(session)
     return await resourceFileUtil.getLocalResourceInfo(
-      documentContext,
-      normalizedPayload.resourceUrl,
+      actionContext.documentContext,
+      actionContext.normalizedPayload,
     )
+  }
+
+  async function copyAbsolutePath({ windowId, payload }) {
+    const actionContext = getFreshActionContext(windowId, payload, () => {
+      return createTextCopyFailureResult('stale-document-context', {
+        path: null,
+      })
+    })
+    if (actionContext.error) {
+      return actionContext.error
+    }
+
+    if (isSourceTypeAccepted(actionContext.normalizedPayload, 'local') !== true) {
+      return createTextCopyFailureResult('source-type-mismatch')
+    }
+
+    try {
+      const resourceInfo = await resourceFileUtil.resolveLocalResource(
+        actionContext.documentContext,
+        actionContext.normalizedPayload,
+      )
+      if (resourceInfo.ok !== true) {
+        return createTextCopyFailureResult(resourceInfo.reason, {
+          path: resourceInfo.path,
+        })
+      }
+
+      return createTextCopySuccessResult(resourceInfo.path, {
+        path: resourceInfo.path,
+      })
+    } catch {
+      return createTextCopyFailureResult('copy-absolute-path-failed')
+    }
+  }
+
+  async function copyLink({ windowId, payload }) {
+    const actionContext = getFreshActionContext(windowId, payload, () => {
+      return createTextCopyFailureResult('stale-document-context')
+    })
+    if (actionContext.error) {
+      return actionContext.error
+    }
+
+    if (isSourceTypeAccepted(actionContext.normalizedPayload, 'remote') !== true) {
+      return createTextCopyFailureResult('source-type-mismatch')
+    }
+
+    const remoteText = normalizeStringValue(actionContext.normalizedPayload.rawSrc)
+    if (!remoteText) {
+      return createTextCopyFailureResult('invalid-remote-resource')
+    }
+
+    return createTextCopySuccessResult(remoteText)
+  }
+
+  async function copyImage({ windowId, payload }) {
+    const actionContext = getFreshActionContext(windowId, payload, () => ({
+      ok: false,
+      reason: 'stale-document-context',
+    }))
+    if (actionContext.error) {
+      return actionContext.error
+    }
+
+    const runtimeSourceType = resolveRuntimeSourceType(actionContext.normalizedPayload)
+    if (!runtimeSourceType
+      || (actionContext.normalizedPayload.sourceType
+        && actionContext.normalizedPayload.sourceType !== runtimeSourceType)) {
+      return createBinaryActionFailureResult('source-type-mismatch')
+    }
+
+    const imageBufferResult = runtimeSourceType === 'local'
+      ? await readLocalImageBuffer(actionContext.documentContext, actionContext.normalizedPayload)
+      : await fetchRemoteImageBuffer(actionContext.normalizedPayload.rawSrc || actionContext.normalizedPayload.resourceUrl)
+    if (imageBufferResult.ok !== true) {
+      return imageBufferResult
+    }
+
+    try {
+      const nativeImage = createNativeImageFromBuffer(imageBufferResult.buffer)
+      if (!nativeImage || nativeImage.isEmpty?.() === true) {
+        return createBinaryActionFailureResult(
+          runtimeSourceType === 'remote' ? 'remote-resource-not-image' : 'local-resource-not-image',
+          {
+            path: imageBufferResult.path,
+          },
+        )
+      }
+
+      clipboardApi?.writeImage?.(nativeImage)
+      return {
+        ok: true,
+        reason: 'copied',
+        ...(imageBufferResult.path ? { path: imageBufferResult.path } : {}),
+      }
+    } catch {
+      return createBinaryActionFailureResult('copy-image-failed', {
+        path: imageBufferResult.path,
+      })
+    }
+  }
+
+  async function saveAs({ windowId, payload }) {
+    const actionContext = getFreshActionContext(windowId, payload, () => ({
+      ok: false,
+      reason: 'stale-document-context',
+    }))
+    if (actionContext.error) {
+      return actionContext.error
+    }
+
+    const runtimeSourceType = resolveRuntimeSourceType(actionContext.normalizedPayload)
+    if (!runtimeSourceType
+      || (actionContext.normalizedPayload.sourceType
+        && actionContext.normalizedPayload.sourceType !== runtimeSourceType)) {
+      return createBinaryActionFailureResult('source-type-mismatch')
+    }
+
+    const imageBufferResult = runtimeSourceType === 'local'
+      ? await readLocalImageBuffer(actionContext.documentContext, actionContext.normalizedPayload)
+      : await fetchRemoteImageBuffer(actionContext.normalizedPayload.rawSrc || actionContext.normalizedPayload.resourceUrl)
+    if (imageBufferResult.ok !== true) {
+      return imageBufferResult
+    }
+
+    const nativeImage = createNativeImageFromBuffer(imageBufferResult.buffer)
+    if (!nativeImage || nativeImage.isEmpty?.() === true) {
+      return createBinaryActionFailureResult(
+        runtimeSourceType === 'remote' ? 'remote-resource-not-image' : 'local-resource-not-image',
+        {
+          path: imageBufferResult.path,
+        },
+      )
+    }
+
+    try {
+      const selectedPath = dialogApi?.showSaveDialogSync?.({
+        defaultPath: imageBufferResult.fileName,
+      })
+      if (!selectedPath) {
+        return {
+          ok: false,
+          cancelled: true,
+          reason: 'cancelled',
+        }
+      }
+
+      await fsModule?.writeFile?.(selectedPath, imageBufferResult.buffer)
+      return {
+        ok: true,
+        reason: 'saved',
+        targetPath: selectedPath,
+        messageKey: 'message.saveAsSuccessfully',
+      }
+    } catch {
+      return createBinaryActionFailureResult('save-as-failed', {
+        path: imageBufferResult.path,
+      })
+    }
   }
 
   function getComparableKey({ windowId, payload }) {
@@ -168,6 +643,10 @@ export function createDocumentResourceService({
   return {
     getSessionResourceContext,
     openInFolder,
+    copyAbsolutePath,
+    copyLink,
+    copyImage,
+    saveAs,
     deleteLocal,
     getInfo,
     getComparableKey,
