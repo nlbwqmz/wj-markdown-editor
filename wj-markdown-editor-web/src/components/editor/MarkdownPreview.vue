@@ -187,7 +187,8 @@ function handlePreviewClick(e) {
   const assetLink = e.target.closest('a[data-wj-resource-src][data-wj-resource-kind="link"]')
   if (assetLink instanceof Element) {
     const assetInfo = getAssetInfoFromDom(assetLink, e)
-    if (assetInfo?.resourceUrl) {
+    const context = assetInfo ? createPreviewResourceContext(assetInfo) : null
+    if (assetInfo?.resourceUrl && context?.asset?.sourceType === 'local') {
       e.preventDefault()
       emits('assetOpen', assetInfo)
       return

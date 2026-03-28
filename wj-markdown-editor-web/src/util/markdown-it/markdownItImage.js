@@ -1,5 +1,6 @@
 import commonUtil from '@/util/commonUtil.js'
 import { normalizeLocalResourcePath } from '@/util/resourceUrlUtil.js'
+import { getPreviewTokenMarkdownReference, resolvePreviewResourceMetadata } from './markdownItLink.js'
 
 /**
  * 给本地图片加上自定义协议
@@ -17,11 +18,22 @@ export default function (md) {
       if (srcIndex > -1) {
         const src = token.attrs[srcIndex][1]
         if (src) {
-          if (!src.match('^http') && !src.match('^data')) {
-            const normalizedSrc = normalizeLocalResourcePath(src)
+          const resourceMetadata = resolvePreviewResourceMetadata(src)
+          if (resourceMetadata) {
             token.attrSet('data-wj-resource-kind', 'image')
-            token.attrSet('data-wj-resource-src', normalizedSrc)
+            token.attrSet('data-wj-resource-src', resourceMetadata.normalizedSource)
             token.attrSet('data-wj-resource-raw', src)
+            const markdownReference = getPreviewTokenMarkdownReference(token)
+            if (markdownReference) {
+              token.attrSet('data-wj-markdown-reference', markdownReference)
+            }
+            if (resourceMetadata.isLocalResource) {
+              token.attrs[srcIndex][1] = `${resourceMetadata.convertedSource}?wj_date=${Date.now()}`
+            } else {
+              token.attrs[srcIndex][1] = resourceMetadata.convertedSource
+            }
+          } else if (!src.match('^http') && !src.match('^data')) {
+            const normalizedSrc = normalizeLocalResourcePath(src)
             token.attrs[srcIndex][1] = `${commonUtil.convertResourceUrl(normalizedSrc)}?wj_date=${Date.now()}`
           }
         }

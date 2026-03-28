@@ -1,5 +1,10 @@
 import commonUtil from '@/util/commonUtil.js'
 import { normalizeLocalResourcePath } from '@/util/resourceUrlUtil.js'
+import {
+  getPreviewTokenMarkdownReference,
+  resolvePreviewResourceMetadata,
+  setPreviewTokenMarkdownReference,
+} from './markdownItLink.js'
 
 function shouldEscapeMarkdownCharacter(nextChar) {
   return Boolean(nextChar) && /[()<>\\\s]/.test(nextChar)
@@ -69,6 +74,7 @@ export default function (md) {
       const token = state.push('audio', '', 0)
       token.content = state.src.slice(contentStart, endIndex).trim() // 提取音频地址
       token.level = state.level
+      setPreviewTokenMarkdownReference(token, state.src.slice(startPos, endIndex + 1))
     }
 
     // 更新解析位置
@@ -79,11 +85,17 @@ export default function (md) {
   // 渲染音频标签
   md.renderer.rules.audio = (tokens, idx) => {
     const rawSrc = tokens[idx].content.trim()
+    const resourceMetadata = resolvePreviewResourceMetadata(rawSrc)
     const normalizedSrc = normalizeLocalResourcePath(rawSrc)
-    const convertedSrc = commonUtil.convertResourceUrl(normalizedSrc)
-    const isLocalResource = convertedSrc.startsWith('wj://')
-    const resourceAttr = isLocalResource
-      ? ` data-wj-resource-kind="audio" data-wj-resource-src="${md.utils.escapeHtml(normalizedSrc)}" data-wj-resource-raw="${md.utils.escapeHtml(rawSrc)}"`
+    const convertedSrc = resourceMetadata?.convertedSource ?? commonUtil.convertResourceUrl(normalizedSrc)
+    const markdownReference = getPreviewTokenMarkdownReference(tokens[idx])
+    const resourceAttr = resourceMetadata
+      ? [
+          ` data-wj-resource-kind="audio"`,
+          ` data-wj-resource-src="${md.utils.escapeHtml(resourceMetadata.normalizedSource)}"`,
+          ` data-wj-resource-raw="${md.utils.escapeHtml(rawSrc)}"`,
+          markdownReference ? ` data-wj-markdown-reference="${md.utils.escapeHtml(markdownReference)}"` : '',
+        ].join('')
       : ''
 
     return `<audio src="${md.utils.escapeHtml(convertedSrc)}" controls style="max-width: 100%"${resourceAttr}></audio>`

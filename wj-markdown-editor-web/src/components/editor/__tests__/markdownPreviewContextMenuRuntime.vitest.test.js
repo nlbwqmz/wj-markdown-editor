@@ -1,6 +1,10 @@
 import { mount } from '@vue/test-utils'
+import MarkdownIt from 'markdown-it'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick } from 'vue'
+import markdownItImage from '@/util/markdown-it/markdownItImage.js'
+import markdownItLineNumber from '@/util/markdown-it/markdownItLineNumber.js'
+import markdownItLink from '@/util/markdown-it/markdownItLink.js'
 
 const markdownPreviewRuntimeState = vi.hoisted(() => ({
   store: {
@@ -38,7 +42,25 @@ vi.mock('mermaid', () => ({
   },
 }))
 
+vi.mock('@/util/commonUtil.js', async () => {
+  const actual = await vi.importActual('@/util/resourceUrlUtil.js')
+  return {
+    default: {
+      convertResourceUrl: actual.convertResourceUrl,
+    },
+  }
+})
+
 vi.mock('vue-i18n', () => ({
+  createI18n() {
+    return {
+      global: {
+        t(key) {
+          return key
+        },
+      },
+    }
+  },
   useI18n() {
     return {
       t(key) {
@@ -150,6 +172,19 @@ function mountMarkdownPreview() {
   })
 }
 
+function renderPreviewHtml(markdown) {
+  const md = new MarkdownIt({
+    html: true,
+    linkify: true,
+    breaks: true,
+    xhtmlOut: true,
+  })
+  markdownItImage(md)
+  markdownItLink(md)
+  markdownItLineNumber(md)
+  return md.render(markdown)
+}
+
 async function flushPreviewRender() {
   await nextTick()
   await Promise.resolve()
@@ -159,6 +194,7 @@ async function flushPreviewRender() {
 
 describe('markdownPreview runtime contextmenu', () => {
   beforeEach(() => {
+    markdownPreviewRuntimeState.mdRender.mockImplementation(() => markdownPreviewRuntimeState.renderedHtml)
     markdownPreviewRuntimeState.renderedHtml = [
       '<p data-line-start="3" data-line-end="3">',
       '<img',
@@ -294,5 +330,104 @@ describe('markdownPreview runtime contextmenu', () => {
         y: 300,
       },
     })
+  })
+
+  it('真实渲染的远程图片右键时，会透传 remote 资源上下文与 markdown reference', async () => {
+    markdownPreviewRuntimeState.mdRender.mockImplementation(doc => renderPreviewHtml(doc))
+
+    const wrapper = mount(MarkdownPreview, {
+      props: {
+        content: '![远程图](https://example.com/assets/demo.png)',
+        codeTheme: 'atom-one-dark',
+        previewTheme: 'github',
+      },
+      global: {
+        stubs: {
+          'a-watermark': WatermarkStub,
+          'a-image-preview-group': ImagePreviewGroupStub,
+          'a-image': ImageStub,
+        },
+      },
+    })
+
+    await flushPreviewRender()
+
+    await wrapper.get('img[data-wj-resource-src="https://example.com/assets/demo.png"]').trigger('contextmenu', {
+      clientX: 188,
+      clientY: 288,
+    })
+
+    const previewContextmenuEvents = wrapper.emitted('previewContextmenu') || []
+    expect(previewContextmenuEvents).toHaveLength(1)
+    expect(previewContextmenuEvents[0][0]).toEqual({
+      type: 'resource',
+      asset: {
+        assetType: 'image',
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo.png',
+        rawPath: 'https://example.com/assets/demo.png',
+        resourceUrl: 'https://example.com/assets/demo.png',
+        markdownReference: '![远程图](https://example.com/assets/demo.png)',
+        occurrence: 1,
+        lineStart: 1,
+        lineEnd: 1,
+      },
+      menuPosition: {
+        x: 188,
+        y: 288,
+      },
+    })
+  })
+
+  it('点击远程链接时不应触发 assetOpen，而本地链接仍应保留原有打开所在目录行为', async () => {
+    markdownPreviewRuntimeState.mdRender.mockImplementation(doc => renderPreviewHtml(doc))
+
+    const remoteWrapper = mount(MarkdownPreview, {
+      props: {
+        content: '[远程链接](https://example.com/docs)',
+        codeTheme: 'atom-one-dark',
+        previewTheme: 'github',
+      },
+      global: {
+        stubs: {
+          'a-watermark': WatermarkStub,
+          'a-image-preview-group': ImagePreviewGroupStub,
+          'a-image': ImageStub,
+        },
+      },
+    })
+
+    await flushPreviewRender()
+    await remoteWrapper.get('a[data-wj-resource-src="https://example.com/docs"]').trigger('click')
+
+    expect(remoteWrapper.emitted('assetOpen')).toBeUndefined()
+
+    const localWrapper = mount(MarkdownPreview, {
+      props: {
+        content: '[本地链接](README)',
+        codeTheme: 'atom-one-dark',
+        previewTheme: 'github',
+      },
+      global: {
+        stubs: {
+          'a-watermark': WatermarkStub,
+          'a-image-preview-group': ImagePreviewGroupStub,
+          'a-image': ImageStub,
+        },
+      },
+    })
+
+    await flushPreviewRender()
+    await localWrapper.get('a[data-wj-resource-src="README"]').trigger('click')
+
+    const assetOpenEvents = localWrapper.emitted('assetOpen') || []
+    expect(assetOpenEvents).toHaveLength(1)
+    expect(assetOpenEvents[0][0]).toMatchObject({
+      kind: 'link',
+      assetType: 'link',
+      rawSrc: 'README',
+      rawPath: 'README',
+    })
+    expect(assetOpenEvents[0][0].resourceUrl.startsWith('wj://')).toBe(true)
   })
 })
