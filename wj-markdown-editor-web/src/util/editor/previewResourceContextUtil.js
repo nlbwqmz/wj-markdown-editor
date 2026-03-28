@@ -1,6 +1,26 @@
 import { normalizeLocalResourcePath } from '../resourceUrlUtil.js'
 
 const KNOWN_ASSET_TYPE_SET = new Set(['image', 'video', 'audio', 'link'])
+const DANGEROUS_SCHEME_SET = new Set([
+  'about',
+  'blob',
+  'chrome',
+  'data',
+  'edge',
+  'ftp',
+  'ftps',
+  'http',
+  'https',
+  'javascript',
+  'mailto',
+  'sftp',
+  'smb',
+  'ssh',
+  'tel',
+  'view-source',
+  'ws',
+  'wss',
+])
 
 /**
  * 归一化字符串输入，避免把空串当成有效元信息。
@@ -34,6 +54,20 @@ function normalizeAssetType(assetType, legacyKind) {
   }
 
   return 'unknown'
+}
+
+/**
+ * 提取冒号前的前缀，供来源类型判定复用。
+ * @param {string | null} value - 待提取的来源字符串
+ * @returns {string | null} 小写 scheme 前缀
+ */
+function getSourceScheme(value) {
+  if (!value) {
+    return null
+  }
+
+  const schemeMatch = /^([a-z][a-z\d+.-]*):/iu.exec(value)
+  return schemeMatch ? schemeMatch[1].toLowerCase() : null
 }
 
 /**
@@ -92,7 +126,16 @@ function isDangerousUnknownSource(value) {
     return true
   }
 
-  return /^[a-z][a-z\d+.-]*:/iu.test(value)
+  const scheme = getSourceScheme(value)
+  if (!scheme) {
+    return false
+  }
+
+  if (DANGEROUS_SCHEME_SET.has(scheme)) {
+    return true
+  }
+
+  return value.slice(scheme.length + 1).startsWith('//')
 }
 
 /**

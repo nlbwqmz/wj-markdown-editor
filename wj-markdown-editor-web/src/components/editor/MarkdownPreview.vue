@@ -128,12 +128,9 @@ function refreshCodeBlockActionVariables() {
  * @returns {string | null} Markdown 原始引用文本
  */
 function getMarkdownReferenceFromDom(assetDom) {
-  const lineDom = assetDom.closest('[data-line-start]')
   const candidateList = [
     assetDom.dataset.wjMarkdownReference,
     assetDom.dataset.wjResourceMarkdownReference,
-    lineDom?.dataset.wjMarkdownReference,
-    lineDom?.dataset.wjResourceMarkdownReference,
   ]
 
   for (const candidate of candidateList) {

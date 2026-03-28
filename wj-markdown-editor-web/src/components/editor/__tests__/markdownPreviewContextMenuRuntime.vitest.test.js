@@ -208,4 +208,47 @@ describe('markdownPreview runtime contextmenu', () => {
       },
     })
   })
+
+  it('右键预览资源时，只有行级 markdown reference dataset 而资源节点自身缺失时，应稳定返回 null', async () => {
+    markdownPreviewRuntimeState.renderedHtml = [
+      '<p data-line-start="5" data-line-end="5" data-wj-markdown-reference="[行级引用](README)">',
+      '<img',
+      ' src="wj://local/README"',
+      ' data-wj-resource-kind="image"',
+      ' data-wj-resource-src="README"',
+      ' data-wj-resource-raw="README"',
+      '>',
+      '</p>',
+    ].join('')
+
+    const wrapper = mountMarkdownPreview()
+
+    await flushPreviewRender()
+
+    await wrapper.get('img[data-wj-resource-src="README"]').trigger('contextmenu', {
+      clientX: 200,
+      clientY: 300,
+    })
+
+    const previewContextmenuEvents = wrapper.emitted('previewContextmenu') || []
+    expect(previewContextmenuEvents).toHaveLength(1)
+    expect(previewContextmenuEvents[0][0]).toEqual({
+      type: 'resource',
+      asset: {
+        assetType: 'image',
+        sourceType: 'local',
+        rawSrc: 'README',
+        rawPath: 'README',
+        resourceUrl: 'wj://local/README',
+        markdownReference: null,
+        occurrence: 1,
+        lineStart: 5,
+        lineEnd: 5,
+      },
+      menuPosition: {
+        x: 200,
+        y: 300,
+      },
+    })
+  })
 })
