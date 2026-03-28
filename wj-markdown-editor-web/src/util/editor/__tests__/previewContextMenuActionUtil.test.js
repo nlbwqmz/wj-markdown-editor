@@ -63,6 +63,48 @@ test('远程图片在 standalone-preview 下必须按顺序返回复制链接、
   ])
 })
 
+test('远程图片在 editor-preview 下必须在复制菜单后保留删除入口', () => {
+  assert.ok(previewContextMenuActionUtilModule, '缺少 preview context menu action util')
+
+  const { buildPreviewContextMenuItems } = previewContextMenuActionUtilModule
+
+  assert.deepEqual(buildPreviewContextMenuItems({
+    context: createResourceContext({
+      assetType: 'image',
+      sourceType: 'remote',
+      markdownReference: '![远程图片](https://example.com/demo.png)',
+    }),
+    profile: 'editor-preview',
+    t: key => `translated:${key}`,
+  }), [
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyImageLink',
+      danger: false,
+    },
+    {
+      key: 'resource.copy-image',
+      label: 'translated:previewAssetMenu.copyImage',
+      danger: false,
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+    },
+    {
+      key: 'resource.copy-markdown-reference',
+      label: 'translated:previewAssetMenu.copyMarkdownReference',
+      danger: false,
+    },
+    {
+      key: 'resource.delete',
+      label: 'translated:previewAssetMenu.delete',
+      danger: true,
+    },
+  ])
+})
+
 test('本地图片在 editor-preview 下必须按顺序返回完整编辑菜单矩阵', () => {
   assert.ok(previewContextMenuActionUtilModule, '缺少 preview context menu action util')
 
@@ -170,6 +212,38 @@ test('远程非图片资源在 standalone-preview 下只能返回复制资源链
       key: 'resource.copy-markdown-reference',
       label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
+    },
+  ])
+})
+
+test('远程非图片资源在 editor-preview 下必须保留删除入口且顺序稳定', () => {
+  assert.ok(previewContextMenuActionUtilModule, '缺少 preview context menu action util')
+
+  const { buildPreviewContextMenuItems } = previewContextMenuActionUtilModule
+
+  assert.deepEqual(buildPreviewContextMenuItems({
+    context: createResourceContext({
+      assetType: 'video',
+      sourceType: 'remote',
+      markdownReference: '[远程附件](https://example.com/demo.mp4)',
+    }),
+    profile: 'editor-preview',
+    t: key => `translated:${key}`,
+  }), [
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyResourceLink',
+      danger: false,
+    },
+    {
+      key: 'resource.copy-markdown-reference',
+      label: 'translated:previewAssetMenu.copyMarkdownReference',
+      danger: false,
+    },
+    {
+      key: 'resource.delete',
+      label: 'translated:previewAssetMenu.delete',
+      danger: true,
     },
   ])
 })

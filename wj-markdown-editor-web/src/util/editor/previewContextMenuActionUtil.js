@@ -88,6 +88,11 @@ function buildPreviewContextMenuItems({ context, profile, t }) {
   }
 
   appendMarkdownReferenceItem(items)
+
+  if (profile === 'editor-preview') {
+    items.push(createMenuItem('resource.delete', 'previewAssetMenu.delete', true))
+  }
+
   return items
 }
 
