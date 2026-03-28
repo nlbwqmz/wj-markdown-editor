@@ -117,6 +117,7 @@
 - `assetType` 由命中的 DOM 节点类型判定，避免视图层再从 URL 猜语义。
 - `MarkdownPreview.vue` 内部现有的 DOM 提取字段如果仍使用 `kind` 作为中间变量，只允许在组件内部过渡使用；`createPreviewResourceContext()` 对外产出的最终上下文只保留 `assetType`，后续菜单构造与动作分发统一读取 `assetType`。
 - `rawSrc` 是当前资源在 Markdown 中的原始引用文本：
+  - 它必须来自可稳定回放的原始资源引用元信息，不得从最终渲染后的 `src` / `href` / `resourceUrl` 反推
   - 远程资源复制链接固定以 `rawSrc` 为权威来源
   - 远程图片下载、复制图片、另存为也固定以 `rawSrc` 为权威来源
 - `rawPath` 只服务本地资源解析：
@@ -128,6 +129,10 @@
   - `wj://` 或可解析为本地文件的资源视为 `local`
   - `http://` / `https://` 视为 `remote`
 - 如果无法稳定判定 `sourceType`，`createPreviewResourceContext()` 必须直接返回 `null`，不弹出自定义资源菜单。
+- 对本地资源的解析优先级固定如下：
+  - 优先使用 `rawPath + requestContext` 解析原始本地路径
+  - 仅在 `rawPath` 缺失或无法参与解析时，才允许回退 `resourceUrl`
+  - 如果 `rawPath` 与 `resourceUrl` 都能解析且结果不一致，必须 fail-closed，返回固定冲突错误，不继续执行资源动作
 - `markdownReference` 必须来自渲染 DOM 上可稳定回放的原始引用元信息。
 - 如果 DOM 没有足够的原始引用信息，则 `markdownReference = null`，并隐藏“复制 Markdown 引用”；不得再根据 `assetType + rawSrc` 临时拼装“最小可用引用”。
 - 未保存文档中的相对本地资源，在菜单可见性上仍按 `local` 处理，不额外引入新的菜单分支；凡是依赖绝对路径解析的动作，执行期统一复用现有“当前文件未保存，无法定位相对资源”失败语义。
@@ -150,6 +155,7 @@
 - `requestContext` 的生成时机必须与当前 `resource.open-in-folder` / `resource.delete` 一致：
   - 不能在菜单点击时重新读取最新 store 快照
   - 必须复用菜单打开时冻结的上下文
+- `actionContext.version` 只用于 renderer 侧识别“菜单打开后上下文是否已失效”，不进入 runtime 命令契约。
 - runtime 继续只使用 `requestContext.sessionId + requestContext.documentPath` 做 `stale-document-context` 判定，不引入新的请求态结构。
 
 ## 6. 架构与职责拆分
@@ -229,6 +235,7 @@
   - 复制图片到系统剪贴板
   - 图片另存为
   - 本地资源在资源管理器中打开
+- 不能盲信 renderer 传入的 `sourceType`，必须在 runtime 再次校验输入组合是否自洽
 - 保持 `requestContext` 过期保护，避免文档切换后操作旧资源
 
 #### 可选新 util
@@ -262,6 +269,15 @@
 | `document.resource.copy-link` | `{ rawSrc, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
 | `document.resource.copy-image` | `{ sourceType, resourceUrl, rawSrc, rawPath, requestContext }` | `{ ok: true, sourceType }` | `{ ok: false, reason }` |
 | `document.resource.save-as` | `{ sourceType, resourceUrl, rawSrc, rawPath, requestContext }` | `{ ok: true, path }` | `{ ok: false, reason, cancelled?: true }` |
+
+统一校验规则：
+
+- `document.resource.copy-link` 只接受可再次判定为 `remote` 的 `rawSrc`；否则返回固定失败结果。
+- `document.resource.copy-image` / `document.resource.save-as` 必须在 runtime 再次校验：
+  - `sourceType = local` 时，输入必须能按本地资源规则稳定解析
+  - `sourceType = remote` 时，`rawSrc` 必须是可直接下载的远程地址
+  - 如果 runtime 复判结果与 renderer 传入的 `sourceType` 不一致，必须 fail-closed，返回固定类型不匹配错误
+- 任一本地资源动作遇到 `rawPath` 与 `resourceUrl` 解析结果冲突时，必须 fail-closed，返回固定目标冲突错误
 
 ### 7.2 复制绝对路径 / 复制链接
 
@@ -314,6 +330,9 @@
 - 本地文件已不存在：
   - `复制绝对路径` 仍然允许
   - `复制图片` / `另存为` / `在资源管理器中打开` 返回“文件不存在”
+- `rawPath` 与 `resourceUrl` 指向不同本地目标：
+  - runtime 必须返回固定目标冲突错误
+  - renderer 只显示失败提示，不做任意一侧的猜测性兜底
 - 未保存文档中的相对资源：
   - 继续复用现有“相对资源需要已保存文档”语义
 - 请求上下文过期：
@@ -323,6 +342,7 @@
 ### 8.2 网络资源异常
 
 - 下载失败：提示失败，不写空文件
+- `sourceType` 与 runtime 复判结果不一致：返回固定类型不匹配错误，不继续下载或写剪贴板
 - 响应不是图片：`复制图片` 与 `另存为` 必须拒绝
 - URL 带 query/hash：默认文件名推导时剥离 query/hash
 - URL 缺少扩展名：
