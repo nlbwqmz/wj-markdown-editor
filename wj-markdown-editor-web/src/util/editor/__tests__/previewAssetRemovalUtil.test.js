@@ -105,6 +105,34 @@ test('预览资源上下文只提供 assetType 时，删除当前图片引用仍
   ].join('\n'))
 })
 
+test('删除链路在 assetType 非法但 legacy kind 合法时，应回退到 legacy kind', () => {
+  const content = [
+    '第一段',
+    '![封面](assets/target.png)',
+    '第二段',
+    '![封面](assets/target.png)',
+    '第三段',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    assetType: 'invalid-kind',
+    kind: 'image',
+    rawSrc: 'assets/target.png',
+    occurrence: 2,
+    lineStart: 4,
+    lineEnd: 4,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.cursorPosition, result.content.indexOf('第三段'))
+  assert.equal(result.content, [
+    '第一段',
+    '![封面](assets/target.png)',
+    '第二段',
+    '第三段',
+  ].join('\n'))
+})
+
 test('删除本地图片时，应按 markdown-it 规则处理 alt 文本里的复杂内容', () => {
   const content = [
     '![示例 `](` 文本](<assets/target.png>)',

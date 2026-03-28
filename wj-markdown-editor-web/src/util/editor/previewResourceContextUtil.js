@@ -1,3 +1,5 @@
+import { normalizeLocalResourcePath } from '../resourceUrlUtil.js'
+
 const KNOWN_ASSET_TYPE_SET = new Set(['image', 'video', 'audio', 'link'])
 
 /**
@@ -21,8 +23,17 @@ function normalizeStringValue(value) {
  * @returns {string} 归一化后的资源类型
  */
 function normalizeAssetType(assetType, legacyKind) {
-  const normalizedType = normalizeStringValue(assetType) || normalizeStringValue(legacyKind)
-  return normalizedType && KNOWN_ASSET_TYPE_SET.has(normalizedType) ? normalizedType : 'unknown'
+  const normalizedAssetType = normalizeStringValue(assetType)
+  if (normalizedAssetType && KNOWN_ASSET_TYPE_SET.has(normalizedAssetType)) {
+    return normalizedAssetType
+  }
+
+  const normalizedLegacyKind = normalizeStringValue(legacyKind)
+  if (normalizedLegacyKind && KNOWN_ASSET_TYPE_SET.has(normalizedLegacyKind)) {
+    return normalizedLegacyKind
+  }
+
+  return 'unknown'
 }
 
 /**
@@ -114,19 +125,21 @@ function classifySourceCandidate(value) {
     return null
   }
 
-  if (/^https?:\/\//iu.test(normalizedValue)) {
+  const inspectionValue = normalizeLocalResourcePath(normalizedValue)
+
+  if (/^https?:\/\//iu.test(inspectionValue)) {
     return 'remote'
   }
 
-  if (isStableLocalSource(normalizedValue)) {
+  if (isStableLocalSource(inspectionValue)) {
     return 'local'
   }
 
-  if (isDangerousUnknownSource(normalizedValue)) {
+  if (isDangerousUnknownSource(inspectionValue)) {
     return 'dangerous'
   }
 
-  if (isWeakLocalSource(normalizedValue)) {
+  if (isWeakLocalSource(inspectionValue)) {
     return 'weak-local'
   }
 

@@ -437,10 +437,10 @@ export function shouldCleanupMarkdownAfterDeleteResult(deleteResult) {
 }
 
 function resolveAssetMatchKind(asset) {
-  if (typeof asset?.assetType === 'string' && asset.assetType) {
+  if (typeof asset?.assetType === 'string' && ['image', 'video', 'audio', 'link'].includes(asset.assetType)) {
     return asset.assetType
   }
-  if (typeof asset?.kind === 'string' && asset.kind) {
+  if (typeof asset?.kind === 'string' && ['image', 'video', 'audio', 'link'].includes(asset.kind)) {
     return asset.kind
   }
   return null
