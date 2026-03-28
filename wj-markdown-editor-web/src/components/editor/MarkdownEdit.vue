@@ -90,7 +90,7 @@ const props = defineProps({
   },
 })
 
-const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange', 'assetContextmenu', 'assetOpen'])
+const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange', 'previewContextmenu', 'assetOpen'])
 
 const { t } = useI18n()
 const store = useCommonStore()
@@ -773,8 +773,8 @@ function onAnchorChange(changedAnchorList) {
   emits('anchorChange', changedAnchorList)
 }
 
-function onAssetContextmenu(assetInfo) {
-  emits('assetContextmenu', assetInfo)
+function onPreviewContextmenu(context) {
+  emits('previewContextmenu', context)
 }
 
 function onAssetOpen(assetInfo) {
@@ -1027,7 +1027,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full p-2"
+          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full p-2"
           :style="previewContainerStyle"
           :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
           @scroll="syncPreviewToEditor"
@@ -1041,7 +1041,7 @@ defineExpose({
             :watermark="watermark"
             @refresh-complete="onRefreshComplete"
             @anchor-change="onAnchorChange"
-            @asset-contextmenu="onAssetContextmenu"
+            @preview-contextmenu="onPreviewContextmenu"
             @asset-open="onAssetOpen"
           />
         </div>

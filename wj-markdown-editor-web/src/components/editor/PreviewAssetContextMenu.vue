@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { getPreviewAssetPopupContainer } from '@/util/editor/previewAssetContextMenuUtil.js'
 
 const props = defineProps({
@@ -16,11 +15,13 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  items: {
+    type: Array,
+    default: () => [],
+  },
 })
 
-const emits = defineEmits(['close', 'openExplorer', 'delete'])
-
-const { t } = useI18n()
+const emits = defineEmits(['close', 'select'])
 
 const EDGE_PADDING = 12
 const MENU_WIDTH = 180
@@ -63,12 +64,9 @@ function closeMenu() {
   emits('close')
 }
 
-function onMenuClick({ key }) {
-  if (key === 'open-explorer') {
-    emits('openExplorer')
-  } else if (key === 'delete') {
-    emits('delete')
-  }
+// 菜单壳只透传 actionKey，不承载具体业务语义。
+function onMenuItemClick(actionKey) {
+  emits('select', actionKey)
   closeMenu()
 }
 
@@ -135,12 +133,17 @@ onBeforeUnmount(() => {
   >
     <div v-show="open" :class="anchorClassName" :style="anchorStyle" />
     <template #overlay>
-      <a-menu @click="onMenuClick">
-        <a-menu-item key="open-explorer">
-          {{ t('top.openInExplorer') }}
-        </a-menu-item>
-        <a-menu-item key="delete" class="!color-red">
-          {{ t('previewAssetMenu.delete') }}
+      <a-menu>
+        <!-- 危险项保留显式红色类，避免被项目级下拉菜单文字颜色覆盖。 -->
+        <a-menu-item
+          v-for="item in items"
+          :key="item.key"
+          :class="item.danger === true ? '!color-red' : undefined"
+          :danger="item.danger === true"
+          :data-menu-key="item.key"
+          @click="onMenuItemClick(item.key)"
+        >
+          {{ item.label }}
         </a-menu-item>
       </a-menu>
     </template>

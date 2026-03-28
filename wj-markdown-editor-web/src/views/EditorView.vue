@@ -39,6 +39,7 @@ import {
   shouldCleanupMarkdownAfterDeleteResult,
 } from '@/util/editor/previewAssetRemovalUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
+import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
 import { createEditorViewActivationRestoreScheduler } from '@/views/editorViewActivationRestoreScheduler.js'
 
 // 预览资源右键菜单的基础状态工厂。
@@ -50,6 +51,7 @@ function createPreviewAssetMenuState() {
     y: 0,
     asset: null,
     actionContext: null,
+    items: [],
   }
 }
 
@@ -299,14 +301,34 @@ function closePreviewAssetMenu() {
 }
 
 // 预览区资源右键菜单入口。
-// 除了记录点击位置，也会同步捕获当下文档上下文，后续所有操作都基于这份快照校验。
-function onAssetContextmenu(assetInfo) {
+// 子组件现在直接上浮统一 context，宿主只负责记录菜单状态和捕获当前会话上下文。
+function onPreviewContextmenu(context) {
+  if (!context?.asset) {
+    return
+  }
   previewAssetMenu.value = {
     open: true,
-    x: assetInfo.clientX,
-    y: assetInfo.clientY,
-    asset: assetInfo,
+    x: context.menuPosition?.x ?? 0,
+    y: context.menuPosition?.y ?? 0,
+    asset: context.asset,
     actionContext: previewAssetSessionController.captureActionContext(),
+    items: buildPreviewContextMenuItems({
+      context,
+      profile: 'editor-preview',
+      t,
+    }),
+  }
+}
+
+// 统一把菜单 actionKey 路由回现有资源业务分支，避免展示层组件再承载业务语义。
+function onPreviewAssetMenuSelect(actionKey) {
+  if (actionKey === 'resource.open-in-folder') {
+    openPreviewAssetInExplorer()
+    return
+  }
+
+  if (actionKey === 'resource.delete') {
+    deletePreviewAsset()
   }
 }
 
@@ -574,15 +596,15 @@ async function deletePreviewAsset() {
 
 <template>
   <!-- 主编辑器：正文、主题、水印和资源事件都在这里汇总。 -->
-  <MarkdownEdit v-if="ready" ref="markdownEditRef" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" :preview-position="config.editor.previewPosition" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @asset-contextmenu="onAssetContextmenu" @asset-open="onAssetOpen" />
+  <MarkdownEdit v-if="ready" ref="markdownEditRef" v-model="content" :association-highlight="config.editor.associationHighlight" :content-update-meta="contentUpdateMeta" :extension="config.editorExtension" :preview-position="config.editor.previewPosition" class="h-full" :code-theme="config.theme.code" :preview-theme="config.theme.preview" :watermark="watermark" :theme="config.theme.global" @save="save" @preview-contextmenu="onPreviewContextmenu" @asset-open="onAssetOpen" />
   <!-- 预览资源右键菜单，仅负责展示与转发操作，不直接处理业务。 -->
   <PreviewAssetContextMenu
     :open="previewAssetMenu.open"
     :x="previewAssetMenu.x"
     :y="previewAssetMenu.y"
+    :items="previewAssetMenu.items"
     @close="closePreviewAssetMenu"
-    @open-explorer="openPreviewAssetInExplorer"
-    @delete="deletePreviewAsset"
+    @select="onPreviewAssetMenuSelect"
   />
   <!-- 当同一资源在当前文档中被多次引用时，使用这个弹窗让用户明确选择删除范围。 -->
   <a-modal

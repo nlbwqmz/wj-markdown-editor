@@ -2,10 +2,12 @@
 import dayjs from 'dayjs'
 import Split from 'split-grid'
 import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useViewScrollAnchor } from '@/components/editor/composables/useViewScrollAnchor.js'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
+import PreviewAssetContextMenu from '@/components/editor/PreviewAssetContextMenu.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.js'
@@ -26,7 +28,8 @@ import {
 } from '@/util/document-session/rendererSessionActivationStrategy.js'
 import { createRendererSessionEventSubscription } from '@/util/document-session/rendererSessionEventSubscription.js'
 import { createRendererSessionSnapshotController } from '@/util/document-session/rendererSessionSnapshotController.js'
-import { createResourceRequestContext } from '@/util/editor/resourceRequestContextUtil.js'
+import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
+import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
 import {
   capturePreviewLineAnchor,
   resolvePreviewLineAnchorScrollTop,
@@ -37,7 +40,21 @@ import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
 import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
 
+// 纯预览页的资源右键菜单状态。
+// 菜单关闭时重建对象，避免保留过期的 asset 或 actionContext。
+function createPreviewAssetMenuState() {
+  return {
+    open: false,
+    x: 0,
+    y: 0,
+    asset: null,
+    actionContext: null,
+    items: [],
+  }
+}
+
 const router = useRouter()
+const { t } = useI18n()
 
 const store = useCommonStore()
 
@@ -55,9 +72,15 @@ const ready = ref(false)
 const previewPageAnchorStore = createViewScrollAnchorSessionStore()
 let pendingRestoreOnActivation = false
 const watermark = ref()
+const previewAssetMenu = ref(createPreviewAssetMenuState())
 const currentScrollSnapshot = ref({
   sessionId: '',
   revision: 0,
+})
+const previewAssetSessionController = createPreviewAssetSessionController({
+  onContextInvalidated: () => {
+    closePreviewAssetMenu()
+  },
 })
 const previewSessionSnapshotController = createRendererSessionSnapshotController({
   applySnapshot: (snapshot) => {
@@ -81,6 +104,11 @@ function closePreviewSearchBar() {
     controller: previewSearchBarController,
     store,
   })
+}
+
+// 关闭纯预览页的资源右键菜单，并清空冻结的 actionContext。
+function closePreviewAssetMenu() {
+  previewAssetMenu.value = createPreviewAssetMenuState()
 }
 
 /**
@@ -315,6 +343,7 @@ function applyDocumentSessionSnapshot(snapshot) {
     return
   }
 
+  previewAssetSessionController.syncSnapshot(snapshot)
   // 预览页只消费已经收敛完毕的 session snapshot，
   // 不直接参与保存态或外部修改态推导。
   content.value = snapshot.content
@@ -379,6 +408,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   previewSessionSnapshotController.dispose()
   documentSessionSnapshotSubscription.dispose()
+  previewAssetSessionController.invalidateActiveContext({
+    reason: 'before-unmount',
+  })
+  closePreviewAssetMenu()
   closePreviewSearchBar()
   previewSearchTargetBridge.deactivate({ preserveCleanupTarget: false })
 })
@@ -433,6 +466,10 @@ onDeactivated(() => {
   previewPageScrollAnchor.cancelPendingRestore()
   previewSessionSnapshotController.deactivate()
   documentSessionSnapshotSubscription.deactivate()
+  previewAssetSessionController.invalidateActiveContext({
+    reason: 'deactivated',
+  })
+  closePreviewAssetMenu()
   closePreviewSearchBar()
   previewSearchTargetBridge.deactivate()
 })
@@ -456,30 +493,64 @@ function onPreviewRefreshComplete() {
   closePreviewSearchBar()
 }
 
-function onAssetContextmenu(assetInfo) {
-  if (!assetInfo?.resourceUrl) {
+function onPreviewContextmenu(context) {
+  if (!context?.asset) {
+    closePreviewAssetMenu()
     return
   }
+
+  previewAssetMenu.value = {
+    open: true,
+    x: context.menuPosition?.x ?? 0,
+    y: context.menuPosition?.y ?? 0,
+    asset: context.asset,
+    actionContext: previewAssetSessionController.captureActionContext(),
+    items: buildPreviewContextMenuItems({
+      context,
+      profile: 'standalone-preview',
+      t,
+    }),
+  }
+}
+
+// 纯预览页当前只开放“在资源所在目录中打开”动作。
+function onPreviewAssetMenuSelect(actionKey) {
+  if (actionKey === 'resource.open-in-folder') {
+    openPreviewAssetInExplorer()
+  }
+}
+
+// 菜单动作必须使用菜单打开时冻结的 actionContext，避免文档切换后继续操作旧资源。
+function openPreviewAssetInExplorer() {
+  const assetInfo = previewAssetMenu.value.asset
+  const actionContext = previewAssetMenu.value.actionContext
+  if (!assetInfo?.resourceUrl || previewAssetSessionController.isActiveContext(actionContext) !== true) {
+    closePreviewAssetMenu()
+    return
+  }
+
   channelUtil.send({
     event: 'document.resource.open-in-folder',
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
-      requestContext: createResourceRequestContext(store.documentSessionSnapshot),
+      requestContext: previewAssetSessionController.createRequestContext(actionContext),
     },
   })
 }
 
 function onAssetOpen(assetInfo) {
-  if (!assetInfo?.resourceUrl) {
+  const actionContext = previewAssetSessionController.captureActionContext()
+  if (!assetInfo?.resourceUrl || previewAssetSessionController.isActiveContext(actionContext) !== true) {
     return
   }
+
   channelUtil.send({
     event: 'document.resource.open-in-folder',
     data: {
       resourceUrl: assetInfo.resourceUrl,
       rawPath: assetInfo.rawPath,
-      requestContext: createResourceRequestContext(store.documentSessionSnapshot),
+      requestContext: previewAssetSessionController.createRequestContext(actionContext),
     },
   })
 }
@@ -512,7 +583,7 @@ function onAssetOpen(assetInfo) {
             :watermark="watermark"
             @refresh-complete="onPreviewRefreshComplete"
             @anchor-change="onAnchorChange"
-            @asset-contextmenu="onAssetContextmenu"
+            @preview-contextmenu="onPreviewContextmenu"
             @asset-open="onAssetOpen"
           />
         </div>
@@ -531,6 +602,14 @@ function onAssetOpen(assetInfo) {
       </a-empty>
     </div>
   </div>
+  <PreviewAssetContextMenu
+    :open="previewAssetMenu.open"
+    :x="previewAssetMenu.x"
+    :y="previewAssetMenu.y"
+    :items="previewAssetMenu.items"
+    @close="closePreviewAssetMenu"
+    @select="onPreviewAssetMenuSelect"
+  />
 </template>
 
 <style scoped lang="scss">
