@@ -90,3 +90,55 @@ test('中英文文案都应提供复制结果提示', () => {
     'Copy failed.',
   )
 })
+
+test('中英文文案都应提供预览资源菜单新增标签', () => {
+  assert.equal(
+    zhCN.previewAssetMenu.copyAbsolutePath,
+    '复制绝对路径',
+  )
+  assert.equal(
+    zhCN.previewAssetMenu.copyImageLink,
+    '复制图片链接',
+  )
+  assert.equal(
+    zhCN.previewAssetMenu.copyResourceLink,
+    '复制资源链接',
+  )
+  assert.equal(
+    zhCN.previewAssetMenu.copyImage,
+    '复制图片',
+  )
+  assert.equal(
+    zhCN.previewAssetMenu.saveAs,
+    '另存为',
+  )
+  assert.equal(
+    zhCN.previewAssetMenu.copyMarkdownReference,
+    '复制 Markdown 引用',
+  )
+
+  assert.equal(
+    enUS.previewAssetMenu.copyAbsolutePath,
+    'Copy absolute path',
+  )
+  assert.equal(
+    enUS.previewAssetMenu.copyImageLink,
+    'Copy image link',
+  )
+  assert.equal(
+    enUS.previewAssetMenu.copyResourceLink,
+    'Copy resource link',
+  )
+  assert.equal(
+    enUS.previewAssetMenu.copyImage,
+    'Copy image',
+  )
+  assert.equal(
+    enUS.previewAssetMenu.saveAs,
+    'Save as',
+  )
+  assert.equal(
+    enUS.previewAssetMenu.copyMarkdownReference,
+    'Copy Markdown reference',
+  )
+})

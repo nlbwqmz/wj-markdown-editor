@@ -32,6 +32,12 @@ export default {
     confirmExit: 'Confirm exit',
   },
   previewAssetMenu: {
+    copyAbsolutePath: 'Copy absolute path',
+    copyImageLink: 'Copy image link',
+    copyResourceLink: 'Copy resource link',
+    copyImage: 'Copy image',
+    saveAs: 'Save as',
+    copyMarkdownReference: 'Copy Markdown reference',
     delete: 'Delete',
     deleteConfirm: 'This action will delete the local resource permanently. Do you want to continue?',
     deleteDirectoryNotAllowed: 'The current resource points to a folder and cannot be deleted directly.',

@@ -32,6 +32,12 @@ export default {
     confirmExit: '确认退出',
   },
   previewAssetMenu: {
+    copyAbsolutePath: '复制绝对路径',
+    copyImageLink: '复制图片链接',
+    copyResourceLink: '复制资源链接',
+    copyImage: '复制图片',
+    saveAs: '另存为',
+    copyMarkdownReference: '复制 Markdown 引用',
     delete: '删除',
     deleteConfirm: '该操作将删除本地资源，且不可恢复，确认继续？',
     deleteDirectoryNotAllowed: '当前资源是文件夹链接，不能直接删除。',
