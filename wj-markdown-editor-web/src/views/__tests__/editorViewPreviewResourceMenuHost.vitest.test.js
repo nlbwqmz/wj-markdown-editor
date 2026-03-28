@@ -534,6 +534,44 @@ describe('editorView 预览资源菜单宿主接线', () => {
     expect(editorViewHostState.messageSuccess).toHaveBeenCalledWith('message.copySucceeded')
   })
 
+  it('选择 resource.copy-link 时，runtime 返回前若组件已卸载，后续 resolve 不得继续写剪贴板或弹提示', async () => {
+    const deferred = createDeferred()
+    editorViewHostState.channelSend.mockImplementation(async ({ event }) => {
+      if (event === 'document.resource.copy-link') {
+        return await deferred.promise
+      }
+      return {
+        ok: true,
+      }
+    })
+
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+      markdownReference: '![demo](https://example.com/assets/demo.png)',
+    })
+    await wrapper.get('[data-menu-key="resource.copy-link"]').trigger('click')
+    await nextTick()
+
+    expect(editorViewHostState.clipboardWriteText).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageSuccess).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageError).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageWarning).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+    deferred.resolve({
+      ok: true,
+      text: 'https://example.com/assets/demo.png',
+    })
+    await flushEditorView()
+
+    expect(editorViewHostState.clipboardWriteText).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageSuccess).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageError).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageWarning).not.toHaveBeenCalled()
+  })
+
   it('选择 resource.copy-markdown-reference 时，不经过 runtime，直接写入剪贴板', async () => {
     const wrapper = await mountEditorView()
 
@@ -546,6 +584,35 @@ describe('editorView 预览资源菜单宿主接线', () => {
     expect(editorViewHostState.channelSend).not.toHaveBeenCalled()
     expect(editorViewHostState.clipboardWriteText).toHaveBeenCalledWith('![demo](assets/demo.png)')
     expect(editorViewHostState.messageSuccess).toHaveBeenCalledWith('message.copySucceeded')
+  })
+
+  it('选择 resource.copy-markdown-reference 时，剪贴板 promise 挂起期间若组件已卸载，后续 resolve 不得继续弹提示', async () => {
+    const deferred = createDeferred()
+    editorViewHostState.clipboardWriteText.mockImplementation(async () => {
+      await deferred.promise
+    })
+
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
+    await wrapper.get('[data-menu-key="resource.copy-markdown-reference"]').trigger('click')
+    await nextTick()
+
+    expect(editorViewHostState.channelSend).not.toHaveBeenCalled()
+    expect(editorViewHostState.clipboardWriteText).toHaveBeenCalledWith('![demo](assets/demo.png)')
+    expect(editorViewHostState.messageSuccess).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageError).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageWarning).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+    deferred.resolve()
+    await flushEditorView()
+
+    expect(editorViewHostState.messageSuccess).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageError).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageWarning).not.toHaveBeenCalled()
   })
 
   it('选择 resource.save-as 在 runtime 返回 cancelled 时必须静默结束', async () => {

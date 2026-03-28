@@ -490,6 +490,43 @@ describe('previewView 预览资源菜单宿主接线', () => {
     expect(previewViewHostState.messageSuccess).toHaveBeenCalledWith('message.copySucceeded')
   })
 
+  it('纯预览页选择 resource.copy-link 时，runtime 返回前若组件已卸载，后续 resolve 不得继续写剪贴板或弹提示', async () => {
+    const deferred = createDeferred()
+    previewViewHostState.channelSend.mockImplementation(async ({ event }) => {
+      if (event === 'document.resource.copy-link') {
+        return await deferred.promise
+      }
+      return {
+        ok: true,
+      }
+    })
+
+    const wrapper = await mountPreviewView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+    })
+    await wrapper.get('[data-menu-key="resource.copy-link"]').trigger('click')
+    await nextTick()
+
+    expect(previewViewHostState.clipboardWriteText).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageSuccess).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageError).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageWarning).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+    deferred.resolve({
+      ok: true,
+      text: 'https://example.com/assets/demo.png',
+    })
+    await flushPreviewView()
+
+    expect(previewViewHostState.clipboardWriteText).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageSuccess).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageError).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageWarning).not.toHaveBeenCalled()
+  })
+
   it('纯预览页选择 resource.copy-image 时，会发送 document.resource.copy-image 且不重复写文本剪贴板', async () => {
     const wrapper = await mountPreviewView()
 
@@ -598,6 +635,35 @@ describe('previewView 预览资源菜单宿主接线', () => {
     expect(previewViewHostState.channelSend).not.toHaveBeenCalled()
     expect(previewViewHostState.clipboardWriteText).toHaveBeenCalledWith('![demo](https://example.com/assets/demo.png)')
     expect(previewViewHostState.messageSuccess).toHaveBeenCalledWith('message.copySucceeded')
+  })
+
+  it('纯预览页选择 resource.copy-markdown-reference 时，剪贴板 promise 挂起期间若组件已卸载，后续 resolve 不得继续弹提示', async () => {
+    const deferred = createDeferred()
+    previewViewHostState.clipboardWriteText.mockImplementation(async () => {
+      await deferred.promise
+    })
+
+    const wrapper = await mountPreviewView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+    })
+    await wrapper.get('[data-menu-key="resource.copy-markdown-reference"]').trigger('click')
+    await nextTick()
+
+    expect(previewViewHostState.channelSend).not.toHaveBeenCalled()
+    expect(previewViewHostState.clipboardWriteText).toHaveBeenCalledWith('![demo](https://example.com/assets/demo.png)')
+    expect(previewViewHostState.messageSuccess).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageError).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageWarning).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+    deferred.resolve()
+    await flushPreviewView()
+
+    expect(previewViewHostState.messageSuccess).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageError).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageWarning).not.toHaveBeenCalled()
   })
 
   it('纯预览页不应出现 resource.delete 菜单项，也不应发送 document.resource.delete-local', async () => {

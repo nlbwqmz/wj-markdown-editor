@@ -40,7 +40,6 @@ import {
 } from '@/util/editor/previewAssetRemovalUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
 import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
-import { copyTextWithFeedback } from '@/util/previewInlineCodeCopyUtil.js'
 import { createEditorViewActivationRestoreScheduler } from '@/views/editorViewActivationRestoreScheduler.js'
 
 // 预览资源右键菜单的基础状态工厂。
@@ -366,6 +365,35 @@ function createPreviewAssetRuntimePayload(actionTarget) {
   }
 }
 
+// 文本复制需要在 runtime 结果和本地剪贴板结果两个异步边界后都重新校验上下文，
+// 避免页面已失活或卸载时继续弹出过期提示。
+async function writePreviewAssetTextWithContext(options = {}) {
+  const actionContext = options.actionContext
+  if (previewAssetSessionController.isActiveContext(actionContext) !== true) {
+    closePreviewAssetMenu()
+    return
+  }
+
+  const text = typeof options.text === 'string' ? options.text : ''
+  if (!text) {
+    message.error(t('message.copyFailed'))
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(text)
+    if (previewAssetSessionController.isActiveContext(actionContext) !== true) {
+      return
+    }
+    message.success(t('message.copySucceeded'))
+  } catch {
+    if (previewAssetSessionController.isActiveContext(actionContext) !== true) {
+      return
+    }
+    message.error(t('message.copyFailed'))
+  }
+}
+
 // 统一执行“runtime 返回文本，再由 renderer 写入文本剪贴板”的动作。
 async function copyPreviewAssetTextFromRuntime(runtimeEvent) {
   const actionTarget = resolvePreviewAssetMenuActionTarget()
@@ -383,18 +411,9 @@ async function copyPreviewAssetTextFromRuntime(runtimeEvent) {
   }
 
   if (result?.ok === true) {
-    await copyTextWithFeedback({
-      text: typeof result.text === 'string' ? result.text : '',
-      writeText: async text => await navigator.clipboard.writeText(text),
-      onSuccess() {
-        message.success(t('message.copySucceeded'))
-      },
-      onEmpty() {
-        message.error(t('message.copyFailed'))
-      },
-      onError() {
-        message.error(t('message.copyFailed'))
-      },
+    await writePreviewAssetTextWithContext({
+      text: result.text,
+      actionContext: actionTarget.actionContext,
     })
     return
   }
@@ -533,18 +552,9 @@ async function copyPreviewAssetMarkdownReference() {
     return
   }
 
-  await copyTextWithFeedback({
+  await writePreviewAssetTextWithContext({
     text: markdownReference,
-    writeText: async text => await navigator.clipboard.writeText(text),
-    onSuccess() {
-      message.success(t('message.copySucceeded'))
-    },
-    onEmpty() {
-      message.error(t('message.copyFailed'))
-    },
-    onError() {
-      message.error(t('message.copyFailed'))
-    },
+    actionContext: actionTarget.actionContext,
   })
 }
 
