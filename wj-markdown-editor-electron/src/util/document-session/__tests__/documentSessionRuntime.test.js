@@ -151,13 +151,13 @@ function createRuntimeContext(overrides = {}) {
         return {
           ok: true,
           reason: 'copied',
-          value: payload?.resourceUrl || null,
+          text: payload?.resourceUrl || null,
         }
       case 'document.resource.copy-link':
         return {
           ok: true,
           reason: 'copied',
-          value: payload?.resourceUrl || null,
+          text: payload?.resourceUrl || null,
         }
       case 'document.resource.copy-image':
         return {
@@ -876,12 +876,12 @@ describe('documentSessionRuntime', () => {
     const copyAbsolutePathResult = {
       ok: true,
       reason: 'copied',
-      value: 'C:/docs/assets/copy-path.png',
+      text: 'C:/docs/assets/copy-path.png',
     }
     const copyLinkResult = {
       ok: true,
       reason: 'copied',
-      value: '![copy-link](./assets/copy-link.png)',
+      text: '![copy-link](./assets/copy-link.png)',
     }
     const copyImageResult = {
       ok: true,

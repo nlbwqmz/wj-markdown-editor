@@ -1515,7 +1515,7 @@ describe('ipcMainUtil command mapping', () => {
       {
         ok: true,
         reason: 'copied',
-        value: 'D:\\docs\\assets\\copy-path.png',
+        text: 'D:\\docs\\assets\\copy-path.png',
       },
     ],
     [
@@ -1526,7 +1526,7 @@ describe('ipcMainUtil command mapping', () => {
       {
         ok: true,
         reason: 'copied',
-        value: '![copy-link](./assets/copy-link.png)',
+        text: '![copy-link](./assets/copy-link.png)',
       },
     ],
     [
