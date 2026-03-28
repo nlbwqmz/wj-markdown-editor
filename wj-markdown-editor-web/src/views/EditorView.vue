@@ -39,6 +39,8 @@ import {
   shouldCleanupMarkdownAfterDeleteResult,
 } from '@/util/editor/previewAssetRemovalUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
+import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
+import { createPreviewResourceContext } from '@/util/editor/previewResourceContextUtil.js'
 import { createEditorViewActivationRestoreScheduler } from '@/views/editorViewActivationRestoreScheduler.js'
 
 // 预览资源右键菜单的基础状态工厂。
@@ -50,6 +52,7 @@ function createPreviewAssetMenuState() {
     y: 0,
     asset: null,
     actionContext: null,
+    items: [],
   }
 }
 
@@ -301,12 +304,30 @@ function closePreviewAssetMenu() {
 // 预览区资源右键菜单入口。
 // 除了记录点击位置，也会同步捕获当下文档上下文，后续所有操作都基于这份快照校验。
 function onAssetContextmenu(assetInfo) {
+  const previewResourceContext = createPreviewResourceContext(assetInfo)
   previewAssetMenu.value = {
     open: true,
-    x: assetInfo.clientX,
-    y: assetInfo.clientY,
+    x: previewResourceContext?.menuPosition?.x ?? assetInfo.clientX ?? 0,
+    y: previewResourceContext?.menuPosition?.y ?? assetInfo.clientY ?? 0,
     asset: assetInfo,
     actionContext: previewAssetSessionController.captureActionContext(),
+    items: buildPreviewContextMenuItems({
+      context: previewResourceContext,
+      profile: 'editor-preview',
+      t,
+    }),
+  }
+}
+
+// 统一把菜单 actionKey 路由回现有资源业务分支，避免展示层组件再承载业务语义。
+function onPreviewAssetMenuSelect(actionKey) {
+  if (actionKey === 'resource.open-in-folder') {
+    openPreviewAssetInExplorer()
+    return
+  }
+
+  if (actionKey === 'resource.delete') {
+    deletePreviewAsset()
   }
 }
 
@@ -580,9 +601,9 @@ async function deletePreviewAsset() {
     :open="previewAssetMenu.open"
     :x="previewAssetMenu.x"
     :y="previewAssetMenu.y"
+    :items="previewAssetMenu.items"
     @close="closePreviewAssetMenu"
-    @open-explorer="openPreviewAssetInExplorer"
-    @delete="deletePreviewAsset"
+    @select="onPreviewAssetMenuSelect"
   />
   <!-- 当同一资源在当前文档中被多次引用时，使用这个弹窗让用户明确选择删除范围。 -->
   <a-modal
