@@ -59,7 +59,11 @@ test('编辑页文本复制与运行时命令必须基于冻结 actionContext，
   )
   assert.match(
     source,
-    /copyPreviewAssetMarkdownReference\(\)[\s\S]*?markdownReference[\s\S]*?navigator\.clipboard\.writeText\(text\)/u,
+    /async function writePreviewAssetTextWithContext\(options = \{\}\) \{[\s\S]*?await navigator\.clipboard\.writeText\(text\)/u,
+  )
+  assert.match(
+    source,
+    /copyPreviewAssetMarkdownReference\(\)[\s\S]*?markdownReference[\s\S]*?writePreviewAssetTextWithContext\(\{[\s\S]*?text:\s*markdownReference[\s\S]*?actionContext:\s*actionTarget\.actionContext[\s\S]*?\}\)/u,
   )
   assert.doesNotMatch(
     source,
