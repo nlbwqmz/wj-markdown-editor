@@ -92,7 +92,6 @@
 {
   type: 'resource',
   asset: {
-    kind: 'image' | 'video' | 'audio' | 'link' | 'unknown',
     assetType: 'image' | 'video' | 'audio' | 'link' | 'unknown',
     sourceType: 'local' | 'remote',
     rawSrc: string,
@@ -113,11 +112,13 @@
 ### 5.2 字段判定原则
 
 - `assetType` 由命中的 DOM 节点类型判定，避免视图层再从 URL 猜语义。
+- `MarkdownPreview.vue` 内部现有的 DOM 提取字段如果仍使用 `kind` 作为中间变量，只允许在组件内部过渡使用；`createPreviewResourceContext()` 对外产出的最终上下文只保留 `assetType`，后续菜单构造与动作分发统一读取 `assetType`。
 - `sourceType` 由 `resourceUrl/rawSrc/rawPath` 共同判定：
   - `wj://` 或可解析为本地文件的资源视为 `local`
   - `http://` / `https://` 视为 `remote`
 - `markdownReference` 优先从渲染 DOM 上已有的原始引用元信息读取。
 - 如果 DOM 没有足够的原始引用信息，renderer 可退化为用 `assetType + rawSrc` 拼装最小可用引用文本；若仍无法稳定拼装，则动作执行时提示失败。
+- 未保存文档中的相对本地资源，在菜单可见性上仍按 `local` 处理，不额外引入新的菜单分支；凡是依赖绝对路径解析的动作，执行期统一复用现有“当前文件未保存，无法定位相对资源”失败语义。
 
 ## 6. 架构与职责拆分
 
@@ -271,7 +272,6 @@
   - `message.copySucceeded`
   - `message.copyFailed`
   - `message.saveAsSuccessfully`
-  - `message.cancelSaveAs`
   - `message.theFileDoesNotExist`
   - `message.openResourceLocationFailed`
   - `message.imageDownloadFailed`
@@ -286,6 +286,8 @@
   - 与资源菜单专属失败态对应的消息 key
 
 这样可以保持全局通用动作语义不分叉，同时把预览资源菜单自己的标签和错误语境集中管理。
+
+图片资源右键菜单中的“另存为取消”保持静默结束，不复用 `message.cancelSaveAs`，避免与当前需求中的交互约束冲突。
 
 ## 10. 测试策略
 
