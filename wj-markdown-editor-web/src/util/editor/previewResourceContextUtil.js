@@ -72,6 +72,25 @@ function getSourceScheme(value) {
 }
 
 /**
+ * 判断前导 `?` / `&` 的输入是否更像本地文件名。
+ * 这里只放行明显带扩展名或路径分隔符的形态，其他仍按 fail-closed 处理。
+ * @param {string | null} value - 待判定的来源字符串
+ * @returns {boolean} 是否更像文件名
+ */
+function isLeadingQueryFilenameLike(value) {
+  if (!value || (!value.startsWith('?') && !value.startsWith('&'))) {
+    return false
+  }
+
+  const restValue = value.slice(1)
+  if (!restValue || restValue.startsWith('?') || restValue.startsWith('&') || restValue.startsWith('#')) {
+    return false
+  }
+
+  return /[\\/]/u.test(restValue) || restValue.includes('.')
+}
+
+/**
  * 判断输入是否属于可稳定识别的本地来源。
  * @param {string | null} value - 待判定的来源字符串
  * @returns {boolean} 是否为稳定本地来源
@@ -123,8 +142,12 @@ function isDangerousUnknownSource(value) {
     return false
   }
 
-  if (value.startsWith('#') || value.startsWith('//') || value.startsWith('?') || value.startsWith('&')) {
+  if (value.startsWith('#') || value.startsWith('//')) {
     return true
+  }
+
+  if (value.startsWith('?') || value.startsWith('&')) {
+    return !isLeadingQueryFilenameLike(value)
   }
 
   const scheme = getSourceScheme(value)
@@ -150,7 +173,9 @@ function isWeakLocalSource(value) {
     return false
   }
 
-  const baseValue = value.split(/[?#]/u, 1)[0]
+  const baseValue = isLeadingQueryFilenameLike(value)
+    ? value.slice(1).split(/[?#]/u, 1)[0]
+    : value.split(/[?#]/u, 1)[0]
   if (!baseValue || baseValue === '.' || baseValue === '..') {
     return false
   }

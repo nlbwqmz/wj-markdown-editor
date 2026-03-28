@@ -111,7 +111,7 @@ test('预览资源上下文在 resourceUrl 已稳定为本地 wj:// 时，不应
   assert.ok(previewResourceContextUtilModule, '缺少 preview resource context util')
 
   const { createPreviewResourceContext } = previewResourceContextUtilModule
-  const rawPathList = ['README', '.env', 'Makefile', 'README#guide', 'README?tab=a', 'foo:bar.png']
+  const rawPathList = ['README', '.env', 'Makefile', 'README#guide', 'README?tab=a', 'foo:bar.png', '?guide.md', '&cover.png']
 
   for (const rawPath of rawPathList) {
     const context = createPreviewResourceContext({
