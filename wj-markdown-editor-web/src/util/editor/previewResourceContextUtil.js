@@ -95,11 +95,12 @@ function isWeakLocalSource(value) {
     return false
   }
 
-  if (value === '.' || value === '..') {
+  const baseValue = value.split(/[?#]/u, 1)[0]
+  if (!baseValue || baseValue === '.' || baseValue === '..') {
     return false
   }
 
-  return !/[\\/#?&]/u.test(value)
+  return !/[\\/#?&]/u.test(baseValue)
 }
 
 /**
