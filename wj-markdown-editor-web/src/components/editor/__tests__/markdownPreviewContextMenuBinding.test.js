@@ -21,6 +21,15 @@ test('MarkdownPreview 会把资源右键事件升级为统一的 previewContextm
   assert.match(source, /createPreviewResourceContext\(assetInfo\)/u)
 })
 
+test('MarkdownPreview 会从 DOM 资源元信息读取 markdownReference 并交给上下文归一化工具', () => {
+  const source = readMarkdownPreviewSource()
+
+  assert.match(source, /const rawSrc = assetDom\.dataset\.wjResourceSrc/u)
+  assert.match(source, /const rawPath = assetDom\.dataset\.wjResourceRaw \|\| rawSrc/u)
+  assert.match(source, /const kind = assetDom\.dataset\.wjResourceKind/u)
+  assert.match(source, /markdownReference:\s*getMarkdownReferenceFromDom\(assetDom\)/u)
+})
+
 test('MarkdownEdit 会声明统一的 previewContextmenu 事件并中继给宿主', () => {
   const source = readMarkdownEditSource()
 

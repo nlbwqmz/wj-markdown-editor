@@ -121,6 +121,30 @@ function refreshCodeBlockActionVariables() {
   syncCodeBlockActionVariables(previewShellRef.value)
 }
 
+/**
+ * 从 DOM 上读取可稳定回放的 Markdown 原始引用元信息。
+ * 当前 markdown-it 尚未稳定产出这组元信息时，这里必须回退为 null，禁止伪造引用文本。
+ * @param {Element} assetDom - 当前命中的资源节点
+ * @returns {string | null} Markdown 原始引用文本
+ */
+function getMarkdownReferenceFromDom(assetDom) {
+  const lineDom = assetDom.closest('[data-line-start]')
+  const candidateList = [
+    assetDom.dataset.wjMarkdownReference,
+    assetDom.dataset.wjResourceMarkdownReference,
+    lineDom?.dataset.wjMarkdownReference,
+    lineDom?.dataset.wjResourceMarkdownReference,
+  ]
+
+  for (const candidate of candidateList) {
+    if (typeof candidate === 'string' && candidate) {
+      return candidate
+    }
+  }
+
+  return null
+}
+
 function getAssetInfoFromDom(assetDom, event) {
   const resourceUrl = assetDom.getAttribute('src') || assetDom.getAttribute('href') || ''
   const rawSrc = assetDom.dataset.wjResourceSrc
@@ -133,9 +157,11 @@ function getAssetInfoFromDom(assetDom, event) {
   const occurrence = Number.parseInt(assetDom.dataset.wjResourceOccurrence || '1', 10)
   return {
     kind,
+    assetType: kind,
     rawSrc,
     rawPath,
     resourceUrl,
+    markdownReference: getMarkdownReferenceFromDom(assetDom),
     occurrence: Number.isNaN(occurrence) ? 1 : occurrence,
     lineStart: lineDom?.dataset.lineStart ? Number.parseInt(lineDom.dataset.lineStart, 10) : undefined,
     lineEnd: lineDom?.dataset.lineEnd ? Number.parseInt(lineDom.dataset.lineEnd, 10) : undefined,
