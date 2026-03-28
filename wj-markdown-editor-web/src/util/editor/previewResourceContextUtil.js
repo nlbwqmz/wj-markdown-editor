@@ -71,19 +71,6 @@ function getSourceScheme(value) {
   return schemeMatch ? schemeMatch[1].toLowerCase() : null
 }
 
-function isPureQueryParameterString(value) {
-  if (!value || (!value.startsWith('?') && !value.startsWith('&'))) {
-    return false
-  }
-
-  const restValue = value.slice(1)
-  if (!restValue || restValue.startsWith('?') || restValue.startsWith('&') || restValue.startsWith('#')) {
-    return true
-  }
-
-  return !/[\\/]/u.test(restValue) && restValue.includes('=')
-}
-
 /**
  * 判断输入是否属于危险的未知来源形态。
  * 这类输入一旦混入上下文，即使有稳定来源也要 fail-closed。
@@ -96,10 +83,6 @@ function isDangerousUnknownSource(value) {
   }
 
   if (value.startsWith('#') || value.startsWith('//')) {
-    return true
-  }
-
-  if (isPureQueryParameterString(value)) {
     return true
   }
 
