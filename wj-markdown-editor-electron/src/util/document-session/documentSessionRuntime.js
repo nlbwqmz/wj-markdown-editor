@@ -148,6 +148,10 @@ const DOCUMENT_STATE_COMMAND_SET = new Set([
 
 const RESOURCE_COMMAND_SET = new Set([
   'document.resource.open-in-folder',
+  'document.resource.copy-absolute-path',
+  'document.resource.copy-link',
+  'document.resource.copy-image',
+  'document.resource.save-as',
   'document.resource.delete-local',
   'resource.get-info',
 ])
@@ -220,6 +224,30 @@ export function createDocumentSessionRuntime(deps = {}) {
     switch (command) {
       case 'document.resource.open-in-folder':
         return await resourceService.openInFolder({
+          windowId,
+          payload,
+        })
+
+      case 'document.resource.copy-absolute-path':
+        return await resourceService.copyAbsolutePath({
+          windowId,
+          payload,
+        })
+
+      case 'document.resource.copy-link':
+        return await resourceService.copyLink({
+          windowId,
+          payload,
+        })
+
+      case 'document.resource.copy-image':
+        return await resourceService.copyImage({
+          windowId,
+          payload,
+        })
+
+      case 'document.resource.save-as':
+        return await resourceService.saveAs({
           windowId,
           payload,
         })

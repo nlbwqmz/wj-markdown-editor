@@ -201,6 +201,10 @@ const handlerList = {
     }
   },
   'document.resource.open-in-folder': async (windowContext, data) => await handleResourceOpen(windowContext, data),
+  'document.resource.copy-absolute-path': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.resource.copy-absolute-path', data),
+  'document.resource.copy-link': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.resource.copy-link', data),
+  'document.resource.copy-image': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.resource.copy-image', data),
+  'document.resource.save-as': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.resource.save-as', data),
   // renderer 已经切到新的 session 命令名，这里只保留直连入口。
   'document.save-copy': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save-copy', null),
   'document.save': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save', null),

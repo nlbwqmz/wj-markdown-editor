@@ -35,6 +35,10 @@ const DOCUMENT_STATE_COMMAND_SET = new Set([
 
 const RESOURCE_COMMAND_SET = new Set([
   'document.resource.open-in-folder',
+  'document.resource.copy-absolute-path',
+  'document.resource.copy-link',
+  'document.resource.copy-image',
+  'document.resource.save-as',
   'document.resource.delete-local',
   'resource.get-info',
 ])
@@ -142,6 +146,29 @@ function createRuntimeContext(overrides = {}) {
           opened: true,
           reason: 'opened',
           path: payload?.resourceUrl || null,
+        }
+      case 'document.resource.copy-absolute-path':
+        return {
+          ok: true,
+          reason: 'copied',
+          value: payload?.resourceUrl || null,
+        }
+      case 'document.resource.copy-link':
+        return {
+          ok: true,
+          reason: 'copied',
+          value: payload?.resourceUrl || null,
+        }
+      case 'document.resource.copy-image':
+        return {
+          ok: true,
+          reason: 'copied',
+        }
+      case 'document.resource.save-as':
+        return {
+          ok: true,
+          reason: 'saved',
+          targetPath: payload?.resourceUrl || null,
         }
       case 'document.resource.delete-local':
         return {
@@ -267,6 +294,10 @@ describe('documentSessionRuntime', () => {
     }
     const resourceService = {
       openInFolder: vi.fn(),
+      copyAbsolutePath: vi.fn(),
+      copyLink: vi.fn(),
+      copyImage: vi.fn(),
+      saveAs: vi.fn(),
       deleteLocal: vi.fn(),
       getInfo: vi.fn(),
       getComparableKey: vi.fn(),
@@ -286,6 +317,23 @@ describe('documentSessionRuntime', () => {
       publishRecentListChanged: vi.fn(recentList => recentList),
     }))
     const createDocumentResourceService = vi.fn(() => resourceService)
+    const showItemInFolder = vi.fn()
+    const dialogApi = {
+      showOpenDialogSync: vi.fn(),
+      showSaveDialogSync: vi.fn(),
+    }
+    const clipboardApi = {
+      writeText: vi.fn(),
+      writeImage: vi.fn(),
+    }
+    const nativeImageApi = {
+      createFromPath: vi.fn(),
+    }
+    const fsModule = {
+      pathExists: vi.fn(),
+      copyFile: vi.fn(),
+    }
+    const fetchImpl = vi.fn()
 
     vi.doMock('../documentSessionStore.js', () => ({
       createDocumentSessionStore,
@@ -314,7 +362,12 @@ describe('documentSessionRuntime', () => {
         add: vi.fn(),
       },
       sendToRenderer: vi.fn(),
-      showItemInFolder: vi.fn(),
+      showItemInFolder,
+      dialogApi,
+      clipboardApi,
+      nativeImageApi,
+      fsModule,
+      fetchImpl,
     })
     const runtime = initializeDocumentSessionRuntime({
       ...composition,
@@ -345,7 +398,12 @@ describe('documentSessionRuntime', () => {
     })
     expect(createDocumentResourceService).toHaveBeenCalledWith({
       store,
-      showItemInFolder: expect.any(Function),
+      showItemInFolder,
+      dialogApi,
+      clipboardApi,
+      nativeImageApi,
+      fsModule,
+      fetchImpl,
     })
     expect(composition.store).toBe(store)
     expect(composition.saveCoordinator).toBe(saveCoordinator)
@@ -394,6 +452,10 @@ describe('documentSessionRuntime', () => {
     expect(DOCUMENT_STATE_COMMAND_SET.has('document.external.apply')).toBe(true)
     expect(DOCUMENT_STATE_COMMAND_SET.has('document.external.ignore')).toBe(true)
     expect(RESOURCE_COMMAND_SET.has('document.resource.open-in-folder')).toBe(true)
+    expect(RESOURCE_COMMAND_SET.has('document.resource.copy-absolute-path')).toBe(true)
+    expect(RESOURCE_COMMAND_SET.has('document.resource.copy-link')).toBe(true)
+    expect(RESOURCE_COMMAND_SET.has('document.resource.copy-image')).toBe(true)
+    expect(RESOURCE_COMMAND_SET.has('document.resource.save-as')).toBe(true)
     expect(RESOURCE_COMMAND_SET.has('document.resource.delete-local')).toBe(true)
     expect(RESOURCE_COMMAND_SET.has('resource.get-info')).toBe(true)
     expect(SYNC_QUERY_SET.has('resource.get-comparable-key')).toBe(true)
@@ -789,6 +851,89 @@ describe('documentSessionRuntime', () => {
       windowId: 7,
       command: 'resource.get-info',
       payload: infoPayload,
+      runtime,
+    }))
+  })
+
+  it('document.resource.copy-absolute-path / copy-link / copy-image / save-as 必须继续走统一资源命令路由，且不能回落到 effectService', async () => {
+    const {
+      runtime,
+      executeResourceCommand,
+      effectService,
+    } = createRuntimeContext()
+    const copyAbsolutePathPayload = {
+      resourceUrl: 'wj://2e2f6173736574732f636f70792d706174682e706e67',
+    }
+    const copyLinkPayload = {
+      resourceUrl: 'wj://2e2f6173736574732f636f70792d6c696e6b2e706e67',
+    }
+    const copyImagePayload = {
+      resourceUrl: 'wj://2e2f6173736574732f636f70792d696d6167652e706e67',
+    }
+    const saveAsPayload = {
+      resourceUrl: 'wj://2e2f6173736574732f736176652d61732e706e67',
+    }
+    const copyAbsolutePathResult = {
+      ok: true,
+      reason: 'copied',
+      value: 'C:/docs/assets/copy-path.png',
+    }
+    const copyLinkResult = {
+      ok: true,
+      reason: 'copied',
+      value: '![copy-link](./assets/copy-link.png)',
+    }
+    const copyImageResult = {
+      ok: true,
+      reason: 'copied',
+    }
+    const saveAsResult = {
+      ok: true,
+      reason: 'saved',
+      targetPath: 'C:/exports/save-as.png',
+    }
+    executeResourceCommand
+      .mockResolvedValueOnce(copyAbsolutePathResult)
+      .mockResolvedValueOnce(copyLinkResult)
+      .mockResolvedValueOnce(copyImageResult)
+      .mockResolvedValueOnce(saveAsResult)
+
+    const results = await Promise.all([
+      runtime.executeUiCommand(8, 'document.resource.copy-absolute-path', copyAbsolutePathPayload),
+      runtime.executeUiCommand(8, 'document.resource.copy-link', copyLinkPayload),
+      runtime.executeUiCommand(8, 'document.resource.copy-image', copyImagePayload),
+      runtime.executeUiCommand(8, 'document.resource.save-as', saveAsPayload),
+    ])
+
+    expect(results).toEqual([
+      copyAbsolutePathResult,
+      copyLinkResult,
+      copyImageResult,
+      saveAsResult,
+    ])
+    expect(effectService.executeCommand).not.toHaveBeenCalled()
+    expect(executeResourceCommand).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      windowId: 8,
+      command: 'document.resource.copy-absolute-path',
+      payload: copyAbsolutePathPayload,
+      runtime,
+    }))
+    expect(executeResourceCommand).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      windowId: 8,
+      command: 'document.resource.copy-link',
+      payload: copyLinkPayload,
+      runtime,
+    }))
+    expect(executeResourceCommand).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      windowId: 8,
+      command: 'document.resource.copy-image',
+      payload: copyImagePayload,
+      runtime,
+    }))
+    expect(executeResourceCommand).toHaveBeenNthCalledWith(4, expect.objectContaining({
+      windowId: 8,
+      command: 'document.resource.save-as',
+      payload: saveAsPayload,
       runtime,
     }))
   })

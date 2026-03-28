@@ -2,16 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   browserWindowFromWebContents,
+  clipboardApi,
   createDocumentCommandService,
   createDocumentEffectService,
   createDocumentResourceService,
   createDocumentSessionStore,
   createSaveCoordinator,
   createWindowSessionBridge,
+  dialogApi,
+  fsModule,
   getDocumentSessionRuntime,
   initializeDocumentSessionRuntime,
   ipcMainHandle,
   ipcMainOn,
+  nativeImageApi,
+  shellShowItemInFolder,
 } = vi.hoisted(() => {
   const store = {
     getSession: vi.fn(() => null),
@@ -39,19 +44,44 @@ const {
   }
   const resourceService = {
     openInFolder: vi.fn(),
+    copyAbsolutePath: vi.fn(),
+    copyLink: vi.fn(),
+    copyImage: vi.fn(),
+    saveAs: vi.fn(),
     deleteLocal: vi.fn(),
     getInfo: vi.fn(),
     getComparableKey: vi.fn(),
   }
+  const dialogApi = {
+    showOpenDialogSync: vi.fn(),
+    showSaveDialogSync: vi.fn(),
+  }
+  const clipboardApi = {
+    writeText: vi.fn(),
+    writeImage: vi.fn(),
+  }
+  const nativeImageApi = {
+    createFromPath: vi.fn(),
+  }
+  const shellShowItemInFolder = vi.fn()
+  const fsModule = {
+    readFile: vi.fn(),
+    writeFile: vi.fn(),
+    pathExists: vi.fn(),
+    stat: vi.fn(),
+  }
 
   return {
     browserWindowFromWebContents: vi.fn(),
+    clipboardApi,
     createDocumentSessionStore: vi.fn(() => store),
     createSaveCoordinator: vi.fn(() => saveCoordinator),
     createDocumentCommandService: vi.fn(() => commandService),
     createDocumentEffectService: vi.fn(() => effectService),
     createWindowSessionBridge: vi.fn(() => windowBridge),
     createDocumentResourceService: vi.fn(() => resourceService),
+    dialogApi,
+    fsModule,
     getDocumentSessionRuntime: vi.fn(() => {
       throw new Error('导入阶段不应访问 runtime 单例')
     }),
@@ -60,6 +90,8 @@ const {
     }),
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
+    nativeImageApi,
+    shellShowItemInFolder,
   }
 })
 
@@ -72,32 +104,26 @@ vi.mock('electron', () => {
     BrowserWindow: {
       fromWebContents: browserWindowFromWebContents,
     },
-    dialog: {
-      showOpenDialogSync: vi.fn(),
-      showSaveDialogSync: vi.fn(),
-    },
+    clipboard: clipboardApi,
+    dialog: dialogApi,
     ipcMain: {
       handle: ipcMainHandle,
       on: ipcMainOn,
     },
+    nativeImage: nativeImageApi,
     screen: {
       getPrimaryDisplay: vi.fn(() => ({ workAreaSize: { width: 1920, height: 1080 } })),
     },
     shell: {
       openExternal: vi.fn(),
-      showItemInFolder: vi.fn(),
+      showItemInFolder: shellShowItemInFolder,
     },
   }
 })
 
 vi.mock('fs-extra', () => {
   return {
-    default: {
-      readFile: vi.fn(),
-      writeFile: vi.fn(),
-      pathExists: vi.fn(),
-      stat: vi.fn(),
-    },
+    default: fsModule,
   }
 })
 
@@ -327,6 +353,40 @@ describe('windowLifecycleService runtime 初始化时机', () => {
     expect(Object.keys(moduleNs)).not.toContain('initializeSessionRuntime')
     expect(winInfoUtil.initializeSessionRuntime).toBeUndefined()
     expect(Object.keys(winInfoUtil)).not.toContain('initializeSessionRuntime')
+  })
+
+  it('documentSessionRuntimeComposition 必须集中给 resourceService 装配桌面依赖，避免主入口继续手动拼接资源宿主对象', async () => {
+    const previousFetch = globalThis.fetch
+    const fetchImpl = vi.fn()
+    globalThis.fetch = fetchImpl
+
+    try {
+      const { createDocumentSessionRuntimeComposition } = await import('../documentSessionRuntimeComposition.js')
+
+      createDocumentSessionRuntimeComposition({
+        registry: createRegistryStub(),
+        getConfig: vi.fn(() => ({ language: 'zh-CN' })),
+        recentStore: {
+          add: vi.fn(),
+          clear: vi.fn(),
+          remove: vi.fn(),
+          get: vi.fn(() => []),
+        },
+        sendToRenderer: vi.fn(),
+      })
+
+      expect(createDocumentResourceService).toHaveBeenCalledWith(expect.objectContaining({
+        store: expect.any(Object),
+        showItemInFolder: shellShowItemInFolder,
+        dialogApi,
+        clipboardApi,
+        nativeImageApi,
+        fsModule,
+        fetchImpl,
+      }))
+    } finally {
+      globalThis.fetch = previousFetch
+    }
   })
 
   it('windowLifecycleService 必须删除旧 winInfo facade 导出，避免主进程消费者继续走隐式上下文', async () => {

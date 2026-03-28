@@ -1506,6 +1506,67 @@ describe('ipcMainUtil command mapping', () => {
     expect(result).toEqual(deleteResult)
   })
 
+  it.each([
+    [
+      'document.resource.copy-absolute-path',
+      {
+        resourceUrl: 'wj://2e2f6173736574732f636f70792d706174682e706e67',
+      },
+      {
+        ok: true,
+        reason: 'copied',
+        value: 'D:\\docs\\assets\\copy-path.png',
+      },
+    ],
+    [
+      'document.resource.copy-link',
+      {
+        resourceUrl: 'wj://2e2f6173736574732f636f70792d6c696e6b2e706e67',
+      },
+      {
+        ok: true,
+        reason: 'copied',
+        value: '![copy-link](./assets/copy-link.png)',
+      },
+    ],
+    [
+      'document.resource.copy-image',
+      {
+        resourceUrl: 'wj://2e2f6173736574732f636f70792d696d6167652e706e67',
+      },
+      {
+        ok: true,
+        reason: 'copied',
+      },
+    ],
+    [
+      'document.resource.save-as',
+      {
+        resourceUrl: 'wj://2e2f6173736574732f736176652d61732e706e67',
+      },
+      {
+        ok: true,
+        reason: 'saved',
+        targetPath: 'D:\\exports\\save-as.png',
+      },
+    ],
+  ])('%s 必须先经 runtime 统一命令入口，并返回结构化结果', async (event, data, expectedResult) => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    const result = await dispatchRuntimeResourceCommand({
+      sender,
+      sendToMainHandler,
+      winInfoUtil,
+      event,
+      data,
+      result: expectedResult,
+    })
+
+    expect(result).toEqual(expectedResult)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(dialogShowSaveDialogSync).not.toHaveBeenCalled()
+  })
+
   it('document.external.apply / document.external.ignore 必须暴露为新的统一 IPC 命令', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
 
