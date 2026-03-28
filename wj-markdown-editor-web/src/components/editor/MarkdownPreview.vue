@@ -9,6 +9,7 @@ import { useCommonStore } from '@/stores/counter.js'
 import { syncCodeBlockActionVariables } from '@/util/codeBlockActionStyleUtil.js'
 import { loadCodeTheme } from '@/util/codeThemeUtil.js'
 import { handlePreviewHashAnchorClick } from '@/util/editor/previewAnchorLinkScrollUtil.js'
+import { createPreviewResourceContext } from '@/util/editor/previewResourceContextUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
 import { copyTextWithFeedback, getPreviewInlineCodeCopyText, syncPreviewInlineCodeCopyMetadata } from '@/util/previewInlineCodeCopyUtil.js'
 import { settleMermaidRender } from '@/util/previewMermaidRenderUtil.js'
@@ -36,7 +37,7 @@ const props = defineProps({
   },
 })
 
-const emits = defineEmits(['refreshComplete', 'anchorChange', 'assetContextmenu', 'assetOpen'])
+const emits = defineEmits(['refreshComplete', 'anchorChange', 'previewContextmenu', 'assetOpen'])
 
 const store = useCommonStore()
 const { t } = useI18n()
@@ -236,8 +237,12 @@ function handlePreviewContextmenu(e) {
   if (!assetInfo) {
     return
   }
+  const context = createPreviewResourceContext(assetInfo)
+  if (!context) {
+    return
+  }
   e.preventDefault()
-  emits('assetContextmenu', assetInfo)
+  emits('previewContextmenu', context)
 }
 
 /**
