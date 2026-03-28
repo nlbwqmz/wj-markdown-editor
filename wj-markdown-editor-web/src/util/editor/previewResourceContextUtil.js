@@ -47,6 +47,10 @@ function isStableLocalSource(value) {
     return false
   }
 
+  if (value.startsWith('?') || value.startsWith('&')) {
+    return false
+  }
+
   if (value.startsWith('/') || value.startsWith('./') || value.startsWith('../')) {
     return true
   }
@@ -55,7 +59,11 @@ function isStableLocalSource(value) {
     return false
   }
 
-  return true
+  if (/[\\/]/u.test(value)) {
+    return true
+  }
+
+  return /^[^/?][^./?]*\.[^/?]+(?:\?.*)?$/u.test(value)
 }
 
 /**
