@@ -80,6 +80,7 @@
 
 - `resource.delete` 只允许在 `editor-preview` profile 出现。
 - `resource.copy-markdown-reference` 在编辑页和纯预览页都保留，因为它只复制文本，不修改正文。
+- `resource.copy-markdown-reference` 只在 `markdownReference` 可稳定提供时显示；如果当前上下文无法安全还原原始 Markdown 引用，则隐藏该菜单项。
 - 网络图片不提供“在浏览器打开”。
 - `resource.copy-image` 与 `resource.save-as` 仅对图片资源显示。
 - `assetType = unknown` 时统一按“非图片资源”兜底处理：不显示 `复制图片` 与 `另存为`，其余动作按 `sourceType + profile` 继续裁决。
@@ -115,12 +116,41 @@
 
 - `assetType` 由命中的 DOM 节点类型判定，避免视图层再从 URL 猜语义。
 - `MarkdownPreview.vue` 内部现有的 DOM 提取字段如果仍使用 `kind` 作为中间变量，只允许在组件内部过渡使用；`createPreviewResourceContext()` 对外产出的最终上下文只保留 `assetType`，后续菜单构造与动作分发统一读取 `assetType`。
+- `rawSrc` 是当前资源在 Markdown 中的原始引用文本：
+  - 远程资源复制链接固定以 `rawSrc` 为权威来源
+  - 远程图片下载、复制图片、另存为也固定以 `rawSrc` 为权威来源
+- `rawPath` 只服务本地资源解析：
+  - 它表示原始本地路径候选，可用于相对路径解析与本地文件定位
+- `resourceUrl` 是预览层最终用于渲染的资源地址：
+  - 对本地资源通常是 `wj://` 或等价本地协议地址
+  - 它可继续作为本地资源打开目录、复制图片、本地另存为时的协议入口
 - `sourceType` 由 `resourceUrl/rawSrc/rawPath` 共同判定：
   - `wj://` 或可解析为本地文件的资源视为 `local`
   - `http://` / `https://` 视为 `remote`
-- `markdownReference` 优先从渲染 DOM 上已有的原始引用元信息读取。
-- 如果 DOM 没有足够的原始引用信息，renderer 可退化为用 `assetType + rawSrc` 拼装最小可用引用文本；若仍无法稳定拼装，则动作执行时提示失败。
+- 如果无法稳定判定 `sourceType`，`createPreviewResourceContext()` 必须直接返回 `null`，不弹出自定义资源菜单。
+- `markdownReference` 必须来自渲染 DOM 上可稳定回放的原始引用元信息。
+- 如果 DOM 没有足够的原始引用信息，则 `markdownReference = null`，并隐藏“复制 Markdown 引用”；不得再根据 `assetType + rawSrc` 临时拼装“最小可用引用”。
 - 未保存文档中的相对本地资源，在菜单可见性上仍按 `local` 处理，不额外引入新的菜单分支；凡是依赖绝对路径解析的动作，执行期统一复用现有“当前文件未保存，无法定位相对资源”失败语义。
+
+### 5.3 `actionContext` / `requestContext` 契约
+
+- `actionContext` 由宿主视图在菜单打开瞬间冻结，继续沿用当前右键架构：
+  - `version`
+  - `sessionId`
+  - `documentPath`
+- `requestContext` 由宿主视图基于冻结的 `actionContext` 生成，并发送给 runtime：
+
+```js
+{
+  sessionId: string | null,
+  documentPath: string | null,
+}
+```
+
+- `requestContext` 的生成时机必须与当前 `resource.open-in-folder` / `resource.delete` 一致：
+  - 不能在菜单点击时重新读取最新 store 快照
+  - 必须复用菜单打开时冻结的上下文
+- runtime 继续只使用 `requestContext.sessionId + requestContext.documentPath` 做 `stale-document-context` 判定，不引入新的请求态结构。
 
 ## 6. 架构与职责拆分
 
@@ -177,7 +207,8 @@
 
 #### `ipcMainUtil.js`
 
-- 增加新的 renderer -> main IPC 入口
+- 继续扩展现有 `sendToMain` -> `document.resource.*` 分发链路
+- 不新增并行 IPC 通道
 - 继续统一透传到 runtime，而不是在 IPC 层直接写散落逻辑
 
 #### `documentSessionRuntime.js`
@@ -228,9 +259,9 @@
 | 命令 | 请求入参 | 成功返回 | 失败返回 |
 | --- | --- | --- | --- |
 | `document.resource.copy-absolute-path` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
-| `document.resource.copy-link` | `{ resourceUrl, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
-| `document.resource.copy-image` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, sourceType }` | `{ ok: false, reason }` |
-| `document.resource.save-as` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, path }` | `{ ok: false, reason, cancelled?: true }` |
+| `document.resource.copy-link` | `{ rawSrc, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
+| `document.resource.copy-image` | `{ sourceType, resourceUrl, rawSrc, rawPath, requestContext }` | `{ ok: true, sourceType }` | `{ ok: false, reason }` |
+| `document.resource.save-as` | `{ sourceType, resourceUrl, rawSrc, rawPath, requestContext }` | `{ ok: true, path }` | `{ ok: false, reason, cancelled?: true }` |
 
 ### 7.2 复制绝对路径 / 复制链接
 
@@ -238,28 +269,34 @@
 2. 菜单层回传 `resource.copy-absolute-path` 或 `resource.copy-link`
 3. 宿主视图把 action key 映射为 `document.resource.copy-absolute-path` 或 `document.resource.copy-link`
 4. 宿主经 IPC 调用 runtime
-5. Electron 解析出最终字符串并返回 `{ ok: true, text }`
-6. 宿主视图在 renderer 侧写入文本剪贴板
-7. Renderer 依据结构化结果显示成功或失败消息
+5. 复制绝对路径固定由 runtime 基于 `resourceUrl + rawPath + requestContext` 解析权威本地路径文本
+6. 复制资源链接固定由 runtime 基于 `rawSrc` 返回权威原始链接文本
+7. Electron 返回 `{ ok: true, text }`
+8. 宿主视图在 renderer 侧写入文本剪贴板
+9. Renderer 依据结构化结果显示成功或失败消息
 
 ### 7.3 复制图片
 
 1. 菜单层回传 `resource.copy-image`
 2. 宿主视图把 action key 映射为 `document.resource.copy-image`
-3. Electron 根据 `sourceType` 读取本地图片或下载网络图片
-4. 校验结果确为图片内容
-5. 转换为系统剪贴板支持的图片格式并写入剪贴板
-6. 返回 `{ ok, reason }` 结构化结果
+3. 本地图片固定以 `resourceUrl + rawPath + requestContext` 作为权威输入
+4. 网络图片固定以 `rawSrc` 作为权威下载地址
+5. Electron 根据 `sourceType` 读取本地图片或下载网络图片
+6. 校验结果确为图片内容
+7. 转换为系统剪贴板支持的图片格式并写入剪贴板
+8. 返回 `{ ok, reason }` 结构化结果
 
 ### 7.4 图片另存为
 
 1. 菜单层回传 `resource.save-as`
 2. 宿主视图把 action key 映射为 `document.resource.save-as`
-3. Electron 解析默认文件名
-4. 打开保存对话框
-5. 用户确认后读取本地文件或下载网络图片
-6. 写入目标路径
-7. 返回保存结果；若用户取消则返回取消态
+3. 本地图片固定以 `resourceUrl + rawPath + requestContext` 作为权威输入
+4. 网络图片固定以 `rawSrc` 作为权威下载地址
+5. Electron 解析默认文件名
+6. 打开保存对话框
+7. 用户确认后读取本地文件或下载网络图片
+8. 写入目标路径
+9. 返回保存结果；若用户取消则返回取消态
 
 ### 7.5 复制 Markdown 引用
 
@@ -299,7 +336,7 @@
 
 - 用户取消另存为：返回取消态，静默结束，不提示错误
 - 剪贴板写入失败：提示复制失败
-- Markdown 引用缺失：提示复制失败，不拼接错误内容
+- `markdownReference = null`：隐藏“复制 Markdown 引用”菜单项；若异常情况下仍触发执行，则提示复制失败，不拼接错误内容
 - `assetType = unknown`：按非图片资源处理，不显示图片专属动作
 - 纯预览页任何情况下都不出现删除入口
 
