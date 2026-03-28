@@ -92,6 +92,10 @@ function resolveSourceType(assetInfo) {
     classifySourceCandidate(assetInfo?.rawPath),
   ].filter(Boolean)
 
+  if (candidateTypeList.includes('unknown')) {
+    return null
+  }
+
   const hasLocalSource = candidateTypeList.includes('local')
   const hasRemoteSource = candidateTypeList.includes('remote')
 
