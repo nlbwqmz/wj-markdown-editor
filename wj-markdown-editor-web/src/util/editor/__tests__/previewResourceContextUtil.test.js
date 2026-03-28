@@ -102,3 +102,15 @@ test('预览资源上下文在稳定来源与不稳定来源混合时必须 fail
     resourceUrl: 'wj://local/assets/demo.png',
   }), null)
 })
+
+test('预览资源上下文遇到协议相对 URL 时必须 fail-closed 返回 null', () => {
+  assert.ok(previewResourceContextUtilModule, '缺少 preview resource context util')
+
+  const { createPreviewResourceContext } = previewResourceContextUtilModule
+  assert.equal(createPreviewResourceContext({
+    assetType: 'image',
+    rawSrc: '//cdn.example.com/demo.png',
+    rawPath: '//cdn.example.com/demo.png',
+    resourceUrl: '//cdn.example.com/demo.png',
+  }), null)
+})

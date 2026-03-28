@@ -43,12 +43,12 @@ function isStableLocalSource(value) {
     return true
   }
 
-  if (value.startsWith('/') || value.startsWith('./') || value.startsWith('../')) {
-    return true
-  }
-
   if (value.startsWith('#') || value.startsWith('//')) {
     return false
+  }
+
+  if (value.startsWith('/') || value.startsWith('./') || value.startsWith('../')) {
+    return true
   }
 
   if (/^[a-z][a-z\d+.-]*:/iu.test(value)) {
