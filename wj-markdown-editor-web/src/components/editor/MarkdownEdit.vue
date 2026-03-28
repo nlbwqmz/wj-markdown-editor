@@ -116,12 +116,13 @@ const menuVisible = ref(false)
 const menuController = ref(false)
 const previewVisible = ref(true)
 const previewController = ref(true)
+// 仅在预览从“未渲染”重新挂载为“已渲染”时，延后首轮同步到 refreshComplete。
+const pendingPreviewResyncAfterRefresh = ref(false)
 const layoutMode = computed(() => resolveMarkdownEditLayoutMode({
   previewVisible: previewVisible.value,
   menuVisible: menuVisible.value,
   previewPosition: props.previewPosition,
 }))
-const gridAnimation = ref(false)
 const handledContentUpdateToken = ref(0)
 // 当前滚动锚点只跟随最近一次对外确认过的 session snapshot。
 // 这样 capture / restore 都会严格绑定到外层给定的 sessionId + revision。
@@ -491,6 +492,14 @@ const {
 
 const { onRefreshComplete } = createPreviewRefreshCoordinator({
   rebuildPreviewLayoutIndex,
+  syncPreviewAfterRefresh: () => {
+    if (pendingPreviewResyncAfterRefresh.value !== true || previewController.value !== true) {
+      return
+    }
+
+    pendingPreviewResyncAfterRefresh.value = false
+    syncEditorToPreview(true)
+  },
   restorePreviewLinkedHighlight,
   closePreviewSearchBar,
 })
@@ -511,15 +520,11 @@ const {
 })
 
 const editorContainerStyle = computed(() => {
-  const style = {
+  return {
     ...linkedHighlightThemeStyle.value,
     '--wj-editor-bottom-gap': BOTTOM_GAP,
     '--wj-preview-bottom-gap': BOTTOM_GAP,
   }
-  if (gridAnimation.value) {
-    style.transition = 'grid-template-columns 0.5s ease-in-out'
-  }
-  return style
 })
 
 const previewContainerStyle = computed(() => {
@@ -884,13 +889,23 @@ watch(() => store.config.shortcutKeyList, (newValue) => {
   reconfigureKeymap(refreshKeymap())
 }, { deep: true, immediate: true })
 
-watch(layoutMode, () => {
+watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {
   closePreviewSearchBar()
   syncLayoutControllers()
   destroySplitLayout()
-  gridAnimation.value = true
+
+  const previewWasVisible = previousLayoutMode?.columnOrder?.includes('preview') === true
+  const previewNowVisible = nextLayoutMode.columnOrder.includes('preview')
+  if (previewNowVisible !== true) {
+    pendingPreviewResyncAfterRefresh.value = false
+  } else if (previewWasVisible !== true) {
+    // 预览重新挂载后的首轮重同步只能由 refreshComplete 消费；
+    // 在预览仍未完成刷新前，即使继续发生布局变化，也必须保留这次待执行标记。
+    pendingPreviewResyncAfterRefresh.value = true
+  }
 
   if (previewController.value !== true) {
+    pendingPreviewResyncAfterRefresh.value = false
     clearLinkedHighlightDisplay()
   }
 
@@ -900,15 +915,13 @@ watch(layoutMode, () => {
       return
     }
 
-    setTimeout(() => {
-      syncEditorToPreview(true)
-      restorePreviewLinkedHighlight()
-    }, 500)
-  })
+    if (pendingPreviewResyncAfterRefresh.value === true) {
+      return
+    }
 
-  setTimeout(() => {
-    gridAnimation.value = false
-  }, 500)
+    syncEditorToPreview(true)
+    restorePreviewLinkedHighlight()
+  })
 })
 
 onMounted(() => {

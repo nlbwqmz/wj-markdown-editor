@@ -1,6 +1,6 @@
-import { shallowMount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, onBeforeUnmount } from 'vue'
 
 import MarkdownEdit from '../MarkdownEdit.vue'
 
@@ -14,6 +14,27 @@ function createFakeRef(value) {
 const splitState = vi.hoisted(() => ({
   calls: [],
   destroySpies: [],
+}))
+
+const previewLayoutWiringState = vi.hoisted(() => ({
+  rebuildPreviewLayoutIndex: vi.fn(() => 0),
+  jumpToTargetLine: vi.fn(),
+  syncEditorToPreview: vi.fn(),
+  syncPreviewToEditor: vi.fn(),
+  bindEvents: vi.fn(),
+  unbindEvents: vi.fn(),
+  clearScrollTimer: vi.fn(),
+  cancelScheduledCursorHighlight: vi.fn(),
+  clearAllLinkedHighlight: vi.fn(),
+  clearLinkedHighlightDisplay: vi.fn(),
+  highlightByEditorCursor: vi.fn(),
+  onPreviewAreaClick: vi.fn(),
+  restorePreviewLinkedHighlight: vi.fn(),
+}))
+
+const markdownPreviewStubState = vi.hoisted(() => ({
+  instances: [],
+  nextId: 0,
 }))
 
 vi.mock('split-grid', () => ({
@@ -70,7 +91,32 @@ vi.mock('@/components/editor/MarkdownMenu.vue', () => ({
 }))
 
 vi.mock('@/components/editor/MarkdownPreview.vue', () => ({
-  default: createStubComponent('MarkdownPreviewStub'),
+  default: defineComponent({
+    name: 'MarkdownPreviewStub',
+    props: {
+      previewRefreshEpoch: {
+        type: Number,
+        default: 0,
+      },
+    },
+    setup(props, { attrs, emit }) {
+      const instanceRecord = {
+        id: ++markdownPreviewStubState.nextId,
+        getPreviewRefreshEpoch: () => props.previewRefreshEpoch,
+        emitRefreshComplete(epoch = props.previewRefreshEpoch) {
+          emit('refresh-complete', epoch)
+        },
+        unmounted: false,
+      }
+      markdownPreviewStubState.instances.push(instanceRecord)
+
+      onBeforeUnmount(() => {
+        instanceRecord.unmounted = true
+      })
+
+      return () => h('div', attrs)
+    },
+  }),
 }))
 
 vi.mock('@/stores/counter.js', () => ({
@@ -136,33 +182,25 @@ vi.mock('@/components/editor/composables/useViewScrollAnchor.js', () => ({
 vi.mock('@/components/editor/markdownEditPreviewLayoutIndexWiring.js', () => ({
   createMarkdownEditPreviewLayoutIndexWiring() {
     return {
-      rebuildPreviewLayoutIndex: vi.fn(() => 0),
+      rebuildPreviewLayoutIndex: previewLayoutWiringState.rebuildPreviewLayoutIndex,
       previewSync: {
-        jumpToTargetLine: vi.fn(),
-        syncEditorToPreview: vi.fn(),
-        syncPreviewToEditor: vi.fn(),
-        bindEvents: vi.fn(),
-        unbindEvents: vi.fn(),
-        clearScrollTimer: vi.fn(),
+        jumpToTargetLine: previewLayoutWiringState.jumpToTargetLine,
+        syncEditorToPreview: previewLayoutWiringState.syncEditorToPreview,
+        syncPreviewToEditor: previewLayoutWiringState.syncPreviewToEditor,
+        bindEvents: previewLayoutWiringState.bindEvents,
+        unbindEvents: previewLayoutWiringState.unbindEvents,
+        clearScrollTimer: previewLayoutWiringState.clearScrollTimer,
       },
       associationHighlight: {
         linkedSourceHighlightField: {},
-        linkedHighlightThemeStyle: createFakeRef({}),
-        cancelScheduledCursorHighlight: vi.fn(),
-        clearAllLinkedHighlight: vi.fn(),
-        clearLinkedHighlightDisplay: vi.fn(),
-        highlightByEditorCursor: vi.fn(),
-        onPreviewAreaClick: vi.fn(),
-        restorePreviewLinkedHighlight: vi.fn(),
+        linkedHighlightThemeStyle: { __v_isRef: true, value: {} },
+        cancelScheduledCursorHighlight: previewLayoutWiringState.cancelScheduledCursorHighlight,
+        clearAllLinkedHighlight: previewLayoutWiringState.clearAllLinkedHighlight,
+        clearLinkedHighlightDisplay: previewLayoutWiringState.clearLinkedHighlightDisplay,
+        highlightByEditorCursor: previewLayoutWiringState.highlightByEditorCursor,
+        onPreviewAreaClick: previewLayoutWiringState.onPreviewAreaClick,
+        restorePreviewLinkedHighlight: previewLayoutWiringState.restorePreviewLinkedHighlight,
       },
-    }
-  },
-}))
-
-vi.mock('@/components/editor/previewRefreshCoordinator.js', () => ({
-  createPreviewRefreshCoordinator() {
-    return {
-      onRefreshComplete: vi.fn(),
     }
   },
 }))
@@ -245,7 +283,7 @@ async function mountMarkdownEdit({
 } = {}) {
   storeState.current = createStore({ menuVisible })
 
-  const wrapper = shallowMount(MarkdownEdit, {
+  const wrapper = mount(MarkdownEdit, {
     props: {
       modelValue: '# title',
       previewPosition,
@@ -263,10 +301,33 @@ function getLayoutSequence(wrapper) {
     .map(node => node.attributes('data-layout-item'))
 }
 
+function getLayoutStyle(wrapper) {
+  return wrapper.get('[data-testid="markdown-edit-layout"]').attributes('style') || ''
+}
+
+function getLastMarkdownPreviewStubInstance() {
+  return markdownPreviewStubState.instances.at(-1) || null
+}
+
 describe('markdownEdit 布局运行时接线', () => {
   beforeEach(() => {
     splitState.calls.length = 0
     splitState.destroySpies.length = 0
+    markdownPreviewStubState.instances.length = 0
+    markdownPreviewStubState.nextId = 0
+    previewLayoutWiringState.rebuildPreviewLayoutIndex.mockClear()
+    previewLayoutWiringState.jumpToTargetLine.mockClear()
+    previewLayoutWiringState.syncEditorToPreview.mockClear()
+    previewLayoutWiringState.syncPreviewToEditor.mockClear()
+    previewLayoutWiringState.bindEvents.mockClear()
+    previewLayoutWiringState.unbindEvents.mockClear()
+    previewLayoutWiringState.clearScrollTimer.mockClear()
+    previewLayoutWiringState.cancelScheduledCursorHighlight.mockClear()
+    previewLayoutWiringState.clearAllLinkedHighlight.mockClear()
+    previewLayoutWiringState.clearLinkedHighlightDisplay.mockClear()
+    previewLayoutWiringState.highlightByEditorCursor.mockClear()
+    previewLayoutWiringState.onPreviewAreaClick.mockClear()
+    previewLayoutWiringState.restorePreviewLinkedHighlight.mockClear()
     vi.useFakeTimers()
   })
 
@@ -353,5 +414,114 @@ describe('markdownEdit 布局运行时接线', () => {
       'gutter-menu',
       'gutter-preview',
     ])
+  })
+
+  it('切换目录栏和预览区显隐时，不应给布局容器注入宽度过渡样式', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: true,
+    })
+
+    wrapper.vm.$.setupState.menuVisible = false
+    await flushLayoutRender()
+
+    expect(getLayoutStyle(wrapper)).not.toContain('transition:')
+
+    wrapper.vm.$.setupState.previewVisible = false
+    await flushLayoutRender()
+
+    expect(getLayoutStyle(wrapper)).not.toContain('transition:')
+  })
+
+  it('重新打开预览后，应等待 refresh-complete 再执行首轮预览同步和高亮恢复', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: false,
+    })
+
+    previewLayoutWiringState.syncEditorToPreview.mockClear()
+    previewLayoutWiringState.restorePreviewLinkedHighlight.mockClear()
+
+    wrapper.vm.$.setupState.previewVisible = false
+    await flushLayoutRender()
+
+    previewLayoutWiringState.syncEditorToPreview.mockClear()
+    previewLayoutWiringState.restorePreviewLinkedHighlight.mockClear()
+
+    wrapper.vm.$.setupState.previewVisible = true
+    await flushLayoutRender()
+
+    expect(previewLayoutWiringState.syncEditorToPreview).not.toHaveBeenCalled()
+    expect(previewLayoutWiringState.restorePreviewLinkedHighlight).not.toHaveBeenCalled()
+
+    getLastMarkdownPreviewStubInstance()?.emitRefreshComplete()
+    await nextTick()
+
+    expect(previewLayoutWiringState.syncEditorToPreview).toHaveBeenCalledTimes(1)
+    expect(previewLayoutWiringState.syncEditorToPreview).toHaveBeenCalledWith(true)
+    expect(previewLayoutWiringState.restorePreviewLinkedHighlight).toHaveBeenCalledTimes(1)
+  })
+
+  it('等待 reopen 的 refresh-complete 期间再次切换布局时，不应提前消费重同步机会', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: false,
+    })
+
+    wrapper.vm.$.setupState.previewVisible = false
+    await flushLayoutRender()
+
+    previewLayoutWiringState.syncEditorToPreview.mockClear()
+    previewLayoutWiringState.restorePreviewLinkedHighlight.mockClear()
+
+    wrapper.vm.$.setupState.previewVisible = true
+    await flushLayoutRender()
+    const reopenedPreviewInstance = getLastMarkdownPreviewStubInstance()
+
+    wrapper.vm.$.setupState.menuVisible = true
+    await flushLayoutRender()
+
+    expect(previewLayoutWiringState.syncEditorToPreview).not.toHaveBeenCalled()
+    expect(previewLayoutWiringState.restorePreviewLinkedHighlight).not.toHaveBeenCalled()
+
+    reopenedPreviewInstance?.emitRefreshComplete()
+    await nextTick()
+
+    expect(previewLayoutWiringState.syncEditorToPreview).toHaveBeenCalledTimes(1)
+    expect(previewLayoutWiringState.syncEditorToPreview).toHaveBeenCalledWith(true)
+    expect(previewLayoutWiringState.restorePreviewLinkedHighlight).toHaveBeenCalledTimes(1)
+  })
+
+  it('旧预览实例卸载后的迟到 refresh-complete 不会触发当前实例的重同步', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: false,
+    })
+
+    const initialPreviewInstance = getLastMarkdownPreviewStubInstance()
+    wrapper.vm.$.setupState.previewVisible = false
+    await flushLayoutRender()
+
+    previewLayoutWiringState.syncEditorToPreview.mockClear()
+    previewLayoutWiringState.restorePreviewLinkedHighlight.mockClear()
+
+    wrapper.vm.$.setupState.previewVisible = true
+    await flushLayoutRender()
+    const reopenedPreviewInstance = getLastMarkdownPreviewStubInstance()
+
+    expect(initialPreviewInstance?.unmounted).toBe(true)
+
+    initialPreviewInstance?.emitRefreshComplete()
+    await nextTick()
+
+    expect(previewLayoutWiringState.syncEditorToPreview).not.toHaveBeenCalled()
+    expect(previewLayoutWiringState.restorePreviewLinkedHighlight).not.toHaveBeenCalled()
+
+    reopenedPreviewInstance?.emitRefreshComplete()
+    await nextTick()
+
+    expect(previewLayoutWiringState.syncEditorToPreview).toHaveBeenCalledTimes(1)
+    expect(previewLayoutWiringState.syncEditorToPreview).toHaveBeenCalledWith(true)
+    expect(previewLayoutWiringState.restorePreviewLinkedHighlight).toHaveBeenCalledTimes(1)
   })
 })
