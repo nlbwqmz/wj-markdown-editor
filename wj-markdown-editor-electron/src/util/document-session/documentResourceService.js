@@ -34,6 +34,9 @@ const IMAGE_CONTENT_TYPE_EXTENSION_MAP = new Map([
   ['image/vnd.microsoft.icon', '.ico'],
 ])
 
+const DEFAULT_REMOTE_IMAGE_FETCH_TIMEOUT_MS = 15 * 1000
+const DEFAULT_REMOTE_IMAGE_MAX_BYTES = 20 * 1024 * 1024
+
 function normalizeComparablePath(targetPath) {
   if (typeof targetPath !== 'string' || targetPath.trim() === '') {
     return null
@@ -66,6 +69,14 @@ function normalizeStringValue(value) {
 
 function normalizeSourceType(value) {
   return value === 'local' || value === 'remote' ? value : null
+}
+
+function normalizePositiveInteger(value, fallbackValue) {
+  if (typeof value !== 'number' || Number.isFinite(value) !== true || value <= 0) {
+    return fallbackValue
+  }
+
+  return Math.floor(value)
 }
 
 function getSourceScheme(value) {
@@ -147,6 +158,24 @@ function normalizeContentType(contentType) {
 
 function getImageExtensionFromContentType(contentType) {
   return IMAGE_CONTENT_TYPE_EXTENSION_MAP.get(normalizeContentType(contentType)) || null
+}
+
+function parseContentLength(contentLength) {
+  const normalizedContentLength = normalizeStringValue(contentLength)
+  if (!normalizedContentLength) {
+    return null
+  }
+
+  const parsedValue = Number.parseInt(normalizedContentLength, 10)
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+    return null
+  }
+
+  return parsedValue
+}
+
+function isAbortError(error) {
+  return error?.name === 'AbortError'
 }
 
 function sanitizeFileName(fileName) {
@@ -286,7 +315,18 @@ export function createDocumentResourceService({
   nativeImageApi = null,
   fetchImpl = null,
   fsModule = null,
+  remoteImageFetchTimeoutMs = DEFAULT_REMOTE_IMAGE_FETCH_TIMEOUT_MS,
+  remoteImageMaxBytes = DEFAULT_REMOTE_IMAGE_MAX_BYTES,
 }) {
+  const resolvedRemoteImageFetchTimeoutMs = normalizePositiveInteger(
+    remoteImageFetchTimeoutMs,
+    DEFAULT_REMOTE_IMAGE_FETCH_TIMEOUT_MS,
+  )
+  const resolvedRemoteImageMaxBytes = normalizePositiveInteger(
+    remoteImageMaxBytes,
+    DEFAULT_REMOTE_IMAGE_MAX_BYTES,
+  )
+
   function isStaleRequestContext(session, requestContext) {
     if (!requestContext) {
       return false
@@ -387,32 +427,55 @@ export function createDocumentResourceService({
       return createBinaryActionFailureResult('remote-fetch-not-configured')
     }
 
-    let response = null
-    try {
-      response = await fetchImpl(remoteUrl)
-    } catch {
-      return createBinaryActionFailureResult('remote-resource-fetch-failed')
+    const normalizedRemoteUrl = normalizeStringValue(remoteUrl)
+    if (!normalizedRemoteUrl) {
+      return createBinaryActionFailureResult('invalid-remote-resource')
     }
 
-    if (!response?.ok) {
-      return createBinaryActionFailureResult('remote-resource-fetch-failed')
-    }
-
-    const contentType = normalizeContentType(response.headers?.get?.('content-type'))
-    if (!contentType?.startsWith('image/')) {
-      return createBinaryActionFailureResult('remote-resource-not-image')
-    }
+    const abortController = typeof AbortController === 'function'
+      ? new AbortController()
+      : null
+    const timeoutId = setTimeout(() => {
+      abortController?.abort()
+    }, resolvedRemoteImageFetchTimeoutMs)
 
     try {
+      const response = await fetchImpl(normalizedRemoteUrl, {
+        ...(abortController ? { signal: abortController.signal } : {}),
+      })
+      if (!response?.ok) {
+        return createBinaryActionFailureResult('remote-resource-fetch-failed')
+      }
+
+      const contentType = normalizeContentType(response.headers?.get?.('content-type'))
+      if (!contentType?.startsWith('image/')) {
+        return createBinaryActionFailureResult('remote-resource-not-image')
+      }
+
+      const contentLength = parseContentLength(response.headers?.get?.('content-length'))
+      if (contentLength !== null && contentLength > resolvedRemoteImageMaxBytes) {
+        return createBinaryActionFailureResult('remote-resource-too-large')
+      }
+
       const arrayBuffer = await response.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+      if (buffer.byteLength > resolvedRemoteImageMaxBytes) {
+        return createBinaryActionFailureResult('remote-resource-too-large')
+      }
+
       return {
         ok: true,
-        buffer: Buffer.from(arrayBuffer),
-        fileName: deriveRemoteFileName(remoteUrl, contentType),
+        buffer,
+        fileName: deriveRemoteFileName(normalizedRemoteUrl, contentType),
         contentType,
       }
-    } catch {
+    } catch (error) {
+      if (isAbortError(error)) {
+        return createBinaryActionFailureResult('remote-resource-fetch-timeout')
+      }
       return createBinaryActionFailureResult('remote-resource-fetch-failed')
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
 
@@ -494,18 +557,18 @@ export function createDocumentResourceService({
     }
 
     try {
-      const resourceInfo = await resourceFileUtil.resolveLocalResource(
+      const resourceTarget = resourceFileUtil.resolveLocalResourceTarget(
         actionContext.documentContext,
         actionContext.normalizedPayload,
       )
-      if (resourceInfo.ok !== true) {
-        return createTextCopyFailureResult(resourceInfo.reason, {
-          path: resourceInfo.path,
+      if (resourceTarget.ok !== true) {
+        return createTextCopyFailureResult(resourceTarget.reason, {
+          path: resourceTarget.path,
         })
       }
 
-      return createTextCopySuccessResult(resourceInfo.path, {
-        path: resourceInfo.path,
+      return createTextCopySuccessResult(resourceTarget.path, {
+        path: resourceTarget.path,
       })
     } catch {
       return createTextCopyFailureResult('copy-absolute-path-failed')
@@ -603,16 +666,6 @@ export function createDocumentResourceService({
     }
 
     try {
-      const nativeImage = createNativeImageFromBuffer(imageBufferResult.buffer)
-      if (!nativeImage || nativeImage.isEmpty?.() === true) {
-        return createBinaryActionFailureResult(
-          runtimeSourceType === 'remote' ? 'remote-resource-not-image' : 'local-resource-not-image',
-          {
-            path: imageBufferResult.path,
-          },
-        )
-      }
-
       const selectedPath = dialogApi?.showSaveDialogSync?.({
         defaultPath: imageBufferResult.fileName,
       })
