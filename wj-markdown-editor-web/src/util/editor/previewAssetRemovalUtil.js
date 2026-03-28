@@ -436,14 +436,25 @@ export function shouldCleanupMarkdownAfterDeleteResult(deleteResult) {
   return shouldContinueMarkdownCleanup(deleteResult?.reason)
 }
 
+function resolveAssetMatchKind(asset) {
+  if (typeof asset?.assetType === 'string' && asset.assetType) {
+    return asset.assetType
+  }
+  if (typeof asset?.kind === 'string' && asset.kind) {
+    return asset.kind
+  }
+  return null
+}
+
 export function findAssetMarkdownRange(content, asset) {
-  if (!content || !asset?.kind || !asset?.rawSrc) {
+  const assetMatchKind = resolveAssetMatchKind(asset)
+  if (!content || !assetMatchKind || !asset?.rawSrc) {
     return null
   }
 
   const lineStartIndexes = buildLineStartIndexes(content)
   const normalizedAssetPath = normalizeAssetPath(asset.rawSrc)
-  const candidateList = collectAssetMatches(content, asset.kind, lineStartIndexes)
+  const candidateList = collectAssetMatches(content, assetMatchKind, lineStartIndexes)
     .filter(match => match.normalizedPath === normalizedAssetPath)
 
   if (candidateList.length === 0) {
