@@ -31,7 +31,8 @@
    - 网络资源复制资源链接
    - 复制当前资源对应的 Markdown 引用
 3. 编辑页继续保留删除能力；纯预览页不得出现编辑性质菜单。
-4. 所有本地/网络资源相关桌面能力继续走 Electron runtime，不在 renderer 自行拼接平台能力。
+4. 所有依赖文件系统、网络下载、原生图片剪贴板或保存对话框的资源能力继续走 Electron runtime，不在 renderer 自行拼接平台能力。
+5. `复制 Markdown 引用` 作为唯一的纯文本剪贴板例外，允许在 renderer 侧直接执行，不纳入 runtime 资源命令集合。
 
 ### 2.2 交互目标
 
@@ -81,6 +82,7 @@
 - `resource.copy-markdown-reference` 在编辑页和纯预览页都保留，因为它只复制文本，不修改正文。
 - 网络图片不提供“在浏览器打开”。
 - `resource.copy-image` 与 `resource.save-as` 仅对图片资源显示。
+- `assetType = unknown` 时统一按“非图片资源”兜底处理：不显示 `复制图片` 与 `另存为`，其余动作按 `sourceType + profile` 继续裁决。
 
 ## 5. 资源上下文设计
 
@@ -140,6 +142,7 @@
 
 - 以 `profile + assetType + sourceType` 作为唯一输入
 - 输出稳定菜单项数组
+- `assetType = unknown` 时必须落到非图片兜底分支，不能单独派生新的菜单体系
 - 不在该 util 中夹带具体执行逻辑
 
 #### `EditorView.vue`
@@ -198,6 +201,15 @@
 
 ## 7. 命令与数据流设计
 
+### 7.0 最小命令契约
+
+| 命令 | 请求入参 | 成功返回 | 失败返回 |
+| --- | --- | --- | --- |
+| `resource.copy-absolute-path` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
+| `resource.copy-link` | `{ resourceUrl, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
+| `resource.copy-image` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, sourceType }` | `{ ok: false, reason }` |
+| `resource.save-as` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, path }` | `{ ok: false, reason, cancelled?: true }` |
+
 ### 7.1 复制绝对路径 / 复制链接
 
 1. Renderer 右键命中资源并冻结 `actionContext`
@@ -226,10 +238,11 @@
 
 ### 7.4 复制 Markdown 引用
 
-1. 视图层直接使用当前 `asset.markdownReference`
-2. 写入文本剪贴板
-3. 复用现有 `message.copySucceeded` / `message.copyFailed`
-4. 不经过 runtime，不修改文档内容
+1. 该动作是本次唯一允许绕开 runtime 的资源菜单动作
+2. 视图层直接使用当前 `asset.markdownReference`
+3. 写入文本剪贴板
+4. 复用现有 `message.copySucceeded` / `message.copyFailed`
+5. 不经过 runtime，不修改文档内容
 
 ## 8. 异常与边界处理
 
@@ -261,6 +274,7 @@
 - 用户取消另存为：返回取消态，静默结束，不提示错误
 - 剪贴板写入失败：提示复制失败
 - Markdown 引用缺失：提示复制失败，不拼接错误内容
+- `assetType = unknown`：按非图片资源处理，不显示图片专属动作
 - 纯预览页任何情况下都不出现删除入口
 
 ## 9. 国际化策略
@@ -324,8 +338,9 @@
 
 1. 不新增绕过 runtime 的资源操作通道。
 2. 不在 Web 端自行实现平台路径解析、下载写盘或图片剪贴板能力。
-3. 不改变当前删除流程的产品策略，只补菜单能力和资源动作。
-4. 优先保持现有模块边界；只有在 Electron 资源服务明显膨胀时才新增辅助 util。
+3. `resource.copy-markdown-reference` 是唯一允许在 renderer 直接执行的例外，因为它只依赖纯文本剪贴板，不涉及文件系统、原生图片剪贴板或保存对话框。
+4. 不改变当前删除流程的产品策略，只补菜单能力和资源动作。
+5. 优先保持现有模块边界；只有在 Electron 资源服务明显膨胀时才新增辅助 util。
 
 ## 12. 计划入口
 
