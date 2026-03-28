@@ -31,8 +31,8 @@
    - 网络资源复制资源链接
    - 复制当前资源对应的 Markdown 引用
 3. 编辑页继续保留删除能力；纯预览页不得出现编辑性质菜单。
-4. 所有依赖文件系统、网络下载、原生图片剪贴板或保存对话框的资源能力继续走 Electron runtime，不在 renderer 自行拼接平台能力。
-5. `复制 Markdown 引用` 作为唯一的纯文本剪贴板例外，允许在 renderer 侧直接执行，不纳入 runtime 资源命令集合。
+4. 所有依赖文件系统、网络下载、原生图片剪贴板或保存对话框的资源能力，都必须先由宿主视图把菜单 action key 分发为 `document.resource.*` 命令，再经 Electron runtime 执行，不在 renderer 自行拼接平台能力。
+5. `复制 Markdown 引用` 作为唯一的纯文本剪贴板例外，允许宿主视图在 renderer 侧直接执行，不纳入 runtime 资源命令集合。
 
 ### 2.2 交互目标
 
@@ -140,7 +140,9 @@
 
 #### `previewContextMenuActionUtil.js`
 
-- 以 `profile + assetType + sourceType` 作为唯一输入
+- 保持 `buildPreviewContextMenuItems({ context, profile, t })` 这一层输入模型
+- 先判断 `context.type`
+- 当 `context.type === 'resource'` 时，再基于 `assetType + sourceType + profile` 生成菜单项
 - 输出稳定菜单项数组
 - `assetType = unknown` 时必须落到非图片兜底分支，不能单独派生新的菜单体系
 - 不在该 util 中夹带具体执行逻辑
@@ -148,17 +150,20 @@
 #### `EditorView.vue`
 
 - 继续作为编辑页菜单动作分发中心
-- 新增以下分支：
+- 继续接收菜单层回传的 `resource.*` action key
+- 新增以下分发分支：
   - `resource.copy-absolute-path`
   - `resource.copy-link`
   - `resource.copy-image`
   - `resource.save-as`
   - `resource.copy-markdown-reference`
 - 继续保留 `resource.open-in-folder` 与 `resource.delete`
+- 除 `resource.copy-markdown-reference` 外，其余资源动作都由宿主再映射为 `document.resource.*` IPC 命令
 
 #### `PreviewView.vue`
 
 - 继续作为纯预览页菜单动作分发中心
+- 继续接收菜单层回传的 `resource.*` action key
 - 仅处理非编辑动作：
   - `resource.copy-absolute-path`
   - `resource.copy-link`
@@ -166,6 +171,7 @@
   - `resource.save-as`
   - `resource.copy-markdown-reference`
   - `resource.open-in-folder`
+- 除 `resource.copy-markdown-reference` 外，其余资源动作都由宿主再映射为 `document.resource.*` IPC 命令
 
 ### 6.2 Electron 侧职责
 
@@ -176,15 +182,19 @@
 
 #### `documentSessionRuntime.js`
 
-- 注册新的资源类 UI 命令
+- 注册新的资源类 UI 命令：
+  - `document.resource.copy-absolute-path`
+  - `document.resource.copy-link`
+  - `document.resource.copy-image`
+  - `document.resource.save-as`
 - 仍把资源命令路由到 `documentResourceService`
 
 #### `documentResourceService.js`
 
 - 继续以 active session 为资源解析上下文
 - 承接本地/网络资源桌面能力：
-  - 复制本地绝对路径
-  - 复制网络链接
+  - 解析本地绝对路径文本
+  - 解析网络链接文本
   - 复制图片到系统剪贴板
   - 图片另存为
   - 本地资源在资源管理器中打开
@@ -201,48 +211,64 @@
 
 ## 7. 命令与数据流设计
 
-### 7.0 最小命令契约
+### 7.0 菜单动作与运行时命令映射
+
+| 菜单 action key | 宿主分发结果 |
+| --- | --- |
+| `resource.copy-absolute-path` | `document.resource.copy-absolute-path` |
+| `resource.copy-link` | `document.resource.copy-link` |
+| `resource.copy-image` | `document.resource.copy-image` |
+| `resource.save-as` | `document.resource.save-as` |
+| `resource.open-in-folder` | `document.resource.open-in-folder` |
+| `resource.delete` | `document.resource.delete-local` |
+| `resource.copy-markdown-reference` | renderer 直接执行，不经过 runtime |
+
+### 7.1 最小运行时命令契约
 
 | 命令 | 请求入参 | 成功返回 | 失败返回 |
 | --- | --- | --- | --- |
-| `resource.copy-absolute-path` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
-| `resource.copy-link` | `{ resourceUrl, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
-| `resource.copy-image` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, sourceType }` | `{ ok: false, reason }` |
-| `resource.save-as` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, path }` | `{ ok: false, reason, cancelled?: true }` |
+| `document.resource.copy-absolute-path` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
+| `document.resource.copy-link` | `{ resourceUrl, requestContext }` | `{ ok: true, text }` | `{ ok: false, reason }` |
+| `document.resource.copy-image` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, sourceType }` | `{ ok: false, reason }` |
+| `document.resource.save-as` | `{ resourceUrl, rawPath, requestContext }` | `{ ok: true, path }` | `{ ok: false, reason, cancelled?: true }` |
 
-### 7.1 复制绝对路径 / 复制链接
+### 7.2 复制绝对路径 / 复制链接
 
 1. Renderer 右键命中资源并冻结 `actionContext`
-2. 视图层按菜单项分发动作
-3. 对本地资源，发送 `resource.copy-absolute-path`
-4. 对网络资源，发送 `resource.copy-link`
-5. Electron 解析出最终字符串后写入系统剪贴板
-6. Renderer 依据结构化结果显示成功或失败消息
+2. 菜单层回传 `resource.copy-absolute-path` 或 `resource.copy-link`
+3. 宿主视图把 action key 映射为 `document.resource.copy-absolute-path` 或 `document.resource.copy-link`
+4. 宿主经 IPC 调用 runtime
+5. Electron 解析出最终字符串并返回 `{ ok: true, text }`
+6. 宿主视图在 renderer 侧写入文本剪贴板
+7. Renderer 依据结构化结果显示成功或失败消息
 
-### 7.2 复制图片
+### 7.3 复制图片
 
-1. Renderer 发送 `resource.copy-image`
-2. Electron 根据 `sourceType` 读取本地图片或下载网络图片
-3. 校验结果确为图片内容
-4. 转换为系统剪贴板支持的图片格式并写入剪贴板
-5. 返回 `{ ok, reason }` 结构化结果
+1. 菜单层回传 `resource.copy-image`
+2. 宿主视图把 action key 映射为 `document.resource.copy-image`
+3. Electron 根据 `sourceType` 读取本地图片或下载网络图片
+4. 校验结果确为图片内容
+5. 转换为系统剪贴板支持的图片格式并写入剪贴板
+6. 返回 `{ ok, reason }` 结构化结果
 
-### 7.3 图片另存为
+### 7.4 图片另存为
 
-1. Renderer 发送 `resource.save-as`
-2. Electron 解析默认文件名
-3. 打开保存对话框
-4. 用户确认后读取本地文件或下载网络图片
-5. 写入目标路径
-6. 返回保存结果；若用户取消则返回取消态
+1. 菜单层回传 `resource.save-as`
+2. 宿主视图把 action key 映射为 `document.resource.save-as`
+3. Electron 解析默认文件名
+4. 打开保存对话框
+5. 用户确认后读取本地文件或下载网络图片
+6. 写入目标路径
+7. 返回保存结果；若用户取消则返回取消态
 
-### 7.4 复制 Markdown 引用
+### 7.5 复制 Markdown 引用
 
 1. 该动作是本次唯一允许绕开 runtime 的资源菜单动作
-2. 视图层直接使用当前 `asset.markdownReference`
-3. 写入文本剪贴板
-4. 复用现有 `message.copySucceeded` / `message.copyFailed`
-5. 不经过 runtime，不修改文档内容
+2. 菜单层回传 `resource.copy-markdown-reference`
+3. 宿主视图直接使用当前 `asset.markdownReference`
+4. 写入文本剪贴板
+5. 复用现有 `message.copySucceeded` / `message.copyFailed`
+6. 不经过 runtime，不修改文档内容
 
 ## 8. 异常与边界处理
 
@@ -338,9 +364,10 @@
 
 1. 不新增绕过 runtime 的资源操作通道。
 2. 不在 Web 端自行实现平台路径解析、下载写盘或图片剪贴板能力。
-3. `resource.copy-markdown-reference` 是唯一允许在 renderer 直接执行的例外，因为它只依赖纯文本剪贴板，不涉及文件系统、原生图片剪贴板或保存对话框。
-4. 不改变当前删除流程的产品策略，只补菜单能力和资源动作。
-5. 优先保持现有模块边界；只有在 Electron 资源服务明显膨胀时才新增辅助 util。
+3. 菜单 action key 与 runtime 命令必须保持分层：菜单层继续使用 `resource.*`，宿主层再分发为 `document.resource.*`。
+4. `resource.copy-markdown-reference` 是唯一允许在 renderer 直接执行的例外，因为它只依赖纯文本剪贴板，不涉及文件系统、原生图片剪贴板或保存对话框。
+5. 不改变当前删除流程的产品策略，只补菜单能力和资源动作。
+6. 优先保持现有模块边界；只有在 Electron 资源服务明显膨胀时才新增辅助 util。
 
 ## 12. 计划入口
 
