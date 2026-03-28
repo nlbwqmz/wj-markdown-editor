@@ -1,0 +1,334 @@
+# 预览资源右键菜单复制与图片导出设计
+
+## 1. 背景
+
+当前预览区右键菜单已经收口到统一链路：
+
+- `MarkdownPreview.vue` 通过事件委托识别命中的资源节点，并抛出 `preview-contextmenu`
+- `EditorView.vue` / `PreviewView.vue` 冻结当前文档的 `actionContext`
+- `buildPreviewContextMenuItems()` 按页面 profile 生成菜单项
+- Electron 端经 `documentSessionRuntime -> documentResourceService` 统一处理资源级桌面能力
+
+现状仅支持：
+
+- 编辑页：`在资源管理器中打开`、`删除`
+- 纯预览页：`在资源管理器中打开`
+
+本次需求是在不破坏现有右键架构的前提下，为资源菜单补充复制与图片导出能力，并严格区分编辑页与纯预览页的权限边界。
+
+## 2. 目标
+
+### 2.1 功能目标
+
+1. 图片资源新增以下能力：
+   - 复制本地图片的绝对路径
+   - 复制网络图片链接
+   - 复制图片内容到系统剪贴板
+   - 另存为到用户选择的位置
+   - 复制当前图片对应的 Markdown 引用
+2. 非图片资源新增以下能力：
+   - 本地资源复制绝对路径
+   - 网络资源复制资源链接
+   - 复制当前资源对应的 Markdown 引用
+3. 编辑页继续保留删除能力；纯预览页不得出现编辑性质菜单。
+4. 所有本地/网络资源相关桌面能力继续走 Electron runtime，不在 renderer 自行拼接平台能力。
+
+### 2.2 交互目标
+
+1. 继续使用当前 `previewContextmenu -> 菜单构造 -> 视图分发 -> runtime` 的链路。
+2. 纯预览页与编辑页共享同一套菜单构造规则，但由 `profile` 控制可见动作。
+3. 异常场景必须有明确提示或稳定兜底，不能只覆盖 happy path。
+
+## 3. 非目标
+
+以下能力不纳入本次范围：
+
+- 为音频、视频、附件增加“复制文件内容到剪贴板”
+- 新增“在浏览器打开网络图片”
+- 新增“替换资源”“查看资源详情”“复制 HTML 引用”等衍生功能
+- 重构现有文档删除流程或 document-session 主链路
+
+## 4. 菜单行为设计
+
+### 4.1 动作 key
+
+本次新增或继续使用的菜单动作 key 如下：
+
+- `resource.copy-absolute-path`
+- `resource.copy-link`
+- `resource.copy-image`
+- `resource.save-as`
+- `resource.copy-markdown-reference`
+- `resource.open-in-folder`
+- `resource.delete`
+
+### 4.2 菜单矩阵
+
+| 资源类型 | 页面 | 菜单项 |
+| --- | --- | --- |
+| 本地图片 | 编辑页 | `复制绝对路径`、`复制图片`、`另存为`、`在资源管理器中打开`、`复制 Markdown 引用`、`删除` |
+| 本地图片 | 纯预览页 | `复制绝对路径`、`复制图片`、`另存为`、`在资源管理器中打开`、`复制 Markdown 引用` |
+| 网络图片 | 编辑页 | `复制图片链接`、`复制图片`、`另存为`、`复制 Markdown 引用`、`删除` |
+| 网络图片 | 纯预览页 | `复制图片链接`、`复制图片`、`另存为`、`复制 Markdown 引用` |
+| 本地非图片资源 | 编辑页 | `复制绝对路径`、`在资源管理器中打开`、`复制 Markdown 引用`、`删除` |
+| 本地非图片资源 | 纯预览页 | `复制绝对路径`、`在资源管理器中打开`、`复制 Markdown 引用` |
+| 网络非图片资源 | 编辑页 | `复制资源链接`、`复制 Markdown 引用`、`删除` |
+| 网络非图片资源 | 纯预览页 | `复制资源链接`、`复制 Markdown 引用` |
+
+### 4.3 编辑性边界
+
+- `resource.delete` 只允许在 `editor-preview` profile 出现。
+- `resource.copy-markdown-reference` 在编辑页和纯预览页都保留，因为它只复制文本，不修改正文。
+- 网络图片不提供“在浏览器打开”。
+- `resource.copy-image` 与 `resource.save-as` 仅对图片资源显示。
+
+## 5. 资源上下文设计
+
+### 5.1 扩展后的上下文字段
+
+当前 `createPreviewResourceContext(assetInfo)` 仅透传基础资源信息。本次需要扩展为以下结构：
+
+```js
+{
+  type: 'resource',
+  asset: {
+    kind: 'image' | 'video' | 'audio' | 'link' | 'unknown',
+    assetType: 'image' | 'video' | 'audio' | 'link' | 'unknown',
+    sourceType: 'local' | 'remote',
+    rawSrc: string,
+    rawPath: string | null,
+    resourceUrl: string,
+    markdownReference: string | null,
+    occurrence: number,
+    lineStart: number | undefined,
+    lineEnd: number | undefined,
+  },
+  menuPosition: {
+    x: number,
+    y: number,
+  },
+}
+```
+
+### 5.2 字段判定原则
+
+- `assetType` 由命中的 DOM 节点类型判定，避免视图层再从 URL 猜语义。
+- `sourceType` 由 `resourceUrl/rawSrc/rawPath` 共同判定：
+  - `wj://` 或可解析为本地文件的资源视为 `local`
+  - `http://` / `https://` 视为 `remote`
+- `markdownReference` 优先从渲染 DOM 上已有的原始引用元信息读取。
+- 如果 DOM 没有足够的原始引用信息，renderer 可退化为用 `assetType + rawSrc` 拼装最小可用引用文本；若仍无法稳定拼装，则动作执行时提示失败。
+
+## 6. 架构与职责拆分
+
+### 6.1 Renderer 侧职责
+
+#### `MarkdownPreview.vue`
+
+- 继续通过事件委托识别右键命中的资源节点
+- 补齐 `assetType`、`sourceType`、`markdownReference`
+- 只负责抛出统一的 `previewContextmenu` 事件
+- 不直接触发系统剪贴板、文件保存或下载
+
+#### `previewResourceContextUtil.js`
+
+- 统一归一化资源上下文结构
+- 封装本地/网络来源判定，避免 `EditorView.vue` / `PreviewView.vue` 重复判断
+
+#### `previewContextMenuActionUtil.js`
+
+- 以 `profile + assetType + sourceType` 作为唯一输入
+- 输出稳定菜单项数组
+- 不在该 util 中夹带具体执行逻辑
+
+#### `EditorView.vue`
+
+- 继续作为编辑页菜单动作分发中心
+- 新增以下分支：
+  - `resource.copy-absolute-path`
+  - `resource.copy-link`
+  - `resource.copy-image`
+  - `resource.save-as`
+  - `resource.copy-markdown-reference`
+- 继续保留 `resource.open-in-folder` 与 `resource.delete`
+
+#### `PreviewView.vue`
+
+- 继续作为纯预览页菜单动作分发中心
+- 仅处理非编辑动作：
+  - `resource.copy-absolute-path`
+  - `resource.copy-link`
+  - `resource.copy-image`
+  - `resource.save-as`
+  - `resource.copy-markdown-reference`
+  - `resource.open-in-folder`
+
+### 6.2 Electron 侧职责
+
+#### `ipcMainUtil.js`
+
+- 增加新的 renderer -> main IPC 入口
+- 继续统一透传到 runtime，而不是在 IPC 层直接写散落逻辑
+
+#### `documentSessionRuntime.js`
+
+- 注册新的资源类 UI 命令
+- 仍把资源命令路由到 `documentResourceService`
+
+#### `documentResourceService.js`
+
+- 继续以 active session 为资源解析上下文
+- 承接本地/网络资源桌面能力：
+  - 复制本地绝对路径
+  - 复制网络链接
+  - 复制图片到系统剪贴板
+  - 图片另存为
+  - 本地资源在资源管理器中打开
+- 保持 `requestContext` 过期保护，避免文档切换后操作旧资源
+
+#### 可选新 util
+
+如果 `documentResourceService.js` 出现明显职责膨胀，则新增一个聚焦图片 IO 的 util，封装：
+
+- 网络图片下载
+- Content-Type 校验
+- 默认文件名与扩展名推导
+- Electron `nativeImage` / `clipboard` 转换
+
+## 7. 命令与数据流设计
+
+### 7.1 复制绝对路径 / 复制链接
+
+1. Renderer 右键命中资源并冻结 `actionContext`
+2. 视图层按菜单项分发动作
+3. 对本地资源，发送 `resource.copy-absolute-path`
+4. 对网络资源，发送 `resource.copy-link`
+5. Electron 解析出最终字符串后写入系统剪贴板
+6. Renderer 依据结构化结果显示成功或失败消息
+
+### 7.2 复制图片
+
+1. Renderer 发送 `resource.copy-image`
+2. Electron 根据 `sourceType` 读取本地图片或下载网络图片
+3. 校验结果确为图片内容
+4. 转换为系统剪贴板支持的图片格式并写入剪贴板
+5. 返回 `{ ok, reason }` 结构化结果
+
+### 7.3 图片另存为
+
+1. Renderer 发送 `resource.save-as`
+2. Electron 解析默认文件名
+3. 打开保存对话框
+4. 用户确认后读取本地文件或下载网络图片
+5. 写入目标路径
+6. 返回保存结果；若用户取消则返回取消态
+
+### 7.4 复制 Markdown 引用
+
+1. 视图层直接使用当前 `asset.markdownReference`
+2. 写入文本剪贴板
+3. 复用现有 `message.copySucceeded` / `message.copyFailed`
+4. 不经过 runtime，不修改文档内容
+
+## 8. 异常与边界处理
+
+### 8.1 本地资源异常
+
+- 本地文件已不存在：
+  - `复制绝对路径` 仍然允许
+  - `复制图片` / `另存为` / `在资源管理器中打开` 返回“文件不存在”
+- 未保存文档中的相对资源：
+  - 继续复用现有“相对资源需要已保存文档”语义
+- 请求上下文过期：
+  - runtime 返回 `stale-document-context`
+  - 视图层静默中止或提示统一失败，不继续执行旧文档动作
+
+### 8.2 网络资源异常
+
+- 下载失败：提示失败，不写空文件
+- 响应不是图片：`复制图片` 与 `另存为` 必须拒绝
+- URL 带 query/hash：默认文件名推导时剥离 query/hash
+- URL 缺少扩展名：
+  - 优先根据 `Content-Type` 推导扩展名
+  - 仍无法推导时使用安全默认名，如 `image.png`
+- 下载超时或资源过大：
+  - 返回明确失败原因
+  - 不允许动作长时间无响应且无反馈
+
+### 8.3 用户交互异常
+
+- 用户取消另存为：返回取消态，静默结束，不提示错误
+- 剪贴板写入失败：提示复制失败
+- Markdown 引用缺失：提示复制失败，不拼接错误内容
+- 纯预览页任何情况下都不出现删除入口
+
+## 9. 国际化策略
+
+采用“通用反馈复用 + 菜单专属文案新增”的策略：
+
+- 复用现有文案：
+  - `top.openInExplorer`
+  - `message.copySucceeded`
+  - `message.copyFailed`
+  - `message.saveAsSuccessfully`
+  - `message.cancelSaveAs`
+  - `message.theFileDoesNotExist`
+  - `message.openResourceLocationFailed`
+  - `message.imageDownloadFailed`
+  - `message.theLinkIsNotValid`
+- 新增 `previewAssetMenu.*` 文案：
+  - `copyAbsolutePath`
+  - `copyResourceLink`
+  - `copyImageLink`
+  - `copyImage`
+  - `copyMarkdownReference`
+  - `saveAs`
+  - 与资源菜单专属失败态对应的消息 key
+
+这样可以保持全局通用动作语义不分叉，同时把预览资源菜单自己的标签和错误语境集中管理。
+
+## 10. 测试策略
+
+### 10.1 Web 单测
+
+- `previewContextMenuActionUtil.test.js`
+  - 覆盖本地/网络、图片/非图片、编辑页/纯预览页的菜单矩阵
+- `previewResourceContextUtil` 或 `MarkdownPreview` 相关测试
+  - 覆盖 `assetType / sourceType / markdownReference` 归一化
+- `EditorView` 菜单宿主测试
+  - 覆盖新增 action 分发
+  - 保证编辑页保留删除动作
+- `PreviewView` 菜单宿主测试
+  - 保证纯预览页没有删除动作
+  - 保留 `复制 Markdown 引用`
+- i18n 测试
+  - 覆盖新增键存在性
+
+### 10.2 Electron 单测
+
+- `ipcMainUtil.test.js`
+  - 验证新增 IPC 命令继续经 runtime 统一入口
+- `documentSessionRuntime.test.js`
+  - 验证新增资源命令已注册并正确路由
+- `documentResourceService.test.js`
+  - 覆盖本地图片复制成功/失败
+  - 覆盖网络图片下载成功/失败/非图片响应
+  - 覆盖另存为成功/取消/写盘失败
+  - 覆盖绝对路径/链接复制
+  - 覆盖 `stale-document-context`
+  - 覆盖 query/hash 文件名剥离与扩展名推导
+
+## 11. 实施约束
+
+1. 不新增绕过 runtime 的资源操作通道。
+2. 不在 Web 端自行实现平台路径解析、下载写盘或图片剪贴板能力。
+3. 不改变当前删除流程的产品策略，只补菜单能力和资源动作。
+4. 优先保持现有模块边界；只有在 Electron 资源服务明显膨胀时才新增辅助 util。
+
+## 12. 计划入口
+
+该设计对应一个单一实现计划即可，不需要再拆成多个独立子项目。后续实施计划将基于以下顺序展开：
+
+1. 先补资源上下文与菜单矩阵测试
+2. 再补 renderer 动作分发
+3. 最后补 Electron 资源命令与异常覆盖
