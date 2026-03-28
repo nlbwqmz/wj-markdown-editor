@@ -72,7 +72,7 @@ const MenuItemStub = defineComponent({
   setup(props, { attrs, slots }) {
     return () => h('button', {
       'type': 'button',
-      'class': ['menu-item-stub', props.danger ? 'menu-item-danger' : ''],
+      'class': ['menu-item-stub', attrs.class, props.danger ? 'menu-item-danger' : ''],
       'data-menu-key': attrs['data-menu-key'],
       'onClick': attrs.onClick,
     }, slots.default?.())
@@ -138,7 +138,7 @@ describe('previewAssetContextMenu', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
-  it('危险项会带危险样式，普通项不会带危险样式', () => {
+  it('危险项会保留显式红色类，普通项不会带显式红色类', () => {
     const wrapper = mountContextMenu({
       items: [
         {
@@ -157,8 +157,8 @@ describe('previewAssetContextMenu', () => {
     const normalItem = wrapper.get('[data-menu-key="open-explorer"]')
     const dangerItem = wrapper.get('[data-menu-key="delete"]')
 
-    expect(normalItem.classes()).not.toContain('menu-item-danger')
-    expect(dangerItem.classes()).toContain('menu-item-danger')
+    expect(normalItem.classes()).not.toContain('!color-red')
+    expect(dangerItem.classes()).toContain('!color-red')
   })
 
   it('点击菜单外空白区域时会关闭菜单', async () => {
