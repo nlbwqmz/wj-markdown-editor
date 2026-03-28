@@ -3,11 +3,26 @@ import assert from 'node:assert/strict'
 const { test } = await import('node:test')
 
 let previewResourceContextUtilModule = null
+let resourceUrlUtilModule = null
 
 try {
   previewResourceContextUtilModule = await import('../previewResourceContextUtil.js')
 } catch {
   previewResourceContextUtilModule = null
+}
+
+try {
+  resourceUrlUtilModule = await import('../../resourceUrlUtil.js')
+} catch {
+  resourceUrlUtilModule = null
+}
+
+function buildRenderedImageResourceUrl(rawSrc) {
+  assert.ok(resourceUrlUtilModule, '缺少 resource url util')
+
+  const { convertResourceUrl, normalizeLocalResourcePath } = resourceUrlUtilModule
+  const normalizedSrc = normalizeLocalResourcePath(rawSrc)
+  return `${convertResourceUrl(normalizedSrc)}?wj_date=1700000000000`
 }
 
 test('预览资源上下文必须归一化 assetType 和 sourceType，并保留稳定的 Markdown 引用元信息', () => {
@@ -107,28 +122,29 @@ test('预览资源上下文在 assetType 非法但 legacy kind 合法时，应�
   })
 })
 
-test('预览资源上下文在 resourceUrl 已稳定为本地 wj:// 时，不应被裸文件名 rawSrc 或 rawPath 误判为未知来源', () => {
+test('预览资源上下文在真实本地资源形态下，不应把合法本地文件名误判为未知来源', () => {
   assert.ok(previewResourceContextUtilModule, '缺少 preview resource context util')
 
   const { createPreviewResourceContext } = previewResourceContextUtilModule
-  const rawPathList = ['README', '.env', 'Makefile', 'README#guide', 'README?tab=a', 'foo:bar.png', '?guide.md', '&cover.png']
+  const rawPathList = ['README', '.env', 'Makefile', 'README#guide', 'README?tab=a', 'foo:bar.png', '?guide.md', '&cover.png', '?README', '&LICENSE']
 
   for (const rawPath of rawPathList) {
+    const resourceUrl = buildRenderedImageResourceUrl(rawPath)
     const context = createPreviewResourceContext({
-      assetType: 'link',
+      assetType: 'image',
       rawSrc: rawPath,
       rawPath,
-      resourceUrl: `wj://local/${rawPath}`,
+      resourceUrl,
     })
 
     assert.deepEqual(context, {
       type: 'resource',
       asset: {
-        assetType: 'link',
+        assetType: 'image',
         sourceType: 'local',
         rawSrc: rawPath,
         rawPath,
-        resourceUrl: `wj://local/${rawPath}`,
+        resourceUrl,
         markdownReference: null,
         occurrence: undefined,
         lineStart: undefined,
@@ -217,7 +233,7 @@ test('预览资源上下文遇到仅查询串输入时必须 fail-closed 返回 
     assetType: 'link',
     rawSrc: '?foo=1',
     rawPath: '?foo=1',
-    resourceUrl: '?foo=1',
+    resourceUrl: buildRenderedImageResourceUrl('?foo=1'),
   }), null)
 })
 

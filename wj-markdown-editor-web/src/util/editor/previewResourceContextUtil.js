@@ -71,64 +71,17 @@ function getSourceScheme(value) {
   return schemeMatch ? schemeMatch[1].toLowerCase() : null
 }
 
-/**
- * 判断前导 `?` / `&` 的输入是否更像本地文件名。
- * 这里只放行明显带扩展名或路径分隔符的形态，其他仍按 fail-closed 处理。
- * @param {string | null} value - 待判定的来源字符串
- * @returns {boolean} 是否更像文件名
- */
-function isLeadingQueryFilenameLike(value) {
+function isPureQueryParameterString(value) {
   if (!value || (!value.startsWith('?') && !value.startsWith('&'))) {
     return false
   }
 
   const restValue = value.slice(1)
   if (!restValue || restValue.startsWith('?') || restValue.startsWith('&') || restValue.startsWith('#')) {
-    return false
-  }
-
-  return /[\\/]/u.test(restValue) || restValue.includes('.')
-}
-
-/**
- * 判断输入是否属于可稳定识别的本地来源。
- * @param {string | null} value - 待判定的来源字符串
- * @returns {boolean} 是否为稳定本地来源
- */
-function isStableLocalSource(value) {
-  if (!value) {
-    return false
-  }
-
-  if (/^wj:\/\//iu.test(value)) {
     return true
   }
 
-  if (/^[a-z]:[\\/]/iu.test(value) || /^\\\\/u.test(value)) {
-    return true
-  }
-
-  if (value.startsWith('#') || value.startsWith('//')) {
-    return false
-  }
-
-  if (value.startsWith('?') || value.startsWith('&')) {
-    return false
-  }
-
-  if (/^[a-z][a-z\d+.-]*:/iu.test(value)) {
-    return false
-  }
-
-  if (value.startsWith('/') || value.startsWith('./') || value.startsWith('../')) {
-    return true
-  }
-
-  if (/[\\/]/u.test(value)) {
-    return true
-  }
-
-  return false
+  return !/[\\/]/u.test(restValue) && restValue.includes('=')
 }
 
 /**
@@ -146,8 +99,8 @@ function isDangerousUnknownSource(value) {
     return true
   }
 
-  if (value.startsWith('?') || value.startsWith('&')) {
-    return !isLeadingQueryFilenameLike(value)
+  if (isPureQueryParameterString(value)) {
+    return true
   }
 
   const scheme = getSourceScheme(value)
@@ -163,30 +116,10 @@ function isDangerousUnknownSource(value) {
 }
 
 /**
- * 判断输入是否属于弱本地形态。
- * 这类输入本身不足以单独判定为 local，但不应该把明确的 wj:// 本地来源否掉。
- * @param {string | null} value - 待判定的来源字符串
- * @returns {boolean} 是否为弱本地形态
- */
-function isWeakLocalSource(value) {
-  if (!value || isDangerousUnknownSource(value)) {
-    return false
-  }
-
-  const baseValue = isLeadingQueryFilenameLike(value)
-    ? value.slice(1).split(/[?#]/u, 1)[0]
-    : value.split(/[?#]/u, 1)[0]
-  if (!baseValue || baseValue === '.' || baseValue === '..') {
-    return false
-  }
-
-  return !/[\\/#?&]/u.test(baseValue)
-}
-
-/**
- * 把单个来源字符串归类为本地、远程或未知。
+ * 把单个来源字符串归类为本地、远程或危险来源。
+ * 除了显式远程和显式危险输入，其余非冲突形态统一按本地候选处理。
  * @param {unknown} value - 待归类的来源输入
- * @returns {'local' | 'remote' | 'weak-local' | 'dangerous' | 'unknown' | null} 来源分类
+ * @returns {'local' | 'remote' | 'dangerous' | null} 来源分类
  */
 function classifySourceCandidate(value) {
   const normalizedValue = normalizeStringValue(value)
@@ -200,7 +133,7 @@ function classifySourceCandidate(value) {
     return 'remote'
   }
 
-  if (isStableLocalSource(inspectionValue)) {
+  if (/^wj:\/\//iu.test(inspectionValue)) {
     return 'local'
   }
 
@@ -208,11 +141,7 @@ function classifySourceCandidate(value) {
     return 'dangerous'
   }
 
-  if (isWeakLocalSource(inspectionValue)) {
-    return 'weak-local'
-  }
-
-  return 'unknown'
+  return 'local'
 }
 
 /**
@@ -227,27 +156,22 @@ function resolveSourceType(assetInfo) {
     classifySourceCandidate(assetInfo?.rawPath),
   ].filter(Boolean)
 
-  if (candidateTypeList.includes('dangerous') || candidateTypeList.includes('unknown')) {
+  if (candidateTypeList.length === 0 || candidateTypeList.includes('dangerous')) {
     return null
   }
 
   const hasLocalSource = candidateTypeList.includes('local')
   const hasRemoteSource = candidateTypeList.includes('remote')
-  const hasWeakLocalSource = candidateTypeList.includes('weak-local')
 
-  if (hasRemoteSource && (hasLocalSource || hasWeakLocalSource)) {
+  if (hasRemoteSource && hasLocalSource) {
     return null
-  }
-
-  if (hasLocalSource) {
-    return 'local'
   }
 
   if (hasRemoteSource) {
     return 'remote'
   }
 
-  return null
+  return hasLocalSource ? 'local' : null
 }
 
 function createPreviewResourceContext(assetInfo) {
