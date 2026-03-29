@@ -445,6 +445,24 @@ describe('editorView 预览资源菜单宿主接线', () => {
     expect(wrapper.find('[data-menu-key="resource.delete"]').exists()).toBe(true)
   })
 
+  it('markdownReference 缺失时不应显示 copy-markdown-reference，若异常触发仍应提示复制失败', async () => {
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+      markdownReference: null,
+    })
+
+    expect(wrapper.find('[data-menu-key="resource.copy-markdown-reference"]').exists()).toBe(false)
+
+    wrapper.findComponent({ name: 'PreviewAssetContextMenuStub' }).vm.$emit('select', 'resource.copy-markdown-reference')
+    await flushEditorView()
+
+    expect(editorViewHostState.channelSend).not.toHaveBeenCalled()
+    expect(editorViewHostState.clipboardWriteText).not.toHaveBeenCalled()
+    expect(editorViewHostState.messageError).toHaveBeenCalledWith('message.copyFailed')
+  })
+
   it('选择 resource.copy-image 时，会发送 document.resource.copy-image，且不重复写文本剪贴板', async () => {
     const wrapper = await mountEditorView()
 
@@ -706,6 +724,7 @@ describe('editorView 预览资源菜单宿主接线', () => {
       event: 'resource.get-info',
       data: {
         resourceUrl: 'wj://document-resource/assets/demo.png',
+        rawPath: 'assets/demo.png',
         requestContext: {
           sessionId: 'session-preview-menu',
           documentPath: 'D:/docs/demo.md',
@@ -719,5 +738,53 @@ describe('editorView 预览资源菜单宿主接线', () => {
       cancelText: 'cancelText',
       onOk: expect.any(Function),
     }))
+  })
+
+  it('单引用确认删除本地资源时，应继续把 rawPath 传给 document.resource.delete-local', async () => {
+    editorViewHostState.channelSend.mockImplementation(async ({ event }) => {
+      if (event === 'resource.get-info') {
+        return {
+          ok: true,
+          exists: true,
+          isFile: true,
+        }
+      }
+
+      if (event === 'document.resource.delete-local') {
+        return {
+          ok: true,
+          removed: true,
+          reason: 'deleted',
+          path: 'D:/docs/assets/demo.png',
+        }
+      }
+
+      return {
+        ok: true,
+      }
+    })
+
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
+    await wrapper.get('[data-menu-key="resource.delete"]').trigger('click')
+    await flushEditorView()
+
+    await editorViewHostState.modalConfirm.mock.calls[0][0].onOk()
+    await flushEditorView()
+
+    expect(editorViewHostState.channelSend).toHaveBeenCalledWith({
+      event: 'document.resource.delete-local',
+      data: {
+        resourceUrl: 'wj://document-resource/assets/demo.png',
+        rawPath: 'assets/demo.png',
+        requestContext: {
+          sessionId: 'session-preview-menu',
+          documentPath: 'D:/docs/demo.md',
+        },
+      },
+    })
   })
 })

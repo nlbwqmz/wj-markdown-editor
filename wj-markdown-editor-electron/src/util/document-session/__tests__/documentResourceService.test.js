@@ -89,6 +89,18 @@ function bindSession(store, session, windowId = 1001) {
   return windowId
 }
 
+function createDeferred() {
+  let resolve
+  const promise = new Promise((nextResolve) => {
+    resolve = nextResolve
+  })
+
+  return {
+    promise,
+    resolve,
+  }
+}
+
 describe('documentResourceService', () => {
   beforeEach(() => {
     copyFile.mockReset()
@@ -134,6 +146,112 @@ describe('documentResourceService', () => {
     })
   })
 
+  it('document.resource.copy-absolute-path 在完整路径不存在但 fallback 可用时，应返回 fallback 对应的真实文件路径', async () => {
+    const { service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'copy-absolute-path-fallback-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004011,
+    })
+    const windowId = bindSession(store, session)
+    pathExists.mockImplementation(async (targetPath) => {
+      return targetPath === 'D:\\docs\\docs\\index.html'
+    })
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+
+    const result = await service.copyAbsolutePath({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: './docs/index.html?tab=a',
+        rawPath: './docs/index.html?tab=a',
+        resourceUrl: convertResourceUrl('./docs/index.html?tab=a'),
+      },
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      reason: 'copied',
+      path: 'D:\\docs\\docs\\index.html',
+      text: 'D:\\docs\\docs\\index.html',
+    })
+    expect(pathExists).toHaveBeenNthCalledWith(1, 'D:\\docs\\docs\\index.html?tab=a')
+    expect(pathExists).toHaveBeenNthCalledWith(2, 'D:\\docs\\docs\\index.html')
+    expect(stat).toHaveBeenCalledWith('D:\\docs\\docs\\index.html')
+  })
+
+  it('document.resource.copy-absolute-path 在字面量 hash 文件名存在时，应返回完整文件路径而不是 fallback', async () => {
+    const { service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'copy-absolute-path-literal-hash-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004012,
+    })
+    const windowId = bindSession(store, session)
+    pathExists.mockImplementation(async (targetPath) => {
+      return targetPath === 'D:\\docs\\docs\\a#b.md'
+    })
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+
+    const result = await service.copyAbsolutePath({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: './docs/a#b.md',
+        rawPath: './docs/a#b.md',
+        resourceUrl: convertResourceUrl('./docs/a#b.md'),
+      },
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      reason: 'copied',
+      path: 'D:\\docs\\docs\\a#b.md',
+      text: 'D:\\docs\\docs\\a#b.md',
+    })
+    expect(pathExists).toHaveBeenCalledWith('D:\\docs\\docs\\a#b.md')
+    expect(stat).toHaveBeenCalledWith('D:\\docs\\docs\\a#b.md')
+  })
+
+  it('document.resource.copy-absolute-path 在字面量编码问号文件名存在时，应返回完整文件路径', async () => {
+    const { service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'copy-absolute-path-literal-encoded-question-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004013,
+    })
+    const windowId = bindSession(store, session)
+
+    const result = await service.copyAbsolutePath({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: './docs/demo%3Fguide.md',
+        rawPath: './docs/demo%3Fguide.md',
+        resourceUrl: convertResourceUrl('./docs/demo%3Fguide.md'),
+      },
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      reason: 'copied',
+      path: 'D:\\docs\\docs\\demo?guide.md',
+      text: 'D:\\docs\\docs\\demo?guide.md',
+    })
+  })
+
   it('document.resource.copy-absolute-path 在本地文件不存在时仍应返回路径文本', async () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
@@ -165,7 +283,7 @@ describe('documentResourceService', () => {
     expect(stat).not.toHaveBeenCalled()
   })
 
-  it('document.resource.copy-absolute-path 不应因磁盘探测失败返回 copy-absolute-path-failed', async () => {
+  it('document.resource.copy-absolute-path 在磁盘探测异常时，仍应回退返回完整路径文本', async () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-absolute-path-no-probe-session',
@@ -176,26 +294,24 @@ describe('documentResourceService', () => {
     })
     const windowId = bindSession(store, session)
     pathExists.mockRejectedValue(new Error('disk probe failed'))
-    stat.mockRejectedValue(new Error('stat failed'))
 
     const result = await service.copyAbsolutePath({
       windowId,
       payload: {
         sourceType: 'local',
-        rawSrc: './assets/no-probe.png',
-        rawPath: './assets/no-probe.png',
-        resourceUrl: convertResourceUrl('./assets/no-probe.png'),
+        rawSrc: './docs/index.html#guide',
+        rawPath: './docs/index.html#guide',
+        resourceUrl: convertResourceUrl('./docs/index.html#guide'),
       },
     })
 
     expect(result).toEqual({
       ok: true,
       reason: 'copied',
-      path: 'D:\\docs\\assets\\no-probe.png',
-      text: 'D:\\docs\\assets\\no-probe.png',
+      path: 'D:\\docs\\docs\\index.html#guide',
+      text: 'D:\\docs\\docs\\index.html#guide',
     })
-    expect(pathExists).not.toHaveBeenCalled()
-    expect(stat).not.toHaveBeenCalled()
+    expect(pathExists).toHaveBeenCalledWith('D:\\docs\\docs\\index.html#guide')
   })
 
   it('document.resource.copy-link 在 remote 资源上成功时应该返回 text 字段', async () => {
@@ -363,6 +479,7 @@ describe('documentResourceService', () => {
     })).resolves.toEqual({
       ok: true,
       reason: 'saved',
+      path: 'D:\\exports\\saved-from-throw.png',
       targetPath: 'D:\\exports\\saved-from-throw.png',
       messageKey: 'message.saveAsSuccessfully',
     })
@@ -406,6 +523,7 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: true,
       reason: 'saved',
+      path: 'D:\\exports\\saved-from-empty.png',
       targetPath: 'D:\\exports\\saved-from-empty.png',
       messageKey: 'message.saveAsSuccessfully',
     })
@@ -455,7 +573,53 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: true,
       reason: 'saved',
+      path: 'D:\\exports\\picked.png',
       targetPath: 'D:\\exports\\picked.png',
+      messageKey: 'message.saveAsSuccessfully',
+    })
+  })
+
+  it('document.resource.save-as 在 URL 无扩展名且 Content-Type 为 image/avif 时，应推导 avif 默认文件名', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-unmapped-extension-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004021,
+    })
+    const windowId = bindSession(store, session)
+    fetchImpl.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get(name) {
+          return name?.toLowerCase() === 'content-type' ? 'image/avif' : null
+        },
+      },
+      arrayBuffer: vi.fn(async () => Buffer.from('remote-avif')),
+    })
+    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\picked.avif')
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo?download=1',
+        rawPath: 'https://example.com/assets/demo?download=1',
+        resourceUrl: 'https://example.com/assets/demo?download=1',
+      },
+    })
+
+    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      defaultPath: 'demo.avif',
+    }))
+    expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\picked.avif', expect.any(Buffer))
+    expect(result).toEqual({
+      ok: true,
+      reason: 'saved',
+      path: 'D:\\exports\\picked.avif',
+      targetPath: 'D:\\exports\\picked.avif',
       messageKey: 'message.saveAsSuccessfully',
     })
   })
@@ -747,6 +911,62 @@ describe('documentResourceService', () => {
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })
 
+  it('document.resource.copy-image 在读取期间窗口切到其他 session 后，必须返回 stale-document-context 且不写剪贴板', async () => {
+    const { clipboardApi, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'copy-image-stale-after-read-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004028,
+    })
+    const windowId = bindSession(store, session)
+    const deferred = createDeferred()
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    readFile.mockImplementation(async () => {
+      await deferred.promise
+      return Buffer.from('png-binary')
+    })
+
+    const resultPromise = service.copyImage({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: './assets/demo.png',
+        rawPath: './assets/demo.png',
+        resourceUrl: convertResourceUrl('./assets/demo.png'),
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const nextSession = createBoundFileSession({
+      sessionId: 'copy-image-stale-next-session',
+      path: 'D:\\docs\\other.md',
+      content: '# 其他文档',
+      stat: null,
+      now: 1700000004029,
+    })
+    store.createSession(nextSession)
+    store.bindWindowToSession({
+      windowId,
+      sessionId: nextSession.sessionId,
+    })
+    deferred.resolve()
+
+    await expect(resultPromise).resolves.toEqual({
+      ok: false,
+      reason: 'stale-document-context',
+    })
+    expect(clipboardApi.writeImage).not.toHaveBeenCalled()
+  })
+
   it('document.resource.copy-image 对远程图片超时应返回结构化失败', async () => {
     vi.useFakeTimers()
     try {
@@ -842,7 +1062,7 @@ describe('documentResourceService', () => {
     expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
-  it('document.resource.copy-image 对缺少 content-length 的远程超限图片应在下载后失败', async () => {
+  it('document.resource.copy-image 对缺少 content-length 的远程超限图片应在流式读取超限后立刻失败，且不能走 arrayBuffer 整包读取', async () => {
     const { clipboardApi, fetchImpl, nativeImageApi, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-image-remote-size-buffer-session',
@@ -852,6 +1072,15 @@ describe('documentResourceService', () => {
       now: 1700000004027,
     })
     const windowId = bindSession(store, session)
+    const arrayBuffer = vi.fn(async () => {
+      throw new Error('不应走到 arrayBuffer')
+    })
+    const cancel = vi.fn()
+    const chunkList = [
+      new Uint8Array(10 * 1024 * 1024),
+      new Uint8Array(10 * 1024 * 1024),
+      new Uint8Array(2 * 1024 * 1024),
+    ]
     fetchImpl.mockResolvedValue({
       ok: true,
       status: 200,
@@ -860,7 +1089,30 @@ describe('documentResourceService', () => {
           return name?.toLowerCase() === 'content-type' ? 'image/png' : null
         },
       },
-      arrayBuffer: vi.fn(async () => new Uint8Array(64 * 1024 * 1024).buffer),
+      body: {
+        getReader() {
+          let chunkIndex = 0
+          return {
+            async read() {
+              if (chunkIndex >= chunkList.length) {
+                return {
+                  done: true,
+                  value: undefined,
+                }
+              }
+
+              const value = chunkList[chunkIndex]
+              chunkIndex += 1
+              return {
+                done: false,
+                value,
+              }
+            },
+            cancel,
+          }
+        },
+      },
+      arrayBuffer,
     })
 
     const result = await service.copyImage({
@@ -877,6 +1129,8 @@ describe('documentResourceService', () => {
       ok: false,
       reason: 'remote-resource-too-large',
     })
+    expect(arrayBuffer).not.toHaveBeenCalled()
+    expect(cancel).toHaveBeenCalledTimes(1)
     expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })
@@ -944,6 +1198,112 @@ describe('documentResourceService', () => {
     expect(pathExists).not.toHaveBeenCalled()
     expect(stat).not.toHaveBeenCalled()
     expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as 在读取期间窗口切到其他 session 后，必须返回 stale-document-context 且不再弹保存框', async () => {
+    const { dialogApi, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-stale-after-read-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004030,
+    })
+    const windowId = bindSession(store, session)
+    const deferred = createDeferred()
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    readFile.mockImplementation(async () => {
+      await deferred.promise
+      return Buffer.from('png-binary')
+    })
+
+    const resultPromise = service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: './assets/demo.png',
+        rawPath: './assets/demo.png',
+        resourceUrl: convertResourceUrl('./assets/demo.png'),
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const nextSession = createBoundFileSession({
+      sessionId: 'save-as-stale-next-session',
+      path: 'D:\\docs\\other.md',
+      content: '# 其他文档',
+      stat: null,
+      now: 1700000004031,
+    })
+    store.createSession(nextSession)
+    store.bindWindowToSession({
+      windowId,
+      sessionId: nextSession.sessionId,
+    })
+    deferred.resolve()
+
+    await expect(resultPromise).resolves.toEqual({
+      ok: false,
+      reason: 'stale-document-context',
+    })
+    expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as 在保存对话框返回后若窗口已切到其他 session，必须返回 stale-document-context 且不写文件', async () => {
+    const { dialogApi, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-stale-after-dialog-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004032,
+    })
+    const windowId = bindSession(store, session)
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    readFile.mockResolvedValue(Buffer.from('png-binary'))
+    dialogApi.showSaveDialogSync.mockImplementation(() => {
+      const nextSession = createBoundFileSession({
+        sessionId: 'save-as-stale-after-dialog-next-session',
+        path: 'D:\\docs\\other.md',
+        content: '# 其他文档',
+        stat: null,
+        now: 1700000004033,
+      })
+      store.createSession(nextSession)
+      store.bindWindowToSession({
+        windowId,
+        sessionId: nextSession.sessionId,
+      })
+      return 'D:\\exports\\picked.png'
+    })
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: './assets/demo.png',
+        rawPath: './assets/demo.png',
+        resourceUrl: convertResourceUrl('./assets/demo.png'),
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'stale-document-context',
+    })
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
   it('resource.get-comparable-key 对不存在但可解析的本地路径，仍应返回稳定 key', async () => {

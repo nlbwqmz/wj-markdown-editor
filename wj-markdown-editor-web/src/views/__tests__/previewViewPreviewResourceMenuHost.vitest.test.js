@@ -459,6 +459,24 @@ describe('previewView 预览资源菜单宿主接线', () => {
     expect(wrapper.find('[data-menu-key="resource.delete"]').exists()).toBe(false)
   })
 
+  it('纯预览页 markdownReference 缺失时不应显示 copy-markdown-reference，若异常触发仍应提示复制失败', async () => {
+    const wrapper = await mountPreviewView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+      markdownReference: null,
+    })
+
+    expect(wrapper.find('[data-menu-key="resource.copy-markdown-reference"]').exists()).toBe(false)
+
+    wrapper.findComponent({ name: 'PreviewAssetContextMenuStub' }).vm.$emit('select', 'resource.copy-markdown-reference')
+    await flushPreviewView()
+
+    expect(previewViewHostState.channelSend).not.toHaveBeenCalled()
+    expect(previewViewHostState.clipboardWriteText).not.toHaveBeenCalled()
+    expect(previewViewHostState.messageError).toHaveBeenCalledWith('message.copyFailed')
+  })
+
   it('纯预览页选择 resource.copy-link 时，必须等 runtime 返回文本后才写剪贴板', async () => {
     const deferred = createDeferred()
     previewViewHostState.channelSend.mockImplementation(async ({ event }) => {

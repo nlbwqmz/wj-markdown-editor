@@ -46,6 +46,22 @@ describe('markdown-it preview resource metadata', () => {
     expect(renderedHtml).toMatch(/<audio [^>]*data-wj-resource-kind="audio"[^>]*data-wj-resource-src="https:\/\/example\.com\/media\/demo\.mp3"[^>]*data-wj-resource-raw="https:\/\/example\.com\/media\/demo\.mp3"[^>]*data-wj-markdown-reference="!audio\(https:\/\/example\.com\/media\/demo\.mp3\)"/u)
   })
 
+  it('linkify 链接后跟 ). 时，markdown 引用不应吞入尾随标点', () => {
+    const md = createMarkdownIt()
+    const renderedHtml = md.render('See https://example.com/docs).')
+
+    expect(renderedHtml).toMatch(/<a [^>]*href="https:\/\/example\.com\/docs"[^>]*data-wj-markdown-reference="https:\/\/example\.com\/docs"/u)
+    expect(renderedHtml).toContain('</a>).')
+  })
+
+  it('linkify 链接后跟逗号时，markdown 引用不应吞入尾随标点', () => {
+    const md = createMarkdownIt()
+    const renderedHtml = md.render('See https://example.com/docs,')
+
+    expect(renderedHtml).toMatch(/<a [^>]*href="https:\/\/example\.com\/docs"[^>]*data-wj-markdown-reference="https:\/\/example\.com\/docs"/u)
+    expect(renderedHtml).toContain('</a>,')
+  })
+
   it('data 图片与锚点链接不应进入预览资源菜单链路', () => {
     const md = createMarkdownIt()
     const renderedHtml = md.render('![内联图](data:image/png;base64,abc)\n\n[锚点](#chapter)\n')

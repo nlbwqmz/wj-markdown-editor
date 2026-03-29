@@ -28,6 +28,7 @@ const IMAGE_CONTENT_TYPE_EXTENSION_MAP = new Map([
   ['image/jpg', '.jpg'],
   ['image/gif', '.gif'],
   ['image/webp', '.webp'],
+  ['image/avif', '.avif'],
   ['image/svg+xml', '.svg'],
   ['image/bmp', '.bmp'],
   ['image/x-icon', '.ico'],
@@ -178,6 +179,22 @@ function isAbortError(error) {
   return error?.name === 'AbortError'
 }
 
+function normalizeBufferChunk(chunk) {
+  if (chunk instanceof Uint8Array) {
+    return Buffer.from(chunk)
+  }
+
+  if (chunk instanceof ArrayBuffer) {
+    return Buffer.from(chunk)
+  }
+
+  if (ArrayBuffer.isView(chunk)) {
+    return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+  }
+
+  return null
+}
+
 function sanitizeFileName(fileName) {
   const normalizedFileName = normalizeStringValue(fileName)
   if (!normalizedFileName) {
@@ -207,9 +224,9 @@ function deriveRemoteFileName(remoteUrl, contentType) {
     remoteFileName = null
   }
 
-  const imageExtension = getImageExtensionFromContentType(contentType) || '.png'
+  const imageExtension = getImageExtensionFromContentType(contentType)
   if (!remoteFileName || remoteFileName === '.') {
-    return `image${imageExtension}`
+    return `image${imageExtension || '.png'}`
   }
 
   const remotePathInfo = path.posix.parse(remoteFileName)
@@ -350,6 +367,39 @@ export function createDocumentResourceService({
     return createResourceContext(session)
   }
 
+  function createCapturedActionContext(session, normalizedPayload) {
+    return {
+      sessionId: normalizeStringValue(session?.sessionId),
+      documentPath: normalizeComparablePath(session?.documentSource?.path || null),
+      requestContext: normalizedPayload?.requestContext || null,
+    }
+  }
+
+  function isCapturedActionContextStale(windowId, capturedActionContext) {
+    const currentSession = store?.getSessionByWindowId?.(windowId) || null
+    if (!currentSession) {
+      return true
+    }
+
+    if (capturedActionContext?.sessionId
+      && capturedActionContext.sessionId !== currentSession.sessionId) {
+      return true
+    }
+
+    const currentDocumentPath = normalizeComparablePath(currentSession?.documentSource?.path || null)
+    if (capturedActionContext?.documentPath !== currentDocumentPath) {
+      return true
+    }
+
+    return isStaleRequestContext(currentSession, capturedActionContext?.requestContext)
+  }
+
+  function getStaleActionError(windowId, capturedActionContext, staleResultFactory) {
+    return isCapturedActionContextStale(windowId, capturedActionContext)
+      ? staleResultFactory()
+      : null
+  }
+
   function getFreshActionContext(windowId, payload, staleResultFactory) {
     const session = getSessionByWindowIdOrThrow(store, windowId)
     const normalizedPayload = normalizeResourcePayload(payload)
@@ -363,6 +413,7 @@ export function createDocumentResourceService({
       session,
       normalizedPayload,
       documentContext: createResourceContext(session),
+      capturedActionContext: createCapturedActionContext(session, normalizedPayload),
     }
   }
 
@@ -457,8 +508,63 @@ export function createDocumentResourceService({
         return createBinaryActionFailureResult('remote-resource-too-large')
       }
 
-      const arrayBuffer = await response.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
+      let buffer = null
+      let readAbortedBySizeLimit = false
+      let streamReader = null
+
+      try {
+        streamReader = typeof response.body?.getReader === 'function'
+          ? response.body.getReader()
+          : null
+      } catch {
+        streamReader = null
+      }
+
+      if (streamReader) {
+        const chunkBufferList = []
+        let totalBytes = 0
+
+        try {
+          while (true) {
+            const { done, value } = await streamReader.read()
+            if (done) {
+              break
+            }
+
+            const chunkBuffer = normalizeBufferChunk(value)
+            if (!chunkBuffer) {
+              return createBinaryActionFailureResult('remote-resource-fetch-failed')
+            }
+
+            totalBytes += chunkBuffer.byteLength
+            if (totalBytes > resolvedRemoteImageMaxBytes) {
+              readAbortedBySizeLimit = true
+              abortController?.abort()
+              try {
+                await streamReader.cancel('remote-resource-too-large')
+              } catch {
+                // 部分 fetch 实现不支持主动取消，超限后直接按结构化错误返回即可。
+              }
+              return createBinaryActionFailureResult('remote-resource-too-large')
+            }
+
+            chunkBufferList.push(chunkBuffer)
+          }
+
+          buffer = Buffer.concat(chunkBufferList, totalBytes)
+        } catch (error) {
+          if (readAbortedBySizeLimit || isAbortError(error)) {
+            return createBinaryActionFailureResult(
+              readAbortedBySizeLimit ? 'remote-resource-too-large' : 'remote-resource-fetch-timeout',
+            )
+          }
+          return createBinaryActionFailureResult('remote-resource-fetch-failed')
+        }
+      } else {
+        const arrayBuffer = await response.arrayBuffer()
+        buffer = Buffer.from(arrayBuffer)
+      }
+
       if (buffer.byteLength > resolvedRemoteImageMaxBytes) {
         return createBinaryActionFailureResult('remote-resource-too-large')
       }
@@ -567,8 +673,29 @@ export function createDocumentResourceService({
         })
       }
 
-      return createTextCopySuccessResult(resourceTarget.path, {
-        path: resourceTarget.path,
+      let resolvedPath = resourceTarget.path
+      if (resourceFileUtil.hasDistinctFallbackPath(resourceTarget) === true) {
+        try {
+          // 复制绝对路径也要沿用本地资源动作的 query/hash 裁决：
+          // 先探测完整路径，只有完整路径不可用时才回退到 pathname fallback。
+          const resolvedResource = await resourceFileUtil.resolveLocalResource(
+            actionContext.documentContext,
+            actionContext.normalizedPayload,
+            {
+              preferPathnameFallback: true,
+            },
+          )
+          if (resolvedResource.ok === true && resolvedResource.path) {
+            resolvedPath = resolvedResource.path
+          }
+        } catch {
+          // 剪贴板文本复制不能因为磁盘探测失败而结构化失败，探测异常时回退到完整解析路径。
+          resolvedPath = resourceTarget.path
+        }
+      }
+
+      return createTextCopySuccessResult(resolvedPath, {
+        path: resolvedPath,
       })
     } catch {
       return createTextCopyFailureResult('copy-absolute-path-failed')
@@ -618,6 +745,15 @@ export function createDocumentResourceService({
       return imageBufferResult
     }
 
+    const staleActionError = getStaleActionError(
+      windowId,
+      actionContext.capturedActionContext,
+      () => createBinaryActionFailureResult('stale-document-context'),
+    )
+    if (staleActionError) {
+      return staleActionError
+    }
+
     try {
       const nativeImage = createNativeImageFromBuffer(imageBufferResult.buffer)
       if (!nativeImage || nativeImage.isEmpty?.() === true) {
@@ -665,6 +801,15 @@ export function createDocumentResourceService({
       return imageBufferResult
     }
 
+    const staleAfterReadError = getStaleActionError(
+      windowId,
+      actionContext.capturedActionContext,
+      () => createBinaryActionFailureResult('stale-document-context'),
+    )
+    if (staleAfterReadError) {
+      return staleAfterReadError
+    }
+
     try {
       const selectedPath = dialogApi?.showSaveDialogSync?.({
         defaultPath: imageBufferResult.fileName,
@@ -677,10 +822,20 @@ export function createDocumentResourceService({
         }
       }
 
+      const staleAfterDialogError = getStaleActionError(
+        windowId,
+        actionContext.capturedActionContext,
+        () => createBinaryActionFailureResult('stale-document-context'),
+      )
+      if (staleAfterDialogError) {
+        return staleAfterDialogError
+      }
+
       await fsModule?.writeFile?.(selectedPath, imageBufferResult.buffer)
       return {
         ok: true,
         reason: 'saved',
+        path: selectedPath,
         targetPath: selectedPath,
         messageKey: 'message.saveAsSuccessfully',
       }

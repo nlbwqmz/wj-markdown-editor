@@ -425,6 +425,13 @@ function getCandidateResolvedPathList(target, options = {}) {
   return resolvedPathList
 }
 
+function hasDistinctFallbackPath(target) {
+  return Boolean(
+    target?.fallbackPath
+    && isSameResolvedPath(target.path, target.fallbackPath) !== true,
+  )
+}
+
 async function enrichResolvedPath(decodedPath, target, options = {}) {
   const resolvedPathList = getCandidateResolvedPathList(target, options)
   let inspectedPath = target?.path ?? null
@@ -491,7 +498,9 @@ function resolveLocalResourcePath(documentContext, resourceData) {
 async function deleteLocalResource(documentContext, resourceData) {
   let resolvedPath = resolveLocalResourcePath(documentContext, resourceData)
   try {
-    const resourceInfo = await resolveLocalResource(documentContext, resourceData)
+    const resourceInfo = await resolveLocalResource(documentContext, resourceData, {
+      preferPathnameFallback: true,
+    })
     resolvedPath = resourceInfo.path
     if (resourceInfo.ok !== true) {
       return createDeleteResult(false, false, resourceInfo.reason, resourceInfo.path)
@@ -585,6 +594,7 @@ function getLocalResourceComparableKey(documentContext, resourceData) {
 export default {
   getLocalResourceFailureMessageKey,
   getLocalResourceComparableKey,
+  hasDistinctFallbackPath,
   openLocalResourceInFolder,
   getLocalResourceInfo,
   resolveLocalResource,

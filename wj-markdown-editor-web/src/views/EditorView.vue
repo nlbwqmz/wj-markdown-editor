@@ -547,8 +547,13 @@ async function copyPreviewAssetMarkdownReference() {
   const actionTarget = resolvePreviewAssetMenuActionTarget({
     requireResourceUrl: false,
   })
-  const markdownReference = actionTarget?.assetInfo?.markdownReference
-  if (!actionTarget || typeof markdownReference !== 'string') {
+  if (!actionTarget) {
+    return
+  }
+
+  const markdownReference = actionTarget.assetInfo?.markdownReference
+  if (typeof markdownReference !== 'string') {
+    message.error(t('message.copyFailed'))
     return
   }
 
@@ -641,6 +646,7 @@ async function applyAssetDelete(nextContent, assetInfo, options = {}) {
     event: 'document.resource.delete-local',
     data: {
       resourceUrl: assetInfo.resourceUrl,
+      rawPath: assetInfo.rawPath,
       requestContext: previewAssetSessionController.createRequestContext(options.actionContext),
     },
   })
@@ -789,6 +795,7 @@ async function deletePreviewAsset() {
     event: 'resource.get-info',
     data: {
       resourceUrl: assetInfo.resourceUrl,
+      rawPath: assetInfo.rawPath,
       requestContext: previewAssetSessionController.createRequestContext(actionContext),
     },
   })

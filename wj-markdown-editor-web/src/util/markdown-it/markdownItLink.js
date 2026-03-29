@@ -197,21 +197,27 @@ function parseAutolinkReference(content, startIndex) {
   }
 }
 
-function parseLinkifyReference(content, startIndex) {
-  const matchedUrl = /^https?:\/\/[^\s<]+/iu.exec(content.slice(startIndex))
-  if (!matchedUrl) {
+function parseLinkifyReference(content, startIndex, linkify) {
+  if (typeof linkify?.matchAtStart !== 'function') {
+    return null
+  }
+
+  const matchedLink = linkify.matchAtStart(content.slice(startIndex))
+  const matchedUrl = matchedLink?.url || matchedLink?.raw || matchedLink?.text || null
+  const matchedText = matchedLink?.raw || matchedLink?.text || matchedUrl
+  if (!matchedUrl || !matchedText || !HTTP_RESOURCE_REGEXP.test(matchedUrl)) {
     return null
   }
 
   return {
     type: 'link',
-    source: matchedUrl[0],
-    markdownReference: matchedUrl[0],
-    nextIndex: startIndex + matchedUrl[0].length,
+    source: matchedUrl,
+    markdownReference: matchedText,
+    nextIndex: startIndex + matchedText.length,
   }
 }
 
-function extractInlineResourceReferenceList(content) {
+function extractInlineResourceReferenceList(content, linkify) {
   const referenceList = []
   let index = 0
 
@@ -237,7 +243,7 @@ function extractInlineResourceReferenceList(content) {
       continue
     }
 
-    const linkifyReference = parseLinkifyReference(content, index)
+    const linkifyReference = parseLinkifyReference(content, index, linkify)
     if (linkifyReference) {
       referenceList.push(linkifyReference)
       index = linkifyReference.nextIndex
@@ -272,12 +278,12 @@ function takeNextInlineReference(referenceList, startIndex, type, source) {
   }
 }
 
-function annotateInlineResourceMarkdownReference(inlineToken) {
+function annotateInlineResourceMarkdownReference(inlineToken, linkify) {
   if (!inlineToken?.content || !Array.isArray(inlineToken.children) || inlineToken.children.length === 0) {
     return
   }
 
-  const referenceList = extractInlineResourceReferenceList(inlineToken.content)
+  const referenceList = extractInlineResourceReferenceList(inlineToken.content, linkify)
   if (referenceList.length === 0) {
     return
   }
@@ -351,7 +357,7 @@ export default function (md) {
   md.core.ruler.after('inline', 'preview-resource-markdown-reference', (state) => {
     state.tokens.forEach((token) => {
       if (token.type === 'inline') {
-        annotateInlineResourceMarkdownReference(token)
+        annotateInlineResourceMarkdownReference(token, md.linkify)
       }
     })
   })

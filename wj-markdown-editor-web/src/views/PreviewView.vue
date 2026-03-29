@@ -733,8 +733,13 @@ async function copyPreviewAssetMarkdownReference() {
   const actionTarget = resolvePreviewAssetMenuActionTarget({
     requireResourceUrl: false,
   })
-  const markdownReference = actionTarget?.assetInfo?.markdownReference
-  if (!actionTarget || typeof markdownReference !== 'string') {
+  if (!actionTarget) {
+    return
+  }
+
+  const markdownReference = actionTarget.assetInfo?.markdownReference
+  if (typeof markdownReference !== 'string') {
+    message.error(t('message.copyFailed'))
     return
   }
 

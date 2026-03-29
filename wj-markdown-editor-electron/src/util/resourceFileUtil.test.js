@@ -112,6 +112,62 @@ describe('resourceFileUtil.deleteLocalResource', () => {
     expect(remove).not.toHaveBeenCalled()
   })
 
+  it('删除本地资源时，原始路径带 query 且真实文件存在时，应删除 fallback 对应的真实文件', async () => {
+    pathExists.mockImplementation(async (targetPath) => {
+      return targetPath === 'D:\\docs\\assets\\asset.txt'
+    })
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+
+    const result = await resourceFileUtil.deleteLocalResource({
+      documentPath: 'D:\\docs\\note.md',
+    }, {
+      resourceUrl: convertResourceUrl('./assets/asset.txt?tab=1'),
+      rawPath: './assets/asset.txt?tab=1',
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      removed: true,
+      reason: 'deleted',
+      path: 'D:\\docs\\assets\\asset.txt',
+    })
+    expect(pathExists).toHaveBeenNthCalledWith(1, 'D:\\docs\\assets\\asset.txt?tab=1')
+    expect(pathExists).toHaveBeenNthCalledWith(2, 'D:\\docs\\assets\\asset.txt')
+    expect(stat).toHaveBeenCalledWith('D:\\docs\\assets\\asset.txt')
+    expect(remove).toHaveBeenCalledWith('D:\\docs\\assets\\asset.txt')
+  })
+
+  it('删除本地资源时，原始路径带 hash 且真实文件存在时，应删除 fallback 对应的真实文件', async () => {
+    pathExists.mockImplementation(async (targetPath) => {
+      return targetPath === 'D:\\docs\\assets\\asset.txt'
+    })
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+
+    const result = await resourceFileUtil.deleteLocalResource({
+      documentPath: 'D:\\docs\\note.md',
+    }, {
+      resourceUrl: convertResourceUrl('./assets/asset.txt#anchor'),
+      rawPath: './assets/asset.txt#anchor',
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      removed: true,
+      reason: 'deleted',
+      path: 'D:\\docs\\assets\\asset.txt',
+    })
+    expect(pathExists).toHaveBeenNthCalledWith(1, 'D:\\docs\\assets\\asset.txt#anchor')
+    expect(pathExists).toHaveBeenNthCalledWith(2, 'D:\\docs\\assets\\asset.txt')
+    expect(stat).toHaveBeenCalledWith('D:\\docs\\assets\\asset.txt')
+    expect(remove).toHaveBeenCalledWith('D:\\docs\\assets\\asset.txt')
+  })
+
   it('目标是目录时，应该拒绝删除', async () => {
     pathExists.mockResolvedValue(true)
     stat.mockResolvedValue({
