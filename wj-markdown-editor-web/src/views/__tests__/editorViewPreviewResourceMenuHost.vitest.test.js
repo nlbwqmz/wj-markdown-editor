@@ -65,6 +65,21 @@ function createDeferred() {
   }
 }
 
+function createPreviewImageHitElement() {
+  const imageElement = {
+    dataset: {
+      wjResourceKind: 'image',
+      wjResourceSrc: editorViewHostState.previewResourceContext?.asset?.rawSrc ?? '',
+    },
+  }
+  imageElement.closest = (selector) => {
+    return typeof selector === 'string' && selector.includes('img[data-wj-resource-src]')
+      ? imageElement
+      : null
+  }
+  return imageElement
+}
+
 vi.mock('vue-i18n', () => ({
   useI18n() {
     return {
@@ -406,6 +421,17 @@ describe('editorView 预览资源菜单宿主接线', () => {
         writeText: editorViewHostState.clipboardWriteText,
       },
     })
+    Object.defineProperty(globalThis, 'requestAnimationFrame', {
+      configurable: true,
+      value: vi.fn((callback) => {
+        callback(0)
+        return 1
+      }),
+    })
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: vi.fn(() => createPreviewImageHitElement()),
+    })
   })
 
   afterEach(() => {
@@ -475,6 +501,10 @@ describe('editorView 预览资源菜单宿主接线', () => {
     expect(editorViewHostState.channelSend).toHaveBeenCalledWith({
       event: 'document.resource.copy-image',
       data: {
+        copyTarget: {
+          x: 180,
+          y: 260,
+        },
         sourceType: 'local',
         resourceUrl: 'wj://document-resource/assets/demo.png',
         rawSrc: 'assets/demo.png',

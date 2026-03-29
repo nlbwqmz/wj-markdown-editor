@@ -77,9 +77,18 @@ test('中英文文案都应提供复制结果提示', () => {
     '复制失败',
   )
   assert.equal(
-    zhCN.message.previewAssetCopyImageFormatUnsupported,
-    '当前图片格式暂不支持复制图片，请使用 PNG 或 JPEG，或改用另存为。',
+    zhCN.message.previewAssetCopyImageTargetUnavailable,
+    '当前图片位置已变化，请重新右键后再试。',
   )
+  assert.equal(
+    zhCN.message.previewAssetInvalidCopyImageTarget,
+    '当前复制目标无效，请重新打开菜单后再试。',
+  )
+  assert.equal(
+    zhCN.message.previewAssetHostWindowUnavailable,
+    '当前窗口已不可用，无法复制图片，请重试。',
+  )
+  assert.equal(zhCN.message.previewAssetCopyImageFormatUnsupported, undefined)
 
   assert.equal(
     enUS.message.noCopyableContent,
@@ -94,9 +103,18 @@ test('中英文文案都应提供复制结果提示', () => {
     'Copy failed.',
   )
   assert.equal(
-    enUS.message.previewAssetCopyImageFormatUnsupported,
-    'This image format is not supported for copy image yet. Use PNG/JPEG or Save As instead.',
+    enUS.message.previewAssetCopyImageTargetUnavailable,
+    'The image position has changed. Reopen the context menu and try again.',
   )
+  assert.equal(
+    enUS.message.previewAssetInvalidCopyImageTarget,
+    'The copy target is invalid. Reopen the context menu and try again.',
+  )
+  assert.equal(
+    enUS.message.previewAssetHostWindowUnavailable,
+    'The current window is unavailable, so the image cannot be copied. Please try again.',
+  )
+  assert.equal(enUS.message.previewAssetCopyImageFormatUnsupported, undefined)
 })
 
 test('中英文文案都应提供另存为失败提示', () => {

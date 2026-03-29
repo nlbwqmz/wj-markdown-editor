@@ -1533,6 +1533,10 @@ describe('ipcMainUtil command mapping', () => {
       'document.resource.copy-image',
       {
         resourceUrl: 'wj://2e2f6173736574732f636f70792d696d6167652e706e67',
+        copyTarget: {
+          x: 188,
+          y: 288,
+        },
       },
       {
         ok: true,

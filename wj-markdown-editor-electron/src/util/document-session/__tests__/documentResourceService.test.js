@@ -52,6 +52,15 @@ async function createServiceContext() {
       isEmpty: () => false,
     })),
   }
+  const webContents = {
+    isDestroyed: vi.fn(() => false),
+    copyImageAt: vi.fn(),
+  }
+  const window = {
+    isDestroyed: vi.fn(() => false),
+    webContents,
+  }
+  const resolveWindowById = vi.fn(() => window)
   const fetchImpl = vi.fn()
   const fsModule = {
     copyFile,
@@ -66,6 +75,7 @@ async function createServiceContext() {
     nativeImageApi,
     fetchImpl,
     fsModule,
+    resolveWindowById,
   })
 
   return {
@@ -74,9 +84,12 @@ async function createServiceContext() {
     fetchImpl,
     fsModule,
     nativeImageApi,
+    resolveWindowById,
     service,
     showItemInFolder,
     store,
+    webContents,
+    window,
   }
 }
 
@@ -411,8 +424,8 @@ describe('documentResourceService', () => {
         })[sideEffectKey]).not.toHaveBeenCalled()
   })
 
-  it('document.resource.copy-image 对本地 PNG 图片应继续复制成功', async () => {
-    const { clipboardApi, nativeImageApi, service, store } = await createServiceContext()
+  it('document.resource.copy-image 对本地 PNG 图片应改走 webContents.copyImageAt，且不再读取文件或写原生剪贴板', async () => {
+    const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-image-local-png-success-session',
       path: 'D:\\docs\\note.md',
@@ -421,17 +434,6 @@ describe('documentResourceService', () => {
       now: 1700000004013,
     })
     const windowId = bindSession(store, session)
-    pathExists.mockResolvedValue(true)
-    stat.mockResolvedValue({
-      isDirectory: () => false,
-      isFile: () => true,
-    })
-    const buffer = Buffer.from('png-binary')
-    readFile.mockResolvedValue(buffer)
-    const nativeImage = {
-      isEmpty: () => false,
-    }
-    nativeImageApi.createFromBuffer.mockReturnValue(nativeImage)
 
     const result = await service.copyImage({
       windowId,
@@ -440,24 +442,30 @@ describe('documentResourceService', () => {
         rawSrc: './assets/demo.png',
         rawPath: './assets/demo.png',
         resourceUrl: convertResourceUrl('./assets/demo.png'),
+        copyTarget: {
+          x: 180,
+          y: 260,
+        },
       },
     })
 
     expect(result).toEqual({
       ok: true,
       reason: 'copied',
-      path: 'D:\\docs\\assets\\demo.png',
     })
-    expect(readFile).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png')
-    expect(nativeImageApi.createFromBuffer).toHaveBeenCalledWith(buffer)
-    expect(clipboardApi.writeImage).toHaveBeenCalledWith(nativeImage)
+    expect(webContents.copyImageAt).toHaveBeenCalledWith(180, 260)
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(readFile).not.toHaveBeenCalled()
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
+    expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })
 
   it.each([
     ['./assets/foo?bar.png', 'D:\\docs\\assets\\foo?bar.png'],
     ['./assets/foo#bar.jpg', 'D:\\docs\\assets\\foo#bar.jpg'],
-  ])('document.resource.copy-image 对文件名合法包含 query/hash 字符的本地图片 %s，不应误判为格式不支持', async (rawPath, resolvedPath) => {
-    const { clipboardApi, nativeImageApi, service, store } = await createServiceContext()
+  ])('document.resource.copy-image 对文件名合法包含 query/hash 字符的本地图片 %s，应直接走 copyImageAt 而不是格式白名单', async (rawPath) => {
+    const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: `copy-image-local-special-char-${rawPath}-session`,
       path: 'D:\\docs\\note.md',
@@ -466,17 +474,6 @@ describe('documentResourceService', () => {
       now: 1700000004013,
     })
     const windowId = bindSession(store, session)
-    pathExists.mockResolvedValue(true)
-    stat.mockResolvedValue({
-      isDirectory: () => false,
-      isFile: () => true,
-    })
-    const buffer = Buffer.from('png-binary')
-    readFile.mockResolvedValue(buffer)
-    const nativeImage = {
-      isEmpty: () => false,
-    }
-    nativeImageApi.createFromBuffer.mockReturnValue(nativeImage)
 
     const result = await service.copyImage({
       windowId,
@@ -485,60 +482,29 @@ describe('documentResourceService', () => {
         rawSrc: rawPath,
         rawPath,
         resourceUrl: convertResourceUrl(rawPath),
+        copyTarget: {
+          x: 181,
+          y: 261,
+        },
       },
     })
 
     expect(result).toEqual({
       ok: true,
       reason: 'copied',
-      path: resolvedPath,
     })
-    expect(readFile).toHaveBeenCalledWith(resolvedPath)
-    expect(nativeImageApi.createFromBuffer).toHaveBeenCalledWith(buffer)
-    expect(clipboardApi.writeImage).toHaveBeenCalledWith(nativeImage)
-  })
-
-  it('document.resource.copy-image 对本地 WebP 图片应直接返回 unsupported，且不读取文件', async () => {
-    const { clipboardApi, nativeImageApi, service, store } = await createServiceContext()
-    const session = createBoundFileSession({
-      sessionId: 'copy-image-local-webp-unsupported-session',
-      path: 'D:\\docs\\note.md',
-      content: '# 文档',
-      stat: null,
-      now: 1700000004013,
-    })
-    const windowId = bindSession(store, session)
-    pathExists.mockResolvedValue(true)
-    stat.mockResolvedValue({
-      isDirectory: () => false,
-      isFile: () => true,
-    })
-
-    const result = await service.copyImage({
-      windowId,
-      payload: {
-        sourceType: 'local',
-        rawSrc: './assets/demo.webp',
-        rawPath: './assets/demo.webp',
-        resourceUrl: convertResourceUrl('./assets/demo.webp'),
-      },
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'copy-image-format-unsupported',
-      path: 'D:\\docs\\assets\\demo.webp',
-      messageKey: 'message.previewAssetCopyImageFormatUnsupported',
-    })
+    expect(webContents.copyImageAt).toHaveBeenCalledWith(181, 261)
+    expect(pathExists).not.toHaveBeenCalled()
     expect(readFile).not.toHaveBeenCalled()
+    expect(fetchImpl).not.toHaveBeenCalled()
     expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })
 
-  it('document.resource.copy-image 对远程 WebP 图片应直接返回 unsupported，且不发起下载', async () => {
-    const { clipboardApi, fetchImpl, nativeImageApi, service, store } = await createServiceContext()
+  it('document.resource.copy-image 对远程 WebP 图片应直接走 webContents.copyImageAt，且不再发起下载', async () => {
+    const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
-      sessionId: 'copy-image-remote-webp-unsupported-session',
+      sessionId: 'copy-image-remote-webp-copy-image-at-session',
       path: 'D:\\docs\\note.md',
       content: '# 文档',
       stat: null,
@@ -553,55 +519,51 @@ describe('documentResourceService', () => {
         rawSrc: 'https://example.com/demo.webp',
         rawPath: 'https://example.com/demo.webp',
         resourceUrl: 'https://example.com/demo.webp',
+        copyTarget: {
+          x: 182,
+          y: 262,
+        },
       },
     })
 
     expect(result).toEqual({
-      ok: false,
-      reason: 'copy-image-format-unsupported',
-      messageKey: 'message.previewAssetCopyImageFormatUnsupported',
+      ok: true,
+      reason: 'copied',
     })
+    expect(webContents.copyImageAt).toHaveBeenCalledWith(182, 262)
     expect(fetchImpl).not.toHaveBeenCalled()
     expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })
 
-  it('document.resource.copy-image 对网络非图片响应必须返回固定失败', async () => {
-    const { clipboardApi, fetchImpl, nativeImageApi, service, store } = await createServiceContext()
+  it('document.resource.copy-image 在 copyTarget 缺失时应返回 invalid-copy-image-target', async () => {
+    const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
-      sessionId: 'copy-image-remote-non-image-session',
+      sessionId: 'copy-image-invalid-target-session',
       path: 'D:\\docs\\note.md',
       content: '# 文档',
       stat: null,
       now: 1700000004013,
     })
     const windowId = bindSession(store, session)
-    fetchImpl.mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        get(name) {
-          return name?.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null
-        },
-      },
-      arrayBuffer: vi.fn(async () => new ArrayBuffer(0)),
-    })
 
     const result = await service.copyImage({
       windowId,
       payload: {
-        sourceType: 'remote',
-        rawSrc: 'https://example.com/demo.png',
-        rawPath: 'https://example.com/demo.png',
-        resourceUrl: 'https://example.com/demo.png',
+        sourceType: 'local',
+        rawSrc: './assets/demo.png',
+        rawPath: './assets/demo.png',
+        resourceUrl: convertResourceUrl('./assets/demo.png'),
       },
     })
 
     expect(result).toEqual({
       ok: false,
-      reason: 'remote-resource-not-image',
-      messageKey: 'message.previewAssetRemoteResourceNotImage',
+      reason: 'invalid-copy-image-target',
+      messageKey: 'message.previewAssetInvalidCopyImageTarget',
     })
+    expect(webContents.copyImageAt).not.toHaveBeenCalled()
+    expect(fetchImpl).not.toHaveBeenCalled()
     expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })
@@ -1588,207 +1550,86 @@ describe('documentResourceService', () => {
     })
   })
 
-  it('document.resource.copy-image 在本地文件不存在时必须返回 not-found', async () => {
-    const { clipboardApi, service, store } = await createServiceContext()
+  it('document.resource.copy-image 在 resolveWindowById 期间若 session 已切换，必须返回 stale-document-context 且不调用 copyImageAt', async () => {
+    const { clipboardApi, resolveWindowById, service, store, webContents, window } = await createServiceContext()
     const session = createBoundFileSession({
-      sessionId: 'copy-image-missing-session',
-      path: 'D:\\docs\\note.md',
-      content: '# 文档',
-      stat: null,
-      now: 1700000004016,
-    })
-    const windowId = bindSession(store, session)
-    pathExists.mockResolvedValue(false)
-
-    const result = await service.copyImage({
-      windowId,
-      payload: {
-        sourceType: 'local',
-        rawSrc: './assets/missing.png',
-        rawPath: './assets/missing.png',
-        resourceUrl: convertResourceUrl('./assets/missing.png'),
-      },
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'not-found',
-      path: 'D:\\docs\\assets\\missing.png',
-      messageKey: 'message.theFileDoesNotExist',
-    })
-    expect(clipboardApi.writeImage).not.toHaveBeenCalled()
-  })
-
-  it('document.resource.copy-image 在 nativeImage.createFromBuffer 返回空图时必须结构化失败', async () => {
-    const { clipboardApi, nativeImageApi, service, store } = await createServiceContext()
-    const session = createBoundFileSession({
-      sessionId: 'copy-image-empty-native-image-session',
-      path: 'D:\\docs\\note.md',
-      content: '# 文档',
-      stat: null,
-      now: 1700000004024,
-    })
-    const windowId = bindSession(store, session)
-    pathExists.mockResolvedValue(true)
-    stat.mockResolvedValue({
-      isDirectory: () => false,
-      isFile: () => true,
-    })
-    readFile.mockResolvedValue(Buffer.from('png-binary'))
-    nativeImageApi.createFromBuffer.mockReturnValue({
-      isEmpty: () => true,
-    })
-
-    const result = await service.copyImage({
-      windowId,
-      payload: {
-        sourceType: 'local',
-        rawSrc: './assets/demo.png',
-        rawPath: './assets/demo.png',
-        resourceUrl: convertResourceUrl('./assets/demo.png'),
-      },
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'local-resource-not-image',
-      path: 'D:\\docs\\assets\\demo.png',
-      messageKey: 'message.previewAssetLocalResourceNotImage',
-    })
-    expect(clipboardApi.writeImage).not.toHaveBeenCalled()
-  })
-
-  it('document.resource.copy-image 在读取期间窗口切到其他 session 后，必须返回 stale-document-context 且不写剪贴板', async () => {
-    const { clipboardApi, service, store } = await createServiceContext()
-    const session = createBoundFileSession({
-      sessionId: 'copy-image-stale-after-read-session',
+      sessionId: 'copy-image-stale-before-copy-image-at-session',
       path: 'D:\\docs\\note.md',
       content: '# 文档',
       stat: null,
       now: 1700000004028,
     })
     const windowId = bindSession(store, session)
-    const deferred = createDeferred()
-    pathExists.mockResolvedValue(true)
-    stat.mockResolvedValue({
-      isDirectory: () => false,
-      isFile: () => true,
-    })
-    readFile.mockImplementation(async () => {
-      await deferred.promise
-      return Buffer.from('png-binary')
+    resolveWindowById.mockImplementation(() => {
+      const nextSession = createBoundFileSession({
+        sessionId: 'copy-image-stale-next-session',
+        path: 'D:\\docs\\other.md',
+        content: '# 其他文档',
+        stat: null,
+        now: 1700000004029,
+      })
+      store.createSession(nextSession)
+      store.bindWindowToSession({
+        windowId,
+        sessionId: nextSession.sessionId,
+      })
+      return window
     })
 
-    const resultPromise = service.copyImage({
+    const result = await service.copyImage({
       windowId,
       payload: {
         sourceType: 'local',
         rawSrc: './assets/demo.png',
         rawPath: './assets/demo.png',
         resourceUrl: convertResourceUrl('./assets/demo.png'),
+        copyTarget: {
+          x: 180,
+          y: 260,
+        },
       },
     })
 
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    const nextSession = createBoundFileSession({
-      sessionId: 'copy-image-stale-next-session',
-      path: 'D:\\docs\\other.md',
-      content: '# 其他文档',
-      stat: null,
-      now: 1700000004029,
-    })
-    store.createSession(nextSession)
-    store.bindWindowToSession({
-      windowId,
-      sessionId: nextSession.sessionId,
-    })
-    deferred.resolve()
-
-    await expect(resultPromise).resolves.toEqual({
+    expect(result).toEqual({
       ok: false,
       reason: 'stale-document-context',
     })
+    expect(webContents.copyImageAt).not.toHaveBeenCalled()
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })
 
-  it('document.resource.copy-image 对远程图片超时应返回结构化失败', async () => {
-    vi.useFakeTimers()
-    try {
-      const { clipboardApi, fetchImpl, nativeImageApi, service, store } = await createServiceContext()
-      const session = createBoundFileSession({
-        sessionId: 'copy-image-remote-timeout-session',
-        path: 'D:\\docs\\note.md',
-        content: '# 文档',
-        stat: null,
-        now: 1700000004025,
-      })
-      const windowId = bindSession(store, session)
-      fetchImpl.mockImplementation((_url, options) => {
-        return new Promise((resolve, reject) => {
-          options.signal.addEventListener('abort', () => {
-            const error = new Error('aborted')
-            error.name = 'AbortError'
-            reject(error)
-          }, { once: true })
-        })
-      })
-
-      const resultPromise = service.copyImage({
-        windowId,
-        payload: {
-          sourceType: 'remote',
-          rawSrc: 'https://example.com/slow.png',
-          rawPath: 'https://example.com/slow.png',
-          resourceUrl: 'https://example.com/slow.png',
-        },
-      })
-
-      await vi.runAllTimersAsync()
-
-      await expect(resultPromise).resolves.toEqual({
-        ok: false,
-        reason: 'remote-resource-fetch-timeout',
-        messageKey: 'message.previewAssetRemoteResourceFetchTimeout',
-      })
-      expect(fetchImpl).toHaveBeenCalledWith('https://example.com/slow.png', expect.objectContaining({
-        signal: expect.any(AbortSignal),
-      }))
-      expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
-      expect(clipboardApi.writeImage).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('document.resource.copy-image 在远程 rawSrc 丢失时必须 fail-closed，不能静默回退到 resourceUrl', async () => {
-    const { clipboardApi, fetchImpl, nativeImageApi, service, store } = await createServiceContext()
+  it('document.resource.copy-image 在窗口已销毁时应返回 host-window-unavailable', async () => {
+    const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents, window } = await createServiceContext()
     const session = createBoundFileSession({
-      sessionId: 'copy-image-remote-missing-raw-src-session',
+      sessionId: 'copy-image-host-window-unavailable-session',
       path: 'D:\\docs\\note.md',
       content: '# 文档',
       stat: null,
       now: 1700000004034,
     })
     const windowId = bindSession(store, session)
+    window.isDestroyed.mockReturnValue(true)
 
     const result = await service.copyImage({
       windowId,
       payload: {
         sourceType: 'remote',
-        rawSrc: null,
-        rawPath: null,
-        resourceUrl: 'https://example.com/fallback-only.png',
+        rawSrc: 'https://example.com/demo.webp',
+        rawPath: 'https://example.com/demo.webp',
+        resourceUrl: 'https://example.com/demo.webp',
+        copyTarget: {
+          x: 183,
+          y: 263,
+        },
       },
     })
 
     expect(result).toEqual({
       ok: false,
-      reason: 'invalid-remote-resource',
-      messageKey: 'message.previewAssetRemoteResourceInvalid',
+      reason: 'host-window-unavailable',
+      messageKey: 'message.previewAssetHostWindowUnavailable',
     })
+    expect(webContents.copyImageAt).not.toHaveBeenCalled()
     expect(fetchImpl).not.toHaveBeenCalled()
     expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
@@ -1845,76 +1686,41 @@ describe('documentResourceService', () => {
     expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
-  it('document.resource.copy-image 对缺少 content-length 的远程超限图片应在流式读取超限后立刻失败，且不能走 arrayBuffer 整包读取', async () => {
-    const { clipboardApi, fetchImpl, nativeImageApi, service, store } = await createServiceContext()
+  it('document.resource.copy-image 在 webContents.copyImageAt 抛错时应返回 copy-image-failed', async () => {
+    const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
-      sessionId: 'copy-image-remote-size-buffer-session',
+      sessionId: 'copy-image-copy-image-at-throw-session',
       path: 'D:\\docs\\note.md',
       content: '# 文档',
       stat: null,
       now: 1700000004027,
     })
     const windowId = bindSession(store, session)
-    const arrayBuffer = vi.fn(async () => {
-      throw new Error('不应走到 arrayBuffer')
-    })
-    const cancel = vi.fn()
-    const chunkList = [
-      new Uint8Array(10 * 1024 * 1024),
-      new Uint8Array(10 * 1024 * 1024),
-      new Uint8Array(2 * 1024 * 1024),
-    ]
-    fetchImpl.mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: {
-        get(name) {
-          return name?.toLowerCase() === 'content-type' ? 'image/png' : null
-        },
-      },
-      body: {
-        getReader() {
-          let chunkIndex = 0
-          return {
-            async read() {
-              if (chunkIndex >= chunkList.length) {
-                return {
-                  done: true,
-                  value: undefined,
-                }
-              }
-
-              const value = chunkList[chunkIndex]
-              chunkIndex += 1
-              return {
-                done: false,
-                value,
-              }
-            },
-            cancel,
-          }
-        },
-      },
-      arrayBuffer,
+    webContents.copyImageAt.mockImplementation(() => {
+      throw new Error('copy-image-at failed')
     })
 
     const result = await service.copyImage({
       windowId,
       payload: {
         sourceType: 'remote',
-        rawSrc: 'https://example.com/no-header-too-large.jpg',
-        rawPath: 'https://example.com/no-header-too-large.jpg',
-        resourceUrl: 'https://example.com/no-header-too-large.jpg',
+        rawSrc: 'https://example.com/demo.webp',
+        rawPath: 'https://example.com/demo.webp',
+        resourceUrl: 'https://example.com/demo.webp',
+        copyTarget: {
+          x: 184,
+          y: 264,
+        },
       },
     })
 
     expect(result).toEqual({
       ok: false,
-      reason: 'remote-resource-too-large',
-      messageKey: 'message.previewAssetRemoteResourceTooLarge',
+      reason: 'copy-image-failed',
+      messageKey: 'message.copyFailed',
     })
-    expect(arrayBuffer).not.toHaveBeenCalled()
-    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(webContents.copyImageAt).toHaveBeenCalledWith(184, 264)
+    expect(fetchImpl).not.toHaveBeenCalled()
     expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })

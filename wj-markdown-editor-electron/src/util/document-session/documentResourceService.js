@@ -40,12 +40,6 @@ const IMAGE_CONTENT_TYPE_EXTENSION_MAP = new Map([
   ['image/x-icon', '.ico'],
   ['image/vnd.microsoft.icon', '.ico'],
 ])
-const COPY_IMAGE_SUPPORTED_EXTENSION_SET = new Set([
-  '.png',
-  '.jpg',
-  '.jpeg',
-])
-
 const DEFAULT_REMOTE_IMAGE_FETCH_TIMEOUT_MS = 15 * 1000
 const DEFAULT_REMOTE_IMAGE_SAVE_PROBE_TIMEOUT_MS = 1000
 const DEFAULT_REMOTE_IMAGE_MAX_BYTES = 20 * 1024 * 1024
@@ -58,7 +52,9 @@ const RESOURCE_ACTION_FAILURE_MESSAGE_KEY_MAP = {
   'remote-resource-too-large': 'message.previewAssetRemoteResourceTooLarge',
   'remote-resource-fetch-timeout': 'message.previewAssetRemoteResourceFetchTimeout',
   'local-resource-not-image': 'message.previewAssetLocalResourceNotImage',
-  'copy-image-format-unsupported': 'message.previewAssetCopyImageFormatUnsupported',
+  'invalid-copy-image-target': 'message.previewAssetInvalidCopyImageTarget',
+  'host-window-unavailable': 'message.previewAssetHostWindowUnavailable',
+  'copy-image-failed': 'message.copyFailed',
 }
 
 function normalizeComparablePath(targetPath) {
@@ -237,40 +233,6 @@ function deriveLocalFileName(targetPath) {
   return sanitizeFileName(path.basename(normalizedPath)) || 'image.png'
 }
 
-function deriveCopyImageExtension(targetPathOrUrl) {
-  const normalizedValue = normalizeStringValue(targetPathOrUrl)
-  if (!normalizedValue) {
-    return null
-  }
-
-  try {
-    if (/^(?:https?|wj):\/\//iu.test(normalizedValue)) {
-      const urlObject = new URL(normalizedValue)
-      const pathName = decodeURIComponent(urlObject.pathname || '')
-      const extension = path.posix.extname(path.posix.basename(pathName))
-      return extension ? extension.toLowerCase() : null
-    }
-  } catch {
-    // URL 解析失败时回退到普通路径裁决。
-  }
-
-  const comparablePath = normalizedValue.replaceAll('\\', '/')
-  const baseName = comparablePath.split('/').pop() || ''
-  const directExtension = path.posix.extname(baseName)
-  if (directExtension && !/[?#]/u.test(directExtension)) {
-    return directExtension.toLowerCase()
-  }
-
-  const fallbackPath = comparablePath.split(/[?#]/u)[0]
-  const fallbackBaseName = fallbackPath.split('/').pop() || ''
-  const fallbackExtension = path.posix.extname(fallbackBaseName)
-  return fallbackExtension ? fallbackExtension.toLowerCase() : null
-}
-
-function isCopyImageFormatSupported(targetPathOrUrl) {
-  return COPY_IMAGE_SUPPORTED_EXTENSION_SET.has(deriveCopyImageExtension(targetPathOrUrl))
-}
-
 function deriveRemoteFileName(remoteUrl, contentType) {
   let remoteFileName = null
   try {
@@ -392,6 +354,7 @@ function normalizeResourcePayload(payload) {
       resourceUrl: payload,
       rawSrc: null,
       rawPath: null,
+      copyTarget: null,
       requestContext: null,
     }
   }
@@ -401,6 +364,12 @@ function normalizeResourcePayload(payload) {
     resourceUrl: normalizeStringValue(payload?.resourceUrl),
     rawSrc: normalizeStringValue(payload?.rawSrc),
     rawPath: normalizeStringValue(payload?.rawPath),
+    copyTarget: payload?.copyTarget && typeof payload.copyTarget === 'object'
+      ? {
+          x: payload.copyTarget.x,
+          y: payload.copyTarget.y,
+        }
+      : null,
     requestContext: payload?.requestContext && typeof payload.requestContext === 'object'
       ? {
           sessionId: normalizeStringValue(payload.requestContext.sessionId),
@@ -420,6 +389,21 @@ function normalizeComparablePayload(payload) {
     rawPath: normalizeStringValue(payload?.rawPath),
     resourceUrl: normalizeStringValue(payload?.resourceUrl),
   }
+}
+
+function normalizeCopyImageTarget(payload) {
+  const x = Number.isFinite(payload?.copyTarget?.x)
+    ? Math.trunc(payload.copyTarget.x)
+    : null
+  const y = Number.isFinite(payload?.copyTarget?.y)
+    ? Math.trunc(payload.copyTarget.y)
+    : null
+
+  if (x === null || y === null) {
+    return null
+  }
+
+  return { x, y }
 }
 
 function createResourceContext(session) {
@@ -445,10 +429,9 @@ export function createDocumentResourceService({
   store,
   showItemInFolder = () => {},
   dialogApi = null,
-  clipboardApi = null,
-  nativeImageApi = null,
   fetchImpl = null,
   fsModule = null,
+  resolveWindowById = () => null,
   remoteImageFetchTimeoutMs = DEFAULT_REMOTE_IMAGE_FETCH_TIMEOUT_MS,
   remoteImageSaveProbeTimeoutMs = DEFAULT_REMOTE_IMAGE_SAVE_PROBE_TIMEOUT_MS,
   remoteImageMaxBytes = DEFAULT_REMOTE_IMAGE_MAX_BYTES,
@@ -591,20 +574,6 @@ export function createDocumentResourceService({
     }
   }
 
-  async function readResolvedLocalImageBuffer(localImageSource) {
-    try {
-      const buffer = await fsModule?.readFile?.(localImageSource.path)
-      return {
-        ...localImageSource,
-        buffer,
-      }
-    } catch {
-      return createBinaryActionFailureResult('read-local-resource-failed', {
-        path: localImageSource.path,
-      })
-    }
-  }
-
   async function fetchRemoteImageBuffer(remoteUrl) {
     if (typeof fetchImpl !== 'function') {
       return createBinaryActionFailureResult('remote-fetch-not-configured')
@@ -715,14 +684,6 @@ export function createDocumentResourceService({
     } finally {
       clearTimeout(timeoutId)
     }
-  }
-
-  function createNativeImageFromBuffer(buffer) {
-    if (typeof nativeImageApi?.createFromBuffer !== 'function') {
-      return null
-    }
-
-    return nativeImageApi.createFromBuffer(buffer)
   }
 
   async function resolveRemoteImageSaveSource(windowId, payload, capturedActionContext) {
@@ -917,36 +878,19 @@ export function createDocumentResourceService({
       return createBinaryActionFailureResult('source-type-mismatch')
     }
 
-    let imageBufferResult = null
-    if (runtimeSourceType === 'local') {
-      const localImageSource = await resolveLocalImageSource(
-        actionContext.documentContext,
-        actionContext.normalizedPayload,
-      )
-      if (localImageSource.ok !== true) {
-        return localImageSource
-      }
-
-      if (isCopyImageFormatSupported(localImageSource.path) !== true) {
-        return createBinaryActionFailureResult('copy-image-format-unsupported', {
-          path: localImageSource.path,
-        })
-      }
-
-      imageBufferResult = await readResolvedLocalImageBuffer(localImageSource)
-    } else {
-      const remoteImageUrl = actionContext.normalizedPayload.rawSrc
-      if (!remoteImageUrl) {
-        return createBinaryActionFailureResult('invalid-remote-resource')
-      }
-      if (isCopyImageFormatSupported(remoteImageUrl) !== true) {
-        return createBinaryActionFailureResult('copy-image-format-unsupported')
-      }
-
-      imageBufferResult = await fetchRemoteImageBuffer(remoteImageUrl)
+    const copyTarget = normalizeCopyImageTarget(actionContext.normalizedPayload)
+    if (!copyTarget) {
+      return createBinaryActionFailureResult('invalid-copy-image-target')
     }
-    if (imageBufferResult.ok !== true) {
-      return imageBufferResult
+
+    const hostWindow = resolveWindowById?.(windowId) || null
+    const webContents = hostWindow?.webContents || null
+    if (!hostWindow
+      || hostWindow.isDestroyed?.() === true
+      || !webContents
+      || webContents.isDestroyed?.() === true
+      || typeof webContents.copyImageAt !== 'function') {
+      return createBinaryActionFailureResult('host-window-unavailable')
     }
 
     const staleActionError = getStaleActionError(
@@ -959,26 +903,13 @@ export function createDocumentResourceService({
     }
 
     try {
-      const nativeImage = createNativeImageFromBuffer(imageBufferResult.buffer)
-      if (!nativeImage || nativeImage.isEmpty?.() === true) {
-        return createBinaryActionFailureResult(
-          runtimeSourceType === 'remote' ? 'remote-resource-not-image' : 'local-resource-not-image',
-          {
-            path: imageBufferResult.path,
-          },
-        )
-      }
-
-      clipboardApi?.writeImage?.(nativeImage)
+      webContents.copyImageAt(copyTarget.x, copyTarget.y)
       return {
         ok: true,
         reason: 'copied',
-        ...(imageBufferResult.path ? { path: imageBufferResult.path } : {}),
       }
     } catch {
-      return createBinaryActionFailureResult('copy-image-failed', {
-        path: imageBufferResult.path,
-      })
+      return createBinaryActionFailureResult('copy-image-failed')
     }
   }
 

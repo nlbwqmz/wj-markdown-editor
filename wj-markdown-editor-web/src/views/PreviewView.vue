@@ -29,6 +29,7 @@ import {
 } from '@/util/document-session/rendererSessionActivationStrategy.js'
 import { createRendererSessionEventSubscription } from '@/util/document-session/rendererSessionEventSubscription.js'
 import { createRendererSessionSnapshotController } from '@/util/document-session/rendererSessionSnapshotController.js'
+import { preparePreviewAssetCopyImagePayload } from '@/util/editor/previewAssetCopyImageActionUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
 import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
 import {
@@ -681,9 +682,33 @@ async function copyPreviewAssetImage() {
     return
   }
 
+  const preparedPayloadResult = await preparePreviewAssetCopyImagePayload({
+    asset: actionTarget.assetInfo,
+    menuPosition: previewAssetMenu.value,
+    basePayload: createPreviewAssetRuntimePayload(actionTarget),
+    closeMenu: closePreviewAssetMenu,
+    waitForNextFrame: () => new Promise(resolve => requestAnimationFrame(() => resolve())),
+    resolveElementFromPoint: (x, y) => document.elementFromPoint(x, y),
+  })
+  if (previewAssetSessionController.isActiveContext(actionTarget.actionContext) !== true) {
+    closePreviewAssetMenu()
+    return
+  }
+
+  if (preparedPayloadResult.ok !== true) {
+    showPreviewAssetActionFailure({
+      ok: false,
+      reason: preparedPayloadResult.reason,
+      messageKey: preparedPayloadResult.reason === 'copy-image-target-unavailable'
+        ? 'message.previewAssetCopyImageTargetUnavailable'
+        : 'message.previewAssetInvalidCopyImageTarget',
+    })
+    return
+  }
+
   const result = await channelUtil.send({
     event: 'document.resource.copy-image',
-    data: createPreviewAssetRuntimePayload(actionTarget),
+    data: preparedPayloadResult.payload,
   })
   if (previewAssetSessionController.isActiveContext(actionTarget.actionContext) !== true) {
     closePreviewAssetMenu()

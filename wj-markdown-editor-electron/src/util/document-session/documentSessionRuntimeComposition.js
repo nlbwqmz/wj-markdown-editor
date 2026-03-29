@@ -1,4 +1,4 @@
-import { clipboard, dialog, nativeImage, shell } from 'electron'
+import { dialog, shell } from 'electron'
 import fs from 'fs-extra'
 import { createDocumentCommandService } from './documentCommandService.js'
 import { createDocumentEffectService } from './documentEffectService.js'
@@ -20,8 +20,6 @@ export function createDocumentSessionRuntimeComposition({
   showItemInFolder = shell.showItemInFolder,
   fsModule = fs,
   dialogApi = dialog,
-  clipboardApi = clipboard,
-  nativeImageApi = nativeImage,
   fetchImpl = globalThis.fetch || null,
 } = {}) {
   const store = createDocumentSessionStore()
@@ -51,10 +49,11 @@ export function createDocumentSessionRuntimeComposition({
     store,
     showItemInFolder,
     dialogApi,
-    clipboardApi,
-    nativeImageApi,
     fsModule,
     fetchImpl,
+    resolveWindowById: (windowId) => {
+      return registry?.getWindowById?.(windowId) || null
+    },
   })
 
   return {
