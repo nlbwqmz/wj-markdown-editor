@@ -14,6 +14,9 @@ function createResourceContext({
   assetType = 'image',
   sourceType = 'local',
   markdownReference = '![示例](./demo.png)',
+  rawSrc = sourceType === 'remote' ? 'https://example.com/demo.png' : './demo.png',
+  rawPath = rawSrc,
+  resourceUrl = sourceType === 'remote' ? rawSrc : `wj://${rawSrc.replace(/^\.\//u, '')}`,
 } = {}) {
   return {
     type: 'resource',
@@ -21,6 +24,9 @@ function createResourceContext({
       assetType,
       sourceType,
       markdownReference,
+      rawSrc,
+      rawPath,
+      resourceUrl,
     },
   }
 }
@@ -275,6 +281,121 @@ test('markdownReference 为 null 时必须隐藏复制 Markdown 引用菜单项'
     {
       key: 'resource.save-as',
       label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+    },
+  ])
+})
+
+test('远程 WebP 图片在 standalone-preview 下必须隐藏复制图片，但保留复制链接、另存为和复制 Markdown 引用', () => {
+  assert.ok(previewContextMenuActionUtilModule, '缺少 preview context menu action util')
+
+  const { buildPreviewContextMenuItems } = previewContextMenuActionUtilModule
+
+  assert.deepEqual(buildPreviewContextMenuItems({
+    context: createResourceContext({
+      assetType: 'image',
+      sourceType: 'remote',
+      rawSrc: 'https://example.com/demo.webp',
+      rawPath: 'https://example.com/demo.webp',
+      resourceUrl: 'https://example.com/demo.webp',
+      markdownReference: '![远程图片](https://example.com/demo.webp)',
+    }),
+    profile: 'standalone-preview',
+    t: key => `translated:${key}`,
+  }), [
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyImageLink',
+      danger: false,
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+    },
+    {
+      key: 'resource.copy-markdown-reference',
+      label: 'translated:previewAssetMenu.copyMarkdownReference',
+      danger: false,
+    },
+  ])
+})
+
+test('本地 SVG 图片在 editor-preview 下必须隐藏复制图片，但保留另存为和其他本地资源操作', () => {
+  assert.ok(previewContextMenuActionUtilModule, '缺少 preview context menu action util')
+
+  const { buildPreviewContextMenuItems } = previewContextMenuActionUtilModule
+
+  assert.deepEqual(buildPreviewContextMenuItems({
+    context: createResourceContext({
+      assetType: 'image',
+      sourceType: 'local',
+      rawSrc: './demo.svg',
+      rawPath: './demo.svg',
+      resourceUrl: 'wj://demo.svg',
+      markdownReference: '![本地图片](./demo.svg)',
+    }),
+    profile: 'editor-preview',
+    t: key => `translated:${key}`,
+  }), [
+    {
+      key: 'resource.copy-absolute-path',
+      label: 'translated:previewAssetMenu.copyAbsolutePath',
+      danger: false,
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+    },
+    {
+      key: 'resource.open-in-folder',
+      label: 'translated:top.openInExplorer',
+      danger: false,
+    },
+    {
+      key: 'resource.copy-markdown-reference',
+      label: 'translated:previewAssetMenu.copyMarkdownReference',
+      danger: false,
+    },
+    {
+      key: 'resource.delete',
+      label: 'translated:previewAssetMenu.delete',
+      danger: true,
+    },
+  ])
+})
+
+test('远程无扩展名图片在 standalone-preview 下必须隐藏复制图片，但保留另存为', () => {
+  assert.ok(previewContextMenuActionUtilModule, '缺少 preview context menu action util')
+
+  const { buildPreviewContextMenuItems } = previewContextMenuActionUtilModule
+
+  assert.deepEqual(buildPreviewContextMenuItems({
+    context: createResourceContext({
+      assetType: 'image',
+      sourceType: 'remote',
+      rawSrc: 'https://example.com/assets/demo',
+      rawPath: 'https://example.com/assets/demo',
+      resourceUrl: 'https://example.com/assets/demo',
+      markdownReference: '![远程图片](https://example.com/assets/demo)',
+    }),
+    profile: 'standalone-preview',
+    t: key => `translated:${key}`,
+  }), [
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyImageLink',
+      danger: false,
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+    },
+    {
+      key: 'resource.copy-markdown-reference',
+      label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
     },
   ])

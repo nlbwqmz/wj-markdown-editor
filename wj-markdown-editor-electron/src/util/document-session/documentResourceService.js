@@ -1,6 +1,12 @@
 import path from 'node:path'
 import resourceFileUtil from '../resourceFileUtil.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
+import {
+  buildRemoteSaveFileName,
+  createRemoteImageSaveMetadataProbe,
+  deriveRemoteFileNameFromUrl,
+  isReliableRemoteImageFileName,
+} from './remoteImageSaveFileNameUtil.js'
 
 const DANGEROUS_SCHEME_SET = new Set([
   'about',
@@ -34,8 +40,14 @@ const IMAGE_CONTENT_TYPE_EXTENSION_MAP = new Map([
   ['image/x-icon', '.ico'],
   ['image/vnd.microsoft.icon', '.ico'],
 ])
+const COPY_IMAGE_SUPPORTED_EXTENSION_SET = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+])
 
 const DEFAULT_REMOTE_IMAGE_FETCH_TIMEOUT_MS = 15 * 1000
+const DEFAULT_REMOTE_IMAGE_SAVE_PROBE_TIMEOUT_MS = 1000
 const DEFAULT_REMOTE_IMAGE_MAX_BYTES = 20 * 1024 * 1024
 const RESOURCE_ACTION_FAILURE_MESSAGE_KEY_MAP = {
   'source-type-mismatch': 'message.previewAssetSourceTypeMismatch',
@@ -46,6 +58,7 @@ const RESOURCE_ACTION_FAILURE_MESSAGE_KEY_MAP = {
   'remote-resource-too-large': 'message.previewAssetRemoteResourceTooLarge',
   'remote-resource-fetch-timeout': 'message.previewAssetRemoteResourceFetchTimeout',
   'local-resource-not-image': 'message.previewAssetLocalResourceNotImage',
+  'copy-image-format-unsupported': 'message.previewAssetCopyImageFormatUnsupported',
 }
 
 function normalizeComparablePath(targetPath) {
@@ -224,6 +237,35 @@ function deriveLocalFileName(targetPath) {
   return sanitizeFileName(path.basename(normalizedPath)) || 'image.png'
 }
 
+function deriveCopyImageExtension(targetPathOrUrl) {
+  const normalizedValue = normalizeStringValue(targetPathOrUrl)
+  if (!normalizedValue) {
+    return null
+  }
+
+  try {
+    if (/^(?:https?|wj):\/\//iu.test(normalizedValue)) {
+      const urlObject = new URL(normalizedValue)
+      const pathName = decodeURIComponent(urlObject.pathname || '')
+      const extension = path.posix.extname(path.posix.basename(pathName))
+      return extension ? extension.toLowerCase() : null
+    }
+  } catch {
+    // URL 解析失败时回退到普通路径裁决。
+  }
+
+  const normalizedPath = normalizedValue
+    .split(/[?#]/u)[0]
+    .replaceAll('\\', '/')
+  const baseName = normalizedPath.split('/').pop() || ''
+  const extension = path.posix.extname(baseName)
+  return extension ? extension.toLowerCase() : null
+}
+
+function isCopyImageFormatSupported(targetPathOrUrl) {
+  return COPY_IMAGE_SUPPORTED_EXTENSION_SET.has(deriveCopyImageExtension(targetPathOrUrl))
+}
+
 function deriveRemoteFileName(remoteUrl, contentType) {
   let remoteFileName = null
   try {
@@ -361,16 +403,25 @@ export function createDocumentResourceService({
   fetchImpl = null,
   fsModule = null,
   remoteImageFetchTimeoutMs = DEFAULT_REMOTE_IMAGE_FETCH_TIMEOUT_MS,
+  remoteImageSaveProbeTimeoutMs = DEFAULT_REMOTE_IMAGE_SAVE_PROBE_TIMEOUT_MS,
   remoteImageMaxBytes = DEFAULT_REMOTE_IMAGE_MAX_BYTES,
 }) {
   const resolvedRemoteImageFetchTimeoutMs = normalizePositiveInteger(
     remoteImageFetchTimeoutMs,
     DEFAULT_REMOTE_IMAGE_FETCH_TIMEOUT_MS,
   )
+  const resolvedRemoteImageSaveProbeTimeoutMs = normalizePositiveInteger(
+    remoteImageSaveProbeTimeoutMs,
+    DEFAULT_REMOTE_IMAGE_SAVE_PROBE_TIMEOUT_MS,
+  )
   const resolvedRemoteImageMaxBytes = normalizePositiveInteger(
     remoteImageMaxBytes,
     DEFAULT_REMOTE_IMAGE_MAX_BYTES,
   )
+  const probeRemoteImageSaveMetadata = createRemoteImageSaveMetadataProbe({
+    fetchImpl,
+    timeoutMs: resolvedRemoteImageSaveProbeTimeoutMs,
+  })
 
   function isStaleRequestContext(session, requestContext) {
     if (!requestContext) {
@@ -493,12 +544,7 @@ export function createDocumentResourceService({
     }
   }
 
-  async function readLocalImageBuffer(documentContext, payload) {
-    const localImageSource = await resolveLocalImageSource(documentContext, payload)
-    if (localImageSource.ok !== true) {
-      return localImageSource
-    }
-
+  async function readResolvedLocalImageBuffer(localImageSource) {
     try {
       const buffer = await fsModule?.readFile?.(localImageSource.path)
       return {
@@ -632,16 +678,46 @@ export function createDocumentResourceService({
     return nativeImageApi.createFromBuffer(buffer)
   }
 
-  function resolveRemoteImageSaveSource(payload) {
+  async function resolveRemoteImageSaveSource(windowId, payload, capturedActionContext) {
     const remoteUrl = normalizeStringValue(payload?.rawSrc || payload?.resourceUrl)
     if (!remoteUrl) {
       return createBinaryActionFailureResult('invalid-remote-resource')
     }
 
+    const urlFileName = deriveRemoteFileNameFromUrl(remoteUrl)
+    let probeMetadata = null
+
+    if (isReliableRemoteImageFileName(urlFileName) !== true) {
+      const staleBeforeProbeError = getStaleActionError(
+        windowId,
+        capturedActionContext,
+        () => createBinaryActionFailureResult('stale-document-context'),
+      )
+      if (staleBeforeProbeError) {
+        return staleBeforeProbeError
+      }
+
+      // 默认文件名探测阶段只观察响应头，失败统一静默回退到最终文件名裁决。
+      probeMetadata = await probeRemoteImageSaveMetadata(remoteUrl)
+
+      const staleAfterProbeError = getStaleActionError(
+        windowId,
+        capturedActionContext,
+        () => createBinaryActionFailureResult('stale-document-context'),
+      )
+      if (staleAfterProbeError) {
+        return staleAfterProbeError
+      }
+    }
+
     return {
       ok: true,
       remoteUrl,
-      fileName: deriveRemoteFileName(remoteUrl, null),
+      fileName: buildRemoteSaveFileName({
+        urlFileName,
+        headerFileName: probeMetadata?.fileName,
+        contentType: probeMetadata?.contentType,
+      }),
     }
   }
 
@@ -800,9 +876,31 @@ export function createDocumentResourceService({
       return createBinaryActionFailureResult('source-type-mismatch')
     }
 
-    const imageBufferResult = runtimeSourceType === 'local'
-      ? await readLocalImageBuffer(actionContext.documentContext, actionContext.normalizedPayload)
-      : await fetchRemoteImageBuffer(actionContext.normalizedPayload.rawSrc || actionContext.normalizedPayload.resourceUrl)
+    let imageBufferResult = null
+    if (runtimeSourceType === 'local') {
+      const localImageSource = await resolveLocalImageSource(
+        actionContext.documentContext,
+        actionContext.normalizedPayload,
+      )
+      if (localImageSource.ok !== true) {
+        return localImageSource
+      }
+
+      if (isCopyImageFormatSupported(localImageSource.path) !== true) {
+        return createBinaryActionFailureResult('copy-image-format-unsupported', {
+          path: localImageSource.path,
+        })
+      }
+
+      imageBufferResult = await readResolvedLocalImageBuffer(localImageSource)
+    } else {
+      const remoteImageUrl = actionContext.normalizedPayload.rawSrc || actionContext.normalizedPayload.resourceUrl
+      if (isCopyImageFormatSupported(remoteImageUrl) !== true) {
+        return createBinaryActionFailureResult('copy-image-format-unsupported')
+      }
+
+      imageBufferResult = await fetchRemoteImageBuffer(remoteImageUrl)
+    }
     if (imageBufferResult.ok !== true) {
       return imageBufferResult
     }
@@ -859,7 +957,11 @@ export function createDocumentResourceService({
     try {
       const saveSource = runtimeSourceType === 'local'
         ? await resolveLocalImageSource(actionContext.documentContext, actionContext.normalizedPayload)
-        : resolveRemoteImageSaveSource(actionContext.normalizedPayload)
+        : await resolveRemoteImageSaveSource(
+            windowId,
+            actionContext.normalizedPayload,
+            actionContext.capturedActionContext,
+          )
       if (saveSource.ok !== true) {
         return saveSource
       }

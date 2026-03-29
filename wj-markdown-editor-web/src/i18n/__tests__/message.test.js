@@ -76,6 +76,10 @@ test('中英文文案都应提供复制结果提示', () => {
     zhCN.message.copyFailed,
     '复制失败',
   )
+  assert.equal(
+    zhCN.message.previewAssetCopyImageFormatUnsupported,
+    '当前图片格式暂不支持复制图片，请使用 PNG 或 JPEG，或改用另存为。',
+  )
 
   assert.equal(
     enUS.message.noCopyableContent,
@@ -88,6 +92,10 @@ test('中英文文案都应提供复制结果提示', () => {
   assert.equal(
     enUS.message.copyFailed,
     'Copy failed.',
+  )
+  assert.equal(
+    enUS.message.previewAssetCopyImageFormatUnsupported,
+    'This image format is not supported for copy image yet. Use PNG/JPEG or Save As instead.',
   )
 })
 

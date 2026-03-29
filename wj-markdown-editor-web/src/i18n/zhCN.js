@@ -329,6 +329,7 @@ export default {
     previewAssetRemoteResourceTooLarge: '远程图片体积过大，无法继续处理。',
     previewAssetRemoteResourceFetchTimeout: '远程图片下载超时，请稍后重试。',
     previewAssetLocalResourceNotImage: '当前本地资源不是图片，无法执行该操作。',
+    previewAssetCopyImageFormatUnsupported: '当前图片格式暂不支持复制图片，请使用 PNG 或 JPEG，或改用另存为。',
     configWriteFailed: '配置保存失败，请稍后重试。',
     configReadFailed: '读取配置失败，已回退到默认配置。',
     configDirectoryUnavailable: '配置目录不可用，请检查权限。',

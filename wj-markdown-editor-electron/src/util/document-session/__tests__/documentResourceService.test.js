@@ -372,6 +372,116 @@ describe('documentResourceService', () => {
     expect(pathExists).not.toHaveBeenCalled()
   })
 
+  it('document.resource.copy-image 对本地 PNG 图片应继续复制成功', async () => {
+    const { clipboardApi, nativeImageApi, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'copy-image-local-png-success-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004013,
+    })
+    const windowId = bindSession(store, session)
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    const buffer = Buffer.from('png-binary')
+    readFile.mockResolvedValue(buffer)
+    const nativeImage = {
+      isEmpty: () => false,
+    }
+    nativeImageApi.createFromBuffer.mockReturnValue(nativeImage)
+
+    const result = await service.copyImage({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: './assets/demo.png',
+        rawPath: './assets/demo.png',
+        resourceUrl: convertResourceUrl('./assets/demo.png'),
+      },
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      reason: 'copied',
+      path: 'D:\\docs\\assets\\demo.png',
+    })
+    expect(readFile).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png')
+    expect(nativeImageApi.createFromBuffer).toHaveBeenCalledWith(buffer)
+    expect(clipboardApi.writeImage).toHaveBeenCalledWith(nativeImage)
+  })
+
+  it('document.resource.copy-image 对本地 WebP 图片应直接返回 unsupported，且不读取文件', async () => {
+    const { clipboardApi, nativeImageApi, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'copy-image-local-webp-unsupported-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004013,
+    })
+    const windowId = bindSession(store, session)
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+
+    const result = await service.copyImage({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: './assets/demo.webp',
+        rawPath: './assets/demo.webp',
+        resourceUrl: convertResourceUrl('./assets/demo.webp'),
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'copy-image-format-unsupported',
+      path: 'D:\\docs\\assets\\demo.webp',
+      messageKey: 'message.previewAssetCopyImageFormatUnsupported',
+    })
+    expect(readFile).not.toHaveBeenCalled()
+    expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
+    expect(clipboardApi.writeImage).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.copy-image 对远程 WebP 图片应直接返回 unsupported，且不发起下载', async () => {
+    const { clipboardApi, fetchImpl, nativeImageApi, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'copy-image-remote-webp-unsupported-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004013,
+    })
+    const windowId = bindSession(store, session)
+
+    const result = await service.copyImage({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/demo.webp',
+        rawPath: 'https://example.com/demo.webp',
+        resourceUrl: 'https://example.com/demo.webp',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'copy-image-format-unsupported',
+      messageKey: 'message.previewAssetCopyImageFormatUnsupported',
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
+    expect(clipboardApi.writeImage).not.toHaveBeenCalled()
+  })
+
   it('document.resource.copy-image 对网络非图片响应必须返回固定失败', async () => {
     const { clipboardApi, fetchImpl, nativeImageApi, service, store } = await createServiceContext()
     const session = createBoundFileSession({
@@ -450,7 +560,7 @@ describe('documentResourceService', () => {
     expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
-  it('document.resource.save-as 对远程图片在用户取消前不应提前发起下载', async () => {
+  it('document.resource.save-as 对 URL 无扩展名的远程图片，用户取消时允许 HEAD probe，但仍不得进入真实下载内容阶段', async () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-cancel-before-fetch-session',
@@ -460,15 +570,31 @@ describe('documentResourceService', () => {
       now: 1700000004034,
     })
     const windowId = bindSession(store, session)
+    const headArrayBuffer = vi.fn(async () => Buffer.from('probe-body-should-not-read'))
+    const headText = vi.fn(async () => 'probe-body-should-not-read')
+    fetchImpl.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get(name) {
+          return name?.toLowerCase() === 'content-type' ? 'image/webp' : null
+        },
+      },
+      get body() {
+        throw new Error('probe 阶段不应访问响应体')
+      },
+      arrayBuffer: headArrayBuffer,
+      text: headText,
+    })
     dialogApi.showSaveDialogSync.mockReturnValue(undefined)
 
     const result = await service.saveAs({
       windowId,
       payload: {
         sourceType: 'remote',
-        rawSrc: 'https://example.com/assets/demo.jpg?download=1',
-        rawPath: 'https://example.com/assets/demo.jpg?download=1',
-        resourceUrl: 'https://example.com/assets/demo.jpg?download=1',
+        rawSrc: 'https://example.com/assets/demo',
+        rawPath: 'https://example.com/assets/demo',
+        resourceUrl: 'https://example.com/assets/demo',
       },
     })
 
@@ -477,7 +603,15 @@ describe('documentResourceService', () => {
       cancelled: true,
       reason: 'cancelled',
     })
-    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      defaultPath: 'demo.webp',
+    }))
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://example.com/assets/demo', expect.objectContaining({
+      method: 'HEAD',
+    }))
+    expect(headArrayBuffer).not.toHaveBeenCalled()
+    expect(headText).not.toHaveBeenCalled()
     expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
@@ -615,7 +749,41 @@ describe('documentResourceService', () => {
     })
   })
 
-  it('document.resource.save-as 在 URL 无扩展名时，应在下载前回退到通用默认文件名', async () => {
+  it('document.resource.save-as 对可靠 URL 的远程图片在用户选路径前不应额外做 HEAD probe', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-reliable-url-no-probe-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004021,
+    })
+    const windowId = bindSession(store, session)
+    dialogApi.showSaveDialogSync.mockReturnValue(undefined)
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo.jpg?download=1',
+        rawPath: 'https://example.com/assets/demo.jpg?download=1',
+        resourceUrl: 'https://example.com/assets/demo.jpg?download=1',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      cancelled: true,
+      reason: 'cancelled',
+    })
+    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      defaultPath: 'demo.jpg',
+    }))
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as URL 无扩展名的远程图片应通过 HEAD 的 Content-Type 补默认扩展名', async () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-unmapped-extension-session',
@@ -625,7 +793,410 @@ describe('documentResourceService', () => {
       now: 1700000004021,
     })
     const windowId = bindSession(store, session)
+    const headArrayBuffer = vi.fn(async () => Buffer.from('probe-body-should-not-read'))
+    const headText = vi.fn(async () => 'probe-body-should-not-read')
     fetchImpl.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get(name) {
+          return name?.toLowerCase() === 'content-type' ? 'image/avif' : null
+        },
+      },
+      get body() {
+        throw new Error('probe 阶段不应访问响应体')
+      },
+      arrayBuffer: headArrayBuffer,
+      text: headText,
+    })
+    dialogApi.showSaveDialogSync.mockReturnValue(undefined)
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo',
+        rawPath: 'https://example.com/assets/demo',
+        resourceUrl: 'https://example.com/assets/demo',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      cancelled: true,
+      reason: 'cancelled',
+    })
+    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      defaultPath: 'demo.avif',
+    }))
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://example.com/assets/demo', expect.objectContaining({
+      method: 'HEAD',
+    }))
+    expect(headArrayBuffer).not.toHaveBeenCalled()
+    expect(headText).not.toHaveBeenCalled()
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as 在 HEAD probe 超时后应在短超时预算内静默回退到 demo.png', async () => {
+    vi.useFakeTimers()
+    try {
+      const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+      const session = createBoundFileSession({
+        sessionId: 'save-as-remote-head-timeout-session',
+        path: 'D:\\docs\\note.md',
+        content: '# 文档',
+        stat: null,
+        now: 1700000004035,
+      })
+      const windowId = bindSession(store, session)
+      fetchImpl.mockImplementation((_url, options) => {
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => {
+            const error = new Error('aborted')
+            error.name = 'AbortError'
+            reject(error)
+          }, { once: true })
+        })
+      })
+      dialogApi.showSaveDialogSync.mockReturnValue(undefined)
+
+      const resultPromise = service.saveAs({
+        windowId,
+        payload: {
+          sourceType: 'remote',
+          rawSrc: 'https://example.com/assets/demo',
+          rawPath: 'https://example.com/assets/demo',
+          resourceUrl: 'https://example.com/assets/demo',
+        },
+      })
+      let settled = false
+      resultPromise.finally(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(700)
+
+      expect(settled).toBe(false)
+      expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(800)
+
+      await expect(resultPromise).resolves.toEqual({
+        ok: false,
+        cancelled: true,
+        reason: 'cancelled',
+      })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+      expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://example.com/assets/demo', expect.objectContaining({
+        method: 'HEAD',
+        signal: expect.any(AbortSignal),
+      }))
+      expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+        defaultPath: 'demo.png',
+      }))
+      expect(fsModule.writeFile).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('document.resource.save-as 的 HEAD probe 应使用独立短超时预算，而不是沿用长下载超时', async () => {
+    vi.useFakeTimers()
+    try {
+      const { dialogApi, fetchImpl, service, store } = await createServiceContext()
+      const session = createBoundFileSession({
+        sessionId: 'save-as-remote-head-short-timeout-session',
+        path: 'D:\\docs\\note.md',
+        content: '# 文档',
+        stat: null,
+        now: 1700000004036,
+      })
+      const windowId = bindSession(store, session)
+      fetchImpl.mockImplementation((_url, options) => {
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => {
+            const error = new Error('aborted')
+            error.name = 'AbortError'
+            reject(error)
+          }, { once: true })
+        })
+      })
+      dialogApi.showSaveDialogSync.mockReturnValue(undefined)
+
+      const resultPromise = service.saveAs({
+        windowId,
+        payload: {
+          sourceType: 'remote',
+          rawSrc: 'https://example.com/assets/demo',
+          rawPath: 'https://example.com/assets/demo',
+          resourceUrl: 'https://example.com/assets/demo',
+        },
+      })
+
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(700)
+
+      expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(800)
+
+      await expect(resultPromise).resolves.toEqual({
+        ok: false,
+        cancelled: true,
+        reason: 'cancelled',
+      })
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+      expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://example.com/assets/demo', expect.objectContaining({
+        method: 'HEAD',
+        signal: expect.any(AbortSignal),
+      }))
+      expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+        defaultPath: 'demo.png',
+      }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('document.resource.save-as 对 URL 无扩展名的远程图片应先 HEAD 修正默认名，再在选完路径后发起真实 GET 下载', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-probe-then-get-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004036,
+    })
+    const windowId = bindSession(store, session)
+    const callSequence = []
+    const headArrayBuffer = vi.fn(async () => Buffer.from('probe-body-should-not-read'))
+    const headText = vi.fn(async () => 'probe-body-should-not-read')
+    const getArrayBuffer = vi.fn(async () => Buffer.from('remote-avif'))
+    fetchImpl.mockImplementation(async (_url, options) => {
+      const requestMethod = options?.method || 'GET'
+      callSequence.push(requestMethod)
+
+      if (requestMethod === 'HEAD') {
+        return {
+          ok: true,
+          status: 200,
+          headers: {
+            get(name) {
+              return name?.toLowerCase() === 'content-type' ? 'image/avif' : null
+            },
+          },
+          get body() {
+            throw new Error('HEAD probe 阶段不应访问响应体')
+          },
+          arrayBuffer: headArrayBuffer,
+          text: headText,
+        }
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        headers: {
+          get(name) {
+            return name?.toLowerCase() === 'content-type' ? 'image/avif' : null
+          },
+        },
+        arrayBuffer: getArrayBuffer,
+      }
+    })
+    dialogApi.showSaveDialogSync.mockImplementation(({ defaultPath }) => {
+      callSequence.push(`dialog:${defaultPath}`)
+      return 'D:\\exports\\picked.avif'
+    })
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo',
+        rawPath: 'https://example.com/assets/demo',
+        resourceUrl: 'https://example.com/assets/demo',
+      },
+    })
+
+    expect(callSequence).toEqual([
+      'HEAD',
+      'dialog:demo.avif',
+      'GET',
+    ])
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://example.com/assets/demo', expect.objectContaining({
+      method: 'HEAD',
+    }))
+    expect(headArrayBuffer).not.toHaveBeenCalled()
+    expect(headText).not.toHaveBeenCalled()
+    expect(getArrayBuffer).toHaveBeenCalledTimes(1)
+    expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\picked.avif', expect.any(Buffer))
+    expect(result).toEqual({
+      ok: true,
+      reason: 'saved',
+      path: 'D:\\exports\\picked.avif',
+      targetPath: 'D:\\exports\\picked.avif',
+      messageKey: 'message.saveAsSuccessfully',
+    })
+  })
+
+  it('document.resource.save-as 在 HEAD 返回 405 时，禁止退化成 GET fallback', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-head-405-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004037,
+    })
+    const windowId = bindSession(store, session)
+    fetchImpl.mockResolvedValue({
+      ok: false,
+      status: 405,
+      headers: {
+        get() {
+          return null
+        },
+      },
+      get body() {
+        throw new Error('probe 阶段不应访问响应体')
+      },
+      arrayBuffer: vi.fn(async () => Buffer.from('probe-body-should-not-read')),
+      text: vi.fn(async () => 'probe-body-should-not-read'),
+    })
+    dialogApi.showSaveDialogSync.mockReturnValue(undefined)
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo',
+        rawPath: 'https://example.com/assets/demo',
+        resourceUrl: 'https://example.com/assets/demo',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      cancelled: true,
+      reason: 'cancelled',
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://example.com/assets/demo', expect.objectContaining({
+      method: 'HEAD',
+    }))
+    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      defaultPath: 'demo.png',
+    }))
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as 的 Content-Disposition filename* 应覆盖 filename', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-content-disposition-filename-star-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004038,
+    })
+    const windowId = bindSession(store, session)
+    fetchImpl.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get(name) {
+          if (name?.toLowerCase() === 'content-disposition') {
+            return 'attachment; filename=plain.png; filename*=UTF-8\'\'cover.webp'
+          }
+          if (name?.toLowerCase() === 'content-type') {
+            return 'image/avif'
+          }
+          return null
+        },
+      },
+      get body() {
+        throw new Error('probe 阶段不应访问响应体')
+      },
+      arrayBuffer: vi.fn(async () => Buffer.from('probe-body-should-not-read')),
+      text: vi.fn(async () => 'probe-body-should-not-read'),
+    })
+    dialogApi.showSaveDialogSync.mockReturnValue(undefined)
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo',
+        rawPath: 'https://example.com/assets/demo',
+        resourceUrl: 'https://example.com/assets/demo',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      cancelled: true,
+      reason: 'cancelled',
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://example.com/assets/demo', expect.objectContaining({
+      method: 'HEAD',
+    }))
+    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      defaultPath: 'cover.webp',
+    }))
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as 在 probe 期间窗口切到其他 session 后，必须返回 stale-document-context 且不再弹保存框', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-probe-stale-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004039,
+    })
+    const windowId = bindSession(store, session)
+    const deferred = createDeferred()
+    fetchImpl.mockImplementation(async () => {
+      return await deferred.promise
+    })
+    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\picked.avif')
+
+    const resultPromise = service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo',
+        rawPath: 'https://example.com/assets/demo',
+        resourceUrl: 'https://example.com/assets/demo',
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const nextSession = createBoundFileSession({
+      sessionId: 'save-as-remote-probe-stale-next-session',
+      path: 'D:\\docs\\other.md',
+      content: '# 其他文档',
+      stat: null,
+      now: 1700000004040,
+    })
+    store.createSession(nextSession)
+    store.bindWindowToSession({
+      windowId,
+      sessionId: nextSession.sessionId,
+    })
+    deferred.resolve({
       ok: true,
       status: 200,
       headers: {
@@ -635,29 +1206,83 @@ describe('documentResourceService', () => {
       },
       arrayBuffer: vi.fn(async () => Buffer.from('remote-avif')),
     })
-    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\picked.avif')
+
+    await expect(resultPromise).resolves.toEqual({
+      ok: false,
+      reason: 'stale-document-context',
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://example.com/assets/demo', expect.objectContaining({
+      method: 'HEAD',
+    }))
+    expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as 的 HEAD probe 阶段不得读取 response.body / arrayBuffer() / text()', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-probe-no-body-read-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004041,
+    })
+    const windowId = bindSession(store, session)
+    const bodyAccess = vi.fn(() => {
+      throw new Error('probe 阶段不应访问响应体')
+    })
+    const headArrayBuffer = vi.fn(async () => Buffer.from('probe-body-should-not-read'))
+    const headText = vi.fn(async () => 'probe-body-should-not-read')
+    fetchImpl.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get(name) {
+          if (name?.toLowerCase() === 'content-disposition') {
+            return 'attachment; filename=plain.png; filename*=UTF-8\'\'cover.avif'
+          }
+          if (name?.toLowerCase() === 'content-type') {
+            return 'image/avif'
+          }
+          return null
+        },
+      },
+      get body() {
+        bodyAccess()
+        return null
+      },
+      arrayBuffer: headArrayBuffer,
+      text: headText,
+    })
+    dialogApi.showSaveDialogSync.mockReturnValue(undefined)
 
     const result = await service.saveAs({
       windowId,
       payload: {
         sourceType: 'remote',
-        rawSrc: 'https://example.com/assets/demo?download=1',
-        rawPath: 'https://example.com/assets/demo?download=1',
-        resourceUrl: 'https://example.com/assets/demo?download=1',
+        rawSrc: 'https://example.com/assets/demo',
+        rawPath: 'https://example.com/assets/demo',
+        resourceUrl: 'https://example.com/assets/demo',
       },
     })
 
-    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
-      defaultPath: 'demo.png',
-    }))
-    expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\picked.avif', expect.any(Buffer))
     expect(result).toEqual({
-      ok: true,
-      reason: 'saved',
-      path: 'D:\\exports\\picked.avif',
-      targetPath: 'D:\\exports\\picked.avif',
-      messageKey: 'message.saveAsSuccessfully',
+      ok: false,
+      cancelled: true,
+      reason: 'cancelled',
     })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, 'https://example.com/assets/demo', expect.objectContaining({
+      method: 'HEAD',
+    }))
+    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      defaultPath: 'cover.avif',
+    }))
+    expect(bodyAccess).not.toHaveBeenCalled()
+    expect(headArrayBuffer).not.toHaveBeenCalled()
+    expect(headText).not.toHaveBeenCalled()
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
   it('document.resource.open-in-folder 应该从 active session 解析相对资源并成功打开', async () => {

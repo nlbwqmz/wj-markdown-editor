@@ -329,6 +329,7 @@ export default {
     previewAssetRemoteResourceTooLarge: 'The remote image is too large to process.',
     previewAssetRemoteResourceFetchTimeout: 'Downloading the remote image timed out. Please try again later.',
     previewAssetLocalResourceNotImage: 'The local resource is not an image, so this action cannot be completed.',
+    previewAssetCopyImageFormatUnsupported: 'This image format is not supported for copy image yet. Use PNG/JPEG or Save As instead.',
     configWriteFailed: 'Failed to save configuration. Please try again later.',
     configReadFailed: 'Failed to read configuration. The default configuration has been restored.',
     configDirectoryUnavailable: 'The configuration directory is unavailable. Please check permissions.',
