@@ -254,12 +254,17 @@ function deriveCopyImageExtension(targetPathOrUrl) {
     // URL 解析失败时回退到普通路径裁决。
   }
 
-  const normalizedPath = normalizedValue
-    .split(/[?#]/u)[0]
-    .replaceAll('\\', '/')
-  const baseName = normalizedPath.split('/').pop() || ''
-  const extension = path.posix.extname(baseName)
-  return extension ? extension.toLowerCase() : null
+  const comparablePath = normalizedValue.replaceAll('\\', '/')
+  const baseName = comparablePath.split('/').pop() || ''
+  const directExtension = path.posix.extname(baseName)
+  if (directExtension && !/[?#]/u.test(directExtension)) {
+    return directExtension.toLowerCase()
+  }
+
+  const fallbackPath = comparablePath.split(/[?#]/u)[0]
+  const fallbackBaseName = fallbackPath.split('/').pop() || ''
+  const fallbackExtension = path.posix.extname(fallbackBaseName)
+  return fallbackExtension ? fallbackExtension.toLowerCase() : null
 }
 
 function isCopyImageFormatSupported(targetPathOrUrl) {
@@ -334,6 +339,48 @@ function createBinaryActionFailureResult(reason, options = {}) {
     ok: false,
     reason,
     ...(options.path ? { path: options.path } : {}),
+    ...(messageKey ? { messageKey } : {}),
+  }
+}
+
+function createOpenFolderFailureResult(reason, options = {}) {
+  const messageKey = typeof options.messageKey === 'string'
+    ? options.messageKey
+    : getResourceActionFailureMessageKey(reason)
+  return {
+    ok: false,
+    opened: false,
+    reason,
+    path: options.path ?? null,
+    ...(messageKey ? { messageKey } : {}),
+  }
+}
+
+function createDeleteFailureResult(reason, options = {}) {
+  const messageKey = typeof options.messageKey === 'string'
+    ? options.messageKey
+    : getResourceActionFailureMessageKey(reason)
+  return {
+    ok: false,
+    removed: false,
+    reason,
+    path: options.path ?? null,
+    ...(messageKey ? { messageKey } : {}),
+  }
+}
+
+function createResourceInfoFailureResult(reason, options = {}) {
+  const messageKey = typeof options.messageKey === 'string'
+    ? options.messageKey
+    : getResourceActionFailureMessageKey(reason)
+  return {
+    ok: false,
+    reason,
+    decodedPath: options.decodedPath ?? null,
+    exists: false,
+    isDirectory: false,
+    isFile: false,
+    path: options.path ?? null,
     ...(messageKey ? { messageKey } : {}),
   }
 }
@@ -732,14 +779,13 @@ export function createDocumentResourceService({
   }
 
   async function openInFolder({ windowId, payload }) {
-    const actionContext = getFreshActionContext(windowId, payload, () => ({
-      ok: false,
-      opened: false,
-      reason: 'stale-document-context',
-      path: null,
-    }))
+    const actionContext = getFreshActionContext(windowId, payload, () => createOpenFolderFailureResult('stale-document-context'))
     if (actionContext.error) {
       return actionContext.error
+    }
+
+    if (isSourceTypeAccepted(actionContext.normalizedPayload, 'local') !== true) {
+      return createOpenFolderFailureResult('source-type-mismatch')
     }
 
     return await resourceFileUtil.openLocalResourceInFolder(
@@ -750,14 +796,13 @@ export function createDocumentResourceService({
   }
 
   async function deleteLocal({ windowId, payload }) {
-    const actionContext = getFreshActionContext(windowId, payload, () => ({
-      ok: false,
-      removed: false,
-      reason: 'stale-document-context',
-      path: null,
-    }))
+    const actionContext = getFreshActionContext(windowId, payload, () => createDeleteFailureResult('stale-document-context'))
     if (actionContext.error) {
       return actionContext.error
+    }
+
+    if (isSourceTypeAccepted(actionContext.normalizedPayload, 'local') !== true) {
+      return createDeleteFailureResult('source-type-mismatch')
     }
 
     return await resourceFileUtil.deleteLocalResource(
@@ -767,17 +812,13 @@ export function createDocumentResourceService({
   }
 
   async function getInfo({ windowId, payload }) {
-    const actionContext = getFreshActionContext(windowId, payload, () => ({
-      ok: false,
-      reason: 'stale-document-context',
-      decodedPath: null,
-      exists: false,
-      isDirectory: false,
-      isFile: false,
-      path: null,
-    }))
+    const actionContext = getFreshActionContext(windowId, payload, () => createResourceInfoFailureResult('stale-document-context'))
     if (actionContext.error) {
       return actionContext.error
+    }
+
+    if (isSourceTypeAccepted(actionContext.normalizedPayload, 'local') !== true) {
+      return createResourceInfoFailureResult('source-type-mismatch')
     }
 
     return await resourceFileUtil.getLocalResourceInfo(

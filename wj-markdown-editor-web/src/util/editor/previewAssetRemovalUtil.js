@@ -164,12 +164,80 @@ function createAssetMatch(content, lineStartIndexes, kind, from, to, rawPath) {
   }
 }
 
+function isValidSourceRange(sourceRange) {
+  return Boolean(sourceRange)
+    && Number.isInteger(sourceRange.from)
+    && Number.isInteger(sourceRange.to)
+    && sourceRange.to > sourceRange.from
+}
+
+function findMatchingLinkCloseTokenIndex(tokenList, linkOpenIndex) {
+  let depth = 0
+
+  for (let i = linkOpenIndex; i < tokenList.length; i++) {
+    const token = tokenList[i]
+    if (token?.type === 'link_open') {
+      depth += 1
+      continue
+    }
+    if (token?.type === 'link_close') {
+      depth -= 1
+      if (depth === 0) {
+        return i
+      }
+    }
+  }
+
+  return -1
+}
+
+function isIgnorableLinkWrapperToken(token) {
+  if (!token) {
+    return true
+  }
+  if (token.type === 'text') {
+    return token.content.trim() === ''
+  }
+  return token.type === 'softbreak' || token.type === 'hardbreak'
+}
+
+function resolveWrappedImageRemovalSourceRange(tokenList, imageTokenIndex) {
+  for (let i = imageTokenIndex - 1; i >= 0; i--) {
+    const token = tokenList[i]
+    if (token?.type !== 'link_open') {
+      continue
+    }
+
+    const linkCloseIndex = findMatchingLinkCloseTokenIndex(tokenList, i)
+    if (linkCloseIndex === -1 || linkCloseIndex <= imageTokenIndex) {
+      continue
+    }
+
+    for (let childIndex = i + 1; childIndex < linkCloseIndex; childIndex++) {
+      if (childIndex === imageTokenIndex) {
+        continue
+      }
+      if (!isIgnorableLinkWrapperToken(tokenList[childIndex])) {
+        return null
+      }
+    }
+
+    const wrappedSourceRange = token.meta?.[SOURCE_RANGE_META_KEY]
+    return isValidSourceRange(wrappedSourceRange)
+      ? wrappedSourceRange
+      : null
+  }
+
+  return null
+}
+
 function collectMarkdownItMatches(content, lineStartIndexes, kind) {
   const inlineTokenList = markdownItAssetMatcher.parseInline(content, {})
   const tokenList = inlineTokenList.flatMap(token => Array.isArray(token.children) ? token.children : [])
   const matchList = []
 
-  for (const token of tokenList) {
+  for (let tokenIndex = 0; tokenIndex < tokenList.length; tokenIndex++) {
+    const token = tokenList[tokenIndex]
     const isMatchedKind = kind === 'image'
       ? token?.type === 'image'
       : token?.type === 'link_open'
@@ -177,11 +245,10 @@ function collectMarkdownItMatches(content, lineStartIndexes, kind) {
       continue
     }
 
-    const sourceRange = token?.meta?.[SOURCE_RANGE_META_KEY]
-    if (!sourceRange
-      || Number.isInteger(sourceRange.from) !== true
-      || Number.isInteger(sourceRange.to) !== true
-      || sourceRange.to <= sourceRange.from) {
+    const sourceRange = kind === 'image'
+      ? resolveWrappedImageRemovalSourceRange(tokenList, tokenIndex) || token?.meta?.[SOURCE_RANGE_META_KEY]
+      : token?.meta?.[SOURCE_RANGE_META_KEY]
+    if (!isValidSourceRange(sourceRange)) {
       continue
     }
 

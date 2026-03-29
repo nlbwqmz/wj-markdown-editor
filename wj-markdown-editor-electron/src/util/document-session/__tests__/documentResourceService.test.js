@@ -372,6 +372,45 @@ describe('documentResourceService', () => {
     expect(pathExists).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['openInFolder', 'opened', 'showItemInFolder'],
+    ['deleteLocal', 'removed', 'remove'],
+    ['getInfo', 'exists', 'pathExists'],
+  ])('document.resource.%s 在 resourceUrl 明确是远程地址时，不得回退到 rawPath 执行本地动作', async (methodName, falseFlagKey, sideEffectKey) => {
+    const serviceContext = await createServiceContext()
+    const { service, store } = serviceContext
+    const session = createBoundFileSession({
+      sessionId: `${methodName}-remote-resource-url-session`,
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004012,
+    })
+    const windowId = bindSession(store, session)
+
+    const result = await service[methodName]({
+      windowId,
+      payload: {
+        resourceUrl: 'https://example.com/remote.png',
+        rawPath: './assets/victim.txt',
+      },
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'source-type-mismatch',
+      [falseFlagKey]: false,
+    })
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+    expect(sideEffectKey === 'showItemInFolder'
+      ? serviceContext.showItemInFolder
+      : ({
+          remove,
+          pathExists,
+        })[sideEffectKey]).not.toHaveBeenCalled()
+  })
+
   it('document.resource.copy-image 对本地 PNG 图片应继续复制成功', async () => {
     const { clipboardApi, nativeImageApi, service, store } = await createServiceContext()
     const session = createBoundFileSession({
@@ -410,6 +449,51 @@ describe('documentResourceService', () => {
       path: 'D:\\docs\\assets\\demo.png',
     })
     expect(readFile).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png')
+    expect(nativeImageApi.createFromBuffer).toHaveBeenCalledWith(buffer)
+    expect(clipboardApi.writeImage).toHaveBeenCalledWith(nativeImage)
+  })
+
+  it.each([
+    ['./assets/foo?bar.png', 'D:\\docs\\assets\\foo?bar.png'],
+    ['./assets/foo#bar.jpg', 'D:\\docs\\assets\\foo#bar.jpg'],
+  ])('document.resource.copy-image 对文件名合法包含 query/hash 字符的本地图片 %s，不应误判为格式不支持', async (rawPath, resolvedPath) => {
+    const { clipboardApi, nativeImageApi, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: `copy-image-local-special-char-${rawPath}-session`,
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004013,
+    })
+    const windowId = bindSession(store, session)
+    pathExists.mockResolvedValue(true)
+    stat.mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    })
+    const buffer = Buffer.from('png-binary')
+    readFile.mockResolvedValue(buffer)
+    const nativeImage = {
+      isEmpty: () => false,
+    }
+    nativeImageApi.createFromBuffer.mockReturnValue(nativeImage)
+
+    const result = await service.copyImage({
+      windowId,
+      payload: {
+        sourceType: 'local',
+        rawSrc: rawPath,
+        rawPath,
+        resourceUrl: convertResourceUrl(rawPath),
+      },
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      reason: 'copied',
+      path: resolvedPath,
+    })
+    expect(readFile).toHaveBeenCalledWith(resolvedPath)
     expect(nativeImageApi.createFromBuffer).toHaveBeenCalledWith(buffer)
     expect(clipboardApi.writeImage).toHaveBeenCalledWith(nativeImage)
   })
