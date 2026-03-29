@@ -679,7 +679,7 @@ export function createDocumentResourceService({
   }
 
   async function resolveRemoteImageSaveSource(windowId, payload, capturedActionContext) {
-    const remoteUrl = normalizeStringValue(payload?.rawSrc || payload?.resourceUrl)
+    const remoteUrl = normalizeStringValue(payload?.rawSrc)
     if (!remoteUrl) {
       return createBinaryActionFailureResult('invalid-remote-resource')
     }
@@ -894,7 +894,10 @@ export function createDocumentResourceService({
 
       imageBufferResult = await readResolvedLocalImageBuffer(localImageSource)
     } else {
-      const remoteImageUrl = actionContext.normalizedPayload.rawSrc || actionContext.normalizedPayload.resourceUrl
+      const remoteImageUrl = actionContext.normalizedPayload.rawSrc
+      if (!remoteImageUrl) {
+        return createBinaryActionFailureResult('invalid-remote-resource')
+      }
       if (isCopyImageFormatSupported(remoteImageUrl) !== true) {
         return createBinaryActionFailureResult('copy-image-format-unsupported')
       }

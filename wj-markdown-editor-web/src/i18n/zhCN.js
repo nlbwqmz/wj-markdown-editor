@@ -42,6 +42,7 @@ export default {
     deleteConfirm: '该操作将删除本地资源，且不可恢复，确认继续？',
     deleteDirectoryNotAllowed: '当前资源是文件夹链接，不能直接删除。',
     deleteUnsupportedTarget: '当前资源不是可直接删除的普通文件，不能直接删除。',
+    remoteResourceDeleteUnavailable: '当前资源为远程地址，无法直接删除源文件。',
     referenceCountTip: '检测到当前资源在文档中共有 {count} 处引用，请选择需要执行的删除方式。',
     referenceOnlyModeTip: '{reason}当前操作仅会清理 Markdown 引用，不会删除本地文件。',
     referenceOnlyDeleteConfirm: '{reason}本次仅会删除当前 Markdown 引用，不会删除本地文件，确认继续？',

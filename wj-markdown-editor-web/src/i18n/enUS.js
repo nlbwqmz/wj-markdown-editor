@@ -42,6 +42,7 @@ export default {
     deleteConfirm: 'This action will delete the local resource permanently. Do you want to continue?',
     deleteDirectoryNotAllowed: 'The current resource points to a folder and cannot be deleted directly.',
     deleteUnsupportedTarget: 'The current resource is not a regular file and cannot be deleted directly.',
+    remoteResourceDeleteUnavailable: 'This resource points to a remote URL and its source file cannot be deleted directly.',
     referenceCountTip: 'This resource is referenced {count} times in the current document. Choose the delete action to apply.',
     referenceOnlyModeTip: '{reason} Only Markdown references will be removed. The local file will not be deleted.',
     referenceOnlyDeleteConfirm: '{reason} Only the current Markdown reference will be removed. The local file will not be deleted. Continue?',

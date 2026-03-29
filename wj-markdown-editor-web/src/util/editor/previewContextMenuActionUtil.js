@@ -29,10 +29,24 @@ function deriveAssetExtension(value) {
     normalizedPath = normalizedValue
   }
 
-  const comparablePath = normalizedPath
-    .split(/[?#]/u)[0]
-    .replaceAll('\\', '/')
-  const baseName = comparablePath.split('/').pop() || ''
+  const extractExtension = (targetPath) => {
+    const baseName = targetPath.split('/').pop() || ''
+    const extensionIndex = baseName.lastIndexOf('.')
+    if (extensionIndex <= 0) {
+      return null
+    }
+
+    return baseName.slice(extensionIndex).toLowerCase()
+  }
+
+  const comparablePath = normalizedPath.replaceAll('\\', '/')
+  const directExtension = extractExtension(comparablePath)
+  if (directExtension && !/[?#]/u.test(directExtension)) {
+    return directExtension
+  }
+
+  const fallbackPath = comparablePath.split(/[?#]/u)[0]
+  const baseName = fallbackPath.split('/').pop() || ''
   const extensionIndex = baseName.lastIndexOf('.')
   if (extensionIndex <= 0) {
     return null

@@ -791,18 +791,23 @@ async function deletePreviewAsset() {
   }
 
   const referenceCount = getAssetReferenceCount(assetInfo)
-  const resourceInfo = await channelUtil.send({
-    event: 'resource.get-info',
-    data: {
-      resourceUrl: assetInfo.resourceUrl,
-      rawPath: assetInfo.rawPath,
-      requestContext: previewAssetSessionController.createRequestContext(actionContext),
-    },
-  })
-  if (previewAssetSessionController.isActiveContext(actionContext) !== true) {
-    return
+  let resourceInfo = null
+  if (assetInfo.sourceType !== 'remote') {
+    resourceInfo = await channelUtil.send({
+      event: 'resource.get-info',
+      data: {
+        resourceUrl: assetInfo.resourceUrl,
+        rawPath: assetInfo.rawPath,
+        requestContext: previewAssetSessionController.createRequestContext(actionContext),
+      },
+    })
+    if (previewAssetSessionController.isActiveContext(actionContext) !== true) {
+      return
+    }
   }
-  const deletePlan = resolvePreviewAssetDeletePlan(resourceInfo, referenceCount)
+  const deletePlan = resolvePreviewAssetDeletePlan(resourceInfo, referenceCount, {
+    sourceType: assetInfo.sourceType,
+  })
   if (deletePlan.mode === 'blocked') {
     message.warning(t(deletePlan.blockMessageKey || 'previewAssetMenu.deleteFileFailed'))
     return

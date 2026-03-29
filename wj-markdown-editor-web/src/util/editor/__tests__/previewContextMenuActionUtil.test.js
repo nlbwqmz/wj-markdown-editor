@@ -401,6 +401,39 @@ test('远程无扩展名图片在 standalone-preview 下必须隐藏复制图片
   ])
 })
 
+test('本地图片文件名中合法包含问号或井号时，不能误隐藏复制图片菜单项', () => {
+  assert.ok(previewContextMenuActionUtilModule, '缺少 preview context menu action util')
+
+  const { buildPreviewContextMenuItems } = previewContextMenuActionUtilModule
+  const questionMarkMenu = buildPreviewContextMenuItems({
+    context: createResourceContext({
+      assetType: 'image',
+      sourceType: 'local',
+      rawSrc: './foo?bar.png',
+      rawPath: './foo?bar.png',
+      resourceUrl: 'wj://foo-question-bar-png',
+      markdownReference: '![本地图片](./foo?bar.png)',
+    }),
+    profile: 'editor-preview',
+    t: key => `translated:${key}`,
+  })
+  const hashMenu = buildPreviewContextMenuItems({
+    context: createResourceContext({
+      assetType: 'image',
+      sourceType: 'local',
+      rawSrc: './foo#bar.jpg',
+      rawPath: './foo#bar.jpg',
+      resourceUrl: 'wj://foo-hash-bar-jpg',
+      markdownReference: '![本地图片](./foo#bar.jpg)',
+    }),
+    profile: 'editor-preview',
+    t: key => `translated:${key}`,
+  })
+
+  assert.ok(questionMarkMenu.some(item => item.key === 'resource.copy-image'))
+  assert.ok(hashMenu.some(item => item.key === 'resource.copy-image'))
+})
+
 test('缺少 t 时，菜单项 label 必须回退为文案 key 本身', () => {
   assert.ok(previewContextMenuActionUtilModule, '缺少 preview context menu action util')
 

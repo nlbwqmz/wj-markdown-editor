@@ -169,6 +169,42 @@ test('删除本地图片时，应兼容括号形式的 title 写法', () => {
   assert.equal(result.content, '后文')
 })
 
+test('删除 autolink 远程链接时，应命中真实 Markdown 片段并移除整段', () => {
+  const content = [
+    '<https://example.com/a.png>',
+    '后文',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'link',
+    rawSrc: 'https://example.com/a.png',
+    occurrence: 1,
+    lineStart: 1,
+    lineEnd: 1,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, '后文')
+})
+
+test('删除 linkify 裸 URL 时，应命中真实 Markdown 片段并移除整段', () => {
+  const content = [
+    'https://example.com/a.png',
+    '后文',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'link',
+    rawSrc: 'https://example.com/a.png',
+    occurrence: 1,
+    lineStart: 1,
+    lineEnd: 1,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, '后文')
+})
+
 test('删除全部本地链接引用时，不应误删无关文本', () => {
   const content = [
     '前文里有一个孤立左括号 [不会闭合',

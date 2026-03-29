@@ -1,13 +1,68 @@
 import MarkdownIt from 'markdown-it'
-import linkRule from 'markdown-it/lib/rules_inline/link.mjs'
-import StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs'
 import { shouldContinueMarkdownCleanup } from './previewAssetDeleteDecisionUtil.js'
 
-const markdownItLinkMatcher = new MarkdownIt({
-  html: true,
-  linkify: true,
-  breaks: true,
-})
+const SOURCE_RANGE_META_KEY = 'wjSourceRange'
+
+function createMarkdownItAssetMatcher() {
+  const md = new MarkdownIt({
+    html: true,
+    linkify: true,
+    breaks: true,
+  })
+
+  const wrapInlineRuleWithSourceRange = (rule) => {
+    if (typeof rule !== 'function') {
+      return rule
+    }
+
+    return function wrappedInlineRule(state, silent) {
+      const tokenStartIndex = state.tokens.length
+      const startPos = state.pos
+      const matched = rule(state, silent)
+
+      if (matched !== true || silent === true || state.pos <= startPos) {
+        return matched
+      }
+
+      for (let i = tokenStartIndex; i < state.tokens.length; i++) {
+        const token = state.tokens[i]
+        if (token?.type !== 'image' && token?.type !== 'link_open') {
+          continue
+        }
+
+        if (!token.meta || typeof token.meta !== 'object') {
+          token.meta = {}
+        }
+        const linkifiedText = token.type === 'link_open' && token.markup === 'linkify'
+          ? state.tokens[tokenStartIndex + 1]?.content
+          : null
+        const resolvedStartPos = typeof linkifiedText === 'string' && linkifiedText
+          ? Math.max(0, state.pos - linkifiedText.length)
+          : startPos
+        token.meta[SOURCE_RANGE_META_KEY] = {
+          from: resolvedStartPos,
+          to: state.pos,
+        }
+        break
+      }
+
+      return matched
+    }
+  }
+
+  const getInlineRuleByName = (ruleName) => {
+    return md.inline.ruler.__rules__?.find(rule => rule.name === ruleName)?.fn || null
+  }
+
+  md.inline.ruler.at('link', wrapInlineRuleWithSourceRange(getInlineRuleByName('link')))
+  md.inline.ruler.at('image', wrapInlineRuleWithSourceRange(getInlineRuleByName('image')))
+  md.inline.ruler.at('autolink', wrapInlineRuleWithSourceRange(getInlineRuleByName('autolink')))
+  md.inline.ruler.at('linkify', wrapInlineRuleWithSourceRange(getInlineRuleByName('linkify')))
+
+  return md
+}
+
+const markdownItAssetMatcher = createMarkdownItAssetMatcher()
 
 function normalizeAssetPath(value) {
   if (!value) {
@@ -109,35 +164,45 @@ function createAssetMatch(content, lineStartIndexes, kind, from, to, rawPath) {
   }
 }
 
-function collectImageMatches(content, lineStartIndexes) {
+function collectMarkdownItMatches(content, lineStartIndexes, kind) {
+  const inlineTokenList = markdownItAssetMatcher.parseInline(content, {})
+  const tokenList = inlineTokenList.flatMap(token => Array.isArray(token.children) ? token.children : [])
   const matchList = []
-  let searchIndex = 0
 
-  while (searchIndex < content.length) {
-    const startIndex = content.indexOf('![', searchIndex)
-    if (startIndex === -1) {
-      break
-    }
-
-    const state = new StateInline(content, markdownItLinkMatcher, {}, [])
-    state.pos = startIndex
-    state.posMax = content.length
-
-    if (!state.md.inline.ruler.getRules('').some(rule => rule(state, false) && state.tokens.some(token => token.type === 'image'))) {
-      searchIndex = startIndex + 2
+  for (const token of tokenList) {
+    const isMatchedKind = kind === 'image'
+      ? token?.type === 'image'
+      : token?.type === 'link_open'
+    if (!isMatchedKind) {
       continue
     }
 
-    const imageToken = state.tokens.find(token => token.type === 'image')
-    const rawPath = normalizeAssetPath(imageToken?.attrGet('src'))
-    if (rawPath) {
-      matchList.push(createAssetMatch(content, lineStartIndexes, 'image', startIndex, state.pos, rawPath))
+    const sourceRange = token?.meta?.[SOURCE_RANGE_META_KEY]
+    if (!sourceRange
+      || Number.isInteger(sourceRange.from) !== true
+      || Number.isInteger(sourceRange.to) !== true
+      || sourceRange.to <= sourceRange.from) {
+      continue
     }
 
-    searchIndex = state.pos
+    const rawPath = normalizeAssetPath(token.attrGet?.(kind === 'image' ? 'src' : 'href'))
+    if (rawPath) {
+      matchList.push(createAssetMatch(
+        content,
+        lineStartIndexes,
+        kind,
+        sourceRange.from,
+        sourceRange.to,
+        rawPath,
+      ))
+    }
   }
 
   return matchList
+}
+
+function collectImageMatches(content, lineStartIndexes) {
+  return collectMarkdownItMatches(content, lineStartIndexes, 'image')
 }
 
 function collectVideoMatches(content, lineStartIndexes) {
@@ -197,39 +262,7 @@ function collectAudioMatches(content, lineStartIndexes) {
 }
 
 function collectLinkMatches(content, lineStartIndexes) {
-  const matchList = []
-  let searchIndex = 0
-
-  while (searchIndex < content.length) {
-    const startIndex = content.indexOf('[', searchIndex)
-    if (startIndex === -1) {
-      break
-    }
-
-    if (startIndex > 0 && content[startIndex - 1] === '!') {
-      searchIndex = startIndex + 1
-      continue
-    }
-
-    const state = new StateInline(content, markdownItLinkMatcher, {}, [])
-    state.pos = startIndex
-    state.posMax = content.length
-
-    if (!linkRule(state, false)) {
-      searchIndex = startIndex + 1
-      continue
-    }
-
-    const linkOpenToken = state.tokens.find(token => token.type === 'link_open')
-    const rawPath = normalizeAssetPath(linkOpenToken?.attrGet('href'))
-    if (rawPath) {
-      matchList.push(createAssetMatch(content, lineStartIndexes, 'link', startIndex, state.pos, rawPath))
-    }
-
-    searchIndex = state.pos
-  }
-
-  return matchList
+  return collectMarkdownItMatches(content, lineStartIndexes, 'link')
 }
 
 function collectAssetMatches(content, kind, lineStartIndexes) {

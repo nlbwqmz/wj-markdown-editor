@@ -1679,6 +1679,37 @@ describe('documentResourceService', () => {
     }
   })
 
+  it('document.resource.copy-image 在远程 rawSrc 丢失时必须 fail-closed，不能静默回退到 resourceUrl', async () => {
+    const { clipboardApi, fetchImpl, nativeImageApi, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'copy-image-remote-missing-raw-src-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004034,
+    })
+    const windowId = bindSession(store, session)
+
+    const result = await service.copyImage({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: null,
+        rawPath: null,
+        resourceUrl: 'https://example.com/fallback-only.png',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid-remote-resource',
+      messageKey: 'message.previewAssetRemoteResourceInvalid',
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
+    expect(clipboardApi.writeImage).not.toHaveBeenCalled()
+  })
+
   it('document.resource.save-as 对远程图片 content-length 超限时，应在选完路径后且读取响应体前直接失败', async () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
@@ -1802,6 +1833,37 @@ describe('documentResourceService', () => {
     expect(cancel).toHaveBeenCalledTimes(1)
     expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as 在远程 rawSrc 丢失时必须 fail-closed，不能静默回退到 resourceUrl', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-missing-raw-src-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004035,
+    })
+    const windowId = bindSession(store, session)
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: null,
+        rawPath: null,
+        resourceUrl: 'https://example.com/fallback-only.png',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid-remote-resource',
+      messageKey: 'message.previewAssetRemoteResourceInvalid',
+    })
+    expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
   it('document.resource.save-as 在本地文件不存在时必须返回 not-found', async () => {

@@ -7,6 +7,9 @@ export function getPreviewAssetDeleteReasonMessageKey(reason) {
   if (reason === 'invalid-resource-url' || reason === 'invalid-resource-payload') {
     return 'message.invalidLocalResourceLink'
   }
+  if (reason === 'remote-resource') {
+    return 'previewAssetMenu.remoteResourceDeleteUnavailable'
+  }
   if (reason === 'relative-resource-without-document') {
     return 'message.relativeResourceRequiresSavedFile'
   }
@@ -22,7 +25,7 @@ export function getPreviewAssetDeleteReasonMessageKey(reason) {
   return null
 }
 
-export function resolvePreviewAssetDeletePlan(resourceInfo, referenceCount) {
+export function resolvePreviewAssetDeletePlan(resourceInfo, referenceCount, options = {}) {
   const normalizedReferenceCount = normalizeReferenceCount(referenceCount)
   const basePlan = {
     mode: normalizedReferenceCount > 1 ? 'multi' : 'single',
@@ -31,6 +34,14 @@ export function resolvePreviewAssetDeletePlan(resourceInfo, referenceCount) {
     reason: 'resolved',
     reasonMessageKey: null,
     blockMessageKey: null,
+  }
+
+  if (options?.sourceType === 'remote') {
+    return {
+      ...basePlan,
+      reason: 'remote-resource',
+      reasonMessageKey: 'previewAssetMenu.remoteResourceDeleteUnavailable',
+    }
   }
 
   if (resourceInfo?.isDirectory === true) {

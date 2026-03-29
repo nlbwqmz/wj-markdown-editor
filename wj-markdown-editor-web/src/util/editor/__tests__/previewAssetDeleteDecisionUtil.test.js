@@ -63,6 +63,21 @@ test('未保存文档中的相对资源，应允许仅删除当前引用', () =>
   })
 })
 
+test('远程资源删除时，应直接退化为仅删除 Markdown 引用模式', () => {
+  const result = resolvePreviewAssetDeletePlan(null, 1, {
+    sourceType: 'remote',
+  })
+
+  assert.deepEqual(result, {
+    mode: 'single',
+    deleteFileEnabled: false,
+    deleteAllReferencesEnabled: false,
+    reason: 'remote-resource',
+    reasonMessageKey: 'previewAssetMenu.remoteResourceDeleteUnavailable',
+    blockMessageKey: null,
+  })
+})
+
 test('文件不存在时，应允许批量清理 Markdown 引用但不删文件', () => {
   const result = resolvePreviewAssetDeletePlan({
     ok: true,
@@ -124,6 +139,7 @@ test('应为删除失败原因返回统一提示文案 key', () => {
   assert.equal(getPreviewAssetDeleteReasonMessageKey('invalid-resource-url'), 'message.invalidLocalResourceLink')
   assert.equal(getPreviewAssetDeleteReasonMessageKey('invalid-resource-payload'), 'message.invalidLocalResourceLink')
   assert.equal(getPreviewAssetDeleteReasonMessageKey('relative-resource-without-document'), 'message.relativeResourceRequiresSavedFile')
+  assert.equal(getPreviewAssetDeleteReasonMessageKey('remote-resource'), 'previewAssetMenu.remoteResourceDeleteUnavailable')
   assert.equal(getPreviewAssetDeleteReasonMessageKey('not-found'), 'message.theFileDoesNotExist')
   assert.equal(getPreviewAssetDeleteReasonMessageKey('unsupported-target'), 'previewAssetMenu.deleteUnsupportedTarget')
   assert.equal(getPreviewAssetDeleteReasonMessageKey('directory-not-allowed'), 'previewAssetMenu.deleteDirectoryNotAllowed')

@@ -760,6 +760,22 @@ describe('editorView 预览资源菜单宿主接线', () => {
     }))
   })
 
+  it('远程资源选择 resource.delete 时，不应再先请求 resource.get-info', async () => {
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+      markdownReference: '![demo](https://example.com/assets/demo.png)',
+    })
+    await wrapper.get('[data-menu-key="resource.delete"]').trigger('click')
+    await flushEditorView()
+
+    expect(editorViewHostState.channelSend).not.toHaveBeenCalledWith(expect.objectContaining({
+      event: 'resource.get-info',
+    }))
+    expect(editorViewHostState.modalConfirm).toHaveBeenCalledTimes(1)
+  })
+
   it('单引用确认删除本地资源时，应继续把 rawPath 传给 document.resource.delete-local', async () => {
     editorViewHostState.channelSend.mockImplementation(async ({ event }) => {
       if (event === 'resource.get-info') {

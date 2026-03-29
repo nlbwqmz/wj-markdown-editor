@@ -278,7 +278,10 @@ function createRawPathCandidate(documentContext, rawPath) {
   const decodedPath = decodeRawLocalPath(normalizedRawPath)
   if (isDangerousExplicitSource(decodedPath) && !isWindowsAbsolutePath(decodedPath)) {
     return {
-      participates: false,
+      participates: true,
+      ...createResolvedTargetResult(false, 'invalid-resource-url', {
+        decodedPath,
+      }),
     }
   }
 

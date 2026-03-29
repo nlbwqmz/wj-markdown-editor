@@ -438,6 +438,27 @@ describe('resourceFileUtil.getLocalResourceInfo', () => {
     stat.mockReset()
   })
 
+  it('rawPath 是远程地址时，必须 fail-closed，不能继续回退到本地 resourceUrl', async () => {
+    const result = await resourceFileUtil.getLocalResourceInfo({
+      documentPath: 'D:\\docs\\note.md',
+    }, {
+      rawPath: 'https://example.com/remote.png',
+      resourceUrl: convertResourceUrl('./assets/local.png'),
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid-resource-url',
+      decodedPath: 'https://example.com/remote.png',
+      exists: false,
+      isDirectory: false,
+      isFile: false,
+      path: null,
+    })
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+  })
+
   it('rawPath 和 resourceUrl 同时可解析但目标不一致时，应该返回固定冲突错误', async () => {
     const result = await resourceFileUtil.getLocalResourceInfo({
       documentPath: 'D:\\docs\\note.md',
