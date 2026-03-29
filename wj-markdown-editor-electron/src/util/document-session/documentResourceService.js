@@ -37,6 +37,16 @@ const IMAGE_CONTENT_TYPE_EXTENSION_MAP = new Map([
 
 const DEFAULT_REMOTE_IMAGE_FETCH_TIMEOUT_MS = 15 * 1000
 const DEFAULT_REMOTE_IMAGE_MAX_BYTES = 20 * 1024 * 1024
+const RESOURCE_ACTION_FAILURE_MESSAGE_KEY_MAP = {
+  'source-type-mismatch': 'message.previewAssetSourceTypeMismatch',
+  'invalid-remote-resource': 'message.previewAssetRemoteResourceInvalid',
+  'remote-fetch-not-configured': 'message.previewAssetRemoteFetchUnavailable',
+  'remote-resource-fetch-failed': 'message.previewAssetRemoteResourceFetchFailed',
+  'remote-resource-not-image': 'message.previewAssetRemoteResourceNotImage',
+  'remote-resource-too-large': 'message.previewAssetRemoteResourceTooLarge',
+  'remote-resource-fetch-timeout': 'message.previewAssetRemoteResourceFetchTimeout',
+  'local-resource-not-image': 'message.previewAssetLocalResourceNotImage',
+}
 
 function normalizeComparablePath(targetPath) {
   if (typeof targetPath !== 'string' || targetPath.trim() === '') {
@@ -242,6 +252,16 @@ function deriveRemoteFileName(remoteUrl, contentType) {
   return `${normalizedBaseName}.png`
 }
 
+function getResourceActionFailureMessageKey(reason) {
+  if (typeof reason !== 'string' || !reason) {
+    return null
+  }
+
+  return resourceFileUtil.getLocalResourceFailureMessageKey(reason)
+    || RESOURCE_ACTION_FAILURE_MESSAGE_KEY_MAP[reason]
+    || null
+}
+
 function createTextCopySuccessResult(text, options = {}) {
   return {
     ok: true,
@@ -252,19 +272,27 @@ function createTextCopySuccessResult(text, options = {}) {
 }
 
 function createTextCopyFailureResult(reason, options = {}) {
+  const messageKey = typeof options.messageKey === 'string'
+    ? options.messageKey
+    : getResourceActionFailureMessageKey(reason)
   return {
     ok: false,
     reason,
     text: null,
     ...(options.path !== undefined ? { path: options.path } : {}),
+    ...(messageKey ? { messageKey } : {}),
   }
 }
 
 function createBinaryActionFailureResult(reason, options = {}) {
+  const messageKey = typeof options.messageKey === 'string'
+    ? options.messageKey
+    : getResourceActionFailureMessageKey(reason)
   return {
     ok: false,
     reason,
     ...(options.path ? { path: options.path } : {}),
+    ...(messageKey ? { messageKey } : {}),
   }
 }
 
@@ -430,7 +458,7 @@ export function createDocumentResourceService({
     return true
   }
 
-  async function readLocalImageBuffer(documentContext, payload) {
+  async function resolveLocalImageSource(documentContext, payload) {
     const resourceInfo = await resourceFileUtil.resolveLocalResource(documentContext, payload, {
       preferPathnameFallback: true,
     })
@@ -458,17 +486,28 @@ export function createDocumentResourceService({
       })
     }
 
+    return {
+      ok: true,
+      path: resourceInfo.path,
+      fileName: deriveLocalFileName(resourceInfo.path),
+    }
+  }
+
+  async function readLocalImageBuffer(documentContext, payload) {
+    const localImageSource = await resolveLocalImageSource(documentContext, payload)
+    if (localImageSource.ok !== true) {
+      return localImageSource
+    }
+
     try {
-      const buffer = await fsModule?.readFile?.(resourceInfo.path)
+      const buffer = await fsModule?.readFile?.(localImageSource.path)
       return {
-        ok: true,
+        ...localImageSource,
         buffer,
-        path: resourceInfo.path,
-        fileName: deriveLocalFileName(resourceInfo.path),
       }
     } catch {
       return createBinaryActionFailureResult('read-local-resource-failed', {
-        path: resourceInfo.path,
+        path: localImageSource.path,
       })
     }
   }
@@ -591,6 +630,29 @@ export function createDocumentResourceService({
     }
 
     return nativeImageApi.createFromBuffer(buffer)
+  }
+
+  function resolveRemoteImageSaveSource(payload) {
+    const remoteUrl = normalizeStringValue(payload?.rawSrc || payload?.resourceUrl)
+    if (!remoteUrl) {
+      return createBinaryActionFailureResult('invalid-remote-resource')
+    }
+
+    return {
+      ok: true,
+      remoteUrl,
+      fileName: deriveRemoteFileName(remoteUrl, null),
+    }
+  }
+
+  function buildSaveAsSuccessResult(selectedPath) {
+    return {
+      ok: true,
+      reason: 'saved',
+      path: selectedPath,
+      targetPath: selectedPath,
+      messageKey: 'message.saveAsSuccessfully',
+    }
   }
 
   async function openInFolder({ windowId, payload }) {
@@ -794,25 +856,25 @@ export function createDocumentResourceService({
       return createBinaryActionFailureResult('source-type-mismatch')
     }
 
-    const imageBufferResult = runtimeSourceType === 'local'
-      ? await readLocalImageBuffer(actionContext.documentContext, actionContext.normalizedPayload)
-      : await fetchRemoteImageBuffer(actionContext.normalizedPayload.rawSrc || actionContext.normalizedPayload.resourceUrl)
-    if (imageBufferResult.ok !== true) {
-      return imageBufferResult
-    }
-
-    const staleAfterReadError = getStaleActionError(
-      windowId,
-      actionContext.capturedActionContext,
-      () => createBinaryActionFailureResult('stale-document-context'),
-    )
-    if (staleAfterReadError) {
-      return staleAfterReadError
-    }
-
     try {
+      const saveSource = runtimeSourceType === 'local'
+        ? await resolveLocalImageSource(actionContext.documentContext, actionContext.normalizedPayload)
+        : resolveRemoteImageSaveSource(actionContext.normalizedPayload)
+      if (saveSource.ok !== true) {
+        return saveSource
+      }
+
+      const staleBeforeDialogError = getStaleActionError(
+        windowId,
+        actionContext.capturedActionContext,
+        () => createBinaryActionFailureResult('stale-document-context'),
+      )
+      if (staleBeforeDialogError) {
+        return staleBeforeDialogError
+      }
+
       const selectedPath = dialogApi?.showSaveDialogSync?.({
-        defaultPath: imageBufferResult.fileName,
+        defaultPath: saveSource.fileName,
       })
       if (!selectedPath) {
         return {
@@ -831,18 +893,35 @@ export function createDocumentResourceService({
         return staleAfterDialogError
       }
 
-      await fsModule?.writeFile?.(selectedPath, imageBufferResult.buffer)
-      return {
-        ok: true,
-        reason: 'saved',
-        path: selectedPath,
-        targetPath: selectedPath,
-        messageKey: 'message.saveAsSuccessfully',
+      if (runtimeSourceType === 'local') {
+        if (normalizeComparablePath(selectedPath) === normalizeComparablePath(saveSource.path)) {
+          const sourceBuffer = await fsModule?.readFile?.(saveSource.path)
+          await fsModule?.writeFile?.(selectedPath, sourceBuffer)
+        } else {
+          await fsModule?.copyFile?.(saveSource.path, selectedPath)
+        }
+
+        return buildSaveAsSuccessResult(selectedPath)
       }
+
+      const remoteImageBufferResult = await fetchRemoteImageBuffer(saveSource.remoteUrl)
+      if (remoteImageBufferResult.ok !== true) {
+        return remoteImageBufferResult
+      }
+
+      const staleAfterFetchError = getStaleActionError(
+        windowId,
+        actionContext.capturedActionContext,
+        () => createBinaryActionFailureResult('stale-document-context'),
+      )
+      if (staleAfterFetchError) {
+        return staleAfterFetchError
+      }
+
+      await fsModule?.writeFile?.(selectedPath, remoteImageBufferResult.buffer)
+      return buildSaveAsSuccessResult(selectedPath)
     } catch {
-      return createBinaryActionFailureResult('save-as-failed', {
-        path: imageBufferResult.path,
-      })
+      return createBinaryActionFailureResult('save-as-failed')
     }
   }
 

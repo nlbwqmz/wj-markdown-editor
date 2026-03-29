@@ -689,6 +689,26 @@ describe('editorView 预览资源菜单宿主接线', () => {
     expect(editorViewHostState.messageError).not.toHaveBeenCalledWith('save-as-failed')
   })
 
+  it('选择 resource.save-as 在 runtime 返回结构化 messageKey 时，应优先展示该文案', async () => {
+    editorViewHostState.channelSend.mockResolvedValue({
+      ok: false,
+      reason: 'remote-resource-too-large',
+      messageKey: 'message.previewAssetRemoteResourceTooLarge',
+    })
+
+    const wrapper = await mountEditorView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+      markdownReference: '![demo](https://example.com/assets/demo.png)',
+    })
+    await wrapper.get('[data-menu-key="resource.save-as"]').trigger('click')
+    await flushEditorView()
+
+    expect(editorViewHostState.messageWarning).toHaveBeenCalledWith('message.previewAssetRemoteResourceTooLarge')
+    expect(editorViewHostState.messageError).not.toHaveBeenCalled()
+  })
+
   it('选择 resource.open-in-folder 时，会沿用现有打开目录逻辑发出 document.resource.open-in-folder', async () => {
     const wrapper = await mountEditorView()
 

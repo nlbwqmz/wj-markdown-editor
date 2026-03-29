@@ -29,6 +29,13 @@ function createMarkdownIt() {
   return md
 }
 
+function extractMarkdownReferenceList(renderedHtml) {
+  return Array.from(
+    renderedHtml.matchAll(/data-wj-markdown-reference="([^"]+)"/gu),
+    ([, markdownReference]) => markdownReference,
+  )
+}
+
 describe('markdown-it preview resource metadata', () => {
   it('真实渲染的远程图片和远程链接必须暴露资源 dataset 与 markdown 引用', () => {
     const md = createMarkdownIt()
@@ -60,6 +67,27 @@ describe('markdown-it preview resource metadata', () => {
 
     expect(renderedHtml).toMatch(/<a [^>]*href="https:\/\/example\.com\/docs"[^>]*data-wj-markdown-reference="https:\/\/example\.com\/docs"/u)
     expect(renderedHtml).toContain('</a>,')
+  })
+
+  it('转义的伪括号链接不应抢占真实 token 的 markdown 引用', () => {
+    const md = createMarkdownIt()
+    const renderedHtml = md.render('\\[假链](https://example.com/a) [真链](https://example.com/a)')
+
+    expect(extractMarkdownReferenceList(renderedHtml)).toEqual([
+      'https://example.com/a',
+      '[真链](https://example.com/a)',
+    ])
+    expect(renderedHtml).not.toContain('data-wj-markdown-reference="[假链](https://example.com/a)"')
+  })
+
+  it('code span 内的伪链接不应进入资源引用候选列表', () => {
+    const md = createMarkdownIt()
+    const renderedHtml = md.render('`[假链](https://example.com/a)` [真链](https://example.com/a)')
+
+    expect(extractMarkdownReferenceList(renderedHtml)).toEqual([
+      '[真链](https://example.com/a)',
+    ])
+    expect(renderedHtml).not.toContain('data-wj-markdown-reference="[假链](https://example.com/a)"')
   })
 
   it('data 图片与锚点链接不应进入预览资源菜单链路', () => {

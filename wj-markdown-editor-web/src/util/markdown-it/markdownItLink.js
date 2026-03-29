@@ -8,10 +8,6 @@ import {
 const HTTP_RESOURCE_REGEXP = /^https?:\/\//iu
 const DATA_RESOURCE_REGEXP = /^data:/iu
 
-function shouldEscapeMarkdownCharacter(nextChar) {
-  return Boolean(nextChar) && /[[\]()<>\\\s]/u.test(nextChar)
-}
-
 function ensureTokenMeta(token) {
   if (!token.meta || typeof token.meta !== 'object') {
     token.meta = {}
@@ -19,29 +15,10 @@ function ensureTokenMeta(token) {
   return token.meta
 }
 
-function findClosingSquareBracket(content, startIndex) {
-  let escaped = false
-  let nestedBracketDepth = 0
-
-  for (let i = startIndex; i < content.length; i++) {
-    const char = content[i]
-    if (escaped) {
-      escaped = false
-      continue
-    }
-    if (char === '\\' && shouldEscapeMarkdownCharacter(content[i + 1])) {
-      escaped = true
-      continue
-    }
-    if (char === '[') {
-      nestedBracketDepth += 1
-      continue
-    }
-    if (char === ']') {
-      if (nestedBracketDepth > 0) {
-        nestedBracketDepth -= 1
-        continue
-      }
+function findFirstNewResourceTokenIndex(state, tokenStartIndex) {
+  for (let i = tokenStartIndex; i < state.tokens.length; i++) {
+    const token = state.tokens[i]
+    if (token?.type === 'image' || token?.type === 'link_open') {
       return i
     }
   }
@@ -49,266 +26,60 @@ function findClosingSquareBracket(content, startIndex) {
   return -1
 }
 
-function findClosingParenthesis(content, startIndex) {
-  let escaped = false
-  let inAngleBracket = false
-  let nestedParenthesisDepth = 0
-
-  for (let i = startIndex; i < content.length; i++) {
-    const char = content[i]
-    if (escaped) {
-      escaped = false
-      continue
-    }
-    if (char === '\\' && shouldEscapeMarkdownCharacter(content[i + 1])) {
-      escaped = true
-      continue
-    }
-    if (char === '<') {
-      inAngleBracket = true
-      continue
-    }
-    if (char === '>' && inAngleBracket) {
-      inAngleBracket = false
-      continue
-    }
-    if (!inAngleBracket && char === '(') {
-      nestedParenthesisDepth += 1
-      continue
-    }
-    if (char === ')' && !inAngleBracket) {
-      if (nestedParenthesisDepth > 0) {
-        nestedParenthesisDepth -= 1
-        continue
-      }
-      return i
-    }
+function resolveMarkdownReferenceFromNewTokens(state, tokenIndex, startPos) {
+  const token = state.tokens[tokenIndex]
+  if (!token) {
+    return null
   }
 
-  return -1
+  if (token.type === 'link_open' && token.markup === 'linkify') {
+    const textToken = state.tokens[tokenIndex + 1]
+    return typeof textToken?.content === 'string' && textToken.content
+      ? textToken.content
+      : null
+  }
+
+  if (token.type === 'link_open' && token.markup === 'autolink') {
+    const textToken = state.tokens[tokenIndex + 1]
+    return typeof textToken?.content === 'string' && textToken.content
+      ? `<${textToken.content}>`
+      : null
+  }
+
+  return state.src.slice(startPos, state.pos) || null
 }
 
-function unescapeMarkdownDestination(destination) {
-  return destination.replace(/\\([()[\]<>\\\s])/gu, '$1')
-}
-
-function extractMarkdownDestination(rawDestination) {
-  const trimmedDestination = rawDestination.trim()
-  if (!trimmedDestination) {
-    return null
+function wrapInlineRuleWithMarkdownReference(rule) {
+  if (typeof rule !== 'function') {
+    return rule
   }
 
-  if (trimmedDestination.startsWith('<')) {
-    const closingAngleIndex = trimmedDestination.indexOf('>')
-    if (closingAngleIndex <= 0) {
-      return null
+  return function wrappedInlineRule(state, silent) {
+    const tokenStartIndex = state.tokens.length
+    const startPos = state.pos
+    const matched = rule(state, silent)
+
+    if (matched !== true || silent === true || state.pos <= startPos) {
+      return matched
     }
-    return unescapeMarkdownDestination(trimmedDestination.slice(1, closingAngleIndex))
-  }
 
-  let escaped = false
-  let nestedParenthesisDepth = 0
-
-  for (let i = 0; i < trimmedDestination.length; i++) {
-    const char = trimmedDestination[i]
-    if (escaped) {
-      escaped = false
-      continue
+    const resourceTokenIndex = findFirstNewResourceTokenIndex(state, tokenStartIndex)
+    if (resourceTokenIndex === -1) {
+      return matched
     }
-    if (char === '\\' && shouldEscapeMarkdownCharacter(trimmedDestination[i + 1])) {
-      escaped = true
-      continue
-    }
-    if (char === '(') {
-      nestedParenthesisDepth += 1
-      continue
-    }
-    if (char === ')' && nestedParenthesisDepth > 0) {
-      nestedParenthesisDepth -= 1
-      continue
-    }
-    if (/\s/u.test(char) && nestedParenthesisDepth === 0) {
-      return unescapeMarkdownDestination(trimmedDestination.slice(0, i))
-    }
-  }
 
-  return unescapeMarkdownDestination(trimmedDestination)
-}
-
-function parseBracketResourceReference(content, startIndex, type) {
-  const prefix = type === 'image' ? '![' : '['
-  if (!content.startsWith(prefix, startIndex)) {
-    return null
-  }
-
-  const labelStartIndex = startIndex + prefix.length
-  const labelEndIndex = findClosingSquareBracket(content, labelStartIndex)
-  if (labelEndIndex === -1) {
-    return null
-  }
-
-  let destinationOpenIndex = labelEndIndex + 1
-  while (destinationOpenIndex < content.length && /\s/u.test(content[destinationOpenIndex])) {
-    destinationOpenIndex += 1
-  }
-  if (content[destinationOpenIndex] !== '(') {
-    return null
-  }
-
-  const destinationStartIndex = destinationOpenIndex + 1
-  const destinationEndIndex = findClosingParenthesis(content, destinationStartIndex)
-  if (destinationEndIndex === -1) {
-    return null
-  }
-
-  const destination = extractMarkdownDestination(content.slice(destinationStartIndex, destinationEndIndex))
-  if (!destination) {
-    return null
-  }
-
-  return {
-    type,
-    source: destination,
-    markdownReference: content.slice(startIndex, destinationEndIndex + 1),
-    nextIndex: destinationEndIndex + 1,
+    // 直接绑定到 markdown-it 本次实际生成的 token，
+    // 这样 code span、转义字符、autolink 与 linkify 的语法边界都会和真实渲染结果保持一致。
+    setPreviewTokenMarkdownReference(
+      state.tokens[resourceTokenIndex],
+      resolveMarkdownReferenceFromNewTokens(state, resourceTokenIndex, startPos),
+    )
+    return matched
   }
 }
 
-function parseAutolinkReference(content, startIndex) {
-  if (content[startIndex] !== '<') {
-    return null
-  }
-
-  const closingAngleIndex = content.indexOf('>', startIndex + 1)
-  if (closingAngleIndex === -1) {
-    return null
-  }
-
-  const destination = content.slice(startIndex + 1, closingAngleIndex)
-  if (!HTTP_RESOURCE_REGEXP.test(destination)) {
-    return null
-  }
-
-  return {
-    type: 'link',
-    source: destination,
-    markdownReference: content.slice(startIndex, closingAngleIndex + 1),
-    nextIndex: closingAngleIndex + 1,
-  }
-}
-
-function parseLinkifyReference(content, startIndex, linkify) {
-  if (typeof linkify?.matchAtStart !== 'function') {
-    return null
-  }
-
-  const matchedLink = linkify.matchAtStart(content.slice(startIndex))
-  const matchedUrl = matchedLink?.url || matchedLink?.raw || matchedLink?.text || null
-  const matchedText = matchedLink?.raw || matchedLink?.text || matchedUrl
-  if (!matchedUrl || !matchedText || !HTTP_RESOURCE_REGEXP.test(matchedUrl)) {
-    return null
-  }
-
-  return {
-    type: 'link',
-    source: matchedUrl,
-    markdownReference: matchedText,
-    nextIndex: startIndex + matchedText.length,
-  }
-}
-
-function extractInlineResourceReferenceList(content, linkify) {
-  const referenceList = []
-  let index = 0
-
-  while (index < content.length) {
-    const imageReference = parseBracketResourceReference(content, index, 'image')
-    if (imageReference) {
-      referenceList.push(imageReference)
-      index = imageReference.nextIndex
-      continue
-    }
-
-    const linkReference = parseBracketResourceReference(content, index, 'link')
-    if (linkReference) {
-      referenceList.push(linkReference)
-      index = linkReference.nextIndex
-      continue
-    }
-
-    const autolinkReference = parseAutolinkReference(content, index)
-    if (autolinkReference) {
-      referenceList.push(autolinkReference)
-      index = autolinkReference.nextIndex
-      continue
-    }
-
-    const linkifyReference = parseLinkifyReference(content, index, linkify)
-    if (linkifyReference) {
-      referenceList.push(linkifyReference)
-      index = linkifyReference.nextIndex
-      continue
-    }
-
-    index += 1
-  }
-
-  return referenceList
-}
-
-function takeNextInlineReference(referenceList, startIndex, type, source) {
-  const normalizedSource = normalizeLocalResourcePath(source)
-  for (let i = startIndex; i < referenceList.length; i++) {
-    const reference = referenceList[i]
-    if (reference.type !== type) {
-      continue
-    }
-    if (normalizeLocalResourcePath(reference.source) !== normalizedSource) {
-      continue
-    }
-    return {
-      reference,
-      nextIndex: i + 1,
-    }
-  }
-
-  return {
-    reference: null,
-    nextIndex: startIndex,
-  }
-}
-
-function annotateInlineResourceMarkdownReference(inlineToken, linkify) {
-  if (!inlineToken?.content || !Array.isArray(inlineToken.children) || inlineToken.children.length === 0) {
-    return
-  }
-
-  const referenceList = extractInlineResourceReferenceList(inlineToken.content, linkify)
-  if (referenceList.length === 0) {
-    return
-  }
-
-  let referenceCursor = 0
-  inlineToken.children.forEach((childToken) => {
-    if (childToken.type !== 'image' && childToken.type !== 'link_open') {
-      return
-    }
-
-    const sourceAttrName = childToken.type === 'image' ? 'src' : 'href'
-    const source = childToken.attrGet(sourceAttrName)
-    if (!source) {
-      return
-    }
-
-    const referenceType = childToken.type === 'image' ? 'image' : 'link'
-    const { reference, nextIndex } = takeNextInlineReference(referenceList, referenceCursor, referenceType, source)
-    if (!reference) {
-      return
-    }
-
-    setPreviewTokenMarkdownReference(childToken, reference.markdownReference)
-    referenceCursor = nextIndex
-  })
+function getInlineRuleByName(ruler, ruleName) {
+  return ruler?.__rules__?.find(rule => rule.name === ruleName)?.fn || null
 }
 
 export function setPreviewTokenMarkdownReference(token, markdownReference) {
@@ -353,14 +124,15 @@ export default function (md) {
   const defaultRender = md.renderer.rules.link_open || function (tokens, idx, options, env, self) {
     return self.renderToken(tokens, idx, options)
   }
+  const originalLinkRule = getInlineRuleByName(md.inline.ruler, 'link')
+  const originalImageRule = getInlineRuleByName(md.inline.ruler, 'image')
+  const originalAutolinkRule = getInlineRuleByName(md.inline.ruler, 'autolink')
+  const originalLinkifyRule = getInlineRuleByName(md.inline.ruler, 'linkify')
 
-  md.core.ruler.after('inline', 'preview-resource-markdown-reference', (state) => {
-    state.tokens.forEach((token) => {
-      if (token.type === 'inline') {
-        annotateInlineResourceMarkdownReference(token, md.linkify)
-      }
-    })
-  })
+  md.inline.ruler.at('link', wrapInlineRuleWithMarkdownReference(originalLinkRule))
+  md.inline.ruler.at('image', wrapInlineRuleWithMarkdownReference(originalImageRule))
+  md.inline.ruler.at('autolink', wrapInlineRuleWithMarkdownReference(originalAutolinkRule))
+  md.inline.ruler.at('linkify', wrapInlineRuleWithMarkdownReference(originalLinkifyRule))
 
   md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
     const hrefIndex = tokens[idx].attrIndex('href')

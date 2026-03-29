@@ -618,6 +618,25 @@ describe('previewView 预览资源菜单宿主接线', () => {
     expect(previewViewHostState.messageError).not.toHaveBeenCalledWith('save-as-failed')
   })
 
+  it('纯预览页选择 resource.save-as 在 runtime 返回结构化 messageKey 时，应优先展示该文案', async () => {
+    previewViewHostState.channelSend.mockResolvedValue({
+      ok: false,
+      reason: 'remote-resource-too-large',
+      messageKey: 'message.previewAssetRemoteResourceTooLarge',
+    })
+
+    const wrapper = await mountPreviewView()
+
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'remote',
+    })
+    await wrapper.get('[data-menu-key="resource.save-as"]').trigger('click')
+    await flushPreviewView()
+
+    expect(previewViewHostState.messageWarning).toHaveBeenCalledWith('message.previewAssetRemoteResourceTooLarge')
+    expect(previewViewHostState.messageError).not.toHaveBeenCalled()
+  })
+
   it('纯预览页选择 resource.open-in-folder 时，会继续发送 document.resource.open-in-folder', async () => {
     const wrapper = await mountPreviewView()
 

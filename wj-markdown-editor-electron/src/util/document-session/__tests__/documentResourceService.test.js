@@ -366,6 +366,7 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: false,
       reason: 'source-type-mismatch',
+      messageKey: 'message.previewAssetSourceTypeMismatch',
       text: null,
     })
     expect(pathExists).not.toHaveBeenCalled()
@@ -405,6 +406,7 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: false,
       reason: 'remote-resource-not-image',
+      messageKey: 'message.previewAssetRemoteResourceNotImage',
     })
     expect(nativeImageApi.createFromBuffer).not.toHaveBeenCalled()
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
@@ -443,11 +445,43 @@ describe('documentResourceService', () => {
       cancelled: true,
       reason: 'cancelled',
     })
+    expect(readFile).not.toHaveBeenCalled()
     expect(fsModule.copyFile).not.toHaveBeenCalled()
     expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
-  it('document.resource.save-as 在 nativeImage.createFromBuffer 抛错时仍应成功写盘', async () => {
+  it('document.resource.save-as 对远程图片在用户取消前不应提前发起下载', async () => {
+    const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
+    const session = createBoundFileSession({
+      sessionId: 'save-as-remote-cancel-before-fetch-session',
+      path: 'D:\\docs\\note.md',
+      content: '# 文档',
+      stat: null,
+      now: 1700000004034,
+    })
+    const windowId = bindSession(store, session)
+    dialogApi.showSaveDialogSync.mockReturnValue(undefined)
+
+    const result = await service.saveAs({
+      windowId,
+      payload: {
+        sourceType: 'remote',
+        rawSrc: 'https://example.com/assets/demo.jpg?download=1',
+        rawPath: 'https://example.com/assets/demo.jpg?download=1',
+        resourceUrl: 'https://example.com/assets/demo.jpg?download=1',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      cancelled: true,
+      reason: 'cancelled',
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('document.resource.save-as 本地图片另存为时应直接复制文件，不依赖 nativeImage 解码结果', async () => {
     const { dialogApi, fsModule, nativeImageApi, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-ignore-native-image-throw-session',
@@ -486,10 +520,11 @@ describe('documentResourceService', () => {
     expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
       defaultPath: 'demo.png',
     }))
-    expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\saved-from-throw.png', Buffer.from('png-binary'))
+    expect(fsModule.copyFile).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png', 'D:\\exports\\saved-from-throw.png')
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
-  it('document.resource.save-as 在 nativeImage.createFromBuffer 返回空图时仍应成功写盘', async () => {
+  it('document.resource.save-as 本地图片另存为在目标路径与源路径不同时时应走 copyFile', async () => {
     const { dialogApi, fsModule, nativeImageApi, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-ignore-native-image-empty-session',
@@ -530,10 +565,11 @@ describe('documentResourceService', () => {
     expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
       defaultPath: 'demo.png',
     }))
-    expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\saved-from-empty.png', Buffer.from('png-binary'))
+    expect(fsModule.copyFile).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png', 'D:\\exports\\saved-from-empty.png')
+    expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
-  it('document.resource.save-as 对远程图片应按 Content-Type 纠正默认扩展名', async () => {
+  it('document.resource.save-as 对远程图片应先按 URL 推导默认文件名，再在选完路径后下载', async () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-file-name-session',
@@ -567,7 +603,7 @@ describe('documentResourceService', () => {
     })
 
     expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
-      defaultPath: 'demo.png',
+      defaultPath: 'demo.jpg',
     }))
     expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\picked.png', expect.any(Buffer))
     expect(result).toEqual({
@@ -579,7 +615,7 @@ describe('documentResourceService', () => {
     })
   })
 
-  it('document.resource.save-as 在 URL 无扩展名且 Content-Type 为 image/avif 时，应推导 avif 默认文件名', async () => {
+  it('document.resource.save-as 在 URL 无扩展名时，应在下载前回退到通用默认文件名', async () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-unmapped-extension-session',
@@ -612,7 +648,7 @@ describe('documentResourceService', () => {
     })
 
     expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
-      defaultPath: 'demo.avif',
+      defaultPath: 'demo.png',
     }))
     expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\picked.avif', expect.any(Buffer))
     expect(result).toEqual({
@@ -869,6 +905,7 @@ describe('documentResourceService', () => {
       ok: false,
       reason: 'not-found',
       path: 'D:\\docs\\assets\\missing.png',
+      messageKey: 'message.theFileDoesNotExist',
     })
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })
@@ -907,6 +944,7 @@ describe('documentResourceService', () => {
       ok: false,
       reason: 'local-resource-not-image',
       path: 'D:\\docs\\assets\\demo.png',
+      messageKey: 'message.previewAssetLocalResourceNotImage',
     })
     expect(clipboardApi.writeImage).not.toHaveBeenCalled()
   })
@@ -1004,6 +1042,7 @@ describe('documentResourceService', () => {
       await expect(resultPromise).resolves.toEqual({
         ok: false,
         reason: 'remote-resource-fetch-timeout',
+        messageKey: 'message.previewAssetRemoteResourceFetchTimeout',
       })
       expect(fetchImpl).toHaveBeenCalledWith('https://example.com/slow.png', expect.objectContaining({
         signal: expect.any(AbortSignal),
@@ -1015,7 +1054,7 @@ describe('documentResourceService', () => {
     }
   })
 
-  it('document.resource.save-as 对远程图片 content-length 超限时应在下载前失败', async () => {
+  it('document.resource.save-as 对远程图片 content-length 超限时，应在选完路径后且读取响应体前直接失败', async () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-size-header-session',
@@ -1042,6 +1081,7 @@ describe('documentResourceService', () => {
       },
       arrayBuffer,
     })
+    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\picked.jpg')
 
     const result = await service.saveAs({
       windowId,
@@ -1056,9 +1096,12 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: false,
       reason: 'remote-resource-too-large',
+      messageKey: 'message.previewAssetRemoteResourceTooLarge',
     })
     expect(arrayBuffer).not.toHaveBeenCalled()
-    expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
+    expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      defaultPath: 'too-large.jpg',
+    }))
     expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
@@ -1128,6 +1171,7 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: false,
       reason: 'remote-resource-too-large',
+      messageKey: 'message.previewAssetRemoteResourceTooLarge',
     })
     expect(arrayBuffer).not.toHaveBeenCalled()
     expect(cancel).toHaveBeenCalledTimes(1)
@@ -1161,6 +1205,7 @@ describe('documentResourceService', () => {
       ok: false,
       reason: 'not-found',
       path: 'D:\\docs\\assets\\missing.png',
+      messageKey: 'message.theFileDoesNotExist',
     })
     expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
     expect(fsModule.copyFile).not.toHaveBeenCalled()
