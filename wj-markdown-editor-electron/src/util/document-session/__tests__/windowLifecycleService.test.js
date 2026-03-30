@@ -2812,6 +2812,162 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(stopWatchingMock).not.toHaveBeenCalled()
   })
 
+  it('document.open-path-in-current-window 在目录 watcher 重绑失败时，必须回滚到旧 session 并返回结构化失败结果', async () => {
+    pathExistsMock.mockImplementation(async targetPath => ['D:/current.md', 'D:/next.md'].includes(targetPath))
+    readFileMock.mockImplementation(async (targetPath) => {
+      if (targetPath === 'D:/current.md') {
+        return '# 当前内容'
+      }
+      if (targetPath === 'D:/next.md') {
+        return '# 新文档内容'
+      }
+      throw new Error(`unexpected read path: ${targetPath}`)
+    })
+
+    await winInfoUtil.createNew('D:/current.md')
+
+    const runtime = getDocumentSessionRuntime()
+    const [winInfo] = listWindowRefs()
+    const previousSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    const previousSession = runtime.store.getSession(previousSnapshot.sessionId)
+    const rebindWindowDirectoryFromSessionMock = vi.spyOn(runtime.directoryWatchService, 'rebindWindowDirectoryFromSession')
+      .mockRejectedValueOnce(new Error('directory rebind failed'))
+      .mockResolvedValueOnce({
+        mode: 'directory',
+        directoryPath: 'D:/',
+        activePath: 'D:/current.md',
+        entryList: [],
+      })
+
+    winInfoUtil.updateTempContent(winInfo.id, '# 旧会话未保存内容')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 旧会话未保存内容')
+    })
+
+    startWatchingMock.mockClear()
+    stopWatchingMock.mockClear()
+
+    const result = await executeTestCommand(winInfo, 'document.open-path-in-current-window', {
+      path: 'D:/next.md',
+    })
+
+    const currentSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-current-window-switch-failed',
+      path: 'D:/next.md',
+    })
+    expect(currentSnapshot.sessionId).toBe(previousSnapshot.sessionId)
+    expect(runtime.store.getSession(previousSnapshot.sessionId)).toBe(previousSession)
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/current.md')
+    expectDocumentContent(winInfo, '# 旧会话未保存内容')
+    expect(rebindWindowDirectoryFromSessionMock).toHaveBeenCalledTimes(2)
+    expect(rebindWindowDirectoryFromSessionMock).toHaveBeenNthCalledWith(1, winInfo.id, expect.objectContaining({
+      documentSource: expect.objectContaining({
+        path: 'D:/next.md',
+      }),
+    }))
+    expect(rebindWindowDirectoryFromSessionMock).toHaveBeenNthCalledWith(2, winInfo.id, previousSession)
+    expect(startWatchingMock.mock.calls.length).toBeGreaterThanOrEqual(1)
+    expect(stopWatchingMock.mock.calls.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('document.open-path-in-current-window 在 external watcher 启动失败时，必须回滚到旧 session 并返回结构化失败结果', async () => {
+    pathExistsMock.mockImplementation(async targetPath => ['D:/current.md', 'D:/next.md'].includes(targetPath))
+    readFileMock.mockImplementation(async (targetPath) => {
+      if (targetPath === 'D:/current.md') {
+        return '# 当前内容'
+      }
+      if (targetPath === 'D:/next.md') {
+        return '# 新文档内容'
+      }
+      throw new Error(`unexpected read path: ${targetPath}`)
+    })
+
+    await winInfoUtil.createNew('D:/current.md')
+
+    const runtime = getDocumentSessionRuntime()
+    const [winInfo] = listWindowRefs()
+    const previousSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    const previousSession = runtime.store.getSession(previousSnapshot.sessionId)
+
+    winInfoUtil.updateTempContent(winInfo.id, '# 旧会话未保存内容')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 旧会话未保存内容')
+    })
+
+    startWatchingMock.mockClear()
+    stopWatchingMock.mockClear()
+    startWatchingMock
+      .mockImplementationOnce(() => {
+        throw new Error('external watch start failed')
+      })
+
+    const result = await executeTestCommand(winInfo, 'document.open-path-in-current-window', {
+      path: 'D:/next.md',
+    })
+
+    const currentSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-current-window-switch-failed',
+      path: 'D:/next.md',
+    })
+    expect(currentSnapshot.sessionId).toBe(previousSnapshot.sessionId)
+    expect(runtime.store.getSession(previousSnapshot.sessionId)).toBe(previousSession)
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/current.md')
+    expectDocumentContent(winInfo, '# 旧会话未保存内容')
+    expect(startWatchingMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(stopWatchingMock.mock.calls.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('document.open-path-in-current-window 切换成功后，必须补做与 createNew 对齐的打开后磁盘对账', async () => {
+    pathExistsMock.mockImplementation(async targetPath => ['D:/current.md', 'D:/next.md'].includes(targetPath))
+    let nextReadCount = 0
+    readFileMock.mockImplementation(async (targetPath) => {
+      if (targetPath === 'D:/current.md') {
+        return '# 当前内容'
+      }
+      if (targetPath === 'D:/next.md') {
+        nextReadCount += 1
+        return nextReadCount === 1 ? '# 新文档内容' : '# 外部新内容'
+      }
+      throw new Error(`unexpected read path: ${targetPath}`)
+    })
+    getConfigMock.mockReturnValue({
+      language: 'zh-CN',
+      autoSave: [],
+      startPage: 'editor',
+      externalFileChangeStrategy: 'prompt',
+    })
+
+    await winInfoUtil.createNew('D:/current.md')
+
+    const [winInfo] = listWindowRefs()
+
+    const result = await executeTestCommand(winInfo, 'document.open-path-in-current-window', {
+      path: 'D:/next.md',
+    })
+
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(result).toEqual(expect.objectContaining({
+      ok: true,
+      reason: 'opened',
+      path: 'D:/next.md',
+    }))
+    expect(readFileMock.mock.calls.filter(call => call[0] === 'D:/next.md')).toHaveLength(2)
+    expect(snapshot.externalPrompt).toEqual({
+      visible: true,
+      version: 1,
+      localContent: '# 新文档内容',
+      externalContent: '# 外部新内容',
+      fileName: 'next.md',
+    })
+  })
+
   it('窗口关闭时也必须停止当前目录 watcher，避免旧 session 目录绑定泄漏', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')

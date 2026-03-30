@@ -556,6 +556,16 @@ function registerSessionForWindow(windowId, session) {
   }
   const { store } = ensureSessionRuntimeInitialized()
   store.createSession(session)
+  bindSessionForWindow(normalizedWindowId, session)
+}
+
+function bindSessionForWindow(windowId, session) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId || !session?.sessionId) {
+    return
+  }
+
+  const { store } = ensureSessionRuntimeInitialized()
   store.bindWindowToSession({
     windowId: normalizedWindowId,
     sessionId: session.sessionId,
@@ -968,6 +978,54 @@ function createSaveBeforeSwitchFailedResult(documentPath) {
   }
 }
 
+function createOpenCurrentWindowSwitchFailedResult(documentPath) {
+  return {
+    ok: false,
+    reason: 'open-current-window-switch-failed',
+    path: documentPath || null,
+  }
+}
+
+function assertExternalWatchStarted(watchStartResult) {
+  if (watchStartResult === false || watchStartResult?.ok === false) {
+    throw watchStartResult?.error || new Error('external watch start failed')
+  }
+}
+
+async function rollbackCurrentWindowSessionSwitch(windowId, {
+  previousSession,
+  nextSession,
+}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId || !previousSession?.sessionId) {
+    return false
+  }
+
+  const runtime = ensureSessionRuntimeInitialized()
+
+  try {
+    await stopDirectoryWatch(normalizedWindowId)
+  } catch {}
+  try {
+    stopExternalWatch(normalizedWindowId)
+  } catch {}
+
+  bindSessionForWindow(normalizedWindowId, previousSession)
+
+  if (nextSession?.sessionId && runtime.store.getSession(nextSession.sessionId)) {
+    runtime.store.destroySession(nextSession.sessionId)
+  }
+
+  try {
+    await rebindDirectoryWatchForSession(normalizedWindowId, previousSession)
+  } catch {}
+  try {
+    assertExternalWatchStarted(startExternalWatch(normalizedWindowId))
+  } catch {}
+
+  return true
+}
+
 async function switchSessionInCurrentWindow(windowId, {
   documentPath,
   content,
@@ -995,9 +1053,23 @@ async function switchSessionInCurrentWindow(windowId, {
     content,
     isRecent: false,
   })
-  registerSessionForWindow(normalizedWindowId, nextSession)
-  await rebindDirectoryWatchForSession(normalizedWindowId, nextSession)
-  startExternalWatch(normalizedWindowId)
+
+  try {
+    registerSessionForWindow(normalizedWindowId, nextSession)
+    await rebindDirectoryWatchForSession(normalizedWindowId, nextSession)
+    assertExternalWatchStarted(startExternalWatch(normalizedWindowId))
+
+    const reconcileResult = await reconcileOpenedDocumentAgainstDisk(normalizedWindowId, documentPath)
+    if (reconcileResult === false) {
+      throw new Error('open current window reconcile failed')
+    }
+  } catch {
+    await rollbackCurrentWindowSessionSwitch(normalizedWindowId, {
+      previousSession,
+      nextSession,
+    })
+    return createOpenCurrentWindowSwitchFailedResult(documentPath)
+  }
 
   if (previousSession?.sessionId) {
     runtime.store.destroySession(previousSession.sessionId)
