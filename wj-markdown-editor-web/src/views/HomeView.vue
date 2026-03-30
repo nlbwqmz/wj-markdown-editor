@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ExternalFileChangeModal from '@/components/ExternalFileChangeModal.vue'
+import FileManagerPanel from '@/components/layout/FileManagerPanel.vue'
 import {
   createHomeViewFilePanelLayoutController,
   FILE_MANAGER_PANEL_DEFAULT_WIDTH,
@@ -99,8 +100,7 @@ watch(shouldEnableFileManagerSplit, async (visible) => {
           data-testid="home-file-manager-panel-slot"
           class="h-full min-w-0 overflow-hidden b-r-1 b-r-border-primary b-r-solid"
         >
-          <!-- 当前任务仅接入壳层宿主，占位节点用于后续真实文件管理栏挂载。 -->
-          <div class="h-full w-full" />
+          <FileManagerPanel />
         </div>
         <div
           v-if="store.fileManagerPanelVisible"

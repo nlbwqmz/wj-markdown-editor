@@ -11,6 +11,9 @@ const { store } = vi.hoisted(() => ({
 }))
 
 const registeredEventHandlerMap = new Map()
+const windowNodeState = vi.hoisted(() => ({
+  sendToShow: vi.fn(),
+}))
 
 vi.mock('ant-design-vue', () => ({
   message: {},
@@ -54,6 +57,7 @@ describe('eventUtil', () => {
     store.hasNewVersion = false
     store.isMaximize = false
     store.config = {}
+    windowNodeState.sendToShow.mockReset()
     vi.clearAllMocks()
   })
 
@@ -71,5 +75,29 @@ describe('eventUtil', () => {
 
     fullScreenChangedHandler(false)
     expect(store.isFullScreen).toBe(false)
+  })
+
+  it('eventUtil.link 应把 window.effect.file-manager-directory-changed 原样转发到 eventEmit', async () => {
+    const { default: eventUtil } = await import('../eventUtil.js')
+    const { default: eventEmit } = await import('../eventEmit.js')
+    let bridgeHandler = null
+
+    window.node = {
+      sendToShow: windowNodeState.sendToShow.mockImplementation((handler) => {
+        bridgeHandler = handler
+      }),
+    }
+
+    eventUtil.link()
+    bridgeHandler({
+      event: 'window.effect.file-manager-directory-changed',
+      data: {
+        directoryPath: 'D:/docs',
+      },
+    })
+
+    expect(eventEmit.publish).toHaveBeenCalledWith('window.effect.file-manager-directory-changed', {
+      directoryPath: 'D:/docs',
+    })
   })
 })

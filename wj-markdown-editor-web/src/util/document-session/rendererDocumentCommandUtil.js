@@ -77,6 +77,23 @@ export function requestDocumentOpenPath(targetPath, options = {}) {
 }
 
 /**
+ * 请求主进程在当前窗口直接切换到指定路径。
+ *
+ * 文件管理栏在“当前窗口打开”分支下需要显式声明：
+ * 1. 目标路径
+ * 2. 切换前是否需要先保存当前脏文档
+ */
+export function requestDocumentOpenPathInCurrentWindow(targetPath, options = {}) {
+  return channelUtil.send({
+    event: 'document.open-path-in-current-window',
+    data: {
+      path: targetPath,
+      ...options,
+    },
+  })
+}
+
+/**
  * 请求主进程返回当前窗口对应的 document session snapshot。
  *
  * 导出页等只读页面不再依赖旧的兼容返回形状，
@@ -139,6 +156,7 @@ export default {
   requestDocumentEdit,
   requestDocumentOpenDialog,
   requestDocumentOpenPath,
+  requestDocumentOpenPathInCurrentWindow,
   requestDocumentSessionSnapshot,
   requestRecentClear,
   requestRecentRemove,

@@ -25,6 +25,7 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
     requestDocumentEdit,
     requestDocumentOpenDialog,
     requestDocumentOpenPath,
+    requestDocumentOpenPathInCurrentWindow,
     requestDocumentSave,
     requestDocumentSaveCopy,
     requestDocumentSessionSnapshot,
@@ -43,6 +44,9 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
   await requestDocumentEdit('# 新内容')
   await requestDocumentOpenDialog()
   await requestDocumentOpenPath('C:/docs/note.md')
+  await requestDocumentOpenPathInCurrentWindow('C:/docs/note.md', {
+    saveBeforeSwitch: true,
+  })
   await requestRecentClear()
   await requestRecentRemove('C:/docs/note.md')
   await requestDocumentSessionSnapshot()
@@ -61,6 +65,13 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
       event: 'document.open-path',
       data: {
         path: 'C:/docs/note.md',
+      },
+    },
+    {
+      event: 'document.open-path-in-current-window',
+      data: {
+        path: 'C:/docs/note.md',
+        saveBeforeSwitch: true,
       },
     },
     { event: 'recent.clear' },
