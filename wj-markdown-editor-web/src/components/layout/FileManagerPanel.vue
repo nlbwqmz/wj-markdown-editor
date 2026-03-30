@@ -50,7 +50,7 @@ function resolveEntryIconTestId(entry) {
             <span v-if="index < breadcrumbList.length - 1" class="px-1">/</span>
           </span>
         </template>
-        <span v-else>{{ emptyMessageKey }}</span>
+        <span v-else>{{ t(emptyMessageKey) }}</span>
       </div>
       <div class="flex items-center gap-1">
         <button
@@ -88,7 +88,7 @@ function resolveEntryIconTestId(entry) {
         class="file-manager-panel__empty h-full flex flex-col items-center justify-center gap-3 px-4 text-center"
       >
         <div class="max-w-full text-sm color-text-secondary">
-          {{ emptyMessageKey }}
+          {{ t(emptyMessageKey) }}
         </div>
         <button
           type="button"
@@ -134,7 +134,7 @@ function resolveEntryIconTestId(entry) {
         data-testid="file-manager-empty-state"
         class="file-manager-panel__empty h-full flex items-center justify-center px-4 text-center text-sm color-text-secondary"
       >
-        {{ emptyMessageKey }}
+        {{ t(emptyMessageKey) }}
       </div>
     </div>
   </div>
@@ -171,12 +171,16 @@ function resolveEntryIconTestId(entry) {
 }
 
 .file-manager-panel__empty-btn {
-  border: none;
+  border: 1px solid var(--wj-markdown-border-primary);
   border-radius: 999px;
   padding: 6px 12px;
-  background: #1677ff;
-  color: #fff;
+  background: var(--wj-markdown-bg-secondary);
+  color: var(--wj-markdown-text-primary);
   cursor: pointer;
+
+  &:hover {
+    background: var(--wj-markdown-bg-hover);
+  }
 }
 
 .file-manager-panel__entry {
@@ -197,8 +201,9 @@ function resolveEntryIconTestId(entry) {
   }
 
   &.is-active {
-    background: rgba(22, 119, 255, 0.12);
-    color: #1677ff;
+    background: var(--wj-markdown-bg-secondary);
+    color: var(--wj-markdown-text-primary);
+    box-shadow: inset 0 0 0 1px var(--wj-markdown-border-primary);
   }
 }
 

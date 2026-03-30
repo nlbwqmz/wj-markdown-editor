@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, reactive } from 'vue'
@@ -24,6 +26,9 @@ const fileManagerPanelState = vi.hoisted(() => {
     registeredHandlerMap,
   }
 })
+const i18nState = vi.hoisted(() => ({
+  t: vi.fn(value => `translated:${value}`),
+}))
 
 fileManagerPanelState.store = reactive(fileManagerPanelState.store)
 const mountedWrapperList = []
@@ -103,7 +108,7 @@ vi.mock('ant-design-vue', async () => {
 vi.mock('@/i18n/index.js', () => ({
   default: {
     global: {
-      t: value => value,
+      t: i18nState.t,
     },
   },
 }))
@@ -154,6 +159,7 @@ describe('fileManagerPanel 组件', () => {
     fileManagerPanelState.modalConfirm.mockReset()
     fileManagerPanelState.messageWarning.mockReset()
     fileManagerPanelState.registeredHandlerMap.clear()
+    i18nState.t.mockClear()
     fileManagerPanelState.openDecisionFactory.mockReturnValue({
       openDocument: fileManagerPanelState.openDecisionOpenDocument,
     })
@@ -175,7 +181,7 @@ describe('fileManagerPanel 组件', () => {
     mountedWrapperList.push(draftWrapper)
     await flushFileManagerPanel()
 
-    expect(draftWrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('message.fileManagerSelectDirectory')
+    expect(draftWrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerSelectDirectory')
 
     draftWrapper.unmount()
 
@@ -220,6 +226,25 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     expect(emptyWrapper.get('[data-testid="file-manager-empty-state"]').exists()).toBe(true)
+  })
+
+  it('recent-missing 父目录存在但目录为空时，仍应保持目录态并显示目录空状态文案', async () => {
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      isRecentMissing: true,
+      recentMissingPath: 'D:/docs/missing.md',
+    })
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('docs')
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerDirectoryEmpty')
+    expect(wrapper.find('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(false)
   })
 
   it('文件管理栏工具区应显示当前目录标题或面包屑', async () => {
@@ -281,6 +306,27 @@ describe('fileManagerPanel 组件', () => {
       directoryPath: 'D:/workspace',
     })
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('workspace')
+  })
+
+  it('空状态与工具区标题应使用 t(emptyMessageKey) 渲染，而不是直接显示 message key', async () => {
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      path: null,
+    })
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('translated:message.fileManagerSelectDirectory')
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerSelectDirectory')
+  })
+
+  it('文件管理栏样式应复用主题变量，不应残留亮色硬编码', async () => {
+    const source = await readFile(path.resolve(process.cwd(), 'src/components/layout/FileManagerPanel.vue'), 'utf8')
+
+    expect(source).not.toMatch(/#1677ff|#fff|rgba\(22,\s*119,\s*255,\s*0\.12\)/u)
+    expect(source).toContain('var(--wj-markdown-bg-secondary)')
+    expect(source).toContain('var(--wj-markdown-border-primary)')
   })
 })
 

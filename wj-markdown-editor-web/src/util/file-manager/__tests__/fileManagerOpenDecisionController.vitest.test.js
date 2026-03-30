@@ -42,6 +42,50 @@ describe('fileManagerOpenDecisionController', () => {
     mocked.controllerFactory = createFileManagerOpenDecisionController
   })
 
+  it('默认打开模式选择弹窗在真正取消时必须返回 cancel，且保留三选一 footer', async () => {
+    const { createDefaultPromptOpenModeChoice } = await import('../fileManagerOpenDecisionController.js')
+    let modalConfig = null
+    const prompt = createDefaultPromptOpenModeChoice(value => value, {
+      createModal: vi.fn((config) => {
+        modalConfig = config
+        return {
+          destroy: vi.fn(),
+        }
+      }),
+    })
+
+    const resultPromise = prompt()
+
+    expect(Array.isArray(modalConfig?.footer?.children)).toBe(true)
+    expect(modalConfig.footer.children).toHaveLength(3)
+
+    modalConfig.onCancel()
+
+    await expect(resultPromise).resolves.toBe('cancel')
+  })
+
+  it('默认保存选择弹窗在真正取消时必须返回 cancel，且保留三选一 footer', async () => {
+    const { createDefaultPromptSaveChoice } = await import('../fileManagerOpenDecisionController.js')
+    let modalConfig = null
+    const prompt = createDefaultPromptSaveChoice(value => value, {
+      createModal: vi.fn((config) => {
+        modalConfig = config
+        return {
+          destroy: vi.fn(),
+        }
+      }),
+    })
+
+    const resultPromise = prompt()
+
+    expect(Array.isArray(modalConfig?.footer?.children)).toBe(true)
+    expect(modalConfig.footer.children).toHaveLength(3)
+
+    modalConfig.onCancel()
+
+    await expect(resultPromise).resolves.toBe('cancel')
+  })
+
   it('点击其他 markdown 时应先返回 open-choice，再在 dirty 文档下追加 save-choice', async () => {
     const controller = createController()
 
@@ -95,6 +139,41 @@ describe('fileManagerOpenDecisionController', () => {
       stageList: [],
     })
     expect(mocked.requestDocumentOpenPath).not.toHaveBeenCalled()
+    expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
+  })
+
+  it('打开模式选择取消时应返回 open-cancelled，且不发起任何打开调度', async () => {
+    mocked.promptOpenModeChoice.mockResolvedValue('cancel')
+    const controller = createController()
+
+    const result = await controller.openDocument('/tmp/next.md', {
+      currentPath: '/tmp/current.md',
+      isDirty: false,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-cancelled',
+      stageList: ['open-choice'],
+    })
+    expect(mocked.requestDocumentOpenPath).not.toHaveBeenCalled()
+    expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
+  })
+
+  it('保存选择取消时应返回 open-cancelled，且不发起当前窗口切换', async () => {
+    mocked.promptSaveChoice.mockResolvedValue('cancel')
+    const controller = createController()
+
+    const result = await controller.openDocument('/tmp/next.md', {
+      currentPath: '/tmp/current.md',
+      isDirty: true,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-cancelled',
+      stageList: ['open-choice', 'save-choice'],
+    })
     expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
   })
 })

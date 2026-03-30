@@ -76,7 +76,8 @@ function resolveDirectoryTargetFromSnapshot(snapshot) {
   if (snapshot?.isRecentMissing === true && snapshot?.recentMissingPath) {
     return {
       directoryPath: getPathDirname(snapshot.recentMissingPath),
-      emptyMessageKey: RECENT_MISSING_EMPTY_MESSAGE_KEY,
+      emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+      missingDirectoryEmptyMessageKey: RECENT_MISSING_EMPTY_MESSAGE_KEY,
     }
   }
 
@@ -297,7 +298,7 @@ export function createFileManagerPanelController({
       })
 
       if (!nextState) {
-        directoryState.value = createEmptyDirectoryState(target.emptyMessageKey)
+        directoryState.value = createEmptyDirectoryState(target.missingDirectoryEmptyMessageKey || target.emptyMessageKey)
         return directoryState.value
       }
 

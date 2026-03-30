@@ -1,4 +1,5 @@
-import { message, Modal } from 'ant-design-vue'
+import { Button, message, Modal } from 'ant-design-vue'
+import { h } from 'vue'
 import {
   requestDocumentOpenPath,
   requestDocumentOpenPathInCurrentWindow,
@@ -29,15 +30,17 @@ function appendStageList(result, stageList) {
   }
 }
 
-function createBinaryChoiceModal({
+function createThreeWayChoiceModal({
   title,
   content,
-  okText,
+  primaryText,
+  secondaryText,
   cancelText,
   createModal = config => Modal.confirm(config),
 }) {
   return new Promise((resolve) => {
     let resolved = false
+    let modalInstance = null
     const settle = (value) => {
       if (resolved) {
         return
@@ -47,15 +50,39 @@ function createBinaryChoiceModal({
       resolve(value)
     }
 
-    createModal({
+    modalInstance = createModal({
       title,
       content,
-      okText,
-      cancelText,
       centered: true,
-      onOk: () => {
-        settle('ok')
-      },
+      footer: h('div', {
+        style: {
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: '8px',
+          paddingTop: '8px',
+        },
+      }, [
+        h(Button, {
+          onClick: () => {
+            modalInstance?.destroy?.()
+            settle('cancel')
+          },
+        }, () => cancelText),
+        h(Button, {
+          onClick: () => {
+            modalInstance?.destroy?.()
+            settle('secondary')
+          },
+        }, () => secondaryText),
+        h(Button, {
+          type: 'primary',
+          onClick: () => {
+            modalInstance?.destroy?.()
+            settle('primary')
+          },
+        }, () => primaryText),
+      ]),
       onCancel: () => {
         settle('cancel')
       },
@@ -63,29 +90,53 @@ function createBinaryChoiceModal({
   })
 }
 
-function createDefaultPromptOpenModeChoice(t) {
+export function createDefaultPromptOpenModeChoice(t, {
+  createModal = config => Modal.confirm(config),
+} = {}) {
   return async () => {
-    const choice = await createBinaryChoiceModal({
+    const choice = await createThreeWayChoiceModal({
       title: t('message.fileManagerOpenModeTitle'),
       content: t('message.fileManagerOpenModeTip'),
-      okText: t('message.fileManagerOpenInCurrentWindow'),
-      cancelText: t('message.fileManagerOpenInNewWindow'),
+      primaryText: t('message.fileManagerOpenInCurrentWindow'),
+      secondaryText: t('message.fileManagerOpenInNewWindow'),
+      cancelText: t('cancelText'),
+      createModal,
     })
 
-    return choice === 'ok' ? 'current-window' : 'new-window'
+    if (choice === 'primary') {
+      return 'current-window'
+    }
+
+    if (choice === 'secondary') {
+      return 'new-window'
+    }
+
+    return 'cancel'
   }
 }
 
-function createDefaultPromptSaveChoice(t) {
+export function createDefaultPromptSaveChoice(t, {
+  createModal = config => Modal.confirm(config),
+} = {}) {
   return async () => {
-    const choice = await createBinaryChoiceModal({
+    const choice = await createThreeWayChoiceModal({
       title: t('message.fileManagerSaveBeforeSwitchTitle'),
       content: t('message.theCurrentFileIsNotSaved'),
-      okText: t('message.fileManagerSaveBeforeSwitch'),
-      cancelText: t('message.fileManagerDiscardAndSwitch'),
+      primaryText: t('message.fileManagerSaveBeforeSwitch'),
+      secondaryText: t('message.fileManagerDiscardAndSwitch'),
+      cancelText: t('cancelText'),
+      createModal,
     })
 
-    return choice === 'ok' ? 'save-before-switch' : 'discard-switch'
+    if (choice === 'primary') {
+      return 'save-before-switch'
+    }
+
+    if (choice === 'secondary') {
+      return 'discard-switch'
+    }
+
+    return 'cancel'
   }
 }
 
@@ -178,5 +229,7 @@ export function createFileManagerOpenDecisionController({
 }
 
 export default {
+  createDefaultPromptOpenModeChoice,
+  createDefaultPromptSaveChoice,
   createFileManagerOpenDecisionController,
 }
