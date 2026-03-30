@@ -110,6 +110,19 @@ describe('fileManagerOpenDecisionController', () => {
     expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
   })
 
+  it('新窗口分支底层返回兼容 false 时，应原样保留 false 结果', async () => {
+    mocked.requestDocumentOpenPath.mockResolvedValue(false)
+    const controller = createController()
+
+    const result = await controller.openDocument('/tmp/next.md', {
+      currentPath: '/tmp/current.md',
+      isDirty: false,
+      openMode: 'new-window',
+    })
+
+    expect(result).toBe(false)
+  })
+
   it('目标文件已在其他窗口打开时应给出统一提示', async () => {
     mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
       ok: true,

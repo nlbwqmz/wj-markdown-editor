@@ -230,6 +230,30 @@ describe('layoutMenu 文件管理栏接线', () => {
     expect(mocked.requestDocumentOpenPath).not.toHaveBeenCalled()
   })
 
+  it('最近历史经统一打开决策后，控制器返回兼容 false 时仍应触发 recentFileNotExists', async () => {
+    store.recentList = [{
+      path: 'D:/docs/missing.md',
+      name: 'missing.md',
+    }]
+    mocked.openDecisionOpenDocument.mockResolvedValue(false)
+
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    const recentMenu = findMenuItemByLabel(getMenuChildren(wrapper, 0), '最近')
+    const recentItem = findMenuItemByLabel(recentMenu.children, 'missing.md')
+
+    await recentItem.click()
+
+    expect(mocked.recentFileNotExists).toHaveBeenCalledWith('D:/docs/missing.md')
+  })
+
   it('视图菜单应提供文件管理栏开关，并在运行时状态切换后更新文案和动作', async () => {
     const wrapper = shallowMount(LayoutMenu, {
       global: {
@@ -269,5 +293,7 @@ describe('layoutMenu 文件管理栏接线', () => {
     expect(zhCN.topMenu.view.children.hideFileManager).toBe('隐藏文件管理栏')
     expect(enUS.topMenu.view.children.showFileManager).toBe('Show file manager')
     expect(enUS.topMenu.view.children.hideFileManager).toBe('Hide file manager')
+    expect(zhCN.message.onlyMarkdownFilesCanBeOpened).toBe('只能打开 Markdown（.md / .markdown）文件。')
+    expect(enUS.message.onlyMarkdownFilesCanBeOpened).toBe('Only Markdown (.md / .markdown) files can be opened.')
   })
 })

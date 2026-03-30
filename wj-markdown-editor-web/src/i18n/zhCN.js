@@ -298,7 +298,7 @@ export default {
   message: {
     anchorTargetDoesNotExist: '锚点目标位置不存在',
     theFileDoesNotExist: '文件不存在',
-    onlyMarkdownFilesCanBeOpened: '只能打开 Markdown（.md）文件。',
+    onlyMarkdownFilesCanBeOpened: '只能打开 Markdown（.md / .markdown）文件。',
     openMarkdownFileFailed: '打开 Markdown 文件失败，请检查文件权限或占用状态。',
     invalidLocalResourceLink: '当前本地资源链接无效，无法定位到对应文件。',
     theFileIsBeingSaved: '正在保存文件',

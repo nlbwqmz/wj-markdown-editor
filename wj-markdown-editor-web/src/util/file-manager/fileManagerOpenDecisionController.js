@@ -64,6 +64,10 @@ export function resolveDocumentOpenCurrentPath(snapshot) {
 }
 
 function appendStageList(result, stageList) {
+  if (result === false) {
+    return false
+  }
+
   if (result && typeof result === 'object') {
     return {
       ...result,
@@ -73,7 +77,7 @@ function appendStageList(result, stageList) {
 
   return {
     ok: Boolean(result),
-    reason: result === false ? 'dispatch-failed' : 'opened',
+    reason: result ? 'opened' : 'dispatch-failed',
     stageList,
   }
 }
