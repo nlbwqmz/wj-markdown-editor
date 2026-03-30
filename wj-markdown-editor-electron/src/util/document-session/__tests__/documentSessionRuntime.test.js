@@ -322,13 +322,6 @@ describe('documentSessionRuntime', () => {
       showOpenDialogSync: vi.fn(),
       showSaveDialogSync: vi.fn(),
     }
-    const clipboardApi = {
-      writeText: vi.fn(),
-      writeImage: vi.fn(),
-    }
-    const nativeImageApi = {
-      createFromPath: vi.fn(),
-    }
     const fsModule = {
       pathExists: vi.fn(),
       copyFile: vi.fn(),
@@ -364,8 +357,6 @@ describe('documentSessionRuntime', () => {
       sendToRenderer: vi.fn(),
       showItemInFolder,
       dialogApi,
-      clipboardApi,
-      nativeImageApi,
       fsModule,
       fetchImpl,
     })
@@ -400,10 +391,9 @@ describe('documentSessionRuntime', () => {
       store,
       showItemInFolder,
       dialogApi,
-      clipboardApi,
-      nativeImageApi,
       fsModule,
       fetchImpl,
+      resolveWindowById: expect.any(Function),
     })
     expect(composition.store).toBe(store)
     expect(composition.saveCoordinator).toBe(saveCoordinator)

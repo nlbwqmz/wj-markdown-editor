@@ -379,10 +379,9 @@ describe('windowLifecycleService runtime 初始化时机', () => {
         store: expect.any(Object),
         showItemInFolder: shellShowItemInFolder,
         dialogApi,
-        clipboardApi,
-        nativeImageApi,
         fsModule,
         fetchImpl,
+        resolveWindowById: expect.any(Function),
       }))
     } finally {
       globalThis.fetch = previousFetch

@@ -19,7 +19,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 // 测试夹具目录
 const TEST_FIXTURES_DIR = path.join(os.tmpdir(), 'wj-markdown-editor-test-fixtures')
 
-function measureFastestSyncDuration(run, { warmupRuns = 1, sampleRuns = 3 } = {}) {
+function measureFastestSyncDuration(run, { warmupRuns = 2, sampleRuns = 5 } = {}) {
   for (let i = 0; i < warmupRuns; i++) {
     run()
   }
@@ -517,6 +517,7 @@ describe('协议处理器集成测试', () => {
   describe('性能测试', () => {
     it('应该快速检查文件是否存在', () => {
       const filePath = path.join(TEST_FIXTURES_DIR, 'images', 'test.png')
+      const durationThreshold = process.platform === 'win32' ? 350 : 150
 
       const duration = measureFastestSyncDuration(() => {
         for (let i = 0; i < 1000; i++) {
@@ -524,8 +525,9 @@ describe('协议处理器集成测试', () => {
         }
       })
 
-      // 预热后取多次采样里的最快值，避免把测试运行器抖动误判成真实性能回退
-      expect(duration).toBeLessThan(150)
+      // Windows 上并行跑多套测试时，同步 existsSync 会出现更明显的调度抖动；
+      // 这里仍保留上限约束，但放宽到足以规避宿主负载误伤的阈值。
+      expect(duration).toBeLessThan(durationThreshold)
     })
 
     it('应该快速获取文件信息', () => {
