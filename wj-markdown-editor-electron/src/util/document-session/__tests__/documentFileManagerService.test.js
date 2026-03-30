@@ -304,6 +304,75 @@ describe('documentFileManagerService', () => {
     expect(result.directoryState.entryList.map(item => item.name)).toEqual(['current.md', 'draft-note.md'])
   })
 
+  it.each([
+    '../escape-dir',
+    'nested/dir',
+    'nested\\dir',
+    '.',
+    '..',
+  ])('createFolder/createMarkdown 遇到非法名称 "%s" 时必须拒绝创建', async (name) => {
+    const rootDirectory = await createTempDirectory()
+    const directoryPath = path.join(rootDirectory, 'docs')
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    await fs.ensureDir(directoryPath)
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: `invalid-entry-${name}`,
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    await expect(service.createFolder({
+      windowId: 9,
+      name,
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'invalid-file-manager-entry-name',
+    })
+    await expect(service.createMarkdown({
+      windowId: 9,
+      name,
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'invalid-file-manager-entry-name',
+    })
+
+    expect(await fs.readdir(directoryPath)).toEqual(['current.md'])
+  })
+
+  it('createFolder/createMarkdown 遇到 ../ 时必须 fail-closed，不能越出当前目录', async () => {
+    const rootDirectory = await createTempDirectory()
+    const directoryPath = path.join(rootDirectory, 'docs')
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    const escapedDirectoryPath = path.join(rootDirectory, 'escape-dir')
+    const escapedMarkdownPath = path.join(rootDirectory, 'escape-note.md')
+    await fs.ensureDir(directoryPath)
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'escape-entry-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    await service.createFolder({
+      windowId: 9,
+      name: '../escape-dir',
+    })
+    await service.createMarkdown({
+      windowId: 9,
+      name: '../escape-note',
+    })
+
+    expect(await fs.pathExists(escapedDirectoryPath)).toBe(false)
+    expect(await fs.pathExists(escapedMarkdownPath)).toBe(false)
+  })
+
   it('同一窗口切换目录后，再次读取目录状态应返回新目录', async () => {
     const currentDirectory = await createTempDirectory()
     const nextDirectory = await createTempDirectory()

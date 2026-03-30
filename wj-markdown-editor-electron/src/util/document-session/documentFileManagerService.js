@@ -26,6 +26,26 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim() !== ''
 }
 
+function normalizeFileManagerEntryName(name) {
+  return typeof name === 'string' ? name.trim() : ''
+}
+
+function isInvalidFileManagerEntryName(name) {
+  const normalizedName = normalizeFileManagerEntryName(name)
+
+  return !normalizedName
+    || normalizedName === '.'
+    || normalizedName === '..'
+    || /[\\/]/u.test(normalizedName)
+}
+
+function createInvalidFileManagerEntryNameResult() {
+  return {
+    ok: false,
+    reason: 'invalid-file-manager-entry-name',
+  }
+}
+
 function appendMarkdownExtension(targetPath) {
   if (!isNonEmptyString(targetPath)) {
     return null
@@ -226,16 +246,26 @@ export function createDocumentFileManagerService({
   }
 
   async function createFolder({ windowId, name }) {
+    const nextName = normalizeFileManagerEntryName(name)
+    if (isInvalidFileManagerEntryName(nextName)) {
+      return createInvalidFileManagerEntryNameResult()
+    }
+
     const directoryPath = await resolveCurrentDirectoryPath(windowId)
     if (!directoryPath) {
       return createEmptyDirectoryState()
     }
 
-    await fsModule.ensureDir(path.join(directoryPath, name))
+    await fsModule.ensureDir(path.join(directoryPath, nextName))
     return await getDirectoryState({ windowId })
   }
 
   async function createMarkdown({ windowId, name }) {
+    const nextName = normalizeFileManagerEntryName(name)
+    if (isInvalidFileManagerEntryName(nextName)) {
+      return createInvalidFileManagerEntryNameResult()
+    }
+
     const directoryPath = await resolveCurrentDirectoryPath(windowId)
     if (!directoryPath) {
       return {
@@ -244,7 +274,7 @@ export function createDocumentFileManagerService({
       }
     }
 
-    const nextPath = appendMarkdownExtension(path.join(directoryPath, name))
+    const nextPath = appendMarkdownExtension(path.join(directoryPath, nextName))
     await fsModule.writeFile(nextPath, '', 'utf8')
 
     return {

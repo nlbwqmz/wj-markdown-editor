@@ -299,6 +299,7 @@ export default {
     anchorTargetDoesNotExist: 'The anchor target does not exist.',
     theFileDoesNotExist: 'The file does not exist.',
     onlyMarkdownFilesCanBeOpened: 'Only Markdown (.md / .markdown) files can be opened.',
+    fileManagerInvalidEntryName: 'The name cannot contain path separators or be "." / "..".',
     fileAlreadyOpenedInOtherWindow: 'The target file is already open in another window. Switched to that window for you.',
     openMarkdownFileFailed: 'Failed to open the Markdown file. Please check file permissions or whether it is in use.',
     invalidLocalResourceLink: 'The local resource link is invalid and cannot be resolved to a file.',

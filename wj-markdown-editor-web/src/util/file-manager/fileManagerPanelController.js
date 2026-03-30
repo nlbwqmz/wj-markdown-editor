@@ -16,6 +16,7 @@ import {
 
 const DRAFT_EMPTY_MESSAGE_KEY = 'message.fileManagerSelectDirectory'
 const DIRECTORY_EMPTY_MESSAGE_KEY = 'message.fileManagerDirectoryEmpty'
+const INVALID_ENTRY_NAME_MESSAGE_KEY = 'message.fileManagerInvalidEntryName'
 
 function isWindowsDriveRootPath(path) {
   return /^[A-Za-z]:\/$/u.test(path)
@@ -102,6 +103,26 @@ function getPathBasename(path) {
 
 function isMarkdownPath(path) {
   return /\.(?:md|markdown)$/iu.test(path || '')
+}
+
+function normalizeFileManagerEntryName(name) {
+  return typeof name === 'string' ? name.trim() : ''
+}
+
+function isInvalidFileManagerEntryName(name) {
+  const normalizedName = normalizeFileManagerEntryName(name)
+
+  return !normalizedName
+    || normalizedName === '.'
+    || normalizedName === '..'
+    || /[\\/]/u.test(normalizedName)
+}
+
+function createInvalidFileManagerEntryNameResult() {
+  return {
+    ok: false,
+    reason: 'invalid-file-manager-entry-name',
+  }
 }
 
 function resolveDirectoryTargetFromSnapshot(snapshot) {
@@ -280,10 +301,14 @@ function createDefaultOpenNameInputModal({
           'onUpdate:value': value => inputValue.value = value,
         }),
         onOk: async () => {
-          const nextValue = trim ? inputValue.value.trim() : inputValue.value
+          const nextValue = trim ? normalizeFileManagerEntryName(inputValue.value) : inputValue.value
           if (!nextValue) {
             showWarning(emptyMessageKey)
             return Promise.reject(new Error('file-manager-entry-name-empty'))
+          }
+          if (isInvalidFileManagerEntryName(nextValue)) {
+            showWarning(INVALID_ENTRY_NAME_MESSAGE_KEY)
+            return Promise.reject(new Error('file-manager-entry-name-invalid'))
           }
 
           settle(nextValue)
@@ -433,14 +458,24 @@ export function createFileManagerPanelController({
   }
 
   async function createFolder(name) {
-    const nextName = typeof name === 'string' ? name : await requestEntryName('folder')
+    const nextName = typeof name === 'string'
+      ? normalizeFileManagerEntryName(name)
+      : await requestEntryName('folder')
     if (!nextName) {
       return null
+    }
+    if (isInvalidFileManagerEntryName(nextName)) {
+      showWarningMessage(INVALID_ENTRY_NAME_MESSAGE_KEY)
+      return createInvalidFileManagerEntryNameResult()
     }
 
     return await runLatestDirectoryStateRequest(() => requestCreateFolder({
       name: nextName,
     }), (result) => {
+      if (result?.ok === false) {
+        return result
+      }
+
       if (result) {
         commitDirectoryState(result?.directoryState || result, {
           emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
@@ -452,14 +487,24 @@ export function createFileManagerPanelController({
   }
 
   async function createMarkdown(name) {
-    const nextName = typeof name === 'string' ? name : await requestEntryName('markdown')
+    const nextName = typeof name === 'string'
+      ? normalizeFileManagerEntryName(name)
+      : await requestEntryName('markdown')
     if (!nextName) {
       return null
+    }
+    if (isInvalidFileManagerEntryName(nextName)) {
+      showWarningMessage(INVALID_ENTRY_NAME_MESSAGE_KEY)
+      return createInvalidFileManagerEntryNameResult()
     }
 
     return await runLatestDirectoryStateRequest(() => requestCreateMarkdown({
       name: nextName,
     }), async (result) => {
+      if (result?.ok === false) {
+        return result
+      }
+
       if (result?.directoryState) {
         commitDirectoryState(result.directoryState, {
           emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,

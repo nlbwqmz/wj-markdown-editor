@@ -611,6 +611,53 @@ describe('fileManagerPanelController', () => {
     scope.stop()
   })
 
+  it('新建文件夹输入非法名称时应立即提示，且不发起创建命令', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    const openNameInputModal = vi.fn().mockResolvedValue('../escape-dir')
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+        openNameInputModal,
+      })
+    })
+
+    await controller.requestCreateFolderFromInput()
+
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerInvalidEntryName')
+    expect(fileManagerPanelState.requestFileManagerCreateFolder).not.toHaveBeenCalled()
+
+    scope.stop()
+  })
+
+  it('新建 Markdown 输入非法名称时应立即提示，且不发起创建与打开链路', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    const openNameInputModal = vi.fn().mockResolvedValue('nested/draft-note')
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+        openNameInputModal,
+      })
+    })
+
+    await controller.requestCreateMarkdownFromInput()
+
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerInvalidEntryName')
+    expect(fileManagerPanelState.requestFileManagerCreateMarkdown).not.toHaveBeenCalled()
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
+
+    scope.stop()
+  })
+
   it('新建文件夹成功后应刷新当前目录列表', async () => {
     const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
     const openNameInputModal = vi.fn().mockResolvedValue('assets')
@@ -672,6 +719,42 @@ describe('fileManagerPanelController', () => {
     expect(fileManagerPanelState.requestFileManagerCreateFolder).toHaveBeenCalledWith({
       name: 'assets',
     })
+
+    scope.stop()
+  })
+
+  it('electron 返回 invalid-file-manager-entry-name 时，不应清空当前目录状态', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerCreateFolder.mockResolvedValue({
+      ok: false,
+      reason: 'invalid-file-manager-entry-name',
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const result = await controller.createFolder('assets')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid-file-manager-entry-name',
+    })
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
 
     scope.stop()
   })
@@ -750,6 +833,43 @@ describe('fileManagerPanelController', () => {
         source: 'file-panel-create-markdown',
       }),
     )
+
+    scope.stop()
+  })
+
+  it('createMarkdown 收到非法名称失败时不应继续走打开链路，且应保留当前目录状态', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerCreateMarkdown.mockResolvedValue({
+      ok: false,
+      reason: 'invalid-file-manager-entry-name',
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const result = await controller.createMarkdown('draft-note')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid-file-manager-entry-name',
+    })
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
 
     scope.stop()
   })
