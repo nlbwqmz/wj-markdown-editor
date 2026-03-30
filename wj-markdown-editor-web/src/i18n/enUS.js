@@ -102,6 +102,8 @@ export default {
         switchView: 'Switch',
         enterFullScreen: 'Enter Full Screen',
         exitFullScreen: 'Exit Full Screen',
+        showFileManager: 'Show file manager',
+        hideFileManager: 'Hide file manager',
       },
     },
     help: {

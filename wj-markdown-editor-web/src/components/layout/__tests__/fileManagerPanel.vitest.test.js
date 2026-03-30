@@ -383,6 +383,86 @@ describe('fileManagerPanel 组件', () => {
     expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
   })
 
+  it('点击工具区新建文件夹按钮后，应走创建文件夹链路', async () => {
+    let folderDialogConfig = null
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    }))
+    fileManagerPanelState.requestFileManagerCreateFolder.mockResolvedValue({
+      directoryState: createDirectoryState({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
+        ],
+      }),
+    })
+    fileManagerPanelState.modalConfirm.mockImplementation((config) => {
+      folderDialogConfig = config
+      return {
+        destroy: vi.fn(),
+      }
+    })
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('[data-testid="file-manager-create-folder"]').trigger('click')
+    folderDialogConfig.content.props['onUpdate:value']('assets')
+    await folderDialogConfig.onOk()
+    await flushFileManagerPanel()
+
+    expect(folderDialogConfig.title).toBe('translated:message.fileManagerCreateFolder')
+    expect(fileManagerPanelState.requestFileManagerCreateFolder).toHaveBeenCalledWith({
+      name: 'assets',
+    })
+    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('docs')
+  })
+
+  it('点击工具区新建 Markdown 按钮后，应继续走统一打开决策链路', async () => {
+    let markdownDialogConfig = null
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    }))
+    fileManagerPanelState.requestFileManagerCreateMarkdown.mockResolvedValue({
+      path: 'D:/docs/draft-note.md',
+      directoryState: createDirectoryState({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'draft-note.md', path: 'D:/docs/draft-note.md', kind: 'markdown' },
+        ],
+      }),
+    })
+    fileManagerPanelState.modalConfirm.mockImplementation((config) => {
+      markdownDialogConfig = config
+      return {
+        destroy: vi.fn(),
+      }
+    })
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('[data-testid="file-manager-create-markdown"]').trigger('click')
+    markdownDialogConfig.content.props['onUpdate:value']('draft-note.md')
+    await markdownDialogConfig.onOk()
+    await flushFileManagerPanel()
+
+    expect(markdownDialogConfig.title).toBe('translated:message.fileManagerCreateMarkdown')
+    expect(fileManagerPanelState.requestFileManagerCreateMarkdown).toHaveBeenCalledWith({
+      name: 'draft-note.md',
+    })
+    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith(
+      'D:/docs/draft-note.md',
+      expect.objectContaining({
+        source: 'file-panel-create-markdown',
+      }),
+    )
+  })
+
   it('draft 空状态应提供选择目录入口，并在选择成功后切换到该目录', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       path: null,

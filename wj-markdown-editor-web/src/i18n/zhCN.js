@@ -102,6 +102,8 @@ export default {
         switchView: '切换',
         enterFullScreen: '进入全屏',
         exitFullScreen: '退出全屏',
+        showFileManager: '显示文件管理栏',
+        hideFileManager: '隐藏文件管理栏',
       },
     },
     help: {

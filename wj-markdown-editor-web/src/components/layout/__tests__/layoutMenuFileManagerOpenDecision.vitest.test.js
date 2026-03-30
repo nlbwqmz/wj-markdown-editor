@@ -13,6 +13,17 @@ const mocked = vi.hoisted(() => ({
   openDecisionFactory: vi.fn(),
   recentFileNotExists: vi.fn(),
 }))
+const translationMap = {
+  'topMenu.file.name': '文件',
+  'topMenu.file.children.recentFiles.name': '最近',
+  'topMenu.file.children.recentFiles.noHistory': '暂无最近历史',
+  'topMenu.view.name': '视图',
+  'topMenu.view.children.switchView': '切换',
+  'topMenu.view.children.enterFullScreen': '进入全屏',
+  'topMenu.view.children.exitFullScreen': '退出全屏',
+  'topMenu.view.children.showFileManager': '显示文件管理栏',
+  'topMenu.view.children.hideFileManager': '隐藏文件管理栏',
+}
 
 const store = reactive({
   isFullScreen: false,
@@ -45,7 +56,7 @@ const store = reactive({
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: key => key,
+    t: key => translationMap[key] ?? key,
   }),
 }))
 
@@ -206,7 +217,7 @@ describe('layoutMenu 文件管理栏接线', () => {
       },
     })
 
-    const recentMenu = findMenuItemByLabel(getMenuChildren(wrapper, 0), 'topMenu.file.children.recentFiles.name')
+    const recentMenu = findMenuItemByLabel(getMenuChildren(wrapper, 0), '最近')
     const recentItem = findMenuItemByLabel(recentMenu.children, 'history.md')
 
     await recentItem.click()
@@ -232,7 +243,7 @@ describe('layoutMenu 文件管理栏接线', () => {
     const initialToggleItem = getMenuChildren(wrapper, 1)[2]
     const initialLabel = extractTextFromNode(initialToggleItem.label)
 
-    expect(initialLabel).not.toBe('')
+    expect(initialLabel).toBe('隐藏文件管理栏')
 
     await initialToggleItem.click()
 
@@ -243,10 +254,20 @@ describe('layoutMenu 文件管理栏接线', () => {
     const nextToggleItem = getMenuChildren(wrapper, 1)[2]
     const nextLabel = extractTextFromNode(nextToggleItem.label)
 
-    expect(nextLabel).not.toBe(initialLabel)
+    expect(nextLabel).toBe('显示文件管理栏')
 
     await nextToggleItem.click()
 
     expect(store.setFileManagerPanelVisible).toHaveBeenLastCalledWith(true)
+  })
+
+  it('中英文文案应补齐文件管理栏显示与隐藏的运行时 key', async () => {
+    const zhCN = (await import('@/i18n/zhCN.js')).default
+    const enUS = (await import('@/i18n/enUS.js')).default
+
+    expect(zhCN.topMenu.view.children.showFileManager).toBe('显示文件管理栏')
+    expect(zhCN.topMenu.view.children.hideFileManager).toBe('隐藏文件管理栏')
+    expect(enUS.topMenu.view.children.showFileManager).toBe('Show file manager')
+    expect(enUS.topMenu.view.children.hideFileManager).toBe('Hide file manager')
   })
 })
