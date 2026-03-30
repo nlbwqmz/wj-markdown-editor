@@ -41,6 +41,20 @@ export function createDocumentDirectoryWatchService({
   const windowStateMap = new Map()
   let nextBindingToken = 0
 
+  function getBoundWindowState(windowId, bindingToken) {
+    const normalizedWindowId = normalizeWindowId(windowId)
+    if (!normalizedWindowId) {
+      return null
+    }
+
+    const windowState = windowStateMap.get(normalizedWindowId)
+    if (!windowState || windowState.bindingToken !== bindingToken) {
+      return null
+    }
+
+    return windowState
+  }
+
   function getWindowDirectoryBinding(windowId) {
     const normalizedWindowId = normalizeWindowId(windowId)
     if (!normalizedWindowId) {
@@ -60,15 +74,15 @@ export function createDocumentDirectoryWatchService({
 
   function scheduleWindowRescan(windowId, bindingToken) {
     const normalizedWindowId = normalizeWindowId(windowId)
-    const windowState = normalizedWindowId ? windowStateMap.get(normalizedWindowId) : null
-    if (!windowState || windowState.bindingToken !== bindingToken) {
+    const windowState = getBoundWindowState(normalizedWindowId, bindingToken)
+    if (!windowState) {
       return
     }
 
     clearWindowTimer(windowState)
     windowState.debounceTimer = setTimeout(() => {
-      const currentWindowState = windowStateMap.get(normalizedWindowId)
-      if (!currentWindowState || currentWindowState.bindingToken !== bindingToken) {
+      const currentWindowState = getBoundWindowState(normalizedWindowId, bindingToken)
+      if (!currentWindowState) {
         return
       }
 
@@ -81,6 +95,9 @@ export function createDocumentDirectoryWatchService({
             directoryPath: currentWindowState.directoryPath,
             activePath: currentWindowState.activePath,
           })
+          if (!getBoundWindowState(normalizedWindowId, bindingToken)) {
+            return
+          }
           await publishDirectoryChanged({
             windowId: normalizedWindowId,
             directoryState,

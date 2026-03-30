@@ -12,6 +12,20 @@ function createWatchHandleRecord(directoryPath) {
   }
 }
 
+function createDeferred() {
+  let resolve
+  let reject
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
 async function createServiceContext({
   existingDirectorySet = ['D:/docs', 'D:/docs/next'],
 } = {}) {
@@ -258,6 +272,46 @@ describe('documentDirectoryWatchService', () => {
         activePath: 'D:/docs/current.md',
       })
       expect(reasonList).toEqual([])
+    })
+  })
+
+  it('旧 binding 的 in-flight rescan 在窗口已 rebind 后不得再发布旧目录状态', async () => {
+    vi.useFakeTimers()
+    const { service, readDirectoryState, publishDirectoryChanged, watchRecordList } = await createServiceContext()
+    const pendingRescan = createDeferred()
+    const staleDirectoryState = {
+      mode: 'directory',
+      directoryPath: 'D:/docs',
+      activePath: 'D:/docs/current.md',
+      entryList: [],
+    }
+    readDirectoryState.mockReturnValueOnce(pendingRescan.promise)
+
+    await service.ensureWindowDirectory(9, 'D:/docs', {
+      activePath: 'D:/docs/current.md',
+    })
+
+    watchRecordList[0].listener('change', 'current.md')
+    await vi.advanceTimersByTimeAsync(120)
+
+    expect(readDirectoryState).toHaveBeenCalledWith({
+      directoryPath: 'D:/docs',
+      activePath: 'D:/docs/current.md',
+    })
+    expect(publishDirectoryChanged).not.toHaveBeenCalled()
+
+    await service.rebindWindowDirectory(9, 'D:/docs/next', {
+      activePath: null,
+    })
+
+    pendingRescan.resolve(staleDirectoryState)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(publishDirectoryChanged).not.toHaveBeenCalled()
+    expect(service.getWindowDirectoryBinding(9)).toEqual({
+      directoryPath: 'D:/docs/next',
+      activePath: null,
     })
   })
 })
