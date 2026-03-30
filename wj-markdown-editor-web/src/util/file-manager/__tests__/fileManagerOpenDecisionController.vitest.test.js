@@ -4,6 +4,7 @@ const mocked = vi.hoisted(() => ({
   requestDocumentOpenPath: vi.fn(),
   requestDocumentOpenPathInCurrentWindow: vi.fn(),
   showInfoMessage: vi.fn(),
+  showErrorMessage: vi.fn(),
   promptOpenModeChoice: vi.fn(),
   promptSaveChoice: vi.fn(),
 }))
@@ -14,6 +15,7 @@ function createController(options = {}) {
     requestDocumentOpenPath: mocked.requestDocumentOpenPath,
     requestDocumentOpenPathInCurrentWindow: mocked.requestDocumentOpenPathInCurrentWindow,
     showInfoMessage: mocked.showInfoMessage,
+    showErrorMessage: mocked.showErrorMessage,
     promptOpenModeChoice: mocked.promptOpenModeChoice,
     promptSaveChoice: mocked.promptSaveChoice,
     ...options,
@@ -25,6 +27,7 @@ describe('fileManagerOpenDecisionController', () => {
     mocked.requestDocumentOpenPath.mockReset()
     mocked.requestDocumentOpenPathInCurrentWindow.mockReset()
     mocked.showInfoMessage.mockReset()
+    mocked.showErrorMessage.mockReset()
     mocked.promptOpenModeChoice.mockReset()
     mocked.promptSaveChoice.mockReset()
     mocked.requestDocumentOpenPath.mockResolvedValue({
@@ -136,6 +139,46 @@ describe('fileManagerOpenDecisionController', () => {
     })
 
     expect(mocked.showInfoMessage).toHaveBeenCalledWith('message.fileAlreadyOpenedInOtherWindow')
+  })
+
+  it('当前窗口切换返回 save-before-switch-failed 时，必须提示用户失败原因', async () => {
+    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
+      ok: false,
+      reason: 'save-before-switch-failed',
+    })
+    const controller = createController()
+
+    const result = await controller.openDocument('/tmp/next.md', {
+      currentPath: '/tmp/current.md',
+      isDirty: true,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'save-before-switch-failed',
+      stageList: ['open-choice', 'save-choice', 'dispatch'],
+    })
+    expect(mocked.showErrorMessage).toHaveBeenCalledWith('message.fileManagerSaveBeforeSwitchFailed')
+  })
+
+  it('当前窗口切换返回 open-current-window-switch-failed 时，必须提示用户失败原因', async () => {
+    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
+      ok: false,
+      reason: 'open-current-window-switch-failed',
+    })
+    const controller = createController()
+
+    const result = await controller.openDocument('/tmp/next.md', {
+      currentPath: '/tmp/current.md',
+      isDirty: false,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-current-window-switch-failed',
+      stageList: ['open-choice', 'dispatch'],
+    })
+    expect(mocked.showErrorMessage).toHaveBeenCalledWith('message.fileManagerOpenCurrentWindowFailed')
   })
 
   it('当前文件重复打开时应直接返回 noop-current-file，不发起任何调度', async () => {

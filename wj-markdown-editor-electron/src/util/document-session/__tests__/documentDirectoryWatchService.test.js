@@ -164,7 +164,7 @@ describe('documentDirectoryWatchService', () => {
     })
   })
 
-  it('已有旧绑定时，切换到绑定瞬间失败的新目录不应丢失旧 binding，也不应关闭旧 watcher', async () => {
+  it('已有旧绑定时，切换到绑定瞬间失败的新目录必须显式失败，且不应丢失旧 binding 或关闭旧 watcher', async () => {
     const { service, fsWatch, watchRecordList } = await createServiceContext()
 
     await service.ensureWindowDirectory(9, 'D:/docs', {
@@ -176,10 +176,12 @@ describe('documentDirectoryWatchService', () => {
 
     await expect(service.rebindWindowDirectory(9, 'D:/docs/missing', {
       activePath: null,
-    })).resolves.toEqual({
+    })).resolves.toEqual(expect.objectContaining({
+      ok: false,
+      reason: 'directory-watch-rebind-failed',
       directoryPath: 'D:/docs',
       activePath: 'D:/docs/current.md',
-    })
+    }))
 
     expect(watchRecordList[0].watchHandle.close).not.toHaveBeenCalled()
     expect(service.getWindowDirectoryBinding(9)).toEqual({

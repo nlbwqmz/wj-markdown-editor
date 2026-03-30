@@ -34,12 +34,22 @@ function createDirectoryWatchServiceStub(windowId) {
         directoryPath,
         activePath: options.activePath ?? null,
       })
+      return {
+        ok: true,
+        directoryPath,
+        activePath: options.activePath ?? null,
+      }
     }),
     rebindWindowDirectory: vi.fn(async (nextWindowId, directoryPath, options = {}) => {
       windowBindingMap.set(String(nextWindowId), {
         directoryPath,
         activePath: options.activePath ?? null,
       })
+      return {
+        ok: true,
+        directoryPath,
+        activePath: options.activePath ?? null,
+      }
     }),
     clearWindowDirectory: vi.fn(async (nextWindowId) => {
       windowBindingMap.delete(String(nextWindowId))
@@ -400,7 +410,34 @@ describe('documentFileManagerService', () => {
     }))
   })
 
-  it('openDirectory 命中新目录 watcher 建立失败时不应 reject，也不应清空旧目录状态', async () => {
+  it('getDirectoryState 在首次 ensureWindowDirectory 绑定失败时必须显式失败，不能把普通目录状态当成功返回', async () => {
+    const currentDirectory = await createTempDirectory()
+    const currentFilePath = path.join(currentDirectory, 'current.md')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service, directoryWatchService } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'initial-bind-failed-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+    directoryWatchService.ensureWindowDirectory.mockResolvedValueOnce({
+      ok: false,
+      reason: 'directory-watch-rebind-failed',
+      directoryPath: null,
+      activePath: null,
+    })
+
+    await expect(service.getDirectoryState({ windowId: 9 })).resolves.toEqual({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+
+    expect(directoryWatchService.getWindowDirectoryBinding(9)).toBeNull()
+  })
+
+  it('openDirectory 命中新目录 watcher 建立失败时必须显式失败，且不应清空旧目录状态', async () => {
     const currentDirectory = await createTempDirectory()
     const nextDirectory = await createTempDirectory()
     const currentFilePath = path.join(currentDirectory, 'current.md')
@@ -432,15 +469,75 @@ describe('documentFileManagerService', () => {
     await expect(service.openDirectory({
       windowId: 9,
       directoryPath: nextDirectory,
-    })).resolves.toEqual(expect.objectContaining({
-      directoryPath: currentDirectory,
-      activePath: currentFilePath,
-    }))
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
 
     expect(oldWatchHandle.close).not.toHaveBeenCalled()
     await expect(service.getDirectoryState({ windowId: 9 })).resolves.toEqual(expect.objectContaining({
       directoryPath: currentDirectory,
       activePath: currentFilePath,
     }))
+  })
+
+  it('createFolder 在底层 getDirectoryState 因 watcher 首绑失败返回 open-directory-watch-failed 时必须显式失败', async () => {
+    const directoryPath = await createTempDirectory()
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service, directoryWatchService } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'create-folder-watch-failed-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+    directoryWatchService.ensureWindowDirectory.mockResolvedValueOnce({
+      ok: false,
+      reason: 'directory-watch-rebind-failed',
+      directoryPath: null,
+      activePath: null,
+    })
+
+    await expect(service.createFolder({
+      windowId: 9,
+      name: 'assets',
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+
+    expect(await fs.pathExists(path.join(directoryPath, 'assets'))).toBe(false)
+  })
+
+  it('createMarkdown 在底层 getDirectoryState 因 watcher 首绑失败返回 open-directory-watch-failed 时必须显式失败', async () => {
+    const directoryPath = await createTempDirectory()
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service, directoryWatchService } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'create-markdown-watch-failed-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+    directoryWatchService.ensureWindowDirectory.mockResolvedValueOnce({
+      ok: false,
+      reason: 'directory-watch-rebind-failed',
+      directoryPath: null,
+      activePath: null,
+    })
+
+    await expect(service.createMarkdown({
+      windowId: 9,
+      name: 'draft-note',
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+
+    expect(await fs.pathExists(path.join(directoryPath, 'draft-note.md'))).toBe(false)
   })
 })

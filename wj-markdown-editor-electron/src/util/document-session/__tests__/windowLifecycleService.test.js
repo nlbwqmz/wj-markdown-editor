@@ -2668,7 +2668,12 @@ describe('windowLifecycleService 生命周期 facade', () => {
         },
       ],
     }
-    const rebindWindowDirectoryFromSessionMock = vi.spyOn(runtime.directoryWatchService, 'rebindWindowDirectoryFromSession').mockResolvedValue(reboundDirectoryState)
+    const rebindWindowDirectoryFromSessionMock = vi.spyOn(runtime.directoryWatchService, 'rebindWindowDirectoryFromSession').mockResolvedValue({
+      ok: true,
+      directoryState: reboundDirectoryState,
+      directoryPath: 'D:/',
+      activePath: 'D:/next.md',
+    })
 
     const [winInfo] = listWindowRefs()
     const previousSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
@@ -2831,12 +2836,20 @@ describe('windowLifecycleService 生命周期 facade', () => {
     const previousSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
     const previousSession = runtime.store.getSession(previousSnapshot.sessionId)
     const rebindWindowDirectoryFromSessionMock = vi.spyOn(runtime.directoryWatchService, 'rebindWindowDirectoryFromSession')
-      .mockRejectedValueOnce(new Error('directory rebind failed'))
       .mockResolvedValueOnce({
-        mode: 'directory',
+        ok: false,
+        reason: 'directory-watch-rebind-failed',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        directoryState: {
+          mode: 'directory',
+          directoryPath: 'D:/',
+          activePath: 'D:/current.md',
+          entryList: [],
+        },
         directoryPath: 'D:/',
         activePath: 'D:/current.md',
-        entryList: [],
       })
 
     winInfoUtil.updateTempContent(winInfo.id, '# 旧会话未保存内容')

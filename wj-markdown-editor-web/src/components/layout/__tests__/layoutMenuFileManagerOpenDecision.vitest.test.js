@@ -8,9 +8,12 @@ const mocked = vi.hoisted(() => ({
   channelSend: vi.fn(),
   shortcutKeyHandler: vi.fn(),
   requestDocumentOpenPath: vi.fn(),
+  requestDocumentOpenPathInCurrentWindow: vi.fn(),
   requestRecentClear: vi.fn(),
   openDecisionOpenDocument: vi.fn(),
   openDecisionFactory: vi.fn(),
+  showInfoMessage: vi.fn(),
+  showErrorMessage: vi.fn(),
   recentFileNotExists: vi.fn(),
 }))
 const translationMap = {
@@ -95,6 +98,7 @@ vi.mock('@/util/shortcutKeyUtil.js', () => ({
 
 vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
   requestDocumentOpenPath: mocked.requestDocumentOpenPath,
+  requestDocumentOpenPathInCurrentWindow: mocked.requestDocumentOpenPathInCurrentWindow,
   requestRecentClear: mocked.requestRecentClear,
   isDocumentOpenMissingResult: result => result === false || result?.reason === 'recent-missing' || result?.reason === 'open-target-missing',
 }))
@@ -182,9 +186,12 @@ describe('layoutMenu 文件管理栏接线', () => {
     mocked.channelSend.mockReset()
     mocked.shortcutKeyHandler.mockReset()
     mocked.requestDocumentOpenPath.mockReset()
+    mocked.requestDocumentOpenPathInCurrentWindow.mockReset()
     mocked.requestRecentClear.mockReset()
     mocked.openDecisionOpenDocument.mockReset()
     mocked.openDecisionFactory.mockReset()
+    mocked.showInfoMessage.mockReset()
+    mocked.showErrorMessage.mockReset()
     mocked.recentFileNotExists.mockReset()
     mocked.openDecisionFactory.mockReturnValue({
       openDocument: mocked.openDecisionOpenDocument,
@@ -254,6 +261,108 @@ describe('layoutMenu 文件管理栏接线', () => {
     expect(mocked.recentFileNotExists).toHaveBeenCalledWith('D:/docs/missing.md')
   })
 
+  it('最近历史经统一打开决策后，save-before-switch-failed 时必须提示保存失败', async () => {
+    const { createFileManagerOpenDecisionController } = await vi.importActual('@/util/file-manager/fileManagerOpenDecisionController.js')
+    store.recentList = [{
+      path: 'D:/docs/history.md',
+      name: 'history.md',
+    }]
+    store.documentSessionSnapshot = {
+      dirty: true,
+      displayPath: 'D:/docs/current.md',
+      resourceContext: {
+        documentPath: 'D:/docs/current.md',
+      },
+    }
+    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
+      ok: false,
+      reason: 'save-before-switch-failed',
+    })
+    mocked.openDecisionFactory.mockImplementation(options => createFileManagerOpenDecisionController({
+      ...options,
+      requestDocumentOpenPath: mocked.requestDocumentOpenPath,
+      requestDocumentOpenPathInCurrentWindow: mocked.requestDocumentOpenPathInCurrentWindow,
+      showInfoMessage: mocked.showInfoMessage,
+      showErrorMessage: mocked.showErrorMessage,
+      promptOpenModeChoice: vi.fn().mockResolvedValue('current-window'),
+      promptSaveChoice: vi.fn().mockResolvedValue('save-before-switch'),
+    }))
+
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    const recentMenu = findMenuItemByLabel(getMenuChildren(wrapper, 0), '最近')
+    const recentItem = findMenuItemByLabel(recentMenu.children, 'history.md')
+
+    await recentItem.click()
+    await Promise.resolve()
+    await nextTick()
+
+    expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('D:/docs/history.md', {
+      saveBeforeSwitch: true,
+      source: 'recent-list',
+    })
+    expect(mocked.showErrorMessage).toHaveBeenCalledWith('message.fileManagerSaveBeforeSwitchFailed')
+    expect(mocked.recentFileNotExists).not.toHaveBeenCalled()
+  })
+
+  it('最近历史经统一打开决策后，open-current-window-switch-failed 时必须提示切换失败', async () => {
+    const { createFileManagerOpenDecisionController } = await vi.importActual('@/util/file-manager/fileManagerOpenDecisionController.js')
+    store.recentList = [{
+      path: 'D:/docs/history.md',
+      name: 'history.md',
+    }]
+    store.documentSessionSnapshot = {
+      dirty: false,
+      displayPath: 'D:/docs/current.md',
+      resourceContext: {
+        documentPath: 'D:/docs/current.md',
+      },
+    }
+    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
+      ok: false,
+      reason: 'open-current-window-switch-failed',
+    })
+    mocked.openDecisionFactory.mockImplementation(options => createFileManagerOpenDecisionController({
+      ...options,
+      requestDocumentOpenPath: mocked.requestDocumentOpenPath,
+      requestDocumentOpenPathInCurrentWindow: mocked.requestDocumentOpenPathInCurrentWindow,
+      showInfoMessage: mocked.showInfoMessage,
+      showErrorMessage: mocked.showErrorMessage,
+      promptOpenModeChoice: vi.fn().mockResolvedValue('current-window'),
+      promptSaveChoice: vi.fn().mockResolvedValue('save-before-switch'),
+    }))
+
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    const recentMenu = findMenuItemByLabel(getMenuChildren(wrapper, 0), '最近')
+    const recentItem = findMenuItemByLabel(recentMenu.children, 'history.md')
+
+    await recentItem.click()
+    await Promise.resolve()
+    await nextTick()
+
+    expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('D:/docs/history.md', {
+      saveBeforeSwitch: false,
+      source: 'recent-list',
+    })
+    expect(mocked.showErrorMessage).toHaveBeenCalledWith('message.fileManagerOpenCurrentWindowFailed')
+    expect(mocked.recentFileNotExists).not.toHaveBeenCalled()
+  })
+
   it('视图菜单应提供文件管理栏开关，并在运行时状态切换后更新文案和动作', async () => {
     const wrapper = shallowMount(LayoutMenu, {
       global: {
@@ -297,5 +406,23 @@ describe('layoutMenu 文件管理栏接线', () => {
     expect(enUS.message.onlyMarkdownFilesCanBeOpened).toBe('Only Markdown (.md / .markdown) files can be opened.')
     expect(zhCN.message.fileAlreadyOpenedInOtherWindow).toBe('目标文件已在其他窗口打开，已为你切换到对应窗口。')
     expect(enUS.message.fileAlreadyOpenedInOtherWindow).toBe('The target file is already open in another window. Switched to that window for you.')
+    expect(zhCN.message.fileManagerOpenModeTitle).toBeTruthy()
+    expect(zhCN.message.fileManagerOpenModeTip).toBeTruthy()
+    expect(zhCN.message.fileManagerOpenInCurrentWindow).toBeTruthy()
+    expect(zhCN.message.fileManagerOpenInNewWindow).toBeTruthy()
+    expect(zhCN.message.fileManagerSaveBeforeSwitchTitle).toBeTruthy()
+    expect(zhCN.message.fileManagerSaveBeforeSwitch).toBeTruthy()
+    expect(zhCN.message.fileManagerDiscardAndSwitch).toBeTruthy()
+    expect(zhCN.message.fileManagerSaveBeforeSwitchFailed).toBeTruthy()
+    expect(zhCN.message.fileManagerOpenCurrentWindowFailed).toBeTruthy()
+    expect(enUS.message.fileManagerOpenModeTitle).toBeTruthy()
+    expect(enUS.message.fileManagerOpenModeTip).toBeTruthy()
+    expect(enUS.message.fileManagerOpenInCurrentWindow).toBeTruthy()
+    expect(enUS.message.fileManagerOpenInNewWindow).toBeTruthy()
+    expect(enUS.message.fileManagerSaveBeforeSwitchTitle).toBeTruthy()
+    expect(enUS.message.fileManagerSaveBeforeSwitch).toBeTruthy()
+    expect(enUS.message.fileManagerDiscardAndSwitch).toBeTruthy()
+    expect(enUS.message.fileManagerSaveBeforeSwitchFailed).toBeTruthy()
+    expect(enUS.message.fileManagerOpenCurrentWindowFailed).toBeTruthy()
   })
 })

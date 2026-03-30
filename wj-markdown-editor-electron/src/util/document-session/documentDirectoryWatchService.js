@@ -31,6 +31,46 @@ function stopWindowWatch(windowState) {
   }
 }
 
+function createWindowDirectoryBindingSnapshot(windowState) {
+  if (!windowState) {
+    return {
+      directoryPath: null,
+      activePath: null,
+    }
+  }
+
+  return {
+    directoryPath: windowState.directoryPath,
+    activePath: windowState.activePath,
+  }
+}
+
+function createDirectoryRebindFailureResult(windowState, error) {
+  return {
+    ok: false,
+    reason: 'directory-watch-rebind-failed',
+    ...createWindowDirectoryBindingSnapshot(windowState),
+    error: error || null,
+  }
+}
+
+function createDirectoryRebindSuccessResult(binding) {
+  return {
+    ok: true,
+    directoryPath: binding?.directoryPath || null,
+    activePath: binding?.activePath || null,
+  }
+}
+
+function isDirectoryBindingMatched(bindingResult, expectedBinding) {
+  if (bindingResult?.ok !== true) {
+    return false
+  }
+
+  return bindingResult.directoryPath === expectedBinding?.directoryPath
+    && (bindingResult.activePath || null) === (expectedBinding?.activePath || null)
+}
+
 export function createDocumentDirectoryWatchService({
   fsModule = fs,
   fsWatch: directoryWatch = fsWatch,
@@ -141,13 +181,8 @@ export function createDocumentDirectoryWatchService({
 
     try {
       watchHandle = createWatchHandle(normalizedWindowId, directoryPath, bindingToken)
-    } catch {
-      return currentWindowState
-        ? {
-            directoryPath: currentWindowState.directoryPath,
-            activePath: currentWindowState.activePath,
-          }
-        : null
+    } catch (error) {
+      return createDirectoryRebindFailureResult(currentWindowState, error)
     }
 
     nextBindingToken = bindingToken
@@ -163,7 +198,7 @@ export function createDocumentDirectoryWatchService({
       bindingToken,
     })
 
-    return getWindowDirectoryBinding(normalizedWindowId)
+    return createDirectoryRebindSuccessResult(getWindowDirectoryBinding(normalizedWindowId))
   }
 
   async function ensureWindowDirectory(windowId, directoryPath, options = {}) {
@@ -175,7 +210,7 @@ export function createDocumentDirectoryWatchService({
     const currentWindowState = windowStateMap.get(normalizedWindowId)
     if (currentWindowState?.directoryPath === directoryPath) {
       currentWindowState.activePath = options.activePath ?? null
-      return getWindowDirectoryBinding(normalizedWindowId)
+      return createDirectoryRebindSuccessResult(getWindowDirectoryBinding(normalizedWindowId))
     }
 
     return await rebindWindowDirectory(normalizedWindowId, directoryPath, options)
@@ -188,13 +223,37 @@ export function createDocumentDirectoryWatchService({
     })
     if (!directoryState.directoryPath) {
       await stopWindowDirectory(windowId)
-      return directoryState
+      return {
+        ok: true,
+        directoryState,
+        directoryPath: null,
+        activePath: null,
+      }
     }
 
-    await rebindWindowDirectory(windowId, directoryState.directoryPath, {
+    const bindingResult = await rebindWindowDirectory(windowId, directoryState.directoryPath, {
       activePath: directoryState.activePath,
     })
-    return directoryState
+    if (!isDirectoryBindingMatched(bindingResult, {
+      directoryPath: directoryState.directoryPath,
+      activePath: directoryState.activePath,
+    })) {
+      return {
+        ok: false,
+        reason: 'directory-watch-rebind-failed',
+        directoryState,
+        directoryPath: bindingResult?.directoryPath || null,
+        activePath: bindingResult?.activePath || null,
+        error: bindingResult?.error || null,
+      }
+    }
+
+    return {
+      ok: true,
+      directoryState,
+      directoryPath: bindingResult.directoryPath,
+      activePath: bindingResult.activePath,
+    }
   }
 
   return {

@@ -377,6 +377,18 @@ export function createFileManagerPanelController({
     return commitDirectoryState(nextState, options)
   }
 
+  function resolveDirectoryFailureResult(nextState) {
+    if (nextState?.ok !== false) {
+      return null
+    }
+
+    if (nextState.reason === 'open-directory-watch-failed') {
+      showWarningMessage('message.fileManagerOpenDirectoryFailed')
+    }
+
+    return nextState
+  }
+
   async function runLatestDirectoryStateRequest(requester, onResolved) {
     latestDirectoryStateRequestId += 1
     const requestId = latestDirectoryStateRequestId
@@ -406,6 +418,11 @@ export function createFileManagerPanelController({
     return await runLatestDirectoryStateRequest(() => requestDirectoryState({
       directoryPath: target.directoryPath,
     }), (nextState) => {
+      const failureResult = resolveDirectoryFailureResult(nextState)
+      if (failureResult) {
+        return failureResult
+      }
+
       if (!nextState) {
         return commitEmptyDirectoryState(
           Object.prototype.hasOwnProperty.call(target, 'missingDirectoryEmptyMessageKey')
@@ -428,6 +445,11 @@ export function createFileManagerPanelController({
     return await runLatestDirectoryStateRequest(() => requestOpenDirectory({
       directoryPath: targetPath,
     }), (nextState) => {
+      const failureResult = resolveDirectoryFailureResult(nextState)
+      if (failureResult) {
+        return failureResult
+      }
+
       if (!nextState) {
         return commitEmptyDirectoryState(DIRECTORY_EMPTY_MESSAGE_KEY)
       }
@@ -472,8 +494,9 @@ export function createFileManagerPanelController({
     return await runLatestDirectoryStateRequest(() => requestCreateFolder({
       name: nextName,
     }), (result) => {
-      if (result?.ok === false) {
-        return result
+      const failureResult = resolveDirectoryFailureResult(result)
+      if (failureResult) {
+        return failureResult
       }
 
       if (result) {
@@ -501,7 +524,13 @@ export function createFileManagerPanelController({
     return await runLatestDirectoryStateRequest(() => requestCreateMarkdown({
       name: nextName,
     }), async (result) => {
-      if (result?.ok === false) {
+      const failureResult = resolveDirectoryFailureResult(result)
+      if (failureResult) {
+        return failureResult
+      }
+
+      const nestedFailureResult = resolveDirectoryFailureResult(result?.directoryState)
+      if (nestedFailureResult) {
         return result
       }
 

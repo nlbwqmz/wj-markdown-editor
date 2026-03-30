@@ -501,6 +501,27 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerSelectDirectory')
   })
 
+  it('中英文文案应补齐文件管理栏真实使用到的 key', async () => {
+    const zhCN = (await import('@/i18n/zhCN.js')).default
+    const enUS = (await import('@/i18n/enUS.js')).default
+
+    expect(zhCN.message.fileManagerSelectDirectory).toBeTruthy()
+    expect(zhCN.message.fileManagerDirectoryEmpty).toBeTruthy()
+    expect(zhCN.message.fileManagerCreateFolder).toBeTruthy()
+    expect(zhCN.message.fileManagerCreateMarkdown).toBeTruthy()
+    expect(zhCN.message.fileManagerFolderNameRequired).toBeTruthy()
+    expect(zhCN.message.fileManagerMarkdownNameRequired).toBeTruthy()
+    expect(zhCN.message.fileManagerOpenDirectoryFailed).toBeTruthy()
+
+    expect(enUS.message.fileManagerSelectDirectory).toBeTruthy()
+    expect(enUS.message.fileManagerDirectoryEmpty).toBeTruthy()
+    expect(enUS.message.fileManagerCreateFolder).toBeTruthy()
+    expect(enUS.message.fileManagerCreateMarkdown).toBeTruthy()
+    expect(enUS.message.fileManagerFolderNameRequired).toBeTruthy()
+    expect(enUS.message.fileManagerMarkdownNameRequired).toBeTruthy()
+    expect(enUS.message.fileManagerOpenDirectoryFailed).toBeTruthy()
+  })
+
   it('文件管理栏样式应复用主题变量，不应残留亮色硬编码', async () => {
     const source = await readFile(path.resolve(process.cwd(), 'src/components/layout/FileManagerPanel.vue'), 'utf8')
 
@@ -759,6 +780,106 @@ describe('fileManagerPanelController', () => {
     scope.stop()
   })
 
+  it('createFolder 收到顶层 open-directory-watch-failed 时，必须保留旧目录状态并提示失败', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerCreateFolder.mockResolvedValue({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const result = await controller.createFolder('assets')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerOpenDirectoryFailed')
+
+    scope.stop()
+  })
+
+  it('renderer 收到 open-directory-watch-failed 时，必须保留旧目录状态并提示失败', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerOpenDirectory.mockResolvedValue({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const result = await controller.openDirectory('D:/other')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerOpenDirectoryFailed')
+
+    scope.stop()
+  })
+
+  it('初次 reloadDirectoryStateFromSnapshot 收到 open-directory-watch-failed 时，必须保持空状态并提示失败', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+      })
+    })
+
+    await flushFileManagerPanel()
+
+    expect(controller.directoryPath.value).toBeNull()
+    expect(controller.entryList.value).toEqual([])
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerOpenDirectoryFailed')
+
+    scope.stop()
+  })
+
   it('新建 Markdown 成功后应复用统一打开决策控制器', async () => {
     const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
     const openNameInputModal = vi.fn().mockResolvedValue('draft-note.md')
@@ -870,6 +991,88 @@ describe('fileManagerPanelController', () => {
     expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
     expect(controller.directoryPath.value).toBe('D:/docs')
     expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+
+    scope.stop()
+  })
+
+  it('createMarkdown 收到顶层 open-directory-watch-failed 时，必须保留旧目录状态、提示失败且不继续走打开链路', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerCreateMarkdown.mockResolvedValue({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const result = await controller.createMarkdown('draft-note')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerOpenDirectoryFailed')
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
+
+    scope.stop()
+  })
+
+  it('createMarkdown 收到 nested open-directory-watch-failed 时，必须保留旧目录状态、提示失败且不继续走打开链路', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerCreateMarkdown.mockResolvedValue({
+      path: 'D:/docs/draft-note.md',
+      directoryState: {
+        ok: false,
+        reason: 'open-directory-watch-failed',
+      },
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const result = await controller.createMarkdown('draft-note')
+
+    expect(result).toEqual({
+      path: 'D:/docs/draft-note.md',
+      directoryState: {
+        ok: false,
+        reason: 'open-directory-watch-failed',
+      },
+    })
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerOpenDirectoryFailed')
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
 
     scope.stop()
   })

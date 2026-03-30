@@ -206,6 +206,7 @@ export function createFileManagerOpenDecisionController({
   promptOpenModeChoice = createDefaultPromptOpenModeChoice(t),
   promptSaveChoice = createDefaultPromptSaveChoice(t),
   showInfoMessage = messageKey => message.info(t(messageKey)),
+  showErrorMessage = messageKey => message.error(t(messageKey)),
 } = {}) {
   async function openDocument(targetPath, options = {}) {
     const stageList = []
@@ -271,6 +272,12 @@ export function createFileManagerOpenDecisionController({
     })
     if (dispatchResult?.reason === 'focused-existing-window') {
       showInfoMessage('message.fileAlreadyOpenedInOtherWindow')
+    }
+    if (dispatchResult?.reason === 'save-before-switch-failed') {
+      showErrorMessage('message.fileManagerSaveBeforeSwitchFailed')
+    }
+    if (dispatchResult?.reason === 'open-current-window-switch-failed') {
+      showErrorMessage('message.fileManagerOpenCurrentWindowFailed')
     }
     return appendStageList(dispatchResult, stageList)
   }

@@ -598,6 +598,48 @@ async function stopDirectoryWatch(windowId) {
   return true
 }
 
+function normalizeDirectoryWatchRebindResult(result) {
+  if (!result) {
+    return result
+  }
+
+  if (result.ok === true || result.ok === false) {
+    return result
+  }
+
+  return {
+    ok: true,
+    directoryState: result,
+    directoryPath: result.directoryPath || null,
+    activePath: result.activePath || null,
+  }
+}
+
+function isDirectoryWatchRebindMatched(result) {
+  const directoryState = result?.directoryState || null
+  if (!directoryState) {
+    return true
+  }
+
+  return (result?.directoryPath || null) === (directoryState.directoryPath || null)
+    && (result?.activePath || null) === (directoryState.activePath || null)
+}
+
+function createDirectoryWatchRebindFailureResult({
+  directoryState = null,
+  bindingResult = null,
+  error = null,
+} = {}) {
+  return {
+    ok: false,
+    reason: 'directory-watch-rebind-failed',
+    directoryState,
+    directoryPath: bindingResult?.directoryPath || null,
+    activePath: bindingResult?.activePath || null,
+    error: bindingResult?.error || error || null,
+  }
+}
+
 async function rebindDirectoryWatchForSession(windowId, session) {
   const normalizedWindowId = normalizeWindowId(windowId)
   if (!normalizedWindowId || !session) {
@@ -610,28 +652,62 @@ async function rebindDirectoryWatchForSession(windowId, session) {
     return null
   }
 
-  let directoryState = null
+  let rebindResult = null
   if (typeof directoryWatchService.rebindWindowDirectoryFromSession === 'function') {
-    directoryState = await directoryWatchService.rebindWindowDirectoryFromSession(normalizedWindowId, session)
+    rebindResult = normalizeDirectoryWatchRebindResult(
+      await directoryWatchService.rebindWindowDirectoryFromSession(normalizedWindowId, session),
+    )
   } else if (typeof runtime.fileManagerService?.resolveDirectoryStateFromSession === 'function') {
-    directoryState = await runtime.fileManagerService.resolveDirectoryStateFromSession(session)
+    const directoryState = await runtime.fileManagerService.resolveDirectoryStateFromSession(session)
     if (!directoryState?.directoryPath) {
       await stopDirectoryWatch(normalizedWindowId)
+      rebindResult = {
+        ok: true,
+        directoryState,
+        directoryPath: null,
+        activePath: null,
+      }
     } else {
-      await directoryWatchService.rebindWindowDirectory?.(normalizedWindowId, directoryState.directoryPath, {
+      const bindingResult = await directoryWatchService.rebindWindowDirectory?.(normalizedWindowId, directoryState.directoryPath, {
         activePath: directoryState.activePath,
       })
+      rebindResult = (bindingResult?.ok === true && isDirectoryWatchRebindMatched({
+        ...bindingResult,
+        directoryState,
+      }))
+        ? {
+            ok: true,
+            directoryState,
+            directoryPath: bindingResult.directoryPath || null,
+            activePath: bindingResult.activePath || null,
+          }
+        : createDirectoryWatchRebindFailureResult({
+            directoryState,
+            bindingResult,
+          })
     }
   }
 
-  if (directoryState) {
-    runtime.windowBridge.publishFileManagerDirectoryChanged?.({
-      windowId: normalizedWindowId,
-      directoryState,
+  if (!rebindResult) {
+    return null
+  }
+
+  if (rebindResult.ok !== true || !isDirectoryWatchRebindMatched(rebindResult)) {
+    return createDirectoryWatchRebindFailureResult({
+      directoryState: rebindResult.directoryState || null,
+      bindingResult: rebindResult,
+      error: rebindResult.error || null,
     })
   }
 
-  return directoryState
+  if (rebindResult.directoryState) {
+    runtime.windowBridge.publishFileManagerDirectoryChanged?.({
+      windowId: normalizedWindowId,
+      directoryState: rebindResult.directoryState,
+    })
+  }
+
+  return rebindResult
 }
 
 function stopExternalWatch(windowId) {
@@ -1056,7 +1132,10 @@ async function switchSessionInCurrentWindow(windowId, {
 
   try {
     registerSessionForWindow(normalizedWindowId, nextSession)
-    await rebindDirectoryWatchForSession(normalizedWindowId, nextSession)
+    const directoryRebindResult = await rebindDirectoryWatchForSession(normalizedWindowId, nextSession)
+    if (directoryRebindResult?.ok === false) {
+      throw directoryRebindResult.error || new Error(directoryRebindResult.reason || 'directory watch rebind failed')
+    }
     assertExternalWatchStarted(startExternalWatch(normalizedWindowId))
 
     const reconcileResult = await reconcileOpenedDocumentAgainstDisk(normalizedWindowId, documentPath)

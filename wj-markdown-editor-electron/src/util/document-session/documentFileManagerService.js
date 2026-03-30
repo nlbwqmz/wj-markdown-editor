@@ -180,6 +180,29 @@ function resolveDirectoryClearer(directoryWatchService) {
   return null
 }
 
+function isDirectoryBindingMatched(bindingResult, {
+  directoryPath,
+  activePath = null,
+}) {
+  if (bindingResult?.ok !== true) {
+    return false
+  }
+
+  return bindingResult.directoryPath === directoryPath
+    && (bindingResult.activePath || null) === (activePath || null)
+}
+
+function createOpenDirectoryWatchFailedResult() {
+  return {
+    ok: false,
+    reason: 'open-directory-watch-failed',
+  }
+}
+
+function isFileManagerFailureResult(result) {
+  return result?.ok === false
+}
+
 export function createDocumentFileManagerService({
   store,
   fsModule = fs,
@@ -220,15 +243,32 @@ export function createDocumentFileManagerService({
       return directoryState
     }
 
-    await directoryWatchService?.ensureWindowDirectory?.(windowId, directoryState.directoryPath, {
-      activePath: directoryState.activePath,
-    })
+    const ensureWindowDirectory = directoryWatchService?.ensureWindowDirectory
+    if (typeof ensureWindowDirectory === 'function') {
+      const bindingResult = await ensureWindowDirectory(windowId, directoryState.directoryPath, {
+        activePath: directoryState.activePath,
+      })
+      if (!isDirectoryBindingMatched(bindingResult, {
+        directoryPath: directoryState.directoryPath,
+        activePath: directoryState.activePath,
+      })) {
+        return createOpenDirectoryWatchFailedResult()
+      }
+    }
+
     return directoryState
   }
 
   async function resolveCurrentDirectoryPath(windowId) {
     const directoryState = await getDirectoryState({ windowId })
-    return directoryState.directoryPath || null
+    if (isFileManagerFailureResult(directoryState)) {
+      return directoryState
+    }
+
+    return {
+      ok: true,
+      directoryPath: directoryState.directoryPath || null,
+    }
   }
 
   async function openDirectory({ windowId, directoryPath }) {
@@ -239,9 +279,16 @@ export function createDocumentFileManagerService({
       ? currentDocumentPath
       : null
 
-    await directoryWatchService?.rebindWindowDirectory?.(windowId, directoryPath, {
+    const bindingResult = await directoryWatchService?.rebindWindowDirectory?.(windowId, directoryPath, {
       activePath,
     })
+    if (!isDirectoryBindingMatched(bindingResult, {
+      directoryPath,
+      activePath,
+    })) {
+      return createOpenDirectoryWatchFailedResult()
+    }
+
     return await getDirectoryState({ windowId })
   }
 
@@ -251,7 +298,12 @@ export function createDocumentFileManagerService({
       return createInvalidFileManagerEntryNameResult()
     }
 
-    const directoryPath = await resolveCurrentDirectoryPath(windowId)
+    const directoryPathResult = await resolveCurrentDirectoryPath(windowId)
+    if (isFileManagerFailureResult(directoryPathResult)) {
+      return directoryPathResult
+    }
+
+    const directoryPath = directoryPathResult.directoryPath || null
     if (!directoryPath) {
       return createEmptyDirectoryState()
     }
@@ -266,7 +318,12 @@ export function createDocumentFileManagerService({
       return createInvalidFileManagerEntryNameResult()
     }
 
-    const directoryPath = await resolveCurrentDirectoryPath(windowId)
+    const directoryPathResult = await resolveCurrentDirectoryPath(windowId)
+    if (isFileManagerFailureResult(directoryPathResult)) {
+      return directoryPathResult
+    }
+
+    const directoryPath = directoryPathResult.directoryPath || null
     if (!directoryPath) {
       return {
         path: null,
