@@ -32,6 +32,7 @@ const loadURLMock = vi.fn(() => Promise.resolve())
 const loadFileMock = vi.fn(() => Promise.resolve())
 let webContentsId = 1
 let createIdIndex = 1
+let nextWindowFullScreen = false
 
 function createDeferred() {
   let resolve
@@ -54,12 +55,36 @@ vi.mock('electron', () => {
       this.onceListeners = new Map()
       this.closeEvents = []
       this.minimized = false
+      this.maximized = false
+      this.fullScreen = nextWindowFullScreen
+      this.alwaysOnTop = false
       this.destroyed = false
+      const webContentsListeners = new Map()
+      const webContentsOnceListeners = new Map()
       this.webContents = {
         id: webContentsId++,
         send: vi.fn(),
         setWindowOpenHandler: vi.fn(),
         openDevTools: vi.fn(),
+        on: vi.fn((eventName, listener) => {
+          const listenerList = webContentsListeners.get(eventName) || []
+          listenerList.push(listener)
+          webContentsListeners.set(eventName, listenerList)
+          return this.webContents
+        }),
+        once: vi.fn((eventName, listener) => {
+          const listenerList = webContentsOnceListeners.get(eventName) || []
+          listenerList.push(listener)
+          webContentsOnceListeners.set(eventName, listenerList)
+          return this.webContents
+        }),
+        emit: (eventName, ...args) => {
+          const listenerList = [...(webContentsListeners.get(eventName) || [])]
+          const onceListenerList = [...(webContentsOnceListeners.get(eventName) || [])]
+          webContentsOnceListeners.delete(eventName)
+          listenerList.forEach(listener => listener(...args))
+          onceListenerList.forEach(listener => listener(...args))
+        },
       }
       browserWindowInstances.push(this)
     }
@@ -107,14 +132,34 @@ vi.mock('electron', () => {
       this.minimized = true
     }
 
-    maximize() {}
+    maximize() {
+      this.maximized = true
+    }
 
     restore() {
       this.minimized = false
+      this.maximized = false
+    }
+
+    setFullScreen(flag) {
+      this.fullScreen = flag
+    }
+
+    isFullScreen() {
+      return this.fullScreen
     }
 
     setAlwaysOnTop(flag) {
+      this.alwaysOnTop = flag
       this.emit('always-on-top-changed', {}, flag)
+    }
+
+    isAlwaysOnTop() {
+      return this.alwaysOnTop
+    }
+
+    isMaximized() {
+      return this.maximized
     }
 
     isMinimized() {
@@ -136,11 +181,17 @@ vi.mock('electron', () => {
     }
 
     loadURL(...args) {
-      return loadURLMock(...args)
+      return Promise.resolve(loadURLMock(...args)).then((result) => {
+        this.webContents.emit('did-finish-load')
+        return result
+      })
     }
 
     loadFile(...args) {
-      return loadFileMock(...args)
+      return Promise.resolve(loadFileMock(...args)).then((result) => {
+        this.webContents.emit('did-finish-load')
+        return result
+      })
     }
   }
 
@@ -446,6 +497,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     writeFileMock.mockResolvedValue(undefined)
     browserWindowInstances.length = 0
     webContentsId = 1
+    nextWindowFullScreen = false
     initializeRuntimeForWindowLifecycleTests()
   })
 
@@ -624,6 +676,90 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(closeEvent.preventDefault).not.toHaveBeenCalled()
     await vi.waitFor(() => {
       expect(listWindowRefs()).toHaveLength(0)
+    })
+  })
+
+  it('窗口触发 enter-full-screen 时，必须向 renderer 广播 full-screen-changed=true', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    sendMock.mockClear()
+
+    winInfo.win.emit('enter-full-screen')
+
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'full-screen-changed',
+      data: true,
+    })
+  })
+
+  it('窗口触发 leave-full-screen 时，必须向 renderer 广播 full-screen-changed=false', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    sendMock.mockClear()
+
+    winInfo.win.emit('leave-full-screen')
+
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'full-screen-changed',
+      data: false,
+    })
+  })
+
+  it('createNew 在 shell 加载成功后，必须主动推送一次当前 isFullScreen() 初始状态', async () => {
+    const shellLoadDeferred = createDeferred()
+
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    loadFileMock.mockReturnValueOnce(shellLoadDeferred.promise)
+    nextWindowFullScreen = true
+
+    const createWindowPromise = winInfoUtil.createNew('D:/demo.md')
+
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'full-screen-changed')).toBe(false)
+
+    shellLoadDeferred.resolve()
+    await createWindowPromise
+
+    const [winInfo] = listWindowRefs()
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'full-screen-changed',
+      data: true,
+    })
+  })
+
+  it('renderer 重新 did-finish-load 后，必须重新回灌当前宿主窗口状态', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    winInfo.win.fullScreen = true
+    winInfo.win.maximized = true
+    winInfo.win.alwaysOnTop = true
+    sendMock.mockClear()
+
+    winInfo.win.webContents.emit('did-finish-load')
+
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'full-screen-changed',
+      data: true,
+    })
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window-size',
+      data: { isMaximize: true },
+    })
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'always-on-top-changed',
+      data: true,
     })
   })
 

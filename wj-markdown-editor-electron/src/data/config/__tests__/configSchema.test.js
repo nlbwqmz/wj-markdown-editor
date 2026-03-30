@@ -12,6 +12,22 @@ describe('configSchema', () => {
     expect(defaultConfig.markdown.inlineCodeClickCopy).toBe(false)
   })
 
+  it('defaultConfig 必须提供全屏切换快捷键配置', () => {
+    const toggleFullScreenShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
+    const editorHeadingShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'editor-heading-1')
+
+    expect(toggleFullScreenShortcutKey).toBeDefined()
+    expect(toggleFullScreenShortcutKey).toMatchObject({
+      id: 'toggleFullScreen',
+      name: '全屏切换',
+      keymap: 'F11',
+      enabled: true,
+      type: 'web',
+    })
+    expect(toggleFullScreenShortcutKey.index).toBe(6)
+    expect(editorHeadingShortcutKey.index).toBe(7)
+  })
+
   it('configVersion 必须接纳当前配置版本', () => {
     const validConfig = {
       ...defaultConfig,

@@ -16,6 +16,50 @@ test('中英文文案都应提供缺失锚点提示', () => {
   )
 })
 
+test('中英文文案都应提供全屏相关文案', () => {
+  assert.equal(
+    zhCN.top.enterFullScreen,
+    '进入全屏',
+  )
+  assert.equal(
+    zhCN.top.exitFullScreen,
+    '退出全屏',
+  )
+  assert.equal(
+    zhCN.topMenu.view.children.enterFullScreen,
+    '进入全屏',
+  )
+  assert.equal(
+    zhCN.topMenu.view.children.exitFullScreen,
+    '退出全屏',
+  )
+  assert.equal(
+    zhCN.shortcutKey.toggleFullScreen,
+    '全屏切换',
+  )
+
+  assert.equal(
+    enUS.top.enterFullScreen,
+    'Enter full screen',
+  )
+  assert.equal(
+    enUS.top.exitFullScreen,
+    'Exit full screen',
+  )
+  assert.equal(
+    enUS.topMenu.view.children.enterFullScreen,
+    'Enter Full Screen',
+  )
+  assert.equal(
+    enUS.topMenu.view.children.exitFullScreen,
+    'Exit Full Screen',
+  )
+  assert.equal(
+    enUS.shortcutKey.toggleFullScreen,
+    'Toggle full screen',
+  )
+})
+
 test('中英文文案都应提供配置更新失败提示', () => {
   assert.equal(
     zhCN.message.configWriteFailed,

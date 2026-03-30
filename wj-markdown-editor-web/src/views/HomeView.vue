@@ -7,6 +7,8 @@ import LayoutTop from '@/components/layout/LayoutTop.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
+const functionShortcutKeyPattern = /^F(?:[1-9]|1[0-2])$/
+
 function findShortcutKeyId(keymap) {
   const shortcutKeyList = useCommonStore().config.shortcutKeyList
   for (let i = 0; i < shortcutKeyList.length; i++) {
@@ -21,6 +23,10 @@ function findShortcutKeyId(keymap) {
 function onKeydown(e) {
   if (shortcutKeyUtil.isShortcutKey(e)) {
     const shortcutKey = shortcutKeyUtil.getShortcutKey(e)
+    // 裸 F1-F12 需要先拦截宿主默认行为，避免触发浏览器刷新等内建动作。
+    if (functionShortcutKeyPattern.test(shortcutKey)) {
+      e.preventDefault()
+    }
     const shortcutKeyId = findShortcutKeyId(shortcutKey)
     if (shortcutKeyId) {
       shortcutKeyUtil.getWebShortcutKeyHandler(shortcutKeyId, true)

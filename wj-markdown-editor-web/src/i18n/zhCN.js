@@ -67,6 +67,8 @@ export default {
     externalVersion: '外部内容',
   },
   top: {
+    enterFullScreen: '进入全屏',
+    exitFullScreen: '退出全屏',
     switchTheme: '切换主题',
     openInExplorer: '在资源管理器中打开',
     pinTop: '置顶',
@@ -98,6 +100,8 @@ export default {
       name: '视图',
       children: {
         switchView: '切换',
+        enterFullScreen: '进入全屏',
+        exitFullScreen: '退出全屏',
       },
     },
     help: {
@@ -246,6 +250,7 @@ export default {
     'saveOther': '另存为',
     'setting': '设置',
     'switchView': '视图切换',
+    'toggleFullScreen': '全屏切换',
     'editor-heading-1': '一级标题',
     'editor-heading-2': '二级标题',
     'editor-heading-3': '三级标题',

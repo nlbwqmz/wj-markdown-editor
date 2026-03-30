@@ -200,6 +200,11 @@ watch(() => store.config.language, (newValue) => {
 })
 
 const disallowedShortcutKeys = ['Backspace', 'Alt+ArrowLeft', 'Alt+ArrowRight', 'Alt+ArrowUp', 'Shift+Alt+ArrowUp', 'Alt+ArrowDown', 'Shift+Alt+ArrowDown', 'Escape', 'Ctrl+Enter', 'Alt+l', 'Ctrl+i', 'Ctrl+[', 'Ctrl+]', 'Ctrl+Alt+\\', 'Shift+Ctrl+k', 'Shift+Ctrl+\\', 'Ctrl+/', 'Alt+A', 'Ctrl+m', 'ArrowLeft', 'Ctrl+ArrowLeft', 'ArrowRight', 'Ctrl+ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'Ctrl+Home', 'End', 'Ctrl+End', 'Enter', 'Ctrl+a', 'Backspace', 'Delete', 'Ctrl+Backspace', 'Ctrl+Delete', 'Ctrl+f', 'F3', 'Ctrl+g', 'Escape', 'Ctrl+Shift+l', 'Ctrl+Alt+g', 'Ctrl+d', 'Ctrl+z', 'Ctrl+y', 'Ctrl+u', 'Alt+u', 'Ctrl+Space', 'Escape', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Enter', 'Tab', 'Ctrl+c', 'Ctrl+v']
+const functionShortcutKeyPattern = /^F(?:[1-9]|1[0-2])$/
+
+function isProtectedShortcutKey(keymap) {
+  return !functionShortcutKeyPattern.test(keymap) && disallowedShortcutKeys.includes(keymap)
+}
 
 /**
  * 监听修改快捷键
@@ -208,6 +213,10 @@ function onKeydown(shortcutKey) {
   return (e) => {
     if (shortcutKeyUtil.isShortcutKey(e)) {
       const keymap = shortcutKeyUtil.getShortcutKey(e)
+      // 录制裸 F1-F12 时先拦截宿主默认行为，避免设置页被刷新或触发系统动作。
+      if (functionShortcutKeyPattern.test(keymap)) {
+        e.preventDefault()
+      }
       const otherShortcutKeyList = config.value.shortcutKeyList.filter(item => item.id !== shortcutKey.id)
       for (let i = 0; i < otherShortcutKeyList.length; i++) {
         if (otherShortcutKeyList[i].keymap === keymap) {
@@ -228,7 +237,7 @@ function onKeydown(shortcutKey) {
 
           return
         }
-        if (disallowedShortcutKeys.includes(keymap)) {
+        if (isProtectedShortcutKey(keymap)) {
           message.warn(t('shortcutKey.conflictWithSystemShortcutKey'))
           return
         }

@@ -50,6 +50,21 @@ describe('configRepairUtil', () => {
     expect(saveShortcutKey.type).toBe(defaultSaveShortcutKey.type)
   })
 
+  it('旧配置缺失全屏切换快捷键时必须自动补齐', () => {
+    const repaired = repairConfig({
+      shortcutKeyList: defaultConfig.shortcutKeyList.filter(item => item.id !== 'toggleFullScreen'),
+    }, defaultConfig)
+
+    const toggleFullScreenShortcutKey = repaired.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
+    const defaultToggleFullScreenShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
+    const toggleFullScreenIndex = repaired.shortcutKeyList.findIndex(item => item.id === 'toggleFullScreen')
+
+    expect(toggleFullScreenShortcutKey).toBeDefined()
+    expect(toggleFullScreenShortcutKey).toMatchObject(defaultToggleFullScreenShortcutKey)
+    expect(repaired.shortcutKeyList[toggleFullScreenIndex - 1]?.id).toBe('switchView')
+    expect(repaired.shortcutKeyList[toggleFullScreenIndex + 1]?.id).toBe('editor-heading-1')
+  })
+
   it('shortcutKeyList 含 null 等脏项时不得抛错，未知脏项必须被忽略且默认快捷键仍会补齐', () => {
     expect(() => repairConfig({
       shortcutKeyList: [

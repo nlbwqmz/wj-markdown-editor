@@ -447,6 +447,55 @@ function publishWindowMessage(windowId, data) {
   })
 }
 
+function publishFullScreenChanged(win, isFullScreen) {
+  if (!isWindowAlive(win)) {
+    return null
+  }
+
+  return sendUtil.send(win, {
+    event: 'full-screen-changed',
+    data: isFullScreen === true,
+  })
+}
+
+function publishWindowSizeChanged(win, isMaximize) {
+  if (!isWindowAlive(win)) {
+    return null
+  }
+
+  return sendUtil.send(win, {
+    event: 'window-size',
+    data: {
+      isMaximize: isMaximize === true,
+    },
+  })
+}
+
+function publishAlwaysOnTopChanged(win, isAlwaysOnTop) {
+  if (!isWindowAlive(win)) {
+    return null
+  }
+
+  return sendUtil.send(win, {
+    event: 'always-on-top-changed',
+    data: isAlwaysOnTop === true,
+  })
+}
+
+/**
+ * renderer 重载后会丢失本地 store，需要由宿主重新回灌当前窗口状态。
+ */
+function publishHostWindowState(win) {
+  if (!isWindowAlive(win)) {
+    return null
+  }
+
+  publishFullScreenChanged(win, win.isFullScreen?.() === true)
+  publishWindowSizeChanged(win, win.isMaximized?.() === true)
+  publishAlwaysOnTopChanged(win, win.isAlwaysOnTop?.() === true)
+  return true
+}
+
 function getSnapshotSignature(snapshot) {
   return JSON.stringify(snapshot || null)
 }
@@ -1415,13 +1464,22 @@ async function createNew(filePath, isRecent = false) {
       }, 30000)
     })
     win.on('unmaximize', () => {
-      sendUtil.send(win, { event: 'window-size', data: { isMaximize: false } })
+      publishWindowSizeChanged(win, false)
     })
     win.on('maximize', () => {
-      sendUtil.send(win, { event: 'window-size', data: { isMaximize: true } })
+      publishWindowSizeChanged(win, true)
+    })
+    win.on('enter-full-screen', () => {
+      publishFullScreenChanged(win, true)
+    })
+    win.on('leave-full-screen', () => {
+      publishFullScreenChanged(win, false)
     })
     win.on('always-on-top-changed', (event, isAlwaysOnTop) => {
-      sendUtil.send(win, { event: 'always-on-top-changed', data: isAlwaysOnTop })
+      publishAlwaysOnTopChanged(win, isAlwaysOnTop)
+    })
+    win.webContents.on('did-finish-load', () => {
+      publishHostWindowState(win)
     })
     win.webContents.setWindowOpenHandler((details) => {
       const url = details.url

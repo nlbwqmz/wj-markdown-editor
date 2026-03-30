@@ -11,6 +11,7 @@ import {
   requestDocumentOpenPath,
   requestRecentClear,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
+import toggleFullScreenAction from '@/util/fullScreenActionUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const { t } = useI18n()
@@ -19,6 +20,7 @@ const store = useCommonStore()
 const menuList = ref([])
 const shortcutKeyList = ref(store.config.shortcutKeyList)
 const recentList = ref(store.recentList)
+const isFullScreen = ref(store.isFullScreen)
 
 function createRecentListVNode() {
   return recentList.value.map((item) => {
@@ -153,9 +155,17 @@ function updateMenuList() {
       label: t('topMenu.view.name'),
       children: [
         {
+          key: commonUtil.createId(),
           label: commonUtil.createLabel(t('topMenu.view.children.switchView'), getKeymapByShortcutKeyId('switchView')),
           click: () => {
             shortcutKeyUtil.getWebShortcutKeyHandler('switchView', true)
+          },
+        },
+        {
+          key: commonUtil.createId(),
+          label: commonUtil.createLabel(t(isFullScreen.value ? 'topMenu.view.children.exitFullScreen' : 'topMenu.view.children.enterFullScreen'), getKeymapByShortcutKeyId('toggleFullScreen')),
+          click: () => {
+            toggleFullScreenAction()
           },
         },
       ],
@@ -193,6 +203,10 @@ watch(() => store.recentList, (newValue) => {
   recentList.value = newValue
   updateMenuList()
 }, { deep: true })
+watch(() => store.isFullScreen, (newValue) => {
+  isFullScreen.value = newValue
+  updateMenuList()
+})
 
 function getKeymapByShortcutKeyId(id) {
   const shortcutKey = shortcutKeyList.value.find(item => item.id === id && item.enabled === true)

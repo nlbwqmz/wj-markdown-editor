@@ -67,6 +67,8 @@ export default {
     externalVersion: 'External Content',
   },
   top: {
+    enterFullScreen: 'Enter full screen',
+    exitFullScreen: 'Exit full screen',
     switchTheme: 'Switch theme',
     openInExplorer: 'Open in explorer',
     pinTop: 'Pin to top',
@@ -98,6 +100,8 @@ export default {
       name: 'View',
       children: {
         switchView: 'Switch',
+        enterFullScreen: 'Enter Full Screen',
+        exitFullScreen: 'Exit Full Screen',
       },
     },
     help: {
@@ -246,6 +250,7 @@ export default {
     'saveOther': 'Save as',
     'setting': 'Setting',
     'switchView': 'Switch view',
+    'toggleFullScreen': 'Toggle full screen',
     'editor-heading-1': 'Level 1 Heading',
     'editor-heading-2': 'Level 2 Heading',
     'editor-heading-3': 'Level 3 Heading',

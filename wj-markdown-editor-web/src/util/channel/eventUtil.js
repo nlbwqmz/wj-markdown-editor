@@ -49,6 +49,9 @@ export default {
     eventEmit.on('always-on-top-changed', (isAlwaysOnTop) => {
       store.isAlwaysOnTop = isAlwaysOnTop
     })
+    eventEmit.on('full-screen-changed', (isFullScreen) => {
+      store.isFullScreen = isFullScreen
+    })
     Object.entries(documentSessionEventHandlers).forEach(([eventName, handler]) => {
       eventEmit.on(eventName, handler)
     })

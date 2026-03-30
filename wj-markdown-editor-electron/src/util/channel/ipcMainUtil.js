@@ -172,6 +172,12 @@ const handlerList = {
   'restore': (windowContext) => {
     windowContext.win.restore()
   },
+  'full-screen': (windowContext, flag) => {
+    if (typeof flag !== 'boolean') {
+      return
+    }
+    windowContext.win.setFullScreen(flag)
+  },
   'always-on-top': (windowContext, isAlwaysOnTop) => {
     windowContext.win.setAlwaysOnTop(isAlwaysOnTop)
   },

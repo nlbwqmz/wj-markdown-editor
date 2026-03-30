@@ -16,6 +16,7 @@ const useCommonStore = defineStore('common', () => {
   const fileName = ref(documentSessionSnapshot.value.fileName)
   const saved = ref(true)
   const isMaximize = ref(false)
+  const isFullScreen = ref(false)
   const config = ref(configData)
   const searchBarVisible = ref(false)
   const editorSearchBarVisible = ref(false)
@@ -51,6 +52,7 @@ const useCommonStore = defineStore('common', () => {
     fileName,
     saved,
     isMaximize,
+    isFullScreen,
     config,
     searchBarVisible,
     hasNewVersion,

@@ -5,6 +5,7 @@ import {
   requestDocumentSave,
   requestDocumentSaveCopy,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
+import toggleFullScreenAction from '@/util/fullScreenActionUtil.js'
 
 /**
  * 按键映射 与codemirror的快捷键映射规则保持一致
@@ -94,6 +95,7 @@ const keyMappings = {
   Pause: 'Pause',
 }
 
+const functionKeyCodePattern = /^F(?:[1-9]|1[0-2])$/
 const webShortcutKeyHandler = {
   createNew: () => {
     channelUtil.send({ event: 'create-new' }).then(() => {})
@@ -117,6 +119,7 @@ const webShortcutKeyHandler = {
   setting: () => {
     channelUtil.send({ event: 'open-setting' }).then(() => {})
   },
+  toggleFullScreen: toggleFullScreenAction,
 }
 
 /**
@@ -195,6 +198,10 @@ function getShortcutKey(e) {
  */
 function isShortcutKey(e) {
   // 排除只按下修饰键的情况 排除非组合键的情况（shift不能单独使用）
+  if (functionKeyCodePattern.test(e.code)) {
+    return true
+  }
+
   return !(['ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight'].includes(e.code) || (!e.ctrlKey
     && !e.altKey && !e.metaKey))
 }

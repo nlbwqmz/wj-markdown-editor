@@ -1223,7 +1223,10 @@ describe('ipcMainUtil command mapping', () => {
     })
 
     const sender = { id: 9527 }
-    const win = { id: 1 }
+    const win = {
+      id: 1,
+      setFullScreen: vi.fn(),
+    }
     browserWindowFromWebContents.mockReturnValue(win)
     registerWindowContext({
       windowId: 1,
@@ -1237,6 +1240,7 @@ describe('ipcMainUtil command mapping', () => {
 
     return {
       sender,
+      win,
       sendToMainHandler,
       winInfoUtil,
     }
@@ -1610,6 +1614,36 @@ describe('ipcMainUtil command mapping', () => {
 
     expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(1, 1, 'document.cancel-close', null)
     expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(2, 1, 'document.confirm-force-close', null)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+  })
+
+  it('full-screen IPC 收到 true 时，必须对当前窗口调用 setFullScreen(true)', async () => {
+    const { sender, sendToMainHandler, win, winInfoUtil } = await setupCommandHandler()
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'full-screen',
+      data: true,
+    })
+
+    expect(result).toBeUndefined()
+    expect(win.setFullScreen).toHaveBeenCalledTimes(1)
+    expect(win.setFullScreen).toHaveBeenCalledWith(true)
+    expect(runtimeExecuteUiCommand).not.toHaveBeenCalled()
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+  })
+
+  it('full-screen IPC 收到 false 时，必须对当前窗口调用 setFullScreen(false)', async () => {
+    const { sender, sendToMainHandler, win, winInfoUtil } = await setupCommandHandler()
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'full-screen',
+      data: false,
+    })
+
+    expect(result).toBeUndefined()
+    expect(win.setFullScreen).toHaveBeenCalledTimes(1)
+    expect(win.setFullScreen).toHaveBeenCalledWith(false)
+    expect(runtimeExecuteUiCommand).not.toHaveBeenCalled()
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
