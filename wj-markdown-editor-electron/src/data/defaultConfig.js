@@ -12,6 +12,7 @@ export default {
   // 可选值 blur(窗口失焦) close(窗口关闭)
   autoSave: [],
   menuVisible: true,
+  fileManagerVisible: true,
   previewWidth: 80,
   fontSize: 16,
   fontFamily: {

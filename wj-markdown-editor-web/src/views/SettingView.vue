@@ -457,6 +457,16 @@ function reset() {
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
+          <a-descriptions-item :label="$t('config.view.defaultShowFileManager')">
+            <a-radio-group v-model:value="config.fileManagerVisible" button-style="solid">
+              <a-radio-button :value="true">
+                {{ $t('config.yes') }}
+              </a-radio-button>
+              <a-radio-button :value="false">
+                {{ $t('config.no') }}
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
           <a-descriptions-item :label="$t('config.view.editorPreviewPosition')">
             <a-radio-group v-model:value="config.editor.previewPosition" button-style="solid">
               <a-radio-button value="left">

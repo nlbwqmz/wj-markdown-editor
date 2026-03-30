@@ -11,6 +11,7 @@ describe('configRepairUtil', () => {
     }, defaultConfig)
 
     expect(repaired.menuVisible).toBe(defaultConfig.menuVisible)
+    expect(repaired.fileManagerVisible).toBe(defaultConfig.fileManagerVisible)
     expect(repaired.theme.global).toBe(defaultConfig.theme.global)
   })
 

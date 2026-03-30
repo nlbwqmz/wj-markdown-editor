@@ -12,6 +12,10 @@ describe('configSchema', () => {
     expect(defaultConfig.markdown.inlineCodeClickCopy).toBe(false)
   })
 
+  it('defaultConfig 必须提供 fileManagerVisible 默认值 true', () => {
+    expect(defaultConfig.fileManagerVisible).toBe(true)
+  })
+
   it('defaultConfig 必须提供全屏切换快捷键配置', () => {
     const toggleFullScreenShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
     const editorHeadingShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'editor-heading-1')
@@ -35,6 +39,13 @@ describe('configSchema', () => {
     }
 
     expect(() => validateConfigShape(validConfig)).not.toThrow()
+  })
+
+  it('config schema 必须接纳 fileManagerVisible', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerVisible: true,
+    })).not.toThrow()
   })
 
   it('顶层缺失必需字段时必须校验失败', () => {

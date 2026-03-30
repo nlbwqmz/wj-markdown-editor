@@ -18,6 +18,7 @@ const useCommonStore = defineStore('common', () => {
   const isMaximize = ref(false)
   const isFullScreen = ref(false)
   const config = ref(configData)
+  const fileManagerPanelVisible = ref(Boolean(configData.fileManagerVisible))
   const searchBarVisible = ref(false)
   const editorSearchBarVisible = ref(false)
   const hasNewVersion = ref(false)
@@ -47,6 +48,10 @@ const useCommonStore = defineStore('common', () => {
     }
   }
 
+  function setFileManagerPanelVisible(visible) {
+    fileManagerPanelVisible.value = Boolean(visible)
+  }
+
   return {
     documentSessionSnapshot,
     fileName,
@@ -54,6 +59,7 @@ const useCommonStore = defineStore('common', () => {
     isMaximize,
     isFullScreen,
     config,
+    fileManagerPanelVisible,
     searchBarVisible,
     hasNewVersion,
     isAlwaysOnTop,
@@ -63,6 +69,7 @@ const useCommonStore = defineStore('common', () => {
     applyDocumentSessionSnapshot,
     replaceRecentList,
     setExternalFileChangeLoading,
+    setFileManagerPanelVisible,
   }
 })
 
