@@ -13,7 +13,6 @@ import {
 
 const DRAFT_EMPTY_MESSAGE_KEY = 'message.fileManagerSelectDirectory'
 const DIRECTORY_EMPTY_MESSAGE_KEY = 'message.fileManagerDirectoryEmpty'
-const RECENT_MISSING_EMPTY_MESSAGE_KEY = 'message.fileManagerParentDirectoryUnavailable'
 
 function normalizeComparablePath(path) {
   if (typeof path !== 'string') {
@@ -77,7 +76,7 @@ function resolveDirectoryTargetFromSnapshot(snapshot) {
     return {
       directoryPath: getPathDirname(snapshot.recentMissingPath),
       emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-      missingDirectoryEmptyMessageKey: RECENT_MISSING_EMPTY_MESSAGE_KEY,
+      missingDirectoryEmptyMessageKey: null,
     }
   }
 
@@ -107,11 +106,11 @@ function resolveEntryKind(entry) {
   return 'other'
 }
 
-function createEmptyDirectoryState(emptyMessageKey = DRAFT_EMPTY_MESSAGE_KEY) {
+function createEmptyDirectoryState(emptyMessageKey) {
   return {
     directoryPath: null,
     entryList: [],
-    emptyMessageKey,
+    emptyMessageKey: emptyMessageKey === undefined ? DRAFT_EMPTY_MESSAGE_KEY : emptyMessageKey,
   }
 }
 
@@ -298,7 +297,11 @@ export function createFileManagerPanelController({
       })
 
       if (!nextState) {
-        directoryState.value = createEmptyDirectoryState(target.missingDirectoryEmptyMessageKey || target.emptyMessageKey)
+        directoryState.value = createEmptyDirectoryState(
+          Object.prototype.hasOwnProperty.call(target, 'missingDirectoryEmptyMessageKey')
+            ? target.missingDirectoryEmptyMessageKey
+            : target.emptyMessageKey,
+        )
         return directoryState.value
       }
 

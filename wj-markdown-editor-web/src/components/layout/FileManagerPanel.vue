@@ -50,7 +50,7 @@ function resolveEntryIconTestId(entry) {
             <span v-if="index < breadcrumbList.length - 1" class="px-1">/</span>
           </span>
         </template>
-        <span v-else>{{ t(emptyMessageKey) }}</span>
+        <span v-else-if="emptyMessageKey">{{ t(emptyMessageKey) }}</span>
       </div>
       <div class="flex items-center gap-1">
         <button
@@ -87,7 +87,10 @@ function resolveEntryIconTestId(entry) {
         data-testid="file-manager-empty-state"
         class="file-manager-panel__empty h-full flex flex-col items-center justify-center gap-3 px-4 text-center"
       >
-        <div class="max-w-full text-sm color-text-secondary">
+        <div
+          v-if="emptyMessageKey"
+          class="file-manager-panel__empty-message max-w-full text-sm color-text-secondary"
+        >
           {{ t(emptyMessageKey) }}
         </div>
         <button

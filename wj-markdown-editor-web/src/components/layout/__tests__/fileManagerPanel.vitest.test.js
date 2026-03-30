@@ -247,6 +247,23 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.find('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(false)
   })
 
+  it('recent-missing 父目录不存在时应保留空状态动作入口，但不显示额外文案', async () => {
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      isRecentMissing: true,
+      recentMissingPath: 'D:/docs/missing.md',
+    })
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(null)
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toBe('')
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toBe('translated:message.fileManagerSelectDirectory')
+    expect(wrapper.find('.file-manager-panel__empty-message').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(true)
+  })
+
   it('文件管理栏工具区应显示当前目录标题或面包屑', async () => {
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       directoryPath: 'D:/docs/project',
