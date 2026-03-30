@@ -66,20 +66,27 @@ export function createDocumentDirectoryWatchService({
     }
 
     clearWindowTimer(windowState)
-    windowState.debounceTimer = setTimeout(async () => {
+    windowState.debounceTimer = setTimeout(() => {
       const currentWindowState = windowStateMap.get(normalizedWindowId)
       if (!currentWindowState || currentWindowState.bindingToken !== bindingToken) {
         return
       }
 
-      const directoryState = await readDirectoryState({
-        directoryPath: currentWindowState.directoryPath,
-        activePath: currentWindowState.activePath,
-      })
-      await publishDirectoryChanged({
-        windowId: normalizedWindowId,
-        directoryState,
-      })
+      currentWindowState.debounceTimer = null
+
+      // 重扫失败只保留当前绑定，不允许把异步错误抛成未处理失败。
+      void Promise.resolve()
+        .then(async () => {
+          const directoryState = await readDirectoryState({
+            directoryPath: currentWindowState.directoryPath,
+            activePath: currentWindowState.activePath,
+          })
+          await publishDirectoryChanged({
+            windowId: normalizedWindowId,
+            directoryState,
+          })
+        })
+        .catch(() => {})
     }, debounceMs)
   }
 
@@ -111,9 +118,25 @@ export function createDocumentDirectoryWatchService({
       return null
     }
 
-    await stopWindowDirectory(normalizedWindowId)
-    const bindingToken = ++nextBindingToken
-    const watchHandle = createWatchHandle(normalizedWindowId, directoryPath, bindingToken)
+    const currentWindowState = windowStateMap.get(normalizedWindowId) || null
+    const bindingToken = nextBindingToken + 1
+    let watchHandle = null
+
+    try {
+      watchHandle = createWatchHandle(normalizedWindowId, directoryPath, bindingToken)
+    } catch {
+      return currentWindowState
+        ? {
+            directoryPath: currentWindowState.directoryPath,
+            activePath: currentWindowState.activePath,
+          }
+        : null
+    }
+
+    nextBindingToken = bindingToken
+    if (currentWindowState) {
+      stopWindowWatch(currentWindowState)
+    }
 
     windowStateMap.set(normalizedWindowId, {
       directoryPath,

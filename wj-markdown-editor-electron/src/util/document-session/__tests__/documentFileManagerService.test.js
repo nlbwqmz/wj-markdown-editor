@@ -89,6 +89,48 @@ async function createServiceContext({
   }
 }
 
+async function createRealServiceContext({
+  windowId = 9,
+  session,
+  fsWatchImpl,
+  publishDirectoryChanged = vi.fn(),
+} = {}) {
+  const store = createDocumentSessionStore()
+  registerWindowSession(store, {
+    windowId,
+    session,
+  })
+
+  const { createDocumentDirectoryWatchService } = await import('../documentDirectoryWatchService.js')
+  const { createDocumentFileManagerService } = await import('../documentFileManagerService.js')
+
+  let service = null
+  const directoryWatchService = createDocumentDirectoryWatchService({
+    fsModule: fs,
+    fsWatch: fsWatchImpl,
+    readDirectoryState: async ({ directoryPath, activePath }) => {
+      return await service.readDirectoryState({
+        directoryPath,
+        activePath,
+      })
+    },
+    publishDirectoryChanged,
+    debounceMs: 120,
+  })
+
+  service = createDocumentFileManagerService({
+    store,
+    fsModule: fs,
+    directoryWatchService,
+  })
+
+  return {
+    service,
+    directoryWatchService,
+    publishDirectoryChanged,
+  }
+}
+
 afterEach(async () => {
   await Promise.all(tempDirectoryList.splice(0).map(async tempDirectory => fs.remove(tempDirectory)))
 })
@@ -286,6 +328,50 @@ describe('documentFileManagerService', () => {
       mode: 'directory',
       directoryPath: nextDirectory,
       activePath: null,
+    }))
+  })
+
+  it('openDirectory 命中新目录 watcher 建立失败时不应 reject，也不应清空旧目录状态', async () => {
+    const currentDirectory = await createTempDirectory()
+    const nextDirectory = await createTempDirectory()
+    const currentFilePath = path.join(currentDirectory, 'current.md')
+    const oldWatchHandle = {
+      close: vi.fn(),
+    }
+
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+    await fs.writeFile(path.join(nextDirectory, 'next.md'), '# next', 'utf8')
+
+    const fsWatchImpl = vi.fn((directoryPath) => {
+      if (directoryPath === nextDirectory) {
+        throw new Error('watch bind failed')
+      }
+
+      return oldWatchHandle
+    })
+    const { service } = await createRealServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'open-directory-safe-failure-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+      fsWatchImpl,
+    })
+
+    await service.getDirectoryState({ windowId: 9 })
+
+    await expect(service.openDirectory({
+      windowId: 9,
+      directoryPath: nextDirectory,
+    })).resolves.toEqual(expect.objectContaining({
+      directoryPath: currentDirectory,
+      activePath: currentFilePath,
+    }))
+
+    expect(oldWatchHandle.close).not.toHaveBeenCalled()
+    await expect(service.getDirectoryState({ windowId: 9 })).resolves.toEqual(expect.objectContaining({
+      directoryPath: currentDirectory,
+      activePath: currentFilePath,
     }))
   })
 })

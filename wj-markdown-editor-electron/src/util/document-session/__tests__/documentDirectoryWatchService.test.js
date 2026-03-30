@@ -54,6 +54,20 @@ async function createServiceContext({
   }
 }
 
+async function captureUnhandledRejection(run) {
+  const reasonList = []
+  const handleUnhandledRejection = (reason) => {
+    reasonList.push(reason)
+  }
+
+  process.on('unhandledRejection', handleUnhandledRejection)
+  try {
+    await run(reasonList)
+  } finally {
+    process.off('unhandledRejection', handleUnhandledRejection)
+  }
+}
+
 afterEach(() => {
   vi.useRealTimers()
 })
@@ -136,6 +150,30 @@ describe('documentDirectoryWatchService', () => {
     })
   })
 
+  it('已有旧绑定时，切换到绑定瞬间失败的新目录不应丢失旧 binding，也不应关闭旧 watcher', async () => {
+    const { service, fsWatch, watchRecordList } = await createServiceContext()
+
+    await service.ensureWindowDirectory(9, 'D:/docs', {
+      activePath: 'D:/docs/current.md',
+    })
+    fsWatch.mockImplementationOnce(() => {
+      throw new Error('watch bind failed')
+    })
+
+    await expect(service.rebindWindowDirectory(9, 'D:/docs/missing', {
+      activePath: null,
+    })).resolves.toEqual({
+      directoryPath: 'D:/docs',
+      activePath: 'D:/docs/current.md',
+    })
+
+    expect(watchRecordList[0].watchHandle.close).not.toHaveBeenCalled()
+    expect(service.getWindowDirectoryBinding(9)).toEqual({
+      directoryPath: 'D:/docs',
+      activePath: 'D:/docs/current.md',
+    })
+  })
+
   it('session 切换后应基于新 session 重新绑定窗口目录 watcher，并在空状态 session 下清理旧 watcher', async () => {
     const { service, fsWatch, watchRecordList } = await createServiceContext()
     const currentSession = createBoundFileSession({
@@ -165,5 +203,61 @@ describe('documentDirectoryWatchService', () => {
 
     expect(watchRecordList[1].watchHandle.close).toHaveBeenCalledWith()
     expect(service.getWindowDirectoryBinding(9)).toBeNull()
+  })
+
+  it('防抖重扫 readDirectoryState 失败时必须收口，不能变成未处理异步失败，也不应下发目录变更', async () => {
+    vi.useFakeTimers()
+    const { service, readDirectoryState, publishDirectoryChanged, watchRecordList } = await createServiceContext()
+    readDirectoryState.mockRejectedValueOnce(new Error('scan failed'))
+
+    await service.ensureWindowDirectory(9, 'D:/docs', {
+      activePath: 'D:/docs/current.md',
+    })
+
+    await captureUnhandledRejection(async (reasonList) => {
+      watchRecordList[0].listener('change', 'current.md')
+      await vi.advanceTimersByTimeAsync(120)
+      await Promise.resolve()
+
+      expect(publishDirectoryChanged).not.toHaveBeenCalled()
+      expect(service.getWindowDirectoryBinding(9)).toEqual({
+        directoryPath: 'D:/docs',
+        activePath: 'D:/docs/current.md',
+      })
+      expect(reasonList).toEqual([])
+    })
+  })
+
+  it('防抖重扫 publishDirectoryChanged 失败时也必须收口，不能变成未处理异步失败', async () => {
+    vi.useFakeTimers()
+    const { service, readDirectoryState, publishDirectoryChanged, watchRecordList } = await createServiceContext()
+    const directoryState = {
+      mode: 'directory',
+      directoryPath: 'D:/docs',
+      activePath: 'D:/docs/current.md',
+      entryList: [],
+    }
+    readDirectoryState.mockResolvedValueOnce(directoryState)
+    publishDirectoryChanged.mockRejectedValueOnce(new Error('push failed'))
+
+    await service.ensureWindowDirectory(9, 'D:/docs', {
+      activePath: 'D:/docs/current.md',
+    })
+
+    await captureUnhandledRejection(async (reasonList) => {
+      watchRecordList[0].listener('change', 'current.md')
+      await vi.advanceTimersByTimeAsync(120)
+      await Promise.resolve()
+
+      expect(publishDirectoryChanged).toHaveBeenCalledWith({
+        windowId: '9',
+        directoryState,
+      })
+      expect(service.getWindowDirectoryBinding(9)).toEqual({
+        directoryPath: 'D:/docs',
+        activePath: 'D:/docs/current.md',
+      })
+      expect(reasonList).toEqual([])
+    })
   })
 })
