@@ -184,6 +184,7 @@ export function createDocumentEffectService({
   notificationApi = Notification,
   createSystemNotification = options => new notificationApi(options),
   notificationIconPath = APP_NOTIFICATION_ICON_PATH,
+  fileManagerService = null,
   recentStore = {
     add: async () => {},
     remove: async () => {},
@@ -304,6 +305,7 @@ export function createDocumentEffectService({
    * 4. 向外暴露当前 session snapshot
    */
   async function executeCommand({
+    windowId,
     command,
     payload,
     dispatchCommand,
@@ -469,6 +471,30 @@ export function createDocumentEffectService({
           list: recentStore.get(),
         }
       }
+
+      case 'file-manager.get-directory-state':
+        return await fileManagerService?.getDirectoryState({
+          windowId,
+          payload,
+        })
+
+      case 'file-manager.open-directory':
+        return await fileManagerService?.openDirectory({
+          windowId,
+          directoryPath: payload?.directoryPath || null,
+        })
+
+      case 'file-manager.create-folder':
+        return await fileManagerService?.createFolder({
+          windowId,
+          name: payload?.name || '',
+        })
+
+      case 'file-manager.create-markdown':
+        return await fileManagerService?.createMarkdown({
+          windowId,
+          name: payload?.name || '',
+        })
 
       default:
         throw new Error(`未知副作用命令: ${command}`)

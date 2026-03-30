@@ -217,6 +217,18 @@ const handlerList = {
   'document.get-session-snapshot': async (windowContext) => {
     return await executeRuntimeUiCommand(windowContext, 'document.get-session-snapshot', null)
   },
+  'file-manager.get-directory-state': async (windowContext) => {
+    return await executeRuntimeUiCommand(windowContext, 'file-manager.get-directory-state', null)
+  },
+  'file-manager.open-directory': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'file-manager.open-directory', data)
+  },
+  'file-manager.create-folder': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'file-manager.create-folder', data)
+  },
+  'file-manager.create-markdown': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'file-manager.create-markdown', data)
+  },
   'document.edit': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.edit', data),
   'document.cancel-close': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.cancel-close', null),
   'document.confirm-force-close': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.confirm-force-close', null),

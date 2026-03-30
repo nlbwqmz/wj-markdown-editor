@@ -92,8 +92,22 @@ export function createWindowSessionBridge({
     return nextRecentList
   }
 
+  function publishFileManagerDirectoryChanged({ windowId, directoryState }) {
+    const win = resolveWindowById?.(windowId) || null
+    if (!directoryState || !isWindowUsable(win)) {
+      return null
+    }
+
+    sendToRenderer(win, {
+      event: 'window.effect.file-manager-directory-changed',
+      data: directoryState,
+    })
+    return directoryState
+  }
+
   return {
     getSessionSnapshot,
+    publishFileManagerDirectoryChanged,
     publishSnapshotChanged,
     publishMessage,
     publishRecentListChanged,

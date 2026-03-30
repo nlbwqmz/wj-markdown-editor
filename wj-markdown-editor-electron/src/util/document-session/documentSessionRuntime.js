@@ -186,6 +186,8 @@ export function createDocumentSessionRuntime(deps = {}) {
   const store = deps.store
   const saveCoordinator = deps.saveCoordinator
   const resourceService = deps.resourceService || null
+  const fileManagerService = deps.fileManagerService || null
+  const directoryWatchService = deps.directoryWatchService || null
   const commandService = deps.commandService
   const effectService = deps.effectService
   const windowBridge = deps.windowBridge
@@ -440,6 +442,7 @@ export function createDocumentSessionRuntime(deps = {}) {
         })
 
     return Promise.resolve(effectService.executeCommand({
+      windowId: normalizedWindowId,
       command,
       payload,
       dispatchCommand,
@@ -502,6 +505,8 @@ export function createDocumentSessionRuntime(deps = {}) {
     saveCoordinator,
     commandService,
     effectService,
+    fileManagerService,
+    directoryWatchService,
     windowBridge,
     resourceService,
     dispatch,

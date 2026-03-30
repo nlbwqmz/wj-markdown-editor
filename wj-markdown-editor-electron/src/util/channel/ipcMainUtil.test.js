@@ -1368,6 +1368,107 @@ describe('ipcMainUtil command mapping', () => {
     })
   })
 
+  it('file-manager.get-directory-state 必须通过统一命令入口返回目录状态', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    const directoryState = {
+      mode: 'directory',
+      directoryPath: 'D:\\docs',
+      activePath: 'D:\\docs\\current.md',
+      entryList: [],
+    }
+    runtimeExecuteUiCommand.mockResolvedValueOnce(directoryState)
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'file-manager.get-directory-state',
+      data: null,
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'file-manager.get-directory-state', null)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(result).toEqual(directoryState)
+  })
+
+  it('file-manager.open-directory 必须把目录路径原样透传给统一命令流', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'file-manager.open-directory',
+      data: {
+        directoryPath: 'D:\\docs\\next',
+      },
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'file-manager.open-directory', {
+      directoryPath: 'D:\\docs\\next',
+    })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+  })
+
+  it('file-manager.create-folder 必须通过统一命令入口返回刷新后的目录状态', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    const directoryState = {
+      mode: 'directory',
+      directoryPath: 'D:\\docs',
+      activePath: 'D:\\docs\\current.md',
+      entryList: [
+        {
+          path: 'D:\\docs\\assets',
+          name: 'assets',
+          kind: 'directory',
+          extension: null,
+        },
+      ],
+    }
+    runtimeExecuteUiCommand.mockResolvedValueOnce(directoryState)
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'file-manager.create-folder',
+      data: {
+        name: 'assets',
+      },
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'file-manager.create-folder', {
+      name: 'assets',
+    })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(result).toEqual(directoryState)
+  })
+
+  it('file-manager.create-markdown 必须通过统一命令入口返回新文件路径和刷新后的目录状态', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    const createMarkdownResult = {
+      path: 'D:\\docs\\draft-note.md',
+      directoryState: {
+        mode: 'directory',
+        directoryPath: 'D:\\docs',
+        activePath: 'D:\\docs\\current.md',
+        entryList: [
+          {
+            path: 'D:\\docs\\draft-note.md',
+            name: 'draft-note.md',
+            kind: 'file',
+            extension: '.md',
+          },
+        ],
+      },
+    }
+    runtimeExecuteUiCommand.mockResolvedValueOnce(createMarkdownResult)
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'file-manager.create-markdown',
+      data: {
+        name: 'draft-note',
+      },
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'file-manager.create-markdown', {
+      name: 'draft-note',
+    })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(result).toEqual(createMarkdownResult)
+  })
+
   it('document.get-session-snapshot 必须通过统一命令入口返回会话快照', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     const snapshot = {

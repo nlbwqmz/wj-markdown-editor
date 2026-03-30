@@ -1,7 +1,9 @@
 import { dialog, shell } from 'electron'
 import fs from 'fs-extra'
 import { createDocumentCommandService } from './documentCommandService.js'
+import { createDocumentDirectoryWatchService } from './documentDirectoryWatchService.js'
 import { createDocumentEffectService } from './documentEffectService.js'
+import { createDocumentFileManagerService } from './documentFileManagerService.js'
 import { createDocumentResourceService } from './documentResourceService.js'
 import { createDocumentSessionStore } from './documentSessionStore.js'
 import { createSaveCoordinator } from './saveCoordinator.js'
@@ -29,12 +31,6 @@ export function createDocumentSessionRuntimeComposition({
     saveCoordinator,
     getConfig,
   })
-  const effectService = createDocumentEffectService({
-    fsModule,
-    dialogApi,
-    recentStore,
-    getConfig,
-  })
   const windowBridge = createWindowSessionBridge({
     store,
     sendToRenderer,
@@ -44,6 +40,34 @@ export function createDocumentSessionRuntimeComposition({
     getAllWindows: () => {
       return registry?.getAllWindows?.() || []
     },
+  })
+  let fileManagerService = null
+  const directoryWatchService = createDocumentDirectoryWatchService({
+    fsModule,
+    readDirectoryState: async ({ directoryPath, activePath }) => {
+      return await fileManagerService.readDirectoryState({
+        directoryPath,
+        activePath,
+      })
+    },
+    publishDirectoryChanged: ({ windowId, directoryState }) => {
+      return windowBridge.publishFileManagerDirectoryChanged?.({
+        windowId,
+        directoryState,
+      })
+    },
+  })
+  fileManagerService = createDocumentFileManagerService({
+    store,
+    fsModule,
+    directoryWatchService,
+  })
+  const effectService = createDocumentEffectService({
+    fsModule,
+    dialogApi,
+    recentStore,
+    getConfig,
+    fileManagerService,
   })
   const resourceService = createDocumentResourceService({
     store,
@@ -61,6 +85,8 @@ export function createDocumentSessionRuntimeComposition({
     saveCoordinator,
     commandService,
     effectService,
+    fileManagerService,
+    directoryWatchService,
     windowBridge,
     resourceService,
   }
