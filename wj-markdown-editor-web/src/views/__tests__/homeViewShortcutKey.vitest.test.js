@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import HomeView from '../HomeView.vue'
 
 const mocked = vi.hoisted(() => ({
+  route: {
+    name: 'setting',
+  },
   shortcutKeyUtil: {
     isShortcutKey: vi.fn(),
     getShortcutKey: vi.fn(),
@@ -19,6 +22,14 @@ const mocked = vi.hoisted(() => ({
 vi.mock('@/stores/counter.js', () => ({
   useCommonStore: () => mocked.store,
 }))
+
+vi.mock('vue-router', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useRoute: () => mocked.route,
+  }
+})
 
 vi.mock('@/util/shortcutKeyUtil.js', () => ({
   default: mocked.shortcutKeyUtil,
@@ -50,6 +61,7 @@ function dispatchWindowKeydown(code = 'F11') {
 
 describe('homeView shortcut key', () => {
   beforeEach(() => {
+    mocked.route.name = 'setting'
     mocked.store.config.shortcutKeyList = [
       {
         id: 'toggleFullScreen',

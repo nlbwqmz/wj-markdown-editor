@@ -295,5 +295,7 @@ describe('layoutMenu 文件管理栏接线', () => {
     expect(enUS.topMenu.view.children.hideFileManager).toBe('Hide file manager')
     expect(zhCN.message.onlyMarkdownFilesCanBeOpened).toBe('只能打开 Markdown（.md / .markdown）文件。')
     expect(enUS.message.onlyMarkdownFilesCanBeOpened).toBe('Only Markdown (.md / .markdown) files can be opened.')
+    expect(zhCN.message.fileAlreadyOpenedInOtherWindow).toBe('目标文件已在其他窗口打开，已为你切换到对应窗口。')
+    expect(enUS.message.fileAlreadyOpenedInOtherWindow).toBe('The target file is already open in another window. Switched to that window for you.')
   })
 })
