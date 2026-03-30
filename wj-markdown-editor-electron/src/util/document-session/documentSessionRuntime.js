@@ -194,6 +194,7 @@ export function createDocumentSessionRuntime(deps = {}) {
   const getWindowById = deps.getWindowById || (() => null)
   const getDocumentContextByWindowId = deps.getDocumentContext || null
   const openDocumentWindow = deps.openDocumentWindow || null
+  const openDocumentInCurrentWindow = deps.openDocumentInCurrentWindow || null
   const publishOpenFailureSystemNotification = deps.publishOpenFailureSystemNotification || (() => null)
   const buildRunnerEffectContext = deps.buildRunnerEffectContext || (() => ({}))
   let runtimeApi = null
@@ -456,6 +457,20 @@ export function createDocumentSessionRuntime(deps = {}) {
           getWindowById,
           getDocumentContext,
           getSessionSnapshot,
+        })
+      },
+      openDocumentInCurrentWindow: (targetPath, options = {}) => {
+        if (typeof openDocumentInCurrentWindow !== 'function') {
+          return {
+            ok: false,
+            reason: 'open-document-in-current-window-not-configured',
+            path: targetPath || null,
+          }
+        }
+
+        return openDocumentInCurrentWindow(normalizedWindowId, targetPath, {
+          trigger: options.trigger || 'user',
+          saveBeforeSwitch: options.saveBeforeSwitch === true,
         })
       },
       getSessionSnapshot: () => getSessionSnapshot(normalizedWindowId),

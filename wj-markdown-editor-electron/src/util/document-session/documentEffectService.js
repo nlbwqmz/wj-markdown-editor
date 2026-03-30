@@ -5,6 +5,7 @@ import { APP_NOTIFICATION_ICON_PATH } from '../appIdentityUtil.js'
 import {
   isMarkdownFilePath,
   resolveDocumentOpenPath,
+  toComparableDocumentPath,
 } from './documentOpenTargetUtil.js'
 
 // 从多种 payload 形态里提取目标路径。
@@ -28,6 +29,10 @@ function getOpenBaseDir(payload) {
 // effect 层只在少数需要即时拼接系统提示文案的场景使用它。
 function getLanguage(getConfig) {
   return getConfig?.()?.language || 'zh-CN'
+}
+
+function getCurrentSnapshotDocumentPath(getSessionSnapshot) {
+  return getSessionSnapshot?.()?.resourceContext?.documentPath || null
 }
 
 // 判断目标路径是否是一个常规文件。
@@ -310,6 +315,7 @@ export function createDocumentEffectService({
     payload,
     dispatchCommand,
     openDocumentWindow,
+    openDocumentInCurrentWindow,
     getSessionSnapshot,
   }) {
     switch (command) {
@@ -364,6 +370,31 @@ export function createDocumentEffectService({
         return await openDocumentWindow?.(validationResult.path, {
           isRecent: false,
           trigger,
+        })
+      }
+
+      case 'document.open-path-in-current-window': {
+        const targetPath = getRecentTargetPath(payload)
+        const trigger = payload?.trigger || 'user'
+        const validationResult = await validateExplicitOpenTarget(targetPath, {
+          baseDir: getOpenBaseDir(payload),
+        })
+        if (validationResult.ok !== true) {
+          return validationResult
+        }
+
+        const currentDocumentPath = getCurrentSnapshotDocumentPath(getSessionSnapshot)
+        if (toComparableDocumentPath(currentDocumentPath) === toComparableDocumentPath(validationResult.path)) {
+          return {
+            ok: true,
+            reason: 'noop-current-file',
+            path: validationResult.path,
+          }
+        }
+
+        return await openDocumentInCurrentWindow?.(validationResult.path, {
+          trigger,
+          saveBeforeSwitch: payload?.saveBeforeSwitch === true,
         })
       }
 

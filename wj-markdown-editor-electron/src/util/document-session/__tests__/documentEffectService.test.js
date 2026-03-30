@@ -178,6 +178,100 @@ describe('documentEffectService', () => {
     })
   })
 
+  it('document.open-path-in-current-window 命中当前已打开文档时，必须返回结构化 no-op，不能继续触发 session 切换', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentInCurrentWindow = vi.fn()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+
+    const result = await service.executeCommand({
+      command: 'document.open-path-in-current-window',
+      payload: {
+        path: 'C:/docs/demo.md',
+      },
+      getSessionSnapshot: () => ({
+        resourceContext: {
+          documentPath: 'C:/docs/demo.md',
+        },
+      }),
+      openDocumentInCurrentWindow,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      reason: 'noop-current-file',
+      path: 'C:/docs/demo.md',
+    })
+    expect(openDocumentInCurrentWindow).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      '缺失路径',
+      {
+        path: 'C:/docs/missing.md',
+      },
+      async (fsModule) => {
+        fsModule.pathExists.mockResolvedValue(false)
+      },
+      {
+        ok: false,
+        reason: 'open-target-missing',
+        path: 'C:/docs/missing.md',
+      },
+    ],
+    [
+      '非 Markdown 扩展',
+      {
+        path: 'C:/docs/plain.txt',
+      },
+      async (fsModule) => {
+        fsModule.pathExists.mockResolvedValue(true)
+        fsModule.stat.mockResolvedValue({
+          isFile: () => true,
+        })
+      },
+      {
+        ok: false,
+        reason: 'open-target-invalid-extension',
+        path: 'C:/docs/plain.txt',
+      },
+    ],
+    [
+      '目录型 Markdown 目标',
+      {
+        path: 'C:/docs/folder.md',
+      },
+      async (fsModule) => {
+        fsModule.pathExists.mockResolvedValue(true)
+        fsModule.stat.mockResolvedValue({
+          isFile: () => false,
+        })
+      },
+      {
+        ok: false,
+        reason: 'open-target-not-file',
+        path: 'C:/docs/folder.md',
+      },
+    ],
+  ])('document.open-path-in-current-window 命中%s时，必须返回结构化失败结果', async (_title, payload, prepareFs, expectedResult) => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentInCurrentWindow = vi.fn()
+    await prepareFs(fsModule)
+
+    const result = await service.executeCommand({
+      command: 'document.open-path-in-current-window',
+      payload,
+      openDocumentInCurrentWindow,
+    })
+
+    expect(result).toEqual(expectedResult)
+    expect(openDocumentInCurrentWindow).not.toHaveBeenCalled()
+  })
+
   it('document.open-recent(trigger=user) 命中缺失文件时，不能改动当前 active session', async () => {
     const { service, fsModule } = await createServiceContext()
     const openDocumentWindow = vi.fn()

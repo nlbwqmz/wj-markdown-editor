@@ -269,6 +269,9 @@ function buildRuntimeHostDeps() {
     openDocumentWindow: async (targetPath, options = {}) => {
       return await createNew(targetPath, options.isRecent === true)
     },
+    openDocumentInCurrentWindow: async (windowId, targetPath, options = {}) => {
+      return await openDocumentInCurrentWindow(windowId, targetPath, options)
+    },
   }
 }
 
@@ -565,6 +568,62 @@ function registerSessionForWindow(windowId, session) {
   publishSnapshotChanged(normalizedWindowId)
 }
 
+function getDirectoryWatchService() {
+  return ensureSessionRuntimeInitialized().directoryWatchService || null
+}
+
+async function stopDirectoryWatch(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return true
+  }
+
+  const directoryWatchService = getDirectoryWatchService()
+  if (typeof directoryWatchService?.clearWindowDirectory === 'function') {
+    return await directoryWatchService.clearWindowDirectory(normalizedWindowId)
+  }
+  if (typeof directoryWatchService?.stopWindowDirectory === 'function') {
+    return await directoryWatchService.stopWindowDirectory(normalizedWindowId)
+  }
+  return true
+}
+
+async function rebindDirectoryWatchForSession(windowId, session) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId || !session) {
+    return null
+  }
+
+  const runtime = ensureSessionRuntimeInitialized()
+  const directoryWatchService = runtime.directoryWatchService || null
+  if (!directoryWatchService) {
+    return null
+  }
+
+  let directoryState = null
+  if (typeof directoryWatchService.rebindWindowDirectoryFromSession === 'function') {
+    directoryState = await directoryWatchService.rebindWindowDirectoryFromSession(normalizedWindowId, session)
+  } else if (typeof runtime.fileManagerService?.resolveDirectoryStateFromSession === 'function') {
+    directoryState = await runtime.fileManagerService.resolveDirectoryStateFromSession(session)
+    if (!directoryState?.directoryPath) {
+      await stopDirectoryWatch(normalizedWindowId)
+    } else {
+      await directoryWatchService.rebindWindowDirectory?.(normalizedWindowId, directoryState.directoryPath, {
+        activePath: directoryState.activePath,
+      })
+    }
+  }
+
+  if (directoryState) {
+    runtime.windowBridge.publishFileManagerDirectoryChanged?.({
+      windowId: normalizedWindowId,
+      directoryState,
+    })
+  }
+
+  return directoryState
+}
+
 function stopExternalWatch(windowId) {
   if (!normalizeWindowId(windowId)) {
     return true
@@ -612,6 +671,7 @@ function finalizeWindowClose(windowId) {
       ? closingSession.saveRuntime.completedManualRequests
       : [],
   )
+  void stopDirectoryWatch(normalizedWindowId)
   stopExternalWatch(normalizedWindowId)
   if (closingSession?.sessionId) {
     const { store } = ensureSessionRuntimeInitialized()
@@ -840,6 +900,7 @@ function rollbackCreatedWindow({
   session,
   win,
 }) {
+  void stopDirectoryWatch(windowId)
   stopExternalWatch(windowId)
   if (session?.sessionId) {
     const { store } = ensureSessionRuntimeInitialized()
@@ -876,6 +937,129 @@ function requestForceClose(windowId) {
 
   setForceCloseRequested(normalizedWindowId, true)
   return true
+}
+
+function getExistingWindowIdByDocumentPath(targetPath, { excludeWindowId = null } = {}) {
+  const normalizedTargetPath = resolveDocumentOpenPath(targetPath)
+  if (!normalizedTargetPath) {
+    return null
+  }
+
+  const existedSession = ensureSessionRuntimeInitialized().store.findSessionByComparablePath(normalizedTargetPath)
+  if (!existedSession) {
+    return null
+  }
+
+  const existedWindowId = findRegisteredWindowIdBySessionId(existedSession.sessionId)
+  if (!existedWindowId) {
+    return null
+  }
+  if (normalizeWindowId(existedWindowId) === normalizeWindowId(excludeWindowId)) {
+    return null
+  }
+  return existedWindowId
+}
+
+function createSaveBeforeSwitchFailedResult(documentPath) {
+  return {
+    ok: false,
+    reason: 'save-before-switch-failed',
+    path: documentPath || null,
+  }
+}
+
+async function switchSessionInCurrentWindow(windowId, {
+  documentPath,
+  content,
+  trigger = 'user',
+}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return {
+      ok: false,
+      reason: 'window-not-found',
+      path: documentPath || null,
+    }
+  }
+
+  const runtime = ensureSessionRuntimeInitialized()
+  const previousSession = getSessionByWindowId(normalizedWindowId)
+
+  await stopDirectoryWatch(normalizedWindowId)
+  stopExternalWatch(normalizedWindowId)
+
+  const nextSession = createInitialSession({
+    sessionId: commonUtil.createId(),
+    filePath: documentPath,
+    exists: true,
+    content,
+    isRecent: false,
+  })
+  registerSessionForWindow(normalizedWindowId, nextSession)
+  await rebindDirectoryWatchForSession(normalizedWindowId, nextSession)
+  startExternalWatch(normalizedWindowId)
+
+  if (previousSession?.sessionId) {
+    runtime.store.destroySession(previousSession.sessionId)
+  }
+
+  await refreshRecentOrderAfterOpen(documentPath)
+
+  return {
+    ok: true,
+    reason: 'opened',
+    path: documentPath || null,
+    trigger,
+    snapshot: getSessionSnapshot(normalizedWindowId),
+  }
+}
+
+async function openDocumentInCurrentWindow(windowId, targetPath, options = {}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const targetWin = getWindowById(normalizedWindowId)
+  if (!normalizedWindowId || !isWindowAlive(targetWin)) {
+    return {
+      ok: false,
+      reason: 'window-not-found',
+      path: targetPath || null,
+    }
+  }
+
+  const existedWindowId = getExistingWindowIdByDocumentPath(targetPath, {
+    excludeWindowId: normalizedWindowId,
+  })
+  if (existedWindowId) {
+    focusWindow(existedWindowId)
+    await refreshRecentOrderAfterOpen(targetPath)
+    return {
+      ok: true,
+      reason: 'focused-existing-window',
+      windowId: existedWindowId,
+    }
+  }
+
+  if (options.saveBeforeSwitch === true) {
+    const saved = await executeDocumentSaveCommandWithDispatcher(
+      normalizedWindowId,
+      createRuntimeDispatchAdapter(normalizedWindowId, ensureSessionRuntimeInitialized()),
+    )
+    if (!saved) {
+      return createSaveBeforeSwitchFailedResult(targetPath)
+    }
+  }
+
+  let content = ''
+  try {
+    content = await fs.readFile(targetPath, 'utf-8')
+  } catch {
+    return createOpenTargetReadFailedResult(targetPath)
+  }
+
+  return await switchSessionInCurrentWindow(normalizedWindowId, {
+    documentPath: targetPath,
+    content,
+    trigger: options.trigger || 'user',
+  })
 }
 
 function dispatchCommandStateOnly(windowId, command, payload, options = {}) {

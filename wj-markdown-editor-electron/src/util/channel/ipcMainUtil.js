@@ -243,6 +243,9 @@ const handlerList = {
   'document.open-path': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'document.open-path', data)
   },
+  'document.open-path-in-current-window': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.open-path-in-current-window', data)
+  },
   'get-config': () => {
     return configUtil.getConfig()
   },

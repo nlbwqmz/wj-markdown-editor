@@ -104,6 +104,7 @@ function createRuntimeContext(overrides = {}) {
     executeCommand: vi.fn(async ({
       command,
       payload,
+      openDocumentInCurrentWindow,
       openDocumentWindow,
       getSessionSnapshot,
     }) => {
@@ -117,6 +118,11 @@ function createRuntimeContext(overrides = {}) {
           return await openDocumentWindow(payload.path, {
             isRecent: true,
             trigger: payload.trigger,
+          })
+        case 'document.open-path-in-current-window':
+          return await openDocumentInCurrentWindow(payload.path, {
+            trigger: payload.trigger,
+            saveBeforeSwitch: payload.saveBeforeSwitch === true,
           })
         case 'document.get-session-snapshot':
           return getSessionSnapshot()
@@ -220,6 +226,11 @@ function createRuntimeContext(overrides = {}) {
   const openDocumentWindow = vi.fn(async (_targetPath, options = {}) => (
     options.isRecent === true ? 19 : 18
   ))
+  const openDocumentInCurrentWindow = vi.fn(async targetPath => ({
+    ok: true,
+    reason: 'opened',
+    path: targetPath,
+  }))
   const publishOpenFailureSystemNotification = vi.fn()
 
   const runtime = createDocumentSessionRuntime({
@@ -246,6 +257,7 @@ function createRuntimeContext(overrides = {}) {
     getWindowById,
     getDocumentContext,
     openDocumentWindow,
+    openDocumentInCurrentWindow,
     publishOpenFailureSystemNotification,
     ...overrides,
   })
@@ -261,6 +273,7 @@ function createRuntimeContext(overrides = {}) {
     getWindowById,
     getDocumentContext,
     openDocumentWindow,
+    openDocumentInCurrentWindow,
     publishOpenFailureSystemNotification,
   }
 }
@@ -1087,6 +1100,35 @@ describe('documentSessionRuntime', () => {
         saved: false,
       },
     })
+  })
+
+  it('document.open-path-in-current-window 必须通过新的当前窗口打开回调返回结构化 no-op，且不能退回旧 openDocumentWindow', async () => {
+    const {
+      runtime,
+      openDocumentWindow,
+      openDocumentInCurrentWindow,
+    } = createRuntimeContext()
+    openDocumentInCurrentWindow.mockResolvedValueOnce({
+      ok: true,
+      reason: 'noop-current-file',
+      path: 'C:/docs/current.md',
+    })
+
+    const result = await runtime.executeUiCommand(8, 'document.open-path-in-current-window', {
+      path: 'C:/docs/current.md',
+      saveBeforeSwitch: true,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      reason: 'noop-current-file',
+      path: 'C:/docs/current.md',
+    })
+    expect(openDocumentInCurrentWindow).toHaveBeenCalledWith(8, 'C:/docs/current.md', {
+      trigger: 'user',
+      saveBeforeSwitch: true,
+    })
+    expect(openDocumentWindow).not.toHaveBeenCalled()
   })
 
   it('document.open-path 命中 invalid-extension 时，必须保留结构化结果并补统一 warning 消息', async () => {

@@ -1368,6 +1368,34 @@ describe('ipcMainUtil command mapping', () => {
     })
   })
 
+  it('document.open-path-in-current-window 必须暴露为新的 IPC 命令，并把 saveBeforeSwitch 原样透传给 runtime', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    runtimeExecuteUiCommand.mockResolvedValueOnce({
+      ok: true,
+      reason: 'noop-current-file',
+      path: 'D:\\docs\\current.md',
+    })
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.open-path-in-current-window',
+      data: {
+        path: 'D:\\docs\\current.md',
+        saveBeforeSwitch: true,
+      },
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.open-path-in-current-window', {
+      path: 'D:\\docs\\current.md',
+      saveBeforeSwitch: true,
+    })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: true,
+      reason: 'noop-current-file',
+      path: 'D:\\docs\\current.md',
+    })
+  })
+
   it('file-manager.get-directory-state 必须通过统一命令入口返回目录状态', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     const directoryState = {
