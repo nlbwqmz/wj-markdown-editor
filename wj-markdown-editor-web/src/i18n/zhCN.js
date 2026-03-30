@@ -171,6 +171,7 @@ export default {
     },
     view: {
       defaultShowOutline: '默认显示大纲',
+      defaultShowFileManager: '默认显示文件管理栏',
       editorPreviewPosition: '编辑页预览位置',
       globalTheme: '全局主题',
       codeTheme: '代码主题',

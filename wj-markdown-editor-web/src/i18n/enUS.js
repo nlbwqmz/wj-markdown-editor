@@ -171,6 +171,7 @@ export default {
     },
     view: {
       defaultShowOutline: 'Default show outline',
+      defaultShowFileManager: 'Default show file manager',
       editorPreviewPosition: 'Editor preview position',
       globalTheme: 'Global theme',
       codeTheme: 'Code theme',
