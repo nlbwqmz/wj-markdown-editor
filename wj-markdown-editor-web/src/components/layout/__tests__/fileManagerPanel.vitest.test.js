@@ -69,6 +69,21 @@ async function flushFileManagerPanel() {
   await nextTick()
 }
 
+function createDeferred() {
+  let resolve = null
+  let reject = null
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
 vi.mock('ant-design-vue', async () => {
   const { defineComponent, h } = await import('vue')
 
@@ -345,6 +360,24 @@ describe('fileManagerPanel 组件', () => {
     expect(source).toContain('var(--wj-markdown-bg-secondary)')
     expect(source).toContain('var(--wj-markdown-border-primary)')
   })
+
+  it('pOSIX 路径仅大小写不同，不应把其他文件误高亮成当前文件', async () => {
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      path: '/workspace/Readme.md',
+    })
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: '/workspace',
+      entryList: [
+        { name: 'readme.md', path: '/workspace/readme.md', kind: 'markdown' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.find('[data-testid="file-manager-entry-current"]').exists()).toBe(false)
+  })
 })
 
 describe('fileManagerPanelController', () => {
@@ -517,6 +550,135 @@ describe('fileManagerPanelController', () => {
       directoryPath: 'D:/incoming',
       entryList: [
         { name: 'fresh.md', path: 'D:/incoming/fresh.md', kind: 'markdown' },
+      ],
+    }))
+    await flushFileManagerPanel()
+
+    expect(controller.directoryPath.value).toBe('D:/incoming')
+    expect(controller.entryList.value[0].name).toBe('fresh.md')
+
+    scope.stop()
+  })
+
+  it('根目录场景下仍应请求并保留目录态，而不是直接退回空状态', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      path: '/README.md',
+    })
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: '/',
+      entryList: [
+        { name: 'README.md', path: '/README.md', kind: 'markdown' },
+      ],
+    }))
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledWith({
+      directoryPath: '/',
+    })
+    expect(controller.directoryPath.value).toBe('/')
+    expect(controller.hasDirectory.value).toBe(true)
+
+    scope.stop()
+  })
+
+  it('较晚发起的目录请求先返回后，较早请求的旧结果不应覆盖最新目录状态', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    const staleRequest = createDeferred()
+    const latestRequest = createDeferred()
+    fileManagerPanelState.requestFileManagerDirectoryState
+      .mockImplementationOnce(() => staleRequest.promise)
+      .mockImplementationOnce(() => latestRequest.promise)
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    await flushFileManagerPanel()
+
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      path: 'D:/other/next.md',
+    })
+    await flushFileManagerPanel()
+
+    latestRequest.resolve(createDirectoryState({
+      directoryPath: 'D:/other',
+      entryList: [
+        { name: 'next.md', path: 'D:/other/next.md', kind: 'markdown' },
+      ],
+    }))
+    await flushFileManagerPanel()
+
+    expect(controller.directoryPath.value).toBe('D:/other')
+    expect(controller.entryList.value[0].name).toBe('next.md')
+    expect(controller.loading.value).toBe(false)
+
+    staleRequest.resolve(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+    await flushFileManagerPanel()
+
+    expect(controller.directoryPath.value).toBe('D:/other')
+    expect(controller.entryList.value[0].name).toBe('next.md')
+    expect(controller.loading.value).toBe(false)
+
+    scope.stop()
+  })
+
+  it('目录变更事件如果代表更新状态，较早请求的旧结果不应再覆盖它', async () => {
+    const { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } = await import('@/util/file-manager/fileManagerEventUtil.js')
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    const staleRequest = createDeferred()
+    fileManagerPanelState.requestFileManagerDirectoryState.mockImplementationOnce(() => staleRequest.promise)
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    await flushFileManagerPanel()
+
+    const changedHandler = fileManagerPanelState.registeredHandlerMap.get(FILE_MANAGER_DIRECTORY_CHANGED_EVENT)
+    changedHandler(createDirectoryState({
+      directoryPath: 'D:/incoming',
+      entryList: [
+        { name: 'fresh.md', path: 'D:/incoming/fresh.md', kind: 'markdown' },
+      ],
+    }))
+    await flushFileManagerPanel()
+
+    expect(controller.directoryPath.value).toBe('D:/incoming')
+    expect(controller.entryList.value[0].name).toBe('fresh.md')
+
+    staleRequest.resolve(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
       ],
     }))
     await flushFileManagerPanel()

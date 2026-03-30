@@ -5,14 +5,48 @@ import {
   requestDocumentOpenPathInCurrentWindow,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 
-function normalizeComparablePath(path) {
+function isWindowsCaseInsensitivePath(path) {
+  return /^[A-Za-z]:\//u.test(path) || path.startsWith('//')
+}
+
+function getUncShareRoot(path) {
+  return path.match(/^(\/\/[^/]+\/[^/]+)\/*$/u)?.[1] || null
+}
+
+function normalizePath(path) {
   if (typeof path !== 'string') {
     return null
   }
 
-  const normalizedPath = path.trim().replace(/\\/g, '/').replace(/\/+$/u, '')
+  const normalizedPath = path.trim().replace(/\\/g, '/')
+  if (!normalizedPath) {
+    return null
+  }
+  if (normalizedPath === '/') {
+    return '/'
+  }
+  if (/^[A-Za-z]:\/?$/u.test(normalizedPath)) {
+    return `${normalizedPath.slice(0, 2)}/`
+  }
 
-  return normalizedPath ? normalizedPath.toLowerCase() : null
+  const uncShareRoot = getUncShareRoot(normalizedPath)
+  if (uncShareRoot) {
+    return uncShareRoot
+  }
+
+  const trimmedPath = normalizedPath.replace(/\/+$/u, '')
+  return trimmedPath || null
+}
+
+function normalizeComparablePath(path) {
+  const normalizedPath = normalizePath(path)
+  if (!normalizedPath) {
+    return null
+  }
+
+  return isWindowsCaseInsensitivePath(normalizedPath)
+    ? normalizedPath.toLowerCase()
+    : normalizedPath
 }
 
 function appendStageList(result, stageList) {

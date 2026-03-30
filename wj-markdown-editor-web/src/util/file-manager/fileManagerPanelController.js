@@ -14,14 +14,16 @@ import {
 const DRAFT_EMPTY_MESSAGE_KEY = 'message.fileManagerSelectDirectory'
 const DIRECTORY_EMPTY_MESSAGE_KEY = 'message.fileManagerDirectoryEmpty'
 
-function normalizeComparablePath(path) {
-  if (typeof path !== 'string') {
-    return null
-  }
+function isWindowsDriveRootPath(path) {
+  return /^[A-Za-z]:\/$/u.test(path)
+}
 
-  const normalizedPath = path.trim().replace(/\\/g, '/').replace(/\/+$/u, '')
+function isWindowsCaseInsensitivePath(path) {
+  return /^[A-Za-z]:\//u.test(path) || path.startsWith('//')
+}
 
-  return normalizedPath ? normalizedPath.toLowerCase() : null
+function getUncShareRoot(path) {
+  return path.match(/^(\/\/[^/]+\/[^/]+)\/*$/u)?.[1] || null
 }
 
 function normalizePath(path) {
@@ -29,8 +31,35 @@ function normalizePath(path) {
     return null
   }
 
-  const normalizedPath = path.trim().replace(/\\/g, '/').replace(/\/+$/u, '')
-  return normalizedPath || null
+  const normalizedPath = path.trim().replace(/\\/g, '/')
+  if (!normalizedPath) {
+    return null
+  }
+  if (normalizedPath === '/') {
+    return '/'
+  }
+  if (/^[A-Za-z]:\/?$/u.test(normalizedPath)) {
+    return `${normalizedPath.slice(0, 2)}/`
+  }
+
+  const uncShareRoot = getUncShareRoot(normalizedPath)
+  if (uncShareRoot) {
+    return uncShareRoot
+  }
+
+  const trimmedPath = normalizedPath.replace(/\/+$/u, '')
+  return trimmedPath || null
+}
+
+function normalizeComparablePath(path) {
+  const normalizedPath = normalizePath(path)
+  if (!normalizedPath) {
+    return null
+  }
+
+  return isWindowsCaseInsensitivePath(normalizedPath)
+    ? normalizedPath.toLowerCase()
+    : normalizedPath
 }
 
 function getPathDirname(path) {
@@ -39,10 +68,19 @@ function getPathDirname(path) {
   if (!normalizedPath) {
     return null
   }
+  if (normalizedPath === '/' || isWindowsDriveRootPath(normalizedPath) || getUncShareRoot(normalizedPath) === normalizedPath) {
+    return normalizedPath
+  }
 
   const lastSlashIndex = normalizedPath.lastIndexOf('/')
-  if (lastSlashIndex <= 0) {
+  if (lastSlashIndex < 0) {
     return null
+  }
+  if (lastSlashIndex === 0) {
+    return '/'
+  }
+  if (/^[A-Za-z]:\//u.test(normalizedPath) && lastSlashIndex === 2) {
+    return `${normalizedPath.slice(0, 2)}/`
   }
 
   return normalizedPath.slice(0, lastSlashIndex)
@@ -171,17 +209,35 @@ function buildBreadcrumbList(directoryPath) {
   if (!normalizedPath) {
     return []
   }
+  if (normalizedPath === '/') {
+    return [{
+      path: '/',
+      label: '/',
+    }]
+  }
+  if (isWindowsDriveRootPath(normalizedPath)) {
+    return [{
+      path: normalizedPath,
+      label: normalizedPath.slice(0, 2),
+    }]
+  }
 
   const segmentList = normalizedPath.split('/').filter(Boolean)
   if (segmentList.length === 0) {
     return []
   }
 
-  let currentPath = ''
+  let currentPath = normalizedPath.startsWith('//')
+    ? '//'
+    : normalizedPath.startsWith('/')
+      ? '/'
+      : ''
 
   return segmentList.map((segment, index) => {
     if (index === 0 && /^[A-Za-z]:$/u.test(segment)) {
-      currentPath = segment
+      currentPath = `${segment}/`
+    } else if (currentPath === '/' || currentPath === '//') {
+      currentPath = `${currentPath}${segment}`
     } else {
       currentPath = currentPath ? `${currentPath}/${segment}` : segment
     }
@@ -267,13 +323,14 @@ export function createFileManagerPanelController({
   })
   const directoryState = ref(createEmptyDirectoryState())
   const loading = ref(false)
+  let latestDirectoryStateRequestId = 0
   const directoryPath = computed(() => directoryState.value.directoryPath)
   const entryList = computed(() => directoryState.value.entryList)
   const emptyMessageKey = computed(() => directoryState.value.emptyMessageKey)
   const hasDirectory = computed(() => Boolean(directoryState.value.directoryPath))
   const breadcrumbList = computed(() => buildBreadcrumbList(directoryPath.value))
 
-  function applyDirectoryState(nextState, options = {}) {
+  function commitDirectoryState(nextState, options = {}) {
     directoryState.value = normalizeDirectoryState(
       nextState,
       store?.documentSessionSnapshot,
@@ -283,34 +340,63 @@ export function createFileManagerPanelController({
     return directoryState.value
   }
 
+  function commitEmptyDirectoryState(emptyMessageKey) {
+    directoryState.value = createEmptyDirectoryState(emptyMessageKey)
+    return directoryState.value
+  }
+
+  function invalidatePendingDirectoryStateRequest() {
+    latestDirectoryStateRequestId += 1
+    loading.value = false
+    return latestDirectoryStateRequestId
+  }
+
+  function applyDirectoryState(nextState, options = {}) {
+    invalidatePendingDirectoryStateRequest()
+    return commitDirectoryState(nextState, options)
+  }
+
+  async function runLatestDirectoryStateRequest(requester, onResolved) {
+    latestDirectoryStateRequestId += 1
+    const requestId = latestDirectoryStateRequestId
+    loading.value = true
+
+    try {
+      const result = await requester()
+      if (requestId !== latestDirectoryStateRequestId) {
+        return directoryState.value
+      }
+
+      return onResolved(result)
+    } finally {
+      if (requestId === latestDirectoryStateRequestId) {
+        loading.value = false
+      }
+    }
+  }
+
   async function reloadDirectoryStateFromSnapshot(snapshot = store?.documentSessionSnapshot) {
     const target = resolveDirectoryTargetFromSnapshot(snapshot)
     if (!target.directoryPath) {
-      directoryState.value = createEmptyDirectoryState(target.emptyMessageKey)
-      return directoryState.value
+      invalidatePendingDirectoryStateRequest()
+      return commitEmptyDirectoryState(target.emptyMessageKey)
     }
 
-    loading.value = true
-    try {
-      const nextState = await requestDirectoryState({
-        directoryPath: target.directoryPath,
-      })
-
+    return await runLatestDirectoryStateRequest(() => requestDirectoryState({
+      directoryPath: target.directoryPath,
+    }), (nextState) => {
       if (!nextState) {
-        directoryState.value = createEmptyDirectoryState(
+        return commitEmptyDirectoryState(
           Object.prototype.hasOwnProperty.call(target, 'missingDirectoryEmptyMessageKey')
             ? target.missingDirectoryEmptyMessageKey
             : target.emptyMessageKey,
         )
-        return directoryState.value
       }
 
-      return applyDirectoryState(nextState, {
+      return commitDirectoryState(nextState, {
         emptyMessageKey: target.emptyMessageKey,
       })
-    } finally {
-      loading.value = false
-    }
+    })
   }
 
   async function openDirectory(targetPath) {
@@ -318,17 +404,16 @@ export function createFileManagerPanelController({
       return null
     }
 
-    const nextState = await requestOpenDirectory({
+    return await runLatestDirectoryStateRequest(() => requestOpenDirectory({
       directoryPath: targetPath,
-    })
+    }), (nextState) => {
+      if (!nextState) {
+        return commitEmptyDirectoryState(DIRECTORY_EMPTY_MESSAGE_KEY)
+      }
 
-    if (!nextState) {
-      directoryState.value = createEmptyDirectoryState(DIRECTORY_EMPTY_MESSAGE_KEY)
-      return directoryState.value
-    }
-
-    return applyDirectoryState(nextState, {
-      emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+      return commitDirectoryState(nextState, {
+        emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+      })
     })
   }
 
@@ -352,39 +437,39 @@ export function createFileManagerPanelController({
   }
 
   async function createFolder(name) {
-    const result = await requestCreateFolder({
+    return await runLatestDirectoryStateRequest(() => requestCreateFolder({
       name,
+    }), (result) => {
+      if (result) {
+        commitDirectoryState(result?.directoryState || result, {
+          emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+        })
+      }
+
+      return result
     })
-
-    if (result) {
-      applyDirectoryState(result?.directoryState || result, {
-        emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-      })
-    }
-
-    return result
   }
 
   async function createMarkdown(name) {
-    const result = await requestCreateMarkdown({
+    return await runLatestDirectoryStateRequest(() => requestCreateMarkdown({
       name,
+    }), async (result) => {
+      if (result?.directoryState) {
+        commitDirectoryState(result.directoryState, {
+          emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+        })
+      }
+
+      if (result?.path) {
+        await openDecisionController.openDocument(result.path, {
+          currentPath: resolveCurrentDocumentPath(store?.documentSessionSnapshot),
+          isDirty: store?.documentSessionSnapshot?.dirty === true,
+          source: 'file-panel-create-markdown',
+        })
+      }
+
+      return result
     })
-
-    if (result?.directoryState) {
-      applyDirectoryState(result.directoryState, {
-        emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-      })
-    }
-
-    if (result?.path) {
-      await openDecisionController.openDocument(result.path, {
-        currentPath: resolveCurrentDocumentPath(store?.documentSessionSnapshot),
-        isDirty: store?.documentSessionSnapshot?.dirty === true,
-        source: 'file-panel-create-markdown',
-      })
-    }
-
-    return result
   }
 
   async function requestCreateFolderFromInput() {

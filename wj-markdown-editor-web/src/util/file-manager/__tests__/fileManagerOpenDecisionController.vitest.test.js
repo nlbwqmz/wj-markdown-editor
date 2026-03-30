@@ -142,6 +142,38 @@ describe('fileManagerOpenDecisionController', () => {
     expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
   })
 
+  it('pOSIX 路径仅大小写不同，不应被误判为当前文件重复打开', async () => {
+    const controller = createController()
+
+    const result = await controller.openDocument('/tmp/current.md', {
+      currentPath: '/tmp/Current.md',
+      isDirty: false,
+    })
+
+    expect(result.reason).not.toBe('noop-current-file')
+    expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('/tmp/current.md', {
+      saveBeforeSwitch: false,
+      source: undefined,
+    })
+  })
+
+  it('windows 驱动器路径大小写不同时，仍应视为同一文件', async () => {
+    const controller = createController()
+
+    const result = await controller.openDocument('c:/docs/note.md', {
+      currentPath: 'C:/Docs/Note.md',
+      isDirty: true,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      reason: 'noop-current-file',
+      stageList: [],
+    })
+    expect(mocked.requestDocumentOpenPath).not.toHaveBeenCalled()
+    expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
+  })
+
   it('打开模式选择取消时应返回 open-cancelled，且不发起任何打开调度', async () => {
     mocked.promptOpenModeChoice.mockResolvedValue('cancel')
     const controller = createController()
