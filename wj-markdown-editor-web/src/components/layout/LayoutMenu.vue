@@ -8,19 +8,47 @@ import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import {
   isDocumentOpenMissingResult,
-  requestDocumentOpenPath,
   requestRecentClear,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
+import {
+  createFileManagerOpenDecisionController,
+  resolveDocumentOpenCurrentPath,
+} from '@/util/file-manager/fileManagerOpenDecisionController.js'
 import toggleFullScreenAction from '@/util/fullScreenActionUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const { t } = useI18n()
 const store = useCommonStore()
+const openDecisionController = createFileManagerOpenDecisionController({
+  t,
+})
 
 const menuList = ref([])
 const shortcutKeyList = ref(store.config.shortcutKeyList)
 const recentList = ref(store.recentList)
 const isFullScreen = ref(store.isFullScreen)
+const fileManagerPanelVisible = ref(store.fileManagerPanelVisible)
+
+function joinMenuLabel(segmentList) {
+  const compactLocale = String(store.config.language || '').toLowerCase().startsWith('zh')
+  return segmentList.filter(Boolean).join(compactLocale ? '' : ' ')
+}
+
+function getFileManagerToggleLabel() {
+  const labelKey = fileManagerPanelVisible.value
+    ? 'topMenu.view.children.hideFileManager'
+    : 'topMenu.view.children.showFileManager'
+  const translatedLabel = t(labelKey)
+
+  if (translatedLabel !== labelKey) {
+    return translatedLabel
+  }
+
+  return joinMenuLabel([
+    t(fileManagerPanelVisible.value ? 'config.disable' : 'config.enable'),
+    t('config.view.defaultShowFileManager'),
+  ])
+}
 
 function createRecentListVNode() {
   return recentList.value.map((item) => {
@@ -28,7 +56,11 @@ function createRecentListVNode() {
       key: commonUtil.createId(),
       label: commonUtil.createRecentLabel(item.path, item.name),
       click: () => {
-        requestDocumentOpenPath(item.path).then((result) => {
+        openDecisionController.openDocument(item.path, {
+          currentPath: resolveDocumentOpenCurrentPath(store.documentSessionSnapshot),
+          isDirty: store.documentSessionSnapshot?.dirty === true,
+          source: 'recent-list',
+        }).then((result) => {
           if (isDocumentOpenMissingResult(result)) {
             commonUtil.recentFileNotExists(item.path)
           }
@@ -168,6 +200,18 @@ function updateMenuList() {
             toggleFullScreenAction()
           },
         },
+        {
+          key: commonUtil.createId(),
+          label: getFileManagerToggleLabel(),
+          click: () => {
+            if (typeof store.setFileManagerPanelVisible === 'function') {
+              store.setFileManagerPanelVisible(!store.fileManagerPanelVisible)
+              return
+            }
+
+            store.fileManagerPanelVisible = !store.fileManagerPanelVisible
+          },
+        },
       ],
     },
     {
@@ -205,6 +249,10 @@ watch(() => store.recentList, (newValue) => {
 }, { deep: true })
 watch(() => store.isFullScreen, (newValue) => {
   isFullScreen.value = newValue
+  updateMenuList()
+})
+watch(() => store.fileManagerPanelVisible, (newValue) => {
+  fileManagerPanelVisible.value = newValue
   updateMenuList()
 })
 

@@ -49,6 +49,20 @@ function normalizeComparablePath(path) {
     : normalizedPath
 }
 
+/**
+ * 从文档会话快照里提取“当前已打开 Markdown 路径”。
+ *
+ * recent-missing 会话没有真实打开的磁盘文件，
+ * 这里统一返回 null，避免把缺失项误判成“当前文件重复打开”。
+ */
+export function resolveDocumentOpenCurrentPath(snapshot) {
+  if (snapshot?.isRecentMissing === true) {
+    return null
+  }
+
+  return normalizePath(snapshot?.resourceContext?.documentPath || snapshot?.displayPath || null)
+}
+
 function appendStageList(result, stageList) {
   if (result && typeof result === 'object') {
     return {
@@ -266,4 +280,5 @@ export default {
   createDefaultPromptOpenModeChoice,
   createDefaultPromptSaveChoice,
   createFileManagerOpenDecisionController,
+  resolveDocumentOpenCurrentPath,
 }

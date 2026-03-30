@@ -158,6 +158,13 @@ vi.mock('@/util/file-manager/fileManagerPanelCommandUtil.js', () => ({
 
 vi.mock('@/util/file-manager/fileManagerOpenDecisionController.js', () => ({
   createFileManagerOpenDecisionController: fileManagerPanelState.openDecisionFactory,
+  resolveDocumentOpenCurrentPath(snapshot) {
+    if (snapshot?.isRecentMissing === true) {
+      return null
+    }
+
+    return snapshot?.resourceContext?.documentPath || snapshot?.displayPath || null
+  },
 }))
 
 describe('fileManagerPanel 组件', () => {
@@ -313,6 +320,67 @@ describe('fileManagerPanel 组件', () => {
     wrapper.findAll('[data-testid="file-manager-entry-name"]').forEach((node) => {
       expect(node.classes()).toContain('truncate')
     })
+  })
+
+  it('点击目录项时应进入该目录', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
+      ],
+    }))
+    fileManagerPanelState.requestFileManagerOpenDirectory.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs/assets',
+      entryList: [
+        { name: 'nested.md', path: 'D:/docs/assets/nested.md', kind: 'markdown' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('.file-manager-panel__entry').trigger('click')
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).toHaveBeenCalledWith({
+      directoryPath: 'D:/docs/assets',
+    })
+    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('assets')
+  })
+
+  it('点击当前 Markdown 时应无操作，不再重复触发统一打开决策', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('[data-testid="file-manager-entry-current"]').trigger('click')
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
+  })
+
+  it('点击其他文件类型时应提示当前仅支持 Markdown 打开', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'archive.zip', path: 'D:/docs/archive.zip', kind: 'other' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('.file-manager-panel__entry').trigger('click')
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.onlyMarkdownFilesCanBeOpened')
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
   })
 
   it('draft 空状态应提供选择目录入口，并在选择成功后切换到该目录', async () => {
@@ -493,6 +561,41 @@ describe('fileManagerPanelController', () => {
     scope.stop()
   })
 
+  it('createFolder 在未传名称时应先请求名称，再调用创建能力', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    const openNameInputModal = vi.fn().mockResolvedValue('assets')
+    fileManagerPanelState.requestFileManagerCreateFolder.mockResolvedValue({
+      directoryState: createDirectoryState({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
+        ],
+      }),
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+        openNameInputModal,
+      })
+    })
+
+    await controller.createFolder()
+
+    expect(openNameInputModal).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'folder',
+    }))
+    expect(fileManagerPanelState.requestFileManagerCreateFolder).toHaveBeenCalledWith({
+      name: 'assets',
+    })
+
+    scope.stop()
+  })
+
   it('新建 Markdown 成功后应复用统一打开决策控制器', async () => {
     const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
     const openNameInputModal = vi.fn().mockResolvedValue('draft-note.md')
@@ -519,6 +622,48 @@ describe('fileManagerPanelController', () => {
 
     await controller.requestCreateMarkdownFromInput()
 
+    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith(
+      expect.stringContaining('draft-note.md'),
+      expect.objectContaining({
+        source: 'file-panel-create-markdown',
+      }),
+    )
+
+    scope.stop()
+  })
+
+  it('createMarkdown 在未传名称时应先请求名称，并继续复用统一打开决策', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    const openNameInputModal = vi.fn().mockResolvedValue('draft-note.md')
+    fileManagerPanelState.requestFileManagerCreateMarkdown.mockResolvedValue({
+      path: 'D:/docs/draft-note.md',
+      directoryState: createDirectoryState({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'draft-note.md', path: 'D:/docs/draft-note.md', kind: 'markdown' },
+        ],
+      }),
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+        openNameInputModal,
+      })
+    })
+
+    await controller.createMarkdown()
+
+    expect(openNameInputModal).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'markdown',
+    }))
+    expect(fileManagerPanelState.requestFileManagerCreateMarkdown).toHaveBeenCalledWith({
+      name: 'draft-note.md',
+    })
     expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith(
       expect.stringContaining('draft-note.md'),
       expect.objectContaining({

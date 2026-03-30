@@ -2,7 +2,10 @@ import { Input, message, Modal } from 'ant-design-vue'
 import { computed, createVNode, onScopeDispose, ref, watch } from 'vue'
 import eventEmit from '@/util/channel/eventEmit.js'
 import { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } from './fileManagerEventUtil.js'
-import { createFileManagerOpenDecisionController } from './fileManagerOpenDecisionController.js'
+import {
+  createFileManagerOpenDecisionController,
+  resolveDocumentOpenCurrentPath,
+} from './fileManagerOpenDecisionController.js'
 import {
   requestFileManagerCreateFolder,
   requestFileManagerCreateMarkdown,
@@ -101,14 +104,6 @@ function isMarkdownPath(path) {
   return /\.(?:md|markdown)$/iu.test(path || '')
 }
 
-function resolveCurrentDocumentPath(snapshot) {
-  if (snapshot?.isRecentMissing === true) {
-    return null
-  }
-
-  return normalizePath(snapshot?.resourceContext?.documentPath || snapshot?.displayPath || null)
-}
-
 function resolveDirectoryTargetFromSnapshot(snapshot) {
   if (snapshot?.isRecentMissing === true && snapshot?.recentMissingPath) {
     return {
@@ -118,7 +113,7 @@ function resolveDirectoryTargetFromSnapshot(snapshot) {
     }
   }
 
-  const currentDocumentPath = resolveCurrentDocumentPath(snapshot)
+  const currentDocumentPath = resolveDocumentOpenCurrentPath(snapshot)
   if (!currentDocumentPath) {
     return {
       directoryPath: null,
@@ -173,7 +168,7 @@ function sortDirectoryEntryList(entryList) {
 }
 
 function normalizeDirectoryState(nextState, snapshot, fallbackEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY) {
-  const currentDocumentPath = normalizeComparablePath(resolveCurrentDocumentPath(snapshot))
+  const currentDocumentPath = normalizeComparablePath(resolveDocumentOpenCurrentPath(snapshot))
   const rawDirectoryState = nextState?.directoryState || nextState
   const directoryPath = normalizePath(rawDirectoryState?.directoryPath)
 
@@ -315,6 +310,7 @@ export function createFileManagerPanelController({
   requestPickDirectory = requestFileManagerPickDirectory,
   createOpenDecisionController = createFileManagerOpenDecisionController,
   openNameInputModal = createDefaultOpenNameInputModal({ t }),
+  showWarningMessage = messageKey => message.warning(t(messageKey)),
   subscribeEvent = (eventName, handler) => eventEmit.on(eventName, handler),
   unsubscribeEvent = (eventName, handler) => eventEmit.remove(eventName, handler),
 } = {}) {
@@ -437,8 +433,13 @@ export function createFileManagerPanelController({
   }
 
   async function createFolder(name) {
+    const nextName = typeof name === 'string' ? name : await requestEntryName('folder')
+    if (!nextName) {
+      return null
+    }
+
     return await runLatestDirectoryStateRequest(() => requestCreateFolder({
-      name,
+      name: nextName,
     }), (result) => {
       if (result) {
         commitDirectoryState(result?.directoryState || result, {
@@ -451,8 +452,13 @@ export function createFileManagerPanelController({
   }
 
   async function createMarkdown(name) {
+    const nextName = typeof name === 'string' ? name : await requestEntryName('markdown')
+    if (!nextName) {
+      return null
+    }
+
     return await runLatestDirectoryStateRequest(() => requestCreateMarkdown({
-      name,
+      name: nextName,
     }), async (result) => {
       if (result?.directoryState) {
         commitDirectoryState(result.directoryState, {
@@ -462,7 +468,7 @@ export function createFileManagerPanelController({
 
       if (result?.path) {
         await openDecisionController.openDocument(result.path, {
-          currentPath: resolveCurrentDocumentPath(store?.documentSessionSnapshot),
+          currentPath: resolveDocumentOpenCurrentPath(store?.documentSessionSnapshot),
           isDirty: store?.documentSessionSnapshot?.dirty === true,
           source: 'file-panel-create-markdown',
         })
@@ -473,21 +479,11 @@ export function createFileManagerPanelController({
   }
 
   async function requestCreateFolderFromInput() {
-    const name = await requestEntryName('folder')
-    if (!name) {
-      return null
-    }
-
-    return await createFolder(name)
+    return await createFolder()
   }
 
   async function requestCreateMarkdownFromInput() {
-    const name = await requestEntryName('markdown')
-    if (!name) {
-      return null
-    }
-
-    return await createMarkdown(name)
+    return await createMarkdown()
   }
 
   async function openEntry(entry) {
@@ -496,13 +492,22 @@ export function createFileManagerPanelController({
     }
 
     if (entry?.kind === 'markdown') {
+      const currentDocumentPath = normalizeComparablePath(resolveDocumentOpenCurrentPath(store?.documentSessionSnapshot))
+      if (entry?.isActive === true || normalizeComparablePath(entry?.path) === currentDocumentPath) {
+        return {
+          ok: true,
+          reason: 'noop-current-file',
+        }
+      }
+
       return await openDecisionController.openDocument(entry.path, {
-        currentPath: resolveCurrentDocumentPath(store?.documentSessionSnapshot),
+        currentPath: resolveDocumentOpenCurrentPath(store?.documentSessionSnapshot),
         isDirty: store?.documentSessionSnapshot?.dirty === true,
         source: 'file-panel-entry',
       })
     }
 
+    showWarningMessage('message.onlyMarkdownFilesCanBeOpened')
     return {
       ok: false,
       reason: 'unsupported-entry-kind',
@@ -514,7 +519,7 @@ export function createFileManagerPanelController({
 
     return [
       snapshot?.sessionId ?? '',
-      resolveCurrentDocumentPath(snapshot) ?? '',
+      resolveDocumentOpenCurrentPath(snapshot) ?? '',
       snapshot?.recentMissingPath ?? '',
     ].join('::')
   })

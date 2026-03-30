@@ -11,13 +11,13 @@ const controller = createFileManagerPanelController({
 })
 const {
   breadcrumbList,
+  createFolder,
+  createMarkdown,
   emptyMessageKey,
   entryList,
   hasDirectory,
   openEntry,
   pickDirectory,
-  requestCreateFolderFromInput,
-  requestCreateMarkdownFromInput,
 } = controller
 
 function resolveEntryIconTestId(entry) {
@@ -66,7 +66,7 @@ function resolveEntryIconTestId(entry) {
           data-testid="file-manager-create-folder"
           class="file-manager-panel__action-btn"
           :disabled="!hasDirectory"
-          @click="requestCreateFolderFromInput"
+          @click="createFolder"
         >
           <span class="i-tabler:folder-plus" />
         </button>
@@ -75,7 +75,7 @@ function resolveEntryIconTestId(entry) {
           data-testid="file-manager-create-markdown"
           class="file-manager-panel__action-btn"
           :disabled="!hasDirectory"
-          @click="requestCreateMarkdownFromInput"
+          @click="createMarkdown"
         >
           <span class="i-tabler:file-plus" />
         </button>
