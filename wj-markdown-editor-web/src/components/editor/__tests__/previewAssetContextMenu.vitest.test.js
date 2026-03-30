@@ -61,6 +61,13 @@ const MenuStub = defineComponent({
   },
 })
 
+const MenuDividerStub = defineComponent({
+  name: 'AMenuDividerStub',
+  setup() {
+    return () => h('div', { 'data-testid': 'menu-divider-stub' })
+  },
+})
+
 const MenuItemStub = defineComponent({
   name: 'AMenuItemStub',
   props: {
@@ -92,6 +99,7 @@ function mountContextMenu(props = {}) {
       stubs: {
         'a-dropdown': DropdownStub,
         'a-menu': MenuStub,
+        'a-menu-divider': MenuDividerStub,
         'a-menu-item': MenuItemStub,
       },
     },
@@ -159,6 +167,36 @@ describe('previewAssetContextMenu', () => {
 
     expect(normalItem.classes()).not.toContain('!color-red')
     expect(dangerItem.classes()).toContain('!color-red')
+  })
+
+  it('菜单组发生切换时，应在新组前渲染分隔线', () => {
+    const wrapper = mountContextMenu({
+      items: [
+        {
+          key: 'copy-image',
+          label: '复制图片',
+          group: 'copy',
+        },
+        {
+          key: 'copy-link',
+          label: '复制链接',
+          group: 'copy',
+        },
+        {
+          key: 'save-as',
+          label: '另存为',
+          group: 'file',
+        },
+        {
+          key: 'delete',
+          label: '删除',
+          danger: true,
+          group: 'danger',
+        },
+      ],
+    })
+
+    expect(wrapper.findAll('[data-testid="menu-divider-stub"]')).toHaveLength(2)
   })
 
   it('点击菜单外空白区域时会关闭菜单', async () => {

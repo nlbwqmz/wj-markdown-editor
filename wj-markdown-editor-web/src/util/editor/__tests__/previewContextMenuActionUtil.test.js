@@ -47,24 +47,28 @@ test('远程图片在 standalone-preview 下必须按顺序返回复制链接、
     t: key => `translated:${key}`,
   }), [
     {
-      key: 'resource.copy-link',
-      label: 'translated:previewAssetMenu.copyImageLink',
-      danger: false,
-    },
-    {
       key: 'resource.copy-image',
       label: 'translated:previewAssetMenu.copyImage',
       danger: false,
-    },
-    {
-      key: 'resource.save-as',
-      label: 'translated:previewAssetMenu.saveAs',
-      danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.copy-markdown-reference',
       label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyImageLink',
+      danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+      group: 'file',
     },
   ])
 })
@@ -84,29 +88,34 @@ test('远程图片在 editor-preview 下必须在复制菜单后保留删除入�
     t: key => `translated:${key}`,
   }), [
     {
-      key: 'resource.copy-link',
-      label: 'translated:previewAssetMenu.copyImageLink',
-      danger: false,
-    },
-    {
       key: 'resource.copy-image',
       label: 'translated:previewAssetMenu.copyImage',
       danger: false,
-    },
-    {
-      key: 'resource.save-as',
-      label: 'translated:previewAssetMenu.saveAs',
-      danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.copy-markdown-reference',
       label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyImageLink',
+      danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+      group: 'file',
     },
     {
       key: 'resource.delete',
       label: 'translated:previewAssetMenu.delete',
       danger: true,
+      group: 'danger',
     },
   ])
 })
@@ -126,34 +135,40 @@ test('本地图片在 editor-preview 下必须按顺序返回完整编辑菜单�
     t: key => `translated:${key}`,
   }), [
     {
-      key: 'resource.copy-absolute-path',
-      label: 'translated:previewAssetMenu.copyAbsolutePath',
-      danger: false,
-    },
-    {
       key: 'resource.copy-image',
       label: 'translated:previewAssetMenu.copyImage',
       danger: false,
-    },
-    {
-      key: 'resource.save-as',
-      label: 'translated:previewAssetMenu.saveAs',
-      danger: false,
-    },
-    {
-      key: 'resource.open-in-folder',
-      label: 'translated:top.openInExplorer',
-      danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.copy-markdown-reference',
       label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-absolute-path',
+      label: 'translated:previewAssetMenu.copyAbsolutePath',
+      danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+      group: 'file',
+    },
+    {
+      key: 'resource.open-in-folder',
+      label: 'translated:top.openInExplorer',
+      danger: false,
+      group: 'file',
     },
     {
       key: 'resource.delete',
       label: 'translated:previewAssetMenu.delete',
       danger: true,
+      group: 'danger',
     },
   ])
 })
@@ -173,24 +188,28 @@ test('本地非图片资源在 editor-preview 下必须按顺序返回非图片�
     t: key => `translated:${key}`,
   }), [
     {
+      key: 'resource.copy-markdown-reference',
+      label: 'translated:previewAssetMenu.copyMarkdownReference',
+      danger: false,
+      group: 'copy',
+    },
+    {
       key: 'resource.copy-absolute-path',
       label: 'translated:previewAssetMenu.copyAbsolutePath',
       danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.open-in-folder',
       label: 'translated:top.openInExplorer',
       danger: false,
-    },
-    {
-      key: 'resource.copy-markdown-reference',
-      label: 'translated:previewAssetMenu.copyMarkdownReference',
-      danger: false,
+      group: 'file',
     },
     {
       key: 'resource.delete',
       label: 'translated:previewAssetMenu.delete',
       danger: true,
+      group: 'danger',
     },
   ])
 })
@@ -210,14 +229,16 @@ test('远程非图片资源在 standalone-preview 下只能返回复制资源链
     t: key => `translated:${key}`,
   }), [
     {
-      key: 'resource.copy-link',
-      label: 'translated:previewAssetMenu.copyResourceLink',
-      danger: false,
-    },
-    {
       key: 'resource.copy-markdown-reference',
       label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyResourceLink',
+      danger: false,
+      group: 'copy',
     },
   ])
 })
@@ -237,19 +258,22 @@ test('远程非图片资源在 editor-preview 下必须保留删除入口且顺�
     t: key => `translated:${key}`,
   }), [
     {
-      key: 'resource.copy-link',
-      label: 'translated:previewAssetMenu.copyResourceLink',
-      danger: false,
-    },
-    {
       key: 'resource.copy-markdown-reference',
       label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyResourceLink',
+      danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.delete',
       label: 'translated:previewAssetMenu.delete',
       danger: true,
+      group: 'danger',
     },
   ])
 })
@@ -269,19 +293,22 @@ test('markdownReference 为 null 时必须隐藏复制 Markdown 引用菜单项'
     t: key => `translated:${key}`,
   }), [
     {
-      key: 'resource.copy-link',
-      label: 'translated:previewAssetMenu.copyImageLink',
-      danger: false,
-    },
-    {
       key: 'resource.copy-image',
       label: 'translated:previewAssetMenu.copyImage',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyImageLink',
+      danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.save-as',
       label: 'translated:previewAssetMenu.saveAs',
       danger: false,
+      group: 'file',
     },
   ])
 })
@@ -304,24 +331,28 @@ test('远程 WebP 图片在 standalone-preview 下也应显示复制图片，避
     t: key => `translated:${key}`,
   }), [
     {
-      key: 'resource.copy-link',
-      label: 'translated:previewAssetMenu.copyImageLink',
-      danger: false,
-    },
-    {
       key: 'resource.copy-image',
       label: 'translated:previewAssetMenu.copyImage',
       danger: false,
-    },
-    {
-      key: 'resource.save-as',
-      label: 'translated:previewAssetMenu.saveAs',
-      danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.copy-markdown-reference',
       label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyImageLink',
+      danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+      group: 'file',
     },
   ])
 })
@@ -344,34 +375,40 @@ test('本地 SVG 图片在 editor-preview 下也应显示复制图片，避免�
     t: key => `translated:${key}`,
   }), [
     {
-      key: 'resource.copy-absolute-path',
-      label: 'translated:previewAssetMenu.copyAbsolutePath',
-      danger: false,
-    },
-    {
       key: 'resource.copy-image',
       label: 'translated:previewAssetMenu.copyImage',
       danger: false,
-    },
-    {
-      key: 'resource.save-as',
-      label: 'translated:previewAssetMenu.saveAs',
-      danger: false,
-    },
-    {
-      key: 'resource.open-in-folder',
-      label: 'translated:top.openInExplorer',
-      danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.copy-markdown-reference',
       label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-absolute-path',
+      label: 'translated:previewAssetMenu.copyAbsolutePath',
+      danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+      group: 'file',
+    },
+    {
+      key: 'resource.open-in-folder',
+      label: 'translated:top.openInExplorer',
+      danger: false,
+      group: 'file',
     },
     {
       key: 'resource.delete',
       label: 'translated:previewAssetMenu.delete',
       danger: true,
+      group: 'danger',
     },
   ])
 })
@@ -394,24 +431,28 @@ test('远程无扩展名图片在 standalone-preview 下也应显示复制图片
     t: key => `translated:${key}`,
   }), [
     {
-      key: 'resource.copy-link',
-      label: 'translated:previewAssetMenu.copyImageLink',
-      danger: false,
-    },
-    {
       key: 'resource.copy-image',
       label: 'translated:previewAssetMenu.copyImage',
       danger: false,
-    },
-    {
-      key: 'resource.save-as',
-      label: 'translated:previewAssetMenu.saveAs',
-      danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.copy-markdown-reference',
       label: 'translated:previewAssetMenu.copyMarkdownReference',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-link',
+      label: 'translated:previewAssetMenu.copyImageLink',
+      danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.save-as',
+      label: 'translated:previewAssetMenu.saveAs',
+      danger: false,
+      group: 'file',
     },
   ])
 })
@@ -463,34 +504,40 @@ test('缺少 t 时，菜单项 label 必须回退为文案 key 本身', () => {
     profile: 'editor-preview',
   }), [
     {
-      key: 'resource.copy-absolute-path',
-      label: 'previewAssetMenu.copyAbsolutePath',
-      danger: false,
-    },
-    {
       key: 'resource.copy-image',
       label: 'previewAssetMenu.copyImage',
       danger: false,
-    },
-    {
-      key: 'resource.save-as',
-      label: 'previewAssetMenu.saveAs',
-      danger: false,
-    },
-    {
-      key: 'resource.open-in-folder',
-      label: 'top.openInExplorer',
-      danger: false,
+      group: 'copy',
     },
     {
       key: 'resource.copy-markdown-reference',
       label: 'previewAssetMenu.copyMarkdownReference',
       danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.copy-absolute-path',
+      label: 'previewAssetMenu.copyAbsolutePath',
+      danger: false,
+      group: 'copy',
+    },
+    {
+      key: 'resource.save-as',
+      label: 'previewAssetMenu.saveAs',
+      danger: false,
+      group: 'file',
+    },
+    {
+      key: 'resource.open-in-folder',
+      label: 'top.openInExplorer',
+      danger: false,
+      group: 'file',
     },
     {
       key: 'resource.delete',
       label: 'previewAssetMenu.delete',
       danger: true,
+      group: 'danger',
     },
   ])
 })

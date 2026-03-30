@@ -64,6 +64,21 @@ function closeMenu() {
   emits('close')
 }
 
+function resolveMenuItemGroup(item) {
+  return typeof item?.group === 'string' && item.group.trim()
+    ? item.group
+    : 'default'
+}
+
+// 菜单按组渲染分隔线，避免复制、文件和危险操作混在一起。
+function shouldRenderDivider(index) {
+  if (index <= 0) {
+    return false
+  }
+
+  return resolveMenuItemGroup(props.items[index - 1]) !== resolveMenuItemGroup(props.items[index])
+}
+
 // 菜单壳只透传 actionKey，不承载具体业务语义。
 function onMenuItemClick(actionKey) {
   emits('select', actionKey)
@@ -134,17 +149,18 @@ onBeforeUnmount(() => {
     <div v-show="open" :class="anchorClassName" :style="anchorStyle" />
     <template #overlay>
       <a-menu>
-        <!-- 危险项保留显式红色类，避免被项目级下拉菜单文字颜色覆盖。 -->
-        <a-menu-item
-          v-for="item in items"
-          :key="item.key"
-          :class="item.danger === true ? '!color-red' : undefined"
-          :danger="item.danger === true"
-          :data-menu-key="item.key"
-          @click="onMenuItemClick(item.key)"
-        >
-          {{ item.label }}
-        </a-menu-item>
+        <template v-for="(item, index) in items" :key="item.key">
+          <a-menu-divider v-if="shouldRenderDivider(index)" />
+          <!-- 危险项保留显式红色类，避免被项目级下拉菜单文字颜色覆盖。 -->
+          <a-menu-item
+            :class="item.danger === true ? '!color-red' : undefined"
+            :danger="item.danger === true"
+            :data-menu-key="item.key"
+            @click="onMenuItemClick(item.key)"
+          >
+            {{ item.label }}
+          </a-menu-item>
+        </template>
       </a-menu>
     </template>
   </a-dropdown>

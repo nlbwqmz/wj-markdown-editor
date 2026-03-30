@@ -2,11 +2,15 @@ function isCopyImageSupportedAsset(asset) {
   return asset?.assetType === 'image'
 }
 
+const MENU_GROUP_COPY = 'copy'
+const MENU_GROUP_FILE = 'file'
+const MENU_GROUP_DANGER = 'danger'
+
 /**
  * 根据预览上下文与菜单配置生成菜单项。
  *
  * @param {{ context?: { type?: string, asset?: { assetType?: string, sourceType?: string, markdownReference?: string | null } }, profile?: string, t?: (key: string) => string }} options
- * @returns {{ key: string, label: string, danger: boolean }[]} 返回预览资源菜单项列表。
+ * @returns {{ key: string, label: string, danger: boolean, group: string }[]} 返回预览资源菜单项列表。
  */
 function buildPreviewContextMenuItems({ context, profile, t }) {
   if (context?.type !== 'resource') {
@@ -34,20 +38,21 @@ function buildPreviewContextMenuItems({ context, profile, t }) {
    * 统一构造菜单项，保证矩阵拼装只关注顺序和标签 key。
    * @param {string} key - 菜单动作 key
    * @param {string} labelKey - 国际化文案 key
-   * @param {boolean} [danger] - 是否危险操作
-   * @returns {{ key: string, label: string, danger: boolean }} 菜单项
+   * @param {{ danger?: boolean, group?: string }} [options] - 菜单项附加配置
+   * @returns {{ key: string, label: string, danger: boolean, group: string }} 菜单项
    */
-  function createMenuItem(key, labelKey, danger = false) {
+  function createMenuItem(key, labelKey, options = {}) {
     return {
       key,
       label: translate(labelKey),
-      danger,
+      danger: options.danger === true,
+      group: options.group ?? MENU_GROUP_COPY,
     }
   }
 
   /**
    * 仅在存在稳定 Markdown 引用时追加复制引用菜单，避免空引用误导用户。
-   * @param {{ key: string, label: string, danger: boolean }[]} items - 当前菜单项列表
+   * @param {{ key: string, label: string, danger: boolean, group: string }[]} items - 当前菜单项列表
    */
   function appendMarkdownReferenceItem(items) {
     if (!hasMarkdownReference) {
@@ -57,51 +62,74 @@ function buildPreviewContextMenuItems({ context, profile, t }) {
     items.push(createMenuItem(
       'resource.copy-markdown-reference',
       'previewAssetMenu.copyMarkdownReference',
+      {
+        group: MENU_GROUP_COPY,
+      },
     ))
   }
 
   if (sourceType === 'local') {
-    const items = [
-      createMenuItem('resource.copy-absolute-path', 'previewAssetMenu.copyAbsolutePath'),
-    ]
+    const items = []
 
     if (copyImageSupported) {
-      items.push(createMenuItem('resource.copy-image', 'previewAssetMenu.copyImage'))
+      items.push(createMenuItem('resource.copy-image', 'previewAssetMenu.copyImage', {
+        group: MENU_GROUP_COPY,
+      }))
     }
+
+    appendMarkdownReferenceItem(items)
+    items.push(createMenuItem('resource.copy-absolute-path', 'previewAssetMenu.copyAbsolutePath', {
+      group: MENU_GROUP_COPY,
+    }))
 
     if (isImageAsset) {
-      items.push(createMenuItem('resource.save-as', 'previewAssetMenu.saveAs'))
+      items.push(createMenuItem('resource.save-as', 'previewAssetMenu.saveAs', {
+        group: MENU_GROUP_FILE,
+      }))
     }
 
-    items.push(createMenuItem('resource.open-in-folder', 'top.openInExplorer'))
-    appendMarkdownReferenceItem(items)
+    items.push(createMenuItem('resource.open-in-folder', 'top.openInExplorer', {
+      group: MENU_GROUP_FILE,
+    }))
 
     if (profile === 'editor-preview') {
-      items.push(createMenuItem('resource.delete', 'previewAssetMenu.delete', true))
+      items.push(createMenuItem('resource.delete', 'previewAssetMenu.delete', {
+        danger: true,
+        group: MENU_GROUP_DANGER,
+      }))
     }
 
     return items
   }
 
-  const items = [
-    createMenuItem(
-      'resource.copy-link',
-      isImageAsset ? 'previewAssetMenu.copyImageLink' : 'previewAssetMenu.copyResourceLink',
-    ),
-  ]
+  const items = []
 
   if (copyImageSupported) {
-    items.push(createMenuItem('resource.copy-image', 'previewAssetMenu.copyImage'))
-  }
-
-  if (isImageAsset) {
-    items.push(createMenuItem('resource.save-as', 'previewAssetMenu.saveAs'))
+    items.push(createMenuItem('resource.copy-image', 'previewAssetMenu.copyImage', {
+      group: MENU_GROUP_COPY,
+    }))
   }
 
   appendMarkdownReferenceItem(items)
+  items.push(createMenuItem(
+    'resource.copy-link',
+    isImageAsset ? 'previewAssetMenu.copyImageLink' : 'previewAssetMenu.copyResourceLink',
+    {
+      group: MENU_GROUP_COPY,
+    },
+  ))
+
+  if (isImageAsset) {
+    items.push(createMenuItem('resource.save-as', 'previewAssetMenu.saveAs', {
+      group: MENU_GROUP_FILE,
+    }))
+  }
 
   if (profile === 'editor-preview') {
-    items.push(createMenuItem('resource.delete', 'previewAssetMenu.delete', true))
+    items.push(createMenuItem('resource.delete', 'previewAssetMenu.delete', {
+      danger: true,
+      group: MENU_GROUP_DANGER,
+    }))
   }
 
   return items
