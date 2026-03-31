@@ -1029,7 +1029,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full p-2"
+          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full p-2"
           :style="previewContainerStyle"
           :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
           @scroll="syncPreviewToEditor"
@@ -1059,9 +1059,8 @@ defineExpose({
           :get-container="() => previewRef"
           :close="() => { menuVisible = false }"
           data-layout-item="menu"
-          class="allow-search markdown-edit-layout__menu" :class="[
-            { 'markdown-edit-layout__menu--left-bordered': menuLeftBordered },
-          ]"
+          class="allow-search markdown-edit-layout__menu"
+          :class="menuLeftBordered ? 'b-r-1 b-r-border-primary b-r-solid' : ''"
         />
       </template>
     </div>

@@ -376,7 +376,22 @@ describe('markdownEdit 布局运行时接线', () => {
       'gutter-menu',
       'gutter-preview',
     ])
-    expect(wrapper.get('[data-layout-item="menu"]').classes()).toContain('markdown-edit-layout__menu--left-bordered')
+    const menuLayoutItem = wrapper.get('[data-layout-item="menu"]')
+    expect(menuLayoutItem.classes()).toContain('b-r-1')
+    expect(menuLayoutItem.classes()).toContain('b-r-border-primary')
+    expect(menuLayoutItem.classes()).toContain('b-r-solid')
+  })
+
+  it('右侧三栏布局不应给 menu 注入左侧布局专用右边框 class', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: true,
+    })
+
+    const menuLayoutItem = wrapper.get('[data-layout-item="menu"]')
+    expect(menuLayoutItem.classes()).not.toContain('b-r-1')
+    expect(menuLayoutItem.classes()).not.toContain('b-r-border-primary')
+    expect(menuLayoutItem.classes()).not.toContain('b-r-solid')
   })
 
   it('previewPosition 从 right 切到 left 时，会重建 Split 并同步新的真实 DOM 顺序', async () => {
