@@ -205,6 +205,9 @@ describe('homeView 文件管理栏宿主壳层', () => {
     const fileManagerGutterStyle = window.getComputedStyle(fileManagerGutter.element)
 
     expect(fileManagerGutter.classes()).toContain('b-t-1')
+    expect(fileManagerGutter.classes()).not.toContain('op-0')
+    expect(fileManagerGutter.classes()).not.toContain('hidden')
+    expect(fileManagerGutter.classes()).not.toContain('invisible')
     expect(fileManagerGutterStyle.backgroundColor).not.toBe('rgba(0, 0, 0, 0)')
     expect(fileManagerGutterStyle.backgroundColor).toBe(FILE_MANAGER_GUTTER_BACKGROUND_STYLE)
     expect(fileManagerGutterStyle.opacity).not.toBe('0')
