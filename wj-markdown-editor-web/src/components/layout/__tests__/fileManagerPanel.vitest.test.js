@@ -527,6 +527,7 @@ describe('fileManagerPanel 组件', () => {
 
     expect(zhCN.message.fileManagerSelectDirectory).toBeTruthy()
     expect(zhCN.message.fileManagerDirectoryEmpty).toBeTruthy()
+    expect(zhCN.message.fileManagerOpenParentDirectory).toBeTruthy()
     expect(zhCN.message.fileManagerCreateFolder).toBeTruthy()
     expect(zhCN.message.fileManagerCreateMarkdown).toBeTruthy()
     expect(zhCN.message.fileManagerFolderNameRequired).toBeTruthy()
@@ -535,6 +536,7 @@ describe('fileManagerPanel 组件', () => {
 
     expect(enUS.message.fileManagerSelectDirectory).toBeTruthy()
     expect(enUS.message.fileManagerDirectoryEmpty).toBeTruthy()
+    expect(enUS.message.fileManagerOpenParentDirectory).toBeTruthy()
     expect(enUS.message.fileManagerCreateFolder).toBeTruthy()
     expect(enUS.message.fileManagerCreateMarkdown).toBeTruthy()
     expect(enUS.message.fileManagerFolderNameRequired).toBeTruthy()
@@ -648,6 +650,114 @@ describe('fileManagerPanelController', () => {
     expect(openNameInputModal).toHaveBeenCalledTimes(2)
     expect(fileManagerPanelState.requestFileManagerCreateFolder).not.toHaveBeenCalled()
     expect(fileManagerPanelState.requestFileManagerCreateMarkdown).not.toHaveBeenCalled()
+
+    scope.stop()
+  })
+
+  it('canOpenParentDirectory 仅在当前目录存在可打开的上一级时才应启用', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    expect(controller.canOpenParentDirectory.value).toBe(false)
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs/project',
+      entryList: [],
+    }))
+    expect(controller.canOpenParentDirectory.value).toBe(true)
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/',
+      entryList: [],
+    }))
+    expect(controller.canOpenParentDirectory.value).toBe(false)
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: '//server/share',
+      entryList: [],
+    }))
+    expect(controller.canOpenParentDirectory.value).toBe(false)
+
+    scope.stop()
+  })
+
+  it('openParentDirectory 在普通目录下应打开上一级，其余场景必须返回 noop 且不发起请求', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerOpenDirectory.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'project', path: 'D:/docs/project', kind: 'directory' },
+      ],
+    }))
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs/project',
+      entryList: [],
+    }))
+
+    const openResult = await controller.openParentDirectory()
+
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).toHaveBeenCalledWith({
+      directoryPath: 'D:/docs',
+    })
+    expect(openResult).toEqual({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'project', path: 'D:/docs/project', kind: 'directory', isActive: false },
+      ],
+      emptyMessageKey: 'message.fileManagerDirectoryEmpty',
+    })
+    expect(controller.directoryPath.value).toBe('D:/docs')
+
+    fileManagerPanelState.requestFileManagerOpenDirectory.mockClear()
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/',
+      entryList: [],
+    }))
+    expect(await controller.openParentDirectory()).toEqual({
+      ok: true,
+      reason: 'noop-parent-directory',
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: '//server/share',
+      entryList: [],
+    }))
+    expect(await controller.openParentDirectory()).toEqual({
+      ok: true,
+      reason: 'noop-parent-directory',
+    })
+
+    controller.directoryState.value = createDirectoryState({
+      directoryPath: null,
+      entryList: [],
+      emptyMessageKey: 'message.fileManagerSelectDirectory',
+    })
+    expect(await controller.openParentDirectory()).toEqual({
+      ok: true,
+      reason: 'noop-parent-directory',
+    })
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).not.toHaveBeenCalled()
 
     scope.stop()
   })
@@ -794,6 +904,45 @@ describe('fileManagerPanelController', () => {
       ok: false,
       reason: 'invalid-file-manager-entry-name',
     })
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+
+    scope.stop()
+  })
+
+  it('createFolder 收到同名已存在失败时，应继续复用现有提示链路并保留当前目录状态', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerCreateFolder.mockResolvedValue({
+      ok: false,
+      reason: 'file-manager-entry-already-exists',
+      path: 'D:/docs/assets',
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const result = await controller.createFolder('assets')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'file-manager-entry-already-exists',
+      path: 'D:/docs/assets',
+    })
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerEntryAlreadyExists')
     expect(controller.directoryPath.value).toBe('D:/docs')
     expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
 

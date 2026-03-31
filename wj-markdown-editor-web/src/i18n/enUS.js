@@ -301,6 +301,7 @@ export default {
     onlyMarkdownFilesCanBeOpened: 'Only Markdown (.md / .markdown) files can be opened.',
     fileManagerSelectDirectory: 'Select a directory',
     fileManagerDirectoryEmpty: 'This directory is empty.',
+    fileManagerOpenParentDirectory: 'Go to parent directory',
     fileManagerCreateFolder: 'New folder',
     fileManagerCreateMarkdown: 'New Markdown',
     fileManagerFolderNameRequired: 'Please enter a folder name.',

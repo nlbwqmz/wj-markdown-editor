@@ -366,6 +366,13 @@ export function createFileManagerPanelController({
   const emptyMessageKey = computed(() => directoryState.value.emptyMessageKey)
   const hasDirectory = computed(() => Boolean(directoryState.value.directoryPath))
   const breadcrumbList = computed(() => buildBreadcrumbList(directoryPath.value))
+  const parentDirectoryPath = computed(() => getPathDirname(directoryPath.value))
+  const canOpenParentDirectory = computed(() => {
+    const currentPath = normalizeComparablePath(directoryPath.value)
+    const parentPath = normalizeComparablePath(parentDirectoryPath.value)
+
+    return Boolean(currentPath && parentPath && currentPath !== parentPath)
+  })
 
   function commitDirectoryState(nextState, options = {}) {
     directoryState.value = normalizeDirectoryState(
@@ -473,6 +480,17 @@ export function createFileManagerPanelController({
         emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
       })
     })
+  }
+
+  async function openParentDirectory() {
+    if (canOpenParentDirectory.value !== true || !parentDirectoryPath.value) {
+      return {
+        ok: true,
+        reason: 'noop-parent-directory',
+      }
+    }
+
+    return await openDirectory(parentDirectoryPath.value)
   }
 
   async function pickDirectory() {
@@ -643,9 +661,11 @@ export function createFileManagerPanelController({
     emptyMessageKey,
     hasDirectory,
     breadcrumbList,
+    canOpenParentDirectory,
     applyDirectoryState,
     reloadDirectoryStateFromSnapshot,
     openDirectory,
+    openParentDirectory,
     pickDirectory,
     createFolder,
     createMarkdown,
