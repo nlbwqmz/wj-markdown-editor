@@ -4,6 +4,7 @@ import fs from 'fs-extra'
 import { APP_NOTIFICATION_ICON_PATH } from '../appIdentityUtil.js'
 import {
   isMarkdownFilePath,
+  MARKDOWN_FILE_EXTENSION_LIST,
   resolveDocumentOpenPath,
   toComparableDocumentPath,
 } from './documentOpenTargetUtil.js'
@@ -326,7 +327,7 @@ export function createDocumentEffectService({
           title: 'Open Markdown File',
           properties: ['openFile'],
           filters: [
-            { name: 'markdown file', extensions: ['md'] },
+            { name: 'markdown file', extensions: MARKDOWN_FILE_EXTENSION_LIST },
           ],
         })
         if (filePathList && filePathList.length > 0) {
@@ -506,7 +507,7 @@ export function createDocumentEffectService({
       case 'file-manager.get-directory-state':
         return await fileManagerService?.getDirectoryState({
           windowId,
-          payload,
+          directoryPath: payload?.directoryPath || null,
         })
 
       case 'file-manager.open-directory':

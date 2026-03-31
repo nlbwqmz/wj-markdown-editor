@@ -306,6 +306,7 @@ export default {
     fileManagerFolderNameRequired: 'Please enter a folder name.',
     fileManagerMarkdownNameRequired: 'Please enter a Markdown file name.',
     fileManagerInvalidEntryName: 'The name cannot contain path separators or be "." / "..".',
+    fileManagerEntryAlreadyExists: 'A file or folder with the same name already exists.',
     fileManagerOpenModeTitle: 'How would you like to open this file?',
     fileManagerOpenModeTip: 'Choose whether to open it in the current window or a new window.',
     fileManagerOpenInCurrentWindow: 'Open in current window',

@@ -10,7 +10,11 @@ import commonUtil from '../commonUtil.js'
 import fileWatchUtil from '../fileWatchUtil.js'
 import resourceFileUtil from '../resourceFileUtil.js'
 import updateUtil from '../updateUtil.js'
-import { resolveDocumentOpenPath } from './documentOpenTargetUtil.js'
+import {
+  appendMarkdownExtension,
+  MARKDOWN_FILE_EXTENSION_LIST,
+  resolveDocumentOpenPath,
+} from './documentOpenTargetUtil.js'
 import {
   createBoundFileSession,
   createDraftSession,
@@ -401,17 +405,6 @@ function getExternalWatchBridge(windowId) {
   })
   windowState.externalWatchBridge = externalWatchBridge
   return externalWatchBridge
-}
-
-function appendMarkdownExtension(targetPath) {
-  if (typeof targetPath !== 'string' || targetPath.trim() === '') {
-    return null
-  }
-  const extname = path.extname(targetPath)
-  if (!extname || extname.toLowerCase() !== '.md') {
-    return `${targetPath}.md`
-  }
-  return targetPath
 }
 
 function getSessionByWindowId(windowId) {
@@ -1054,6 +1047,14 @@ function createSaveBeforeSwitchFailedResult(documentPath) {
   }
 }
 
+function createSaveBeforeSwitchCancelledResult(documentPath) {
+  return {
+    ok: false,
+    reason: 'save-before-switch-cancelled',
+    path: documentPath || null,
+  }
+}
+
 function createOpenCurrentWindowSwitchFailedResult(documentPath) {
   return {
     ok: false,
@@ -1190,12 +1191,14 @@ async function openDocumentInCurrentWindow(windowId, targetPath, options = {}) {
   }
 
   if (options.saveBeforeSwitch === true) {
-    const saved = await executeDocumentSaveCommandWithDispatcher(
+    const saveResult = await executeDocumentSaveCommandWithDispatcherDetailed(
       normalizedWindowId,
       createRuntimeDispatchAdapter(normalizedWindowId, ensureSessionRuntimeInitialized()),
     )
-    if (!saved) {
-      return createSaveBeforeSwitchFailedResult(targetPath)
+    if (saveResult.saved !== true) {
+      return saveResult.reason === 'cancelled'
+        ? createSaveBeforeSwitchCancelledResult(targetPath)
+        : createSaveBeforeSwitchFailedResult(targetPath)
     }
   }
 
@@ -1242,7 +1245,7 @@ function getSaveDialogTarget() {
   const selectedPath = dialog.showSaveDialogSync({
     title: 'Save',
     filters: [
-      { name: 'Markdown File', extensions: ['md'] },
+      { name: 'Markdown File', extensions: MARKDOWN_FILE_EXTENSION_LIST },
     ],
   })
   return appendMarkdownExtension(selectedPath)
@@ -1252,7 +1255,7 @@ function getCopyDialogTarget() {
   const selectedPath = dialog.showSaveDialogSync({
     title: 'Save As',
     filters: [
-      { name: 'Markdown File', extensions: ['md'] },
+      { name: 'Markdown File', extensions: MARKDOWN_FILE_EXTENSION_LIST },
     ],
   })
   return appendMarkdownExtension(selectedPath)
@@ -1482,7 +1485,7 @@ function getCopySaveFailureMessage({ reason, error }) {
   return `另存为失败。${errorDetail}`
 }
 
-async function executeDocumentSaveCommandWithDispatcher(windowId, dispatch) {
+async function executeDocumentSaveCommandWithDispatcherDetailed(windowId, dispatch) {
   const normalizedWindowId = normalizeWindowId(windowId)
   const session = getSessionByWindowId(normalizedWindowId)
   const hadDocumentPath = Boolean(session?.documentSource?.path)
@@ -1521,7 +1524,10 @@ async function executeDocumentSaveCommandWithDispatcher(windowId, dispatch) {
         content: 'message.saveSuccessfully',
       })
     }
-    return true
+    return {
+      saved: true,
+      reason: 'saved',
+    }
   }
 
   // 只有“用户主动取消首存选路径”才应该提示取消保存；
@@ -1532,9 +1538,21 @@ async function executeDocumentSaveCommandWithDispatcher(windowId, dispatch) {
       type: 'warning',
       content: 'message.cancelSave',
     })
+    return {
+      saved: false,
+      reason: 'cancelled',
+    }
   }
 
-  return false
+  return {
+    saved: false,
+    reason: 'failed',
+  }
+}
+
+async function executeDocumentSaveCommandWithDispatcher(windowId, dispatch) {
+  const result = await executeDocumentSaveCommandWithDispatcherDetailed(windowId, dispatch)
+  return result.saved === true
 }
 
 async function executeDocumentCopySaveCommandWithDispatcher(windowId, dispatch) {

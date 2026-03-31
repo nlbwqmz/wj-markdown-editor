@@ -312,6 +312,57 @@ describe('layoutMenu 文件管理栏接线', () => {
     expect(mocked.recentFileNotExists).not.toHaveBeenCalled()
   })
 
+  it('最近历史经统一打开决策后，save-before-switch-cancelled 时不应追加保存失败提示', async () => {
+    const { createFileManagerOpenDecisionController } = await vi.importActual('@/util/file-manager/fileManagerOpenDecisionController.js')
+    store.recentList = [{
+      path: 'D:/docs/history.md',
+      name: 'history.md',
+    }]
+    store.documentSessionSnapshot = {
+      dirty: true,
+      displayPath: 'D:/docs/current.md',
+      resourceContext: {
+        documentPath: 'D:/docs/current.md',
+      },
+    }
+    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
+      ok: false,
+      reason: 'save-before-switch-cancelled',
+    })
+    mocked.openDecisionFactory.mockImplementation(options => createFileManagerOpenDecisionController({
+      ...options,
+      requestDocumentOpenPath: mocked.requestDocumentOpenPath,
+      requestDocumentOpenPathInCurrentWindow: mocked.requestDocumentOpenPathInCurrentWindow,
+      showInfoMessage: mocked.showInfoMessage,
+      showErrorMessage: mocked.showErrorMessage,
+      promptOpenModeChoice: vi.fn().mockResolvedValue('current-window'),
+      promptSaveChoice: vi.fn().mockResolvedValue('save-before-switch'),
+    }))
+
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    const recentMenu = findMenuItemByLabel(getMenuChildren(wrapper, 0), '最近')
+    const recentItem = findMenuItemByLabel(recentMenu.children, 'history.md')
+
+    await recentItem.click()
+    await Promise.resolve()
+    await nextTick()
+
+    expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('D:/docs/history.md', {
+      saveBeforeSwitch: true,
+      source: 'recent-list',
+    })
+    expect(mocked.showErrorMessage).not.toHaveBeenCalledWith('message.fileManagerSaveBeforeSwitchFailed')
+    expect(mocked.recentFileNotExists).not.toHaveBeenCalled()
+  })
+
   it('最近历史经统一打开决策后，open-current-window-switch-failed 时必须提示切换失败', async () => {
     const { createFileManagerOpenDecisionController } = await vi.importActual('@/util/file-manager/fileManagerOpenDecisionController.js')
     store.recentList = [{

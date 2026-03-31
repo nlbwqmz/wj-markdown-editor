@@ -161,6 +161,26 @@ describe('fileManagerOpenDecisionController', () => {
     expect(mocked.showErrorMessage).toHaveBeenCalledWith('message.fileManagerSaveBeforeSwitchFailed')
   })
 
+  it('当前窗口切换返回 save-before-switch-cancelled 时，不应误提示保存失败', async () => {
+    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
+      ok: false,
+      reason: 'save-before-switch-cancelled',
+    })
+    const controller = createController()
+
+    const result = await controller.openDocument('/tmp/next.md', {
+      currentPath: '/tmp/current.md',
+      isDirty: true,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'save-before-switch-cancelled',
+      stageList: ['open-choice', 'save-choice', 'dispatch'],
+    })
+    expect(mocked.showErrorMessage).not.toHaveBeenCalledWith('message.fileManagerSaveBeforeSwitchFailed')
+  })
+
   it('当前窗口切换返回 open-current-window-switch-failed 时，必须提示用户失败原因', async () => {
     mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
       ok: false,

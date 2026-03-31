@@ -1,5 +1,8 @@
 import path from 'node:path'
 
+const MARKDOWN_FILE_EXTENSION_LIST = ['md', 'markdown']
+const MARKDOWN_FILE_EXTENSION_SET = new Set(MARKDOWN_FILE_EXTENSION_LIST.map(extension => `.${extension}`))
+
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim() !== ''
 }
@@ -17,6 +20,25 @@ function resolveBaseDir(baseDir) {
 
 function toPublicPath(targetPath) {
   return targetPath.replaceAll('\\', '/')
+}
+
+function isMarkdownExtension(extension) {
+  if (!isNonEmptyString(extension)) {
+    return false
+  }
+
+  return MARKDOWN_FILE_EXTENSION_SET.has(extension.trim().toLowerCase())
+}
+
+function appendMarkdownExtension(targetPath, { defaultExtension = '.md' } = {}) {
+  if (!isNonEmptyString(targetPath)) {
+    return null
+  }
+
+  const normalizedTargetPath = targetPath.trim()
+  return isMarkdownExtension(path.extname(normalizedTargetPath))
+    ? normalizedTargetPath
+    : `${normalizedTargetPath}${defaultExtension}`
 }
 
 /**
@@ -77,22 +99,26 @@ function isMarkdownFilePath(targetPath) {
     return false
   }
 
-  const normalizedTargetPath = targetPath.trim().toLowerCase()
+  const normalizedTargetPath = targetPath.trim()
   if (normalizedTargetPath.endsWith('/') || normalizedTargetPath.endsWith('\\')) {
     return false
   }
 
-  return normalizedTargetPath.endsWith('.md')
+  return isMarkdownExtension(path.extname(normalizedTargetPath))
 }
 
 export {
+  appendMarkdownExtension,
   isMarkdownFilePath,
+  MARKDOWN_FILE_EXTENSION_LIST,
   resolveDocumentOpenPath,
   toComparableDocumentPath,
 }
 
 export default {
+  appendMarkdownExtension,
   isMarkdownFilePath,
+  MARKDOWN_FILE_EXTENSION_LIST,
   resolveDocumentOpenPath,
   toComparableDocumentPath,
 }

@@ -1,5 +1,6 @@
 import path from 'node:path'
 import fs from 'fs-extra'
+import { appendMarkdownExtension } from './documentOpenTargetUtil.js'
 
 function normalizeWindowId(windowId) {
   if (typeof windowId === 'number' && Number.isFinite(windowId)) {
@@ -46,14 +47,12 @@ function createInvalidFileManagerEntryNameResult() {
   }
 }
 
-function appendMarkdownExtension(targetPath) {
-  if (!isNonEmptyString(targetPath)) {
-    return null
+function createFileManagerEntryAlreadyExistsResult(targetPath) {
+  return {
+    ok: false,
+    reason: 'file-manager-entry-already-exists',
+    path: targetPath || null,
   }
-
-  return targetPath.toLowerCase().endsWith('.md')
-    ? targetPath
-    : `${targetPath}.md`
 }
 
 function getEntryExtension(entryName, isDirectory) {
@@ -235,8 +234,29 @@ export function createDocumentFileManagerService({
     })
   }
 
-  async function getDirectoryState({ windowId }) {
-    const directoryState = await resolveWindowDirectoryState(windowId)
+  async function resolveExplicitDirectoryState(windowId, directoryPath) {
+    const currentSession = getCurrentSession(windowId)
+    const currentDocumentPath = currentSession?.documentSource?.path || null
+    const activePath = isNonEmptyString(currentDocumentPath)
+      && path.dirname(currentDocumentPath) === directoryPath
+      ? currentDocumentPath
+      : null
+
+    return await readDirectoryStateAtPath({
+      fsModule,
+      directoryPath,
+      activePath,
+    })
+  }
+
+  async function getDirectoryState({
+    windowId,
+    directoryPath = null,
+  }) {
+    // renderer 显式指定目录时，必须以该目录为准，不能继续沿用旧 binding。
+    const directoryState = isNonEmptyString(directoryPath)
+      ? await resolveExplicitDirectoryState(windowId, directoryPath)
+      : await resolveWindowDirectoryState(windowId)
 
     if (!directoryState.directoryPath) {
       await clearWindowDirectory?.(windowId)
@@ -332,7 +352,21 @@ export function createDocumentFileManagerService({
     }
 
     const nextPath = appendMarkdownExtension(path.join(directoryPath, nextName))
-    await fsModule.writeFile(nextPath, '', 'utf8')
+    if (await fsModule.pathExists(nextPath)) {
+      return createFileManagerEntryAlreadyExistsResult(nextPath)
+    }
+
+    try {
+      await fsModule.writeFile(nextPath, '', {
+        encoding: 'utf8',
+        flag: 'wx',
+      })
+    } catch (error) {
+      if (error?.code === 'EEXIST') {
+        return createFileManagerEntryAlreadyExistsResult(nextPath)
+      }
+      throw error
+    }
 
     return {
       path: nextPath,

@@ -1396,7 +1396,7 @@ describe('ipcMainUtil command mapping', () => {
     })
   })
 
-  it('file-manager.get-directory-state 必须通过统一命令入口返回目录状态', async () => {
+  it('file-manager.get-directory-state 必须把 renderer 传入的目录路径原样透传给统一命令流', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     const directoryState = {
       mode: 'directory',
@@ -1405,13 +1405,16 @@ describe('ipcMainUtil command mapping', () => {
       entryList: [],
     }
     runtimeExecuteUiCommand.mockResolvedValueOnce(directoryState)
+    const payload = {
+      directoryPath: 'D:\\docs\\next',
+    }
 
     const result = await sendToMainHandler({ sender }, {
       event: 'file-manager.get-directory-state',
-      data: null,
+      data: payload,
     })
 
-    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'file-manager.get-directory-state', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'file-manager.get-directory-state', payload)
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(result).toEqual(directoryState)
   })

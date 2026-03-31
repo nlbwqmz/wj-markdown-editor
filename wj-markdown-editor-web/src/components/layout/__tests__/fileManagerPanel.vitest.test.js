@@ -286,6 +286,26 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(true)
   })
 
+  it('recent-missing 父目录不存在时，即使主进程返回 directoryPath:null 的空状态对象，也必须保持静默空状态', async () => {
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      isRecentMissing: true,
+      recentMissingPath: 'D:/docs/missing.md',
+    })
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: null,
+      entryList: [],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toBe('')
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toBe('translated:message.fileManagerSelectDirectory')
+    expect(wrapper.find('.file-manager-panel__empty-message').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(true)
+  })
+
   it('文件管理栏工具区应显示当前目录标题或面包屑', async () => {
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       directoryPath: 'D:/docs/project',
@@ -988,6 +1008,46 @@ describe('fileManagerPanelController', () => {
       ok: false,
       reason: 'invalid-file-manager-entry-name',
     })
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+
+    scope.stop()
+  })
+
+  it('createMarkdown 收到同名已存在失败时，必须提示用户且不能继续走打开链路', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerCreateMarkdown.mockResolvedValue({
+      ok: false,
+      reason: 'file-manager-entry-already-exists',
+      path: 'D:/docs/draft-note.md',
+    })
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const result = await controller.createMarkdown('draft-note')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'file-manager-entry-already-exists',
+      path: 'D:/docs/draft-note.md',
+    })
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerEntryAlreadyExists')
     expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
     expect(controller.directoryPath.value).toBe('D:/docs')
     expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])

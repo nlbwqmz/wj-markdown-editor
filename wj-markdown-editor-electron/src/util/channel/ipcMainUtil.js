@@ -217,8 +217,8 @@ const handlerList = {
   'document.get-session-snapshot': async (windowContext) => {
     return await executeRuntimeUiCommand(windowContext, 'document.get-session-snapshot', null)
   },
-  'file-manager.get-directory-state': async (windowContext) => {
-    return await executeRuntimeUiCommand(windowContext, 'file-manager.get-directory-state', null)
+  'file-manager.get-directory-state': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'file-manager.get-directory-state', data)
   },
   'file-manager.open-directory': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'file-manager.open-directory', data)

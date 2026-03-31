@@ -314,6 +314,56 @@ describe('documentFileManagerService', () => {
     expect(result.directoryState.entryList.map(item => item.name)).toEqual(['current.md', 'draft-note.md'])
   })
 
+  it('createMarkdown 命中已存在文件时，必须显式失败且不能覆盖原文件内容', async () => {
+    const directoryPath = await createTempDirectory()
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    const existingMarkdownPath = path.join(directoryPath, 'notes.md')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+    await fs.writeFile(existingMarkdownPath, '# existing', 'utf8')
+
+    const { service } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'create-markdown-existing-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    await expect(service.createMarkdown({
+      windowId: 9,
+      name: 'notes',
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'file-manager-entry-already-exists',
+      path: existingMarkdownPath,
+    })
+
+    expect(await fs.readFile(existingMarkdownPath, 'utf8')).toBe('# existing')
+  })
+
+  it('createMarkdown 传入 .markdown 后缀时，必须保留原后缀而不是追加 .md', async () => {
+    const directoryPath = await createTempDirectory()
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'create-markdown-extension-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    const result = await service.createMarkdown({
+      windowId: 9,
+      name: 'draft-note.markdown',
+    })
+
+    expect(result.path).toBe(path.join(directoryPath, 'draft-note.markdown'))
+    expect(await fs.readFile(result.path, 'utf8')).toBe('')
+    expect(result.directoryState.entryList.map(item => item.name)).toEqual(['current.md', 'draft-note.markdown'])
+  })
+
   it.each([
     '../escape-dir',
     'nested/dir',
@@ -408,6 +458,43 @@ describe('documentFileManagerService', () => {
       directoryPath: nextDirectory,
       activePath: null,
     }))
+  })
+
+  it('getDirectoryState 显式传入 directoryPath 时必须忽略旧 binding 并切到目标目录', async () => {
+    const currentDirectory = await createTempDirectory()
+    const nextDirectory = await createTempDirectory()
+    const currentFilePath = path.join(currentDirectory, 'current.md')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+    await fs.writeFile(path.join(nextDirectory, 'next.md'), '# next', 'utf8')
+
+    const { service, directoryWatchService } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'explicit-directory-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+      seedBinding: {
+        directoryPath: currentDirectory,
+        activePath: currentFilePath,
+      },
+    })
+
+    await expect(service.getDirectoryState({
+      windowId: 9,
+      directoryPath: nextDirectory,
+    })).resolves.toEqual(expect.objectContaining({
+      mode: 'directory',
+      directoryPath: nextDirectory,
+      activePath: null,
+    }))
+
+    expect(directoryWatchService.ensureWindowDirectory).toHaveBeenCalledWith(9, nextDirectory, {
+      activePath: null,
+    })
+    expect(directoryWatchService.getWindowDirectoryBinding(9)).toEqual({
+      directoryPath: nextDirectory,
+      activePath: null,
+    })
   })
 
   it('getDirectoryState 在首次 ensureWindowDirectory 绑定失败时必须显式失败，不能把普通目录状态当成功返回', async () => {

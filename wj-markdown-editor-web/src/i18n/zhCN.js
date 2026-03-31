@@ -306,6 +306,7 @@ export default {
     fileManagerFolderNameRequired: '请输入文件夹名称',
     fileManagerMarkdownNameRequired: '请输入 Markdown 文件名',
     fileManagerInvalidEntryName: '名称不能包含路径分隔符，且不能为 . 或 ..。',
+    fileManagerEntryAlreadyExists: '同名文件或文件夹已存在，无法创建。',
     fileManagerOpenModeTitle: '如何打开该文件？',
     fileManagerOpenModeTip: '请选择在当前窗口还是新窗口打开。',
     fileManagerOpenInCurrentWindow: '当前窗口打开',

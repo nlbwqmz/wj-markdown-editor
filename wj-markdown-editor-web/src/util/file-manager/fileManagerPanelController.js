@@ -148,6 +148,20 @@ function resolveDirectoryTargetFromSnapshot(snapshot) {
   }
 }
 
+function resolveSnapshotEmptyMessageKey(snapshot, fallbackEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY) {
+  const target = resolveDirectoryTargetFromSnapshot(snapshot)
+
+  if (snapshot?.isRecentMissing === true
+    && Object.prototype.hasOwnProperty.call(target, 'missingDirectoryEmptyMessageKey')) {
+    return target.missingDirectoryEmptyMessageKey
+  }
+  if (Object.prototype.hasOwnProperty.call(target, 'emptyMessageKey')) {
+    return target.emptyMessageKey
+  }
+
+  return fallbackEmptyMessageKey
+}
+
 function resolveEntryKind(entry) {
   if (entry?.kind === 'directory' || entry?.type === 'directory' || entry?.isDirectory === true) {
     return 'directory'
@@ -194,7 +208,7 @@ function normalizeDirectoryState(nextState, snapshot, fallbackEmptyMessageKey = 
   const directoryPath = normalizePath(rawDirectoryState?.directoryPath)
 
   if (!directoryPath) {
-    return createEmptyDirectoryState(fallbackEmptyMessageKey)
+    return createEmptyDirectoryState(resolveSnapshotEmptyMessageKey(snapshot, fallbackEmptyMessageKey))
   }
 
   const entryList = sortDirectoryEntryList((Array.isArray(rawDirectoryState?.entryList) ? rawDirectoryState.entryList : [])
@@ -216,7 +230,9 @@ function normalizeDirectoryState(nextState, snapshot, fallbackEmptyMessageKey = 
   return {
     directoryPath,
     entryList,
-    emptyMessageKey: rawDirectoryState?.emptyMessageKey || fallbackEmptyMessageKey,
+    emptyMessageKey: rawDirectoryState && Object.prototype.hasOwnProperty.call(rawDirectoryState, 'emptyMessageKey')
+      ? rawDirectoryState.emptyMessageKey
+      : fallbackEmptyMessageKey,
   }
 }
 
@@ -384,6 +400,8 @@ export function createFileManagerPanelController({
 
     if (nextState.reason === 'open-directory-watch-failed') {
       showWarningMessage('message.fileManagerOpenDirectoryFailed')
+    } else if (nextState.reason === 'file-manager-entry-already-exists') {
+      showWarningMessage('message.fileManagerEntryAlreadyExists')
     }
 
     return nextState
@@ -423,12 +441,9 @@ export function createFileManagerPanelController({
         return failureResult
       }
 
-      if (!nextState) {
-        return commitEmptyDirectoryState(
-          Object.prototype.hasOwnProperty.call(target, 'missingDirectoryEmptyMessageKey')
-            ? target.missingDirectoryEmptyMessageKey
-            : target.emptyMessageKey,
-        )
+      const rawDirectoryState = nextState?.directoryState || nextState
+      if (!rawDirectoryState?.directoryPath) {
+        return commitEmptyDirectoryState(resolveSnapshotEmptyMessageKey(snapshot, target.emptyMessageKey))
       }
 
       return commitDirectoryState(nextState, {

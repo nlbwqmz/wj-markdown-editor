@@ -1055,6 +1055,24 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
   })
 
+  it('document.save 在草稿首存选择 .markdown 时，必须保留该后缀而不是追加 .md', async () => {
+    showSaveDialogSyncMock.mockReturnValueOnce('D:/draft.markdown')
+
+    await winInfoUtil.createNew(null)
+
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 草稿内容')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 草稿内容')
+    })
+
+    const saveResult = await executeTestCommand(winInfo, 'document.save')
+
+    expect(writeFileMock).toHaveBeenCalledWith('D:/draft.markdown', '# 草稿内容')
+    expect(saveResult).toBe(true)
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/draft.markdown')
+  })
+
   it('document.save 在真实写盘成功后必须返回 true，而不是 effects 执行前的旧快照结果', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
@@ -2774,7 +2792,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expectDocumentContent(currentWinInfo, '# 当前窗口 dirty 内容')
   })
 
-  it('document.open-path-in-current-window 在 saveBeforeSwitch=true 且保存未完成时，必须返回结构化失败并保持当前 session', async () => {
+  it('document.open-path-in-current-window 在 saveBeforeSwitch=true 且用户取消首存时，必须返回结构化取消结果并保持当前 session', async () => {
     pathExistsMock.mockImplementation(async targetPath => targetPath === 'D:/next.md')
     readFileMock.mockImplementation(async (targetPath) => {
       if (targetPath === 'D:/next.md') {
@@ -2806,7 +2824,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     expect(result).toEqual({
       ok: false,
-      reason: 'save-before-switch-failed',
+      reason: 'save-before-switch-cancelled',
       path: 'D:/next.md',
     })
     expect(showSaveDialogSyncMock).toHaveBeenCalledTimes(1)
@@ -2815,6 +2833,59 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expectDocumentContent(winInfo, '# 草稿待保存内容')
     expect(startWatchingMock).not.toHaveBeenCalled()
     expect(stopWatchingMock).not.toHaveBeenCalled()
+  })
+
+  it('document.open-path-in-current-window 在 saveBeforeSwitch=true 且首存真实写盘失败时，必须返回结构化失败结果且不能伪装成取消', async () => {
+    pathExistsMock.mockImplementation(async targetPath => targetPath === 'D:/next.md')
+    readFileMock.mockImplementation(async (targetPath) => {
+      if (targetPath === 'D:/next.md') {
+        return '# 新文档内容'
+      }
+      throw new Error(`unexpected read path: ${targetPath}`)
+    })
+    showSaveDialogSyncMock.mockReturnValueOnce('D:/draft-save-failed.md')
+    writeFileMock.mockRejectedValueOnce(new Error('磁盘已满'))
+
+    await winInfoUtil.createNew(null)
+
+    const [winInfo] = listWindowRefs()
+    const previousSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    winInfoUtil.updateTempContent(winInfo.id, '# 草稿待保存内容')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 草稿待保存内容')
+    })
+    sendMock.mockClear()
+
+    const result = await executeTestCommand(winInfo, 'document.open-path-in-current-window', {
+      path: 'D:/next.md',
+      saveBeforeSwitch: true,
+    })
+
+    const currentSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'save-before-switch-failed',
+      path: 'D:/next.md',
+    })
+    expect(currentSnapshot.sessionId).toBe(previousSnapshot.sessionId)
+    expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBeNull()
+    expectDocumentContent(winInfo, '# 草稿待保存内容')
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'error',
+        content: '保存失败。 磁盘已满',
+      },
+    })
+    expect(sendMock).not.toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'warning',
+        content: 'message.cancelSave',
+      },
+    })
   })
 
   it('document.open-path-in-current-window 在目录 watcher 重绑失败时，必须回滚到旧 session 并返回结构化失败结果', async () => {

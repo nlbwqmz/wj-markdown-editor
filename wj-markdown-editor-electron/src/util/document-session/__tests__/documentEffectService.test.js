@@ -120,6 +120,24 @@ describe('documentEffectService', () => {
     expect(dispatchCommand).toHaveBeenCalledWith('dialog.open-target-cancelled')
   })
 
+  it('document.request-open-dialog 的过滤器必须同时放行 .md 与 .markdown', async () => {
+    const { service, dialogApi } = await createServiceContext()
+    const dispatchCommand = vi.fn().mockResolvedValue({ ok: false })
+
+    dialogApi.showOpenDialogSync.mockReturnValue(undefined)
+
+    await service.executeCommand({
+      command: 'document.request-open-dialog',
+      dispatchCommand,
+    })
+
+    expect(dialogApi.showOpenDialogSync).toHaveBeenCalledWith(expect.objectContaining({
+      filters: [
+        { name: 'markdown file', extensions: ['md', 'markdown'] },
+      ],
+    }))
+  })
+
   it('dialog.open-target-selected 命中存在但非 .md 的路径时，必须拦截并返回 invalid-extension', async () => {
     const { service, fsModule } = await createServiceContext()
     const openDocumentWindow = vi.fn()
@@ -143,6 +161,36 @@ describe('documentEffectService', () => {
       path: 'C:/docs/plain.txt',
     })
     expect(openDocumentWindow).not.toHaveBeenCalled()
+  })
+
+  it('dialog.open-target-selected 命中 .markdown 路径时，必须按合法 Markdown 文件放行', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentWindow = vi.fn().mockResolvedValue({
+      ok: true,
+      reason: 'opened',
+    })
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+
+    const result = await service.executeCommand({
+      command: 'dialog.open-target-selected',
+      payload: {
+        path: 'C:/docs/demo.markdown',
+      },
+      openDocumentWindow,
+    })
+
+    expect(openDocumentWindow).toHaveBeenCalledWith('C:/docs/demo.markdown', {
+      isRecent: false,
+      trigger: 'user',
+    })
+    expect(result).toEqual({
+      ok: true,
+      reason: 'opened',
+    })
   })
 
   it('document.open-path 命中相对路径时，必须先按 baseDir 解析成稳定绝对路径，再进入统一 opening policy', async () => {
