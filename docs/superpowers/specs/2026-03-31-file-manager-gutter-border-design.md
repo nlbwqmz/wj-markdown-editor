@@ -18,8 +18,9 @@
 
 1. 让文件管理栏右侧分隔线完全由 `gutter` 本身承担。
 2. 让 `gutter` 的视觉宽度与真实轨道宽度都收成 `1px`。
-3. 保持当前 `split-grid` 拖拽接线方式不变，只做最小布局与样式调整。
-4. 保持文件管理栏关闭后的宿主退化行为不变，不重新引入左侧唤起手柄或额外空槽。
+3. 让 `gutter` 在展开态下保持可见，不允许继续使用隐藏或透明样式伪装为不可见拖拽条。
+4. 保持当前 `split-grid` 拖拽接线方式不变，只做最小布局与样式调整。
+5. 保持文件管理栏关闭后的宿主退化行为不变，不重新引入左侧唤起手柄或额外空槽。
 
 ### 2.2 非目标
 
@@ -62,6 +63,7 @@
 
 - `gutter` 轨道宽度改为 `1px`。
 - 颜色继续使用系统现有 `border-primary` 语义对应的边框色。
+- 展开态下 `gutter` 必须常驻可见，不允许继续使用 `opacity: 0`、隐藏背景或等价的透明处理。
 - 不引入新的主题变量，也不单独写死亮暗主题颜色。
 
 ### 4.3 顶部边界
@@ -127,6 +129,7 @@
 - 去掉 `home-file-manager-panel-slot` 的 `border-right` 相关 class。
 - 保留文件管理栏插槽的顶部边框 class。
 - 保留 `home-file-manager-gutter`，让它继续承载顶部边框与拖拽语义。
+- 去掉 `home-file-manager-gutter` 当前的透明样式，让该节点在展开态下直接显示为可见分隔线。
 - 将 `gutter` 作为唯一分隔线节点，不新增额外 DOM。
 
 #### `wj-markdown-editor-web/src/components/layout/homeViewFilePanelLayoutUtil.js`
@@ -195,7 +198,8 @@
 1. `home-file-manager-panel-slot` 不再包含 `b-r-1`、`b-r-border-primary`、`b-r-solid`。
 2. `home-file-manager-panel-slot` 仍保留顶部边框相关 class。
 3. `home-file-manager-gutter` 仍存在，并继续保留顶部边框相关 class。
-4. 文件管理栏关闭时宿主仍退化为单列 `1fr`。
+4. `home-file-manager-gutter` 不得再带 `op-0` 或其他等价透明 class。
+5. 文件管理栏关闭时宿主仍退化为单列 `1fr`。
 
 ### 9.3 回归验证
 
