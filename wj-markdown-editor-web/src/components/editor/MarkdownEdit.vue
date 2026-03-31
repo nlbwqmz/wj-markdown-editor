@@ -535,6 +535,8 @@ const previewContainerStyle = computed(() => {
 
 const editorContainerClass = computed(() => layoutMode.value.gridTemplateClass)
 const layoutRenderItems = computed(() => resolveMarkdownEditRenderItems(layoutMode.value))
+// 仅左侧三栏布局需要给大纲面板补右边框，与外层分栏边界保持一致。
+const menuLeftBordered = computed(() => layoutMode.value.columnOrder[0] === 'menu')
 
 const modelSyncScheduler = createFlushableDebounce(() => {
   const view = editorView.value
@@ -1057,7 +1059,9 @@ defineExpose({
           :get-container="() => previewRef"
           :close="() => { menuVisible = false }"
           data-layout-item="menu"
-          class="allow-search markdown-edit-layout__menu"
+          class="allow-search markdown-edit-layout__menu" :class="[
+            { 'markdown-edit-layout__menu--left-bordered': menuLeftBordered },
+          ]"
         />
       </template>
     </div>

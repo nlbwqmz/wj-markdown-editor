@@ -60,5 +60,8 @@ const onActiveAnchorChanged = commonUtil.debounce(() => {
 </template>
 
 <style scoped lang="scss">
-
+.markdown-edit-layout__menu--left-bordered {
+  // 与编辑页其他分栏复用同一主题边框色，避免出现第二套分隔线视觉。
+  border-right: 1px solid var(--wj-markdown-border-primary);
+}
 </style>

@@ -144,6 +144,15 @@ describe('homeView 文件管理栏宿主壳层', () => {
     expect(wrapper.find('[data-testid="home-file-manager-host"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="home-file-manager-gutter"]').exists()).toBe(true)
 
+    const fileManagerPanelSlot = wrapper.get('[data-testid="home-file-manager-panel-slot"]')
+    const fileManagerGutter = wrapper.get('[data-testid="home-file-manager-gutter"]')
+    expect(fileManagerPanelSlot.classes()).toContain('b-t-1')
+    expect(fileManagerPanelSlot.classes()).toContain('b-t-border-primary')
+    expect(fileManagerPanelSlot.classes()).toContain('b-t-solid')
+    expect(fileManagerGutter.classes()).toContain('b-t-1')
+    expect(fileManagerGutter.classes()).toContain('b-t-border-primary')
+    expect(fileManagerGutter.classes()).toContain('b-t-solid')
+
     wrapper.unmount()
   })
 
@@ -156,12 +165,13 @@ describe('homeView 文件管理栏宿主壳层', () => {
     expect((await mountHomeViewByRoute('/guide')).find('[data-testid="home-file-manager-host"]').exists()).toBe(false)
   })
 
-  it('文件管理栏关闭后应保留左侧唤起手柄', async () => {
+  it('文件管理栏关闭后不应保留左侧唤起手柄，宿主应收拢为单列', async () => {
     const wrapper = await mountHomeView({
       fileManagerPanelVisible: false,
     })
 
-    expect(wrapper.find('[data-testid="home-file-manager-reopen-handle"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="home-file-manager-reopen-handle"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="home-file-manager-host"]').attributes('style')).toContain('grid-template-columns: 1fr;')
 
     wrapper.unmount()
   })

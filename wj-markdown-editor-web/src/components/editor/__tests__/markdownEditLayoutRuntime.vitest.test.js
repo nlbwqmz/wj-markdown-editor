@@ -376,6 +376,7 @@ describe('markdownEdit 布局运行时接线', () => {
       'gutter-menu',
       'gutter-preview',
     ])
+    expect(wrapper.get('[data-layout-item="menu"]').classes()).toContain('markdown-edit-layout__menu--left-bordered')
   })
 
   it('previewPosition 从 right 切到 left 时，会重建 Split 并同步新的真实 DOM 顺序', async () => {

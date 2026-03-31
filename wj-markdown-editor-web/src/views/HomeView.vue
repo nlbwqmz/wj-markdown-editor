@@ -34,7 +34,8 @@ const homeViewFileManagerHostStyle = computed(() => {
   }
 
   return {
-    gridTemplateColumns: '24px 1fr',
+    // 关闭文件管理栏后，宿主直接退化为单列，避免残留手柄空槽。
+    gridTemplateColumns: '1fr',
   }
 })
 const homeViewFilePanelLayoutController = createHomeViewFilePanelLayoutController({
@@ -98,7 +99,7 @@ watch(shouldEnableFileManagerSplit, async (visible) => {
         <div
           v-if="store.fileManagerPanelVisible"
           data-testid="home-file-manager-panel-slot"
-          class="h-full min-w-0 overflow-hidden b-r-1 b-r-border-primary b-r-solid"
+          class="h-full min-w-0 overflow-hidden b-r-1 b-t-1 b-r-border-primary b-t-border-primary b-r-solid b-t-solid"
         >
           <FileManagerPanel />
         </div>
@@ -106,17 +107,8 @@ watch(shouldEnableFileManagerSplit, async (visible) => {
           v-if="store.fileManagerPanelVisible"
           ref="fileManagerGutterRef"
           data-testid="home-file-manager-gutter"
-          class="h-full cursor-col-resize bg-[#E2E2E2] op-0"
+          class="h-full cursor-col-resize b-t-1 b-t-border-primary b-t-solid bg-[#E2E2E2] op-0"
         />
-        <button
-          v-else
-          type="button"
-          data-testid="home-file-manager-reopen-handle"
-          class="bg-bg-secondary h-full w-full flex items-center justify-center border-none px-0 color-text-secondary"
-          @click="store.setFileManagerPanelVisible(true)"
-        >
-          <div class="i-tabler:chevron-right" />
-        </button>
         <LayoutContainer />
       </div>
       <LayoutContainer v-else />
