@@ -116,6 +116,17 @@ function extractCssRuleDeclarations(css, selector) {
     }, new Map())
 }
 
+function extractVNodeText(content) {
+  if (typeof content === 'string') {
+    return content
+  }
+  if (Array.isArray(content)) {
+    return content.map(item => extractVNodeText(item)).join('')
+  }
+
+  return extractVNodeText(content?.children)
+}
+
 function createDeferred() {
   let resolve = null
   let reject = null
@@ -549,7 +560,7 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('docs')
   })
 
-  it('点击工具区新建 Markdown 按钮后，应继续走统一打开决策链路', async () => {
+  it('点击工具区新建 Markdown 按钮后，应展示 .md 后缀输入框并仅刷新列表', async () => {
     let markdownDialogConfig = null
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       directoryPath: 'D:/docs',
@@ -576,6 +587,11 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     await wrapper.get('[data-testid="file-manager-create-markdown"]').trigger('click')
+    const markdownAddonAfterNode = markdownDialogConfig.content.children.addonAfter()
+
+    expect(extractVNodeText(markdownAddonAfterNode)).toBe('.md')
+    expect(markdownAddonAfterNode.props.style.color).toBe('var(--wj-markdown-text-primary)')
+
     markdownDialogConfig.content.props['onUpdate:value']('draft-note.md')
     await markdownDialogConfig.onOk()
     await flushFileManagerPanel()
@@ -584,12 +600,8 @@ describe('fileManagerPanel 组件', () => {
     expect(fileManagerPanelState.requestFileManagerCreateMarkdown).toHaveBeenCalledWith({
       name: 'draft-note.md',
     })
-    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith(
-      'D:/docs/draft-note.md',
-      expect.objectContaining({
-        source: 'file-panel-create-markdown',
-      }),
-    )
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toContain('draft-note.md')
   })
 
   it('draft 空状态应提供选择目录入口，并在选择成功后切换到该目录', async () => {
@@ -1174,9 +1186,9 @@ describe('fileManagerPanelController', () => {
     scope.stop()
   })
 
-  it('新建 Markdown 成功后应复用统一打开决策控制器', async () => {
+  it('新建 Markdown 成功后应自动补齐 .md 后缀、刷新目录状态且不触发打开决策', async () => {
     const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
-    const openNameInputModal = vi.fn().mockResolvedValue('draft-note.md')
+    const openNameInputModal = vi.fn().mockResolvedValue('draft-note')
     fileManagerPanelState.requestFileManagerCreateMarkdown.mockResolvedValue({
       path: 'D:/docs/draft-note.md',
       directoryState: createDirectoryState({
@@ -1200,17 +1212,16 @@ describe('fileManagerPanelController', () => {
 
     await controller.requestCreateMarkdownFromInput()
 
-    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith(
-      expect.stringContaining('draft-note.md'),
-      expect.objectContaining({
-        source: 'file-panel-create-markdown',
-      }),
-    )
+    expect(fileManagerPanelState.requestFileManagerCreateMarkdown).toHaveBeenCalledWith({
+      name: 'draft-note.md',
+    })
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
+    expect(controller.entryList.value.map(item => item.name)).toContain('draft-note.md')
 
     scope.stop()
   })
 
-  it('createMarkdown 在未传名称时应先请求名称，并继续复用统一打开决策', async () => {
+  it('createMarkdown 在未传名称时应先请求名称，并对已包含 .md 的名称自动去重', async () => {
     const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
     const openNameInputModal = vi.fn().mockResolvedValue('draft-note.md')
     fileManagerPanelState.requestFileManagerCreateMarkdown.mockResolvedValue({
@@ -1242,12 +1253,7 @@ describe('fileManagerPanelController', () => {
     expect(fileManagerPanelState.requestFileManagerCreateMarkdown).toHaveBeenCalledWith({
       name: 'draft-note.md',
     })
-    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith(
-      expect.stringContaining('draft-note.md'),
-      expect.objectContaining({
-        source: 'file-panel-create-markdown',
-      }),
-    )
+    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
 
     scope.stop()
   })

@@ -109,6 +109,19 @@ function normalizeFileManagerEntryName(name) {
   return typeof name === 'string' ? name.trim() : ''
 }
 
+// 文件管理栏的新建 Markdown 统一收口为单个 .md 后缀，避免出现 .md.md。
+function ensureMarkdownFileManagerEntryName(name) {
+  const normalizedName = normalizeFileManagerEntryName(name)
+  if (!normalizedName) {
+    return ''
+  }
+  if (/\.(?:md|markdown)$/iu.test(normalizedName)) {
+    return normalizedName.replace(/(?:\.(?:md|markdown))+$/iu, '.md')
+  }
+
+  return `${normalizedName}.md`
+}
+
 function isInvalidFileManagerEntryName(name) {
   const normalizedName = normalizeFileManagerEntryName(name)
 
@@ -317,7 +330,16 @@ function createDefaultOpenNameInputModal({
           'value': inputValue.value,
           'autofocus': true,
           'onUpdate:value': value => inputValue.value = value,
-        }),
+        }, kind === 'markdown'
+          ? {
+              // 新建 Markdown 时固定展示 .md，用户只输入基础名称即可。
+              addonAfter: () => createVNode('span', {
+                style: {
+                  color: 'var(--wj-markdown-text-primary)',
+                },
+              }, '.md'),
+            }
+          : undefined),
         onOk: async () => {
           const nextValue = trim ? normalizeFileManagerEntryName(inputValue.value) : inputValue.value
           if (!nextValue) {
@@ -329,7 +351,9 @@ function createDefaultOpenNameInputModal({
             return Promise.reject(new Error('file-manager-entry-name-invalid'))
           }
 
-          settle(nextValue)
+          settle(kind === 'markdown'
+            ? ensureMarkdownFileManagerEntryName(nextValue)
+            : nextValue)
           return true
         },
         onCancel: () => {
@@ -545,16 +569,17 @@ export function createFileManagerPanelController({
   }
 
   async function createMarkdown(name) {
-    const nextName = typeof name === 'string'
+    const rawName = typeof name === 'string'
       ? normalizeFileManagerEntryName(name)
       : await requestEntryName('markdown')
-    if (!nextName) {
+    if (!rawName) {
       return null
     }
-    if (isInvalidFileManagerEntryName(nextName)) {
+    if (isInvalidFileManagerEntryName(rawName)) {
       showWarningMessage(INVALID_ENTRY_NAME_MESSAGE_KEY)
       return createInvalidFileManagerEntryNameResult()
     }
+    const nextName = ensureMarkdownFileManagerEntryName(rawName)
 
     return await runLatestDirectoryStateRequest(() => requestCreateMarkdown({
       name: nextName,
@@ -572,14 +597,6 @@ export function createFileManagerPanelController({
       if (result?.directoryState) {
         commitDirectoryState(result.directoryState, {
           emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-        })
-      }
-
-      if (result?.path) {
-        await openDecisionController.openDocument(result.path, {
-          currentPath: resolveDocumentOpenCurrentPath(store?.documentSessionSnapshot),
-          isDirty: store?.documentSessionSnapshot?.dirty === true,
-          source: 'file-panel-create-markdown',
         })
       }
 

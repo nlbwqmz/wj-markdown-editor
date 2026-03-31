@@ -106,6 +106,7 @@ function createThreeWayChoiceModal({
       title,
       content,
       centered: true,
+      width: 600,
       footer: h('div', {
         style: {
           width: '100%',

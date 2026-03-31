@@ -245,6 +245,7 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
         <button
           v-for="entry in entryList"
           :key="entry.path"
+          :title="entry.name"
           type="button"
           class="file-manager-panel__entry"
           :class="{ 'is-active': entry.isActive }"
