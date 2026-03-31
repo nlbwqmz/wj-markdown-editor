@@ -9,7 +9,7 @@
 - 编辑页在“大纲位于左侧”场景下，大纲容器右侧缺少统一边框，导致分区感不一致。
 - 文件管理栏当前文件仍使用背景块高亮，和现有轻量侧栏导航风格不一致。
 - 文件管理栏只能进入子目录，不能显式返回上一级。
-- 新建文件夹时尚未把“目录已存在”当作显式失败反馈给用户。
+- 新建文件夹的“目标已存在”提示链路在 renderer 侧已经具备，但 Electron `createFolder()` 还没有像 `createMarkdown()` 一样稳定返回 `file-manager-entry-already-exists`。
 - 文件管理栏关闭后仍保留箭头唤起区，与本轮期望的“完全收起”不一致。
 
 本次需求只处理上述样式与导航补充，不改动文件管理栏主干架构，不新增新的主进程协议，不重做编辑页分栏系统。
@@ -20,7 +20,7 @@
 
 1. 让文件管理栏滚动、边框和当前项高亮方式与主窗口现有视觉规则一致。
 2. 为文件管理栏增加明确的“返回上一级”能力，并复用现有目录切换链路。
-3. 让创建文件夹在“目标已存在”时返回显式提示，而不是静默表现为无变化。
+3. 补齐创建文件夹在“目标已存在”时的主进程失败返回，让现有 renderer 提示链路能稳定生效。
 4. 去掉文件管理栏关闭后的左侧箭头唤起区，保持关闭语义简单直接。
 
 ### 2.2 非目标
@@ -100,6 +100,12 @@
 3. 计算得到的父目录与当前目录相同，按钮禁用，避免无效跳转。
 4. 点击后复用现有 `openDirectory(targetPath)` 能力切换目录。
 
+实现约束：
+
+- 按钮沿用现有文件管理栏工具按钮风格。
+- 补齐对应 i18n 文案。
+- 提供稳定的 `data-testid`，方便组件测试直接断言按钮状态与点击行为。
+
 支持的根目录语义沿用现有路径工具逻辑：
 
 - `/`
@@ -137,9 +143,10 @@
 负责以下逻辑：
 
 - 基于当前 `directoryPath` 计算是否允许返回上一级。
+- 直接复用该文件内现有的路径归一化与父目录计算语义，不新增另一套路径规则。
 - 暴露 `openParentDirectory()` 或同等语义方法给组件调用。
 - 复用已有 `openDirectory()` 执行目录切换。
-- 创建文件夹时识别 `file-manager-entry-already-exists` 并提示用户。
+- 继续复用现有 `file-manager-entry-already-exists` 失败提示链路，不重复新增另一套前端错误处理。
 
 #### `wj-markdown-editor-web/src/views/HomeView.vue`
 
@@ -166,10 +173,15 @@
 
 补充以下约束：
 
-- `createFolder()` 在目标目录已存在时显式返回：
+- `createFolder()` 在目标已存在时显式返回：
   - `ok: false`
   - `reason: 'file-manager-entry-already-exists'`
   - `path: <目标路径>`
+
+其中“目标已存在”同时包含两类情况：
+
+- 同名目录已存在
+- 同名文件已存在
 
 这样 renderer 可以与新建 Markdown 复用同一套“已存在”提示逻辑。
 
@@ -189,8 +201,8 @@
 
 1. 用户输入新建文件夹名称。
 2. renderer 调用现有 `requestFileManagerCreateFolder()`。
-3. Electron 若发现目录已存在，返回 `file-manager-entry-already-exists`。
-4. renderer 统一提示“目标已存在”，并保持当前目录状态不变。
+3. Electron 若发现同名目录或同名文件已存在，返回 `file-manager-entry-already-exists`。
+4. renderer 复用已有统一提示链路，并保持当前目录状态不变。
 
 ### 7.3 文件管理栏关闭链路
 
@@ -222,7 +234,7 @@
 
 其中：
 
-- `file-manager-entry-already-exists` 需要提示用户目标已存在。
+- `file-manager-entry-already-exists` 由现有 renderer 提示链路统一提示用户目标已存在。
 - `open-directory-watch-failed` 沿用现有目录打开失败提示。
 
 ### 8.3 关闭态入口
@@ -239,7 +251,7 @@
 2. 当前文件高亮应使用新的激活 class / 文字高亮语义，而不是旧背景高亮语义。
 3. 有父目录时“上一级”按钮可点击，点击后调用 `requestFileManagerOpenDirectory` 打开父目录。
 4. 根目录或无目录时“上一级”按钮禁用。
-5. `createFolder()` 收到 `file-manager-entry-already-exists` 时，应提示用户并保持当前目录状态。
+5. 继续覆盖 `createFolder()` 收到 `file-manager-entry-already-exists` 时，应提示用户并保持当前目录状态，确认 renderer 复用链路未被破坏。
 6. `HomeView` 在文件管理栏关闭时不再渲染左侧唤起按钮。
 7. 左侧大纲布局应带统一右边框 class。
 
@@ -248,12 +260,13 @@
 重点补以下回归：
 
 1. `createFolder()` 命中已存在目录时，必须返回 `file-manager-entry-already-exists`。
-2. 命中已存在目录时，不能覆盖既有目录内容，也不能误返回成功目录状态。
+2. `createFolder()` 命中同名文件时，也必须返回 `file-manager-entry-already-exists`。
+3. 命中已存在目标时，不能覆盖既有文件或目录内容，也不能误返回成功目录状态。
 
 ## 10. 实施顺序建议
 
-1. 先补 Electron `createFolder()` 已存在失败测试与实现。
-2. 再补 renderer controller 的“已存在提示”和“返回上一级”能力。
+1. 先补 Electron `createFolder()` 已存在失败测试与实现，覆盖“同名目录 / 同名文件”两种分支。
+2. 再补 renderer controller 的“返回上一级”能力，并验证现有“已存在提示”链路继续可用。
 3. 调整 `FileManagerPanel.vue` 的工具栏、滚动类和高亮样式。
 4. 调整 `HomeView.vue` 的关闭态与顶部边框。
 5. 调整 `MarkdownEdit.vue` / `MarkdownMenu.vue` 的左侧大纲右边框。
