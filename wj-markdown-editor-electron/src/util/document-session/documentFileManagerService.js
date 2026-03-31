@@ -328,7 +328,20 @@ export function createDocumentFileManagerService({
       return createEmptyDirectoryState()
     }
 
-    await fsModule.ensureDir(path.join(directoryPath, nextName))
+    const nextPath = path.join(directoryPath, nextName)
+    if (await fsModule.pathExists(nextPath)) {
+      return createFileManagerEntryAlreadyExistsResult(nextPath)
+    }
+
+    try {
+      await fsModule.mkdir(nextPath)
+    } catch (error) {
+      if (error?.code === 'EEXIST') {
+        return createFileManagerEntryAlreadyExistsResult(nextPath)
+      }
+      throw error
+    }
+
     return await getDirectoryState({ windowId })
   }
 

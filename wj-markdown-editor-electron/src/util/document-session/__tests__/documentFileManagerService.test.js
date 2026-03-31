@@ -291,6 +291,58 @@ describe('documentFileManagerService', () => {
     expect(result.entryList.map(item => item.name)).toEqual(['assets', 'current.md'])
   })
 
+  it('createFolder 命中同名目录时，必须显式失败且不能误返回成功目录状态', async () => {
+    const directoryPath = await createTempDirectory()
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    const existingDirectoryPath = path.join(directoryPath, 'assets')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+    await fs.ensureDir(existingDirectoryPath)
+
+    const { service } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'create-folder-existing-directory-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    await expect(service.createFolder({
+      windowId: 9,
+      name: 'assets',
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'file-manager-entry-already-exists',
+      path: existingDirectoryPath,
+    })
+  })
+
+  it('createFolder 命中同名文件时，必须显式失败且不能覆盖现有文件', async () => {
+    const directoryPath = await createTempDirectory()
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    const existingFilePath = path.join(directoryPath, 'assets')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+    await fs.writeFile(existingFilePath, 'keep', 'utf8')
+
+    const { service } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'create-folder-existing-file-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    await expect(service.createFolder({
+      windowId: 9,
+      name: 'assets',
+    })).resolves.toEqual({
+      ok: false,
+      reason: 'file-manager-entry-already-exists',
+      path: existingFilePath,
+    })
+
+    expect(await fs.readFile(existingFilePath, 'utf8')).toBe('keep')
+  })
+
   it('新建 Markdown 成功后应返回 path 与刷新后的目录列表', async () => {
     const directoryPath = await createTempDirectory()
     const currentFilePath = path.join(directoryPath, 'current.md')
