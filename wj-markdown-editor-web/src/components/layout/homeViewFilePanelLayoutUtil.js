@@ -1,7 +1,7 @@
 import Split from 'split-grid'
 
-export const FILE_MANAGER_PANEL_DEFAULT_WIDTH = 260
-export const FILE_MANAGER_PANEL_MIN_WIDTH = 200
+export const FILE_MANAGER_PANEL_DEFAULT_WIDTH = 280
+export const FILE_MANAGER_PANEL_MIN_WIDTH = 220
 export const FILE_MANAGER_PANEL_MAX_WIDTH = 420
 
 /**

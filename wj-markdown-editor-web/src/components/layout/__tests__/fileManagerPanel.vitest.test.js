@@ -261,7 +261,8 @@ describe('fileManagerPanel 组件', () => {
     mountedWrapperList.push(draftWrapper)
     await flushFileManagerPanel()
 
-    expect(draftWrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerSelectDirectory')
+    expect(draftWrapper.get('[data-testid="file-manager-empty-state"]').find('[data-testid="empty-stub"]').exists()).toBe(true)
+    expect(draftWrapper.find('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(false)
     expect(draftWrapper.get('[data-testid="file-manager-open-parent"]').attributes('disabled')).toBeDefined()
 
     draftWrapper.unmount()
@@ -453,7 +454,7 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.find('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(false)
   })
 
-  it('recent-missing 父目录不存在时应保留空状态动作入口，但不显示额外文案', async () => {
+  it('recent-missing 父目录不存在时应显示无描述空组件，且不再渲染正文动作入口', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       isRecentMissing: true,
       recentMissingPath: 'D:/docs/missing.md',
@@ -465,12 +466,12 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toBe('')
-    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toBe('translated:message.fileManagerSelectDirectory')
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').find('[data-testid="empty-stub"]').exists()).toBe(true)
     expect(wrapper.find('.file-manager-panel__empty-message').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(false)
   })
 
-  it('recent-missing 父目录不存在时，即使主进程返回 directoryPath:null 的空状态对象，也必须保持静默空状态', async () => {
+  it('recent-missing 父目录不存在时，即使主进程返回 directoryPath:null 的空状态对象，也必须保持无描述空组件', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       isRecentMissing: true,
       recentMissingPath: 'D:/docs/missing.md',
@@ -485,9 +486,9 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toBe('')
-    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toBe('translated:message.fileManagerSelectDirectory')
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').find('[data-testid="empty-stub"]').exists()).toBe(true)
     expect(wrapper.find('.file-manager-panel__empty-message').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(false)
   })
 
   it('文件管理栏工具区应显示当前目录完整路径字符串', async () => {
@@ -682,7 +683,7 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toContain('draft-note.md')
   })
 
-  it('draft 空状态应提供选择目录入口，并在选择成功后切换到该目录', async () => {
+  it('draft 空状态应通过工具栏选择目录，并在选择成功后切换到该目录', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       path: null,
     })
@@ -697,7 +698,9 @@ describe('fileManagerPanel 组件', () => {
     const wrapper = mount(FileManagerPanel)
     mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
-    await wrapper.get('[data-testid="file-manager-empty-open-directory"]').trigger('click')
+    expect(wrapper.find('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="file-manager-open-directory"]').trigger('click')
     await flushFileManagerPanel()
 
     expect(fileManagerPanelState.requestFileManagerPickDirectory).toHaveBeenCalledTimes(1)
@@ -707,7 +710,7 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('workspace')
   })
 
-  it('空状态与工具区标题应使用 t(emptyMessageKey) 渲染，而不是直接显示 message key', async () => {
+  it('草稿空状态正文应改为无描述空组件，工具区标题仍使用 t(emptyMessageKey)', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       path: null,
     })
@@ -717,7 +720,8 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('translated:message.fileManagerSelectDirectory')
-    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerSelectDirectory')
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').find('[data-testid="empty-stub"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toBe('')
   })
 
   it('中英文文案应补齐文件管理栏真实使用到的 key', async () => {

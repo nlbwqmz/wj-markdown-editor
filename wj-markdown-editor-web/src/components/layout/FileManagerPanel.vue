@@ -1,4 +1,5 @@
 <script setup>
+import { Empty as AEmpty } from 'ant-design-vue'
 import { computed } from 'vue'
 import IconButton from '@/components/editor/IconButton.vue'
 import i18n from '@/i18n/index.js'
@@ -232,22 +233,9 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
       <div
         v-if="!hasDirectory"
         data-testid="file-manager-empty-state"
-        class="file-manager-panel__empty h-full flex flex-col items-center justify-center gap-3 px-4 text-center"
+        class="file-manager-panel__empty h-full flex items-center justify-center px-4"
       >
-        <div
-          v-if="emptyMessageKey"
-          class="file-manager-panel__empty-message max-w-full text-sm color-text-secondary"
-        >
-          {{ t(emptyMessageKey) }}
-        </div>
-        <button
-          type="button"
-          data-testid="file-manager-empty-open-directory"
-          class="file-manager-panel__empty-btn"
-          @click="pickDirectory"
-        >
-          {{ t('message.fileManagerSelectDirectory') }}
-        </button>
+        <AEmpty :description="null" />
       </div>
       <div
         v-else-if="entryList.length > 0"
@@ -301,19 +289,6 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
 .file-manager-panel__path-value {
   direction: ltr;
   unicode-bidi: bidi-override;
-}
-
-.file-manager-panel__empty-btn {
-  border: 1px solid var(--wj-markdown-border-primary);
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: var(--wj-markdown-bg-secondary);
-  color: var(--wj-markdown-text-primary);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--wj-markdown-bg-hover);
-  }
 }
 
 .file-manager-panel__entry {
