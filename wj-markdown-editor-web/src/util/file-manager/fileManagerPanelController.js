@@ -393,11 +393,20 @@ export function createFileManagerPanelController({
   const hasDirectory = computed(() => Boolean(directoryState.value.directoryPath))
   const breadcrumbList = computed(() => buildBreadcrumbList(directoryPath.value))
   const parentDirectoryPath = computed(() => getPathDirname(directoryPath.value))
+  const currentDocumentDirectoryPath = computed(() => getPathDirname(
+    resolveDocumentOpenCurrentPath(store?.documentSessionSnapshot),
+  ))
   const canOpenParentDirectory = computed(() => {
     const currentPath = normalizeComparablePath(directoryPath.value)
     const parentPath = normalizeComparablePath(parentDirectoryPath.value)
 
     return Boolean(currentPath && parentPath && currentPath !== parentPath)
+  })
+  const canFocusCurrentDocumentDirectory = computed(() => {
+    const currentPath = normalizeComparablePath(directoryPath.value)
+    const targetPath = normalizeComparablePath(currentDocumentDirectoryPath.value)
+
+    return Boolean(targetPath && currentPath !== targetPath)
   })
 
   function commitDirectoryState(nextState, options = {}) {
@@ -517,6 +526,17 @@ export function createFileManagerPanelController({
     }
 
     return await openDirectory(parentDirectoryPath.value)
+  }
+
+  async function focusCurrentDocumentDirectory() {
+    if (canFocusCurrentDocumentDirectory.value !== true || !currentDocumentDirectoryPath.value) {
+      return {
+        ok: true,
+        reason: 'noop-current-document-directory',
+      }
+    }
+
+    return await openDirectory(currentDocumentDirectoryPath.value)
   }
 
   async function pickDirectory() {
@@ -681,10 +701,12 @@ export function createFileManagerPanelController({
     hasDirectory,
     breadcrumbList,
     canOpenParentDirectory,
+    canFocusCurrentDocumentDirectory,
     applyDirectoryState,
     reloadDirectoryStateFromSnapshot,
     openDirectory,
     openParentDirectory,
+    focusCurrentDocumentDirectory,
     pickDirectory,
     createFolder,
     createMarkdown,

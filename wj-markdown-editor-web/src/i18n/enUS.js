@@ -302,6 +302,7 @@ export default {
     fileManagerSelectDirectory: 'Select a directory',
     fileManagerDirectoryEmpty: 'This directory is empty.',
     fileManagerOpenParentDirectory: 'Go to parent directory',
+    fileManagerFocusCurrentFileDirectory: 'Locate current file directory',
     fileManagerCreateFolder: 'New folder',
     fileManagerCreateMarkdown: 'New Markdown',
     fileManagerFolderNameRequired: 'Please enter a folder name.',

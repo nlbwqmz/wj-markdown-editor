@@ -14,10 +14,12 @@ const controller = createFileManagerPanelController({
 const {
   breadcrumbList,
   canOpenParentDirectory,
+  canFocusCurrentDocumentDirectory,
   createFolder,
   createMarkdown,
   emptyMessageKey,
   entryList,
+  focusCurrentDocumentDirectory,
   hasDirectory,
   openEntry,
   openParentDirectory,
@@ -189,6 +191,15 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
           :action="canOpenParentDirectory ? openParentDirectory : undefined"
           :disabled="!canOpenParentDirectory ? true : undefined"
           :class="!canOpenParentDirectory ? disabledToolbarButtonClass : undefined"
+        />
+        <IconButton
+          data-testid="file-manager-focus-current-file-directory"
+          icon="i-tabler:focus-2"
+          :label="t('message.fileManagerFocusCurrentFileDirectory')"
+          :title="t('message.fileManagerFocusCurrentFileDirectory')"
+          :action="canFocusCurrentDocumentDirectory ? focusCurrentDocumentDirectory : undefined"
+          :disabled="!canFocusCurrentDocumentDirectory ? true : undefined"
+          :class="!canFocusCurrentDocumentDirectory ? disabledToolbarButtonClass : undefined"
         />
         <IconButton
           data-testid="file-manager-open-directory"

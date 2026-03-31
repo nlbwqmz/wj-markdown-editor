@@ -6,7 +6,6 @@ import log from '@/assets/img/logo.png'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
-import toggleFullScreenAction from '@/util/fullScreenActionUtil.js'
 import { createLayoutTopOpenFolderAction } from './layoutTopOpenFolderAction.js'
 
 const store = useCommonStore()
@@ -38,7 +37,6 @@ function openAbout() {
 const fileName = computed(() => store.fileName)
 const saved = computed(() => store.saved)
 const isMaximize = computed(() => store.isMaximize)
-const isFullScreen = computed(() => store.isFullScreen)
 const isAlwaysOnTop = computed(() => store.isAlwaysOnTop)
 const theme = computed(() => store.config.theme.global)
 
@@ -101,15 +99,6 @@ onBeforeMount(async () => {
       <span v-if="!saved" class="color-red">*</span>
     </div>
     <div class="flex items-center">
-      <a-tooltip placement="bottom" color="#1677ff">
-        <template #title>
-          <span>{{ $t(isFullScreen ? 'top.exitFullScreen' : 'top.enterFullScreen') }}</span>
-        </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="toggleFullScreenAction">
-          <div v-if="!isFullScreen" class="i-tabler:arrows-maximize" />
-          <div v-else class="i-tabler:arrows-minimize" />
-        </div>
-      </a-tooltip>
       <a-tooltip v-if="hasNewVersion" placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.newVersion') }}</span>

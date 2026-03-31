@@ -302,6 +302,7 @@ export default {
     fileManagerSelectDirectory: '选择目录',
     fileManagerDirectoryEmpty: '当前目录为空',
     fileManagerOpenParentDirectory: '返回上一级',
+    fileManagerFocusCurrentFileDirectory: '定位到当前文件目录',
     fileManagerCreateFolder: '新建文件夹',
     fileManagerCreateMarkdown: '新建 Markdown',
     fileManagerFolderNameRequired: '请输入文件夹名称',

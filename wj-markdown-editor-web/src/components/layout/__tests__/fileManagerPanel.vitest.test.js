@@ -328,6 +328,84 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-open-parent"]').attributes('disabled')).toBeDefined()
   })
 
+  it('定位当前文件目录按钮在面板已切到其他目录后应可用，并能切回当前文件所在目录', async () => {
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      path: 'D:/docs/project/current.md',
+    })
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs/project',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/project/current.md', kind: 'markdown' },
+      ],
+    }))
+    fileManagerPanelState.requestFileManagerOpenDirectory
+      .mockResolvedValueOnce(createDirectoryState({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'project', path: 'D:/docs/project', kind: 'directory' },
+        ],
+      }))
+      .mockResolvedValueOnce(createDirectoryState({
+        directoryPath: 'D:/docs/project',
+        entryList: [
+          { name: 'current.md', path: 'D:/docs/project/current.md', kind: 'markdown' },
+        ],
+      }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('[data-testid="file-manager-open-parent"]').trigger('click')
+    await flushFileManagerPanel()
+
+    const focusCurrentDirectoryButton = wrapper.get('[data-testid="file-manager-focus-current-file-directory"]')
+    expect(focusCurrentDirectoryButton.attributes('title')).toBe('translated:message.fileManagerFocusCurrentFileDirectory')
+    expect(focusCurrentDirectoryButton.attributes('disabled')).toBeUndefined()
+
+    await focusCurrentDirectoryButton.trigger('click')
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).toHaveBeenNthCalledWith(1, {
+      directoryPath: 'D:/docs',
+    })
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).toHaveBeenNthCalledWith(2, {
+      directoryPath: 'D:/docs/project',
+    })
+    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('D:/docs/project')
+  })
+
+  it('定位当前文件目录按钮在草稿态或当前目录已命中时应禁用', async () => {
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      path: 'D:/docs/current.md',
+    })
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const currentDirectoryWrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(currentDirectoryWrapper)
+    await flushFileManagerPanel()
+
+    expect(currentDirectoryWrapper.get('[data-testid="file-manager-focus-current-file-directory"]').attributes('disabled')).toBeDefined()
+
+    currentDirectoryWrapper.unmount()
+
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      path: null,
+    })
+    fileManagerPanelState.requestFileManagerDirectoryState.mockReset()
+
+    const draftWrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(draftWrapper)
+    await flushFileManagerPanel()
+
+    expect(draftWrapper.get('[data-testid="file-manager-focus-current-file-directory"]').attributes('disabled')).toBeDefined()
+  })
+
   it('recent-missing 父目录存在时应展示该目录且无高亮，父目录不存在时应直接空状态', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       isRecentMissing: true,
@@ -649,6 +727,7 @@ describe('fileManagerPanel 组件', () => {
     expect(zhCN.message.fileManagerSelectDirectory).toBeTruthy()
     expect(zhCN.message.fileManagerDirectoryEmpty).toBeTruthy()
     expect(zhCN.message.fileManagerOpenParentDirectory).toBeTruthy()
+    expect(zhCN.message.fileManagerFocusCurrentFileDirectory).toBeTruthy()
     expect(zhCN.message.fileManagerCreateFolder).toBeTruthy()
     expect(zhCN.message.fileManagerCreateMarkdown).toBeTruthy()
     expect(zhCN.message.fileManagerFolderNameRequired).toBeTruthy()
@@ -658,6 +737,7 @@ describe('fileManagerPanel 组件', () => {
     expect(enUS.message.fileManagerSelectDirectory).toBeTruthy()
     expect(enUS.message.fileManagerDirectoryEmpty).toBeTruthy()
     expect(enUS.message.fileManagerOpenParentDirectory).toBeTruthy()
+    expect(enUS.message.fileManagerFocusCurrentFileDirectory).toBeTruthy()
     expect(enUS.message.fileManagerCreateFolder).toBeTruthy()
     expect(enUS.message.fileManagerCreateMarkdown).toBeTruthy()
     expect(enUS.message.fileManagerFolderNameRequired).toBeTruthy()

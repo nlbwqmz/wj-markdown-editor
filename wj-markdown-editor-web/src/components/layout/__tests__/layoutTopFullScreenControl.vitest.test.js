@@ -6,7 +6,6 @@ import LayoutTop from '../LayoutTop.vue'
 
 const mocked = vi.hoisted(() => ({
   channelSend: vi.fn(),
-  toggleFullScreenAction: vi.fn(),
 }))
 
 const store = reactive({
@@ -38,10 +37,6 @@ vi.mock('@/util/channel/channelUtil.js', () => ({
   default: {
     send: mocked.channelSend,
   },
-}))
-
-vi.mock('@/util/fullScreenActionUtil.js', () => ({
-  default: mocked.toggleFullScreenAction,
 }))
 
 vi.mock('../layoutTopOpenFolderAction.js', () => ({
@@ -131,7 +126,6 @@ describe('layoutTop full screen control', () => {
     store.config.language = 'zh-CN'
     store.config.theme.global = 'light'
     mocked.channelSend.mockReset()
-    mocked.toggleFullScreenAction.mockReset()
     mocked.channelSend.mockImplementation(async ({ event }) => {
       if (event === 'app-info') {
         return {
@@ -148,45 +142,33 @@ describe('layoutTop full screen control', () => {
     vi.clearAllMocks()
   })
 
-  it('非全屏时应显示进入全屏图标和 tooltip，并调用共享动作', async () => {
+  it('顶部栏不应再渲染全屏按钮', async () => {
     const wrapper = mountLayoutTop()
-    const actionButtons = wrapper.findAll('div.h-8.w-8')
+    const html = wrapper.html()
     const tooltipList = wrapper.findAll('[data-testid="tooltip-stub"]')
 
-    expect(actionButtons[0].html()).toContain('i-tabler:arrows-maximize')
-    expect(tooltipList[0].attributes('data-tooltip-title')).toBe('top.enterFullScreen')
-
-    await actionButtons[0].trigger('click')
-
-    expect(mocked.toggleFullScreenAction).toHaveBeenCalledTimes(1)
-    expect(mocked.channelSend).not.toHaveBeenCalledWith(expect.objectContaining({
-      event: 'full-screen',
-    }))
+    expect(html).not.toContain('i-tabler:arrows-maximize')
+    expect(html).not.toContain('i-tabler:arrows-minimize')
+    expect(tooltipList.some((item) => {
+      const title = item.attributes('data-tooltip-title')
+      return title === 'top.enterFullScreen' || title === 'top.exitFullScreen'
+    })).toBe(false)
   })
 
-  it('已全屏时应显示退出全屏图标和 tooltip，并调用共享动作', async () => {
+  it('store.isFullScreen 变化后顶部栏仍不应渲染全屏按钮', async () => {
     store.isFullScreen = true
     const wrapper = mountLayoutTop()
-    const actionButtons = wrapper.findAll('div.h-8.w-8')
-    const tooltipList = wrapper.findAll('[data-testid="tooltip-stub"]')
+    const html = wrapper.html()
 
-    expect(actionButtons[0].html()).toContain('i-tabler:arrows-minimize')
-    expect(tooltipList[0].attributes('data-tooltip-title')).toBe('top.exitFullScreen')
-
-    await actionButtons[0].trigger('click')
-
-    expect(mocked.toggleFullScreenAction).toHaveBeenCalledTimes(1)
-    expect(mocked.channelSend).not.toHaveBeenCalledWith(expect.objectContaining({
-      event: 'full-screen',
-    }))
+    expect(html).not.toContain('i-tabler:arrows-maximize')
+    expect(html).not.toContain('i-tabler:arrows-minimize')
   })
 
-  it('全屏按钮应位于右上角功能区最左侧，且不打乱最小化/最大化/关闭顺序', () => {
+  it('移除全屏按钮后仍不应打乱最小化、最大化和关闭按钮顺序', () => {
     store.hasNewVersion = true
     const wrapper = mountLayoutTop()
     const html = wrapper.html()
 
-    expect(html.indexOf('i-tabler:arrows-maximize')).toBeLessThan(html.indexOf('i-tabler:arrow-bar-up'))
     expect(html.indexOf('i-tabler:minus')).toBeLessThan(html.indexOf('i-tabler:crop-1-1'))
     expect(html.indexOf('i-tabler:crop-1-1')).toBeLessThan(html.indexOf('i-tabler:x'))
   })
