@@ -51,24 +51,24 @@ describe('homeViewFilePanelLayoutUtil', () => {
   })
 
   it('文件管理栏默认宽度和边界值必须保持稳定', () => {
-    expect(FILE_MANAGER_PANEL_DEFAULT_WIDTH).toBe(260)
-    expect(FILE_MANAGER_PANEL_MIN_WIDTH).toBe(200)
+    expect(FILE_MANAGER_PANEL_DEFAULT_WIDTH).toBe(280)
+    expect(FILE_MANAGER_PANEL_MIN_WIDTH).toBe(220)
     expect(FILE_MANAGER_PANEL_MAX_WIDTH).toBe(420)
   })
 
-  it('拖动文件管理栏时应把宽度限制在 200 到 420 之间', () => {
-    expect(clampFileManagerPanelWidth(120)).toBe(200)
+  it('拖动文件管理栏时应把宽度限制在 220 到 420 之间', () => {
+    expect(clampFileManagerPanelWidth(120)).toBe(220)
     expect(clampFileManagerPanelWidth(520)).toBe(420)
   })
 
   it('文件管理栏展开态的 grid 列定义应使用 1px gutter 轨道', () => {
-    expect(resolveHomeViewFilePanelGridTemplateColumns(FILE_MANAGER_PANEL_DEFAULT_WIDTH)).toBe('260px 1px 1fr')
+    expect(resolveHomeViewFilePanelGridTemplateColumns(FILE_MANAGER_PANEL_DEFAULT_WIDTH)).toBe('280px 1px 1fr')
   })
 
   it('测试宿主元素的初始 grid 列定义应与 1px gutter 需求保持一致', () => {
     const hostElement = createHostElement()
 
-    expect(hostElement.style.gridTemplateColumns).toBe('260px 1px 1fr')
+    expect(hostElement.style.gridTemplateColumns).toBe('280px 1px 1fr')
   })
 
   it('拖拽回调会按当前轨道宽度钳制 panel 宽度', async () => {
