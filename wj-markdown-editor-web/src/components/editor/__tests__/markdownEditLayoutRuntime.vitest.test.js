@@ -449,6 +449,32 @@ describe('markdownEdit 布局运行时接线', () => {
     expect(getLayoutStyle(wrapper)).not.toContain('transition:')
   })
 
+  it('拖拽结束后会把像素列宽重新归一化成自适应 fr 轨道，避免窗口缩放后布局冻结', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: true,
+    })
+
+    const layoutElement = wrapper.get('[data-testid="markdown-edit-layout"]').element
+    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => {
+      if (element === layoutElement) {
+        return {
+          gridTemplateColumns: '600px 2px 300px 2px 300px',
+        }
+      }
+
+      return {
+        gridTemplateColumns: '',
+      }
+    })
+
+    splitState.calls.at(-1)?.onDragEnd?.('column', 1)
+
+    expect(layoutElement.style.gridTemplateColumns).toBe('0.5fr 2px 0.25fr 2px 0.25fr')
+
+    getComputedStyleSpy.mockRestore()
+  })
+
   it('重新打开预览后，应等待 refresh-complete 再执行首轮预览同步和高亮恢复', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',

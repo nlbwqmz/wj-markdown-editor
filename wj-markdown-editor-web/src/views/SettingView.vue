@@ -927,7 +927,7 @@ function reset() {
 
 <style scoped lang="scss">
 :deep(.ant-descriptions-item-label) {
-  width: 150px;
+  width: 160px;
 }
 :deep(.ant-anchor-wrapper) {
   padding-block-start: revert;

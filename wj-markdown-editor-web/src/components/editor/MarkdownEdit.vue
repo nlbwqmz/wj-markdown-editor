@@ -16,6 +16,7 @@ import { useViewScrollAnchor } from '@/components/editor/composables/useViewScro
 import EditorSearchBar from '@/components/editor/EditorSearchBar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import ImageNetworkModal from '@/components/editor/ImageNetworkModal.vue'
+import { resolveAdaptiveGridTemplateColumns } from '@/components/editor/markdownEditGridTemplateColumnsUtil.js'
 import {
   resolveMarkdownEditLayoutMode,
   resolveMarkdownEditSplitColumnGutters,
@@ -636,6 +637,24 @@ function syncInlineGridTemplateColumnsFromComputedStyle() {
 }
 
 /**
+ * 拖拽结束后把像素列宽重新换回 fr 轨道。
+ * 这样既保留本次拖拽得到的相对比例，又不会在窗口缩放后把布局锁死在旧像素值上。
+ */
+function syncInlineGridTemplateColumnsAsAdaptiveTracks() {
+  if (!editorContainer.value) {
+    return
+  }
+
+  const computedGridTemplateColumns = window.getComputedStyle(editorContainer.value).gridTemplateColumns
+  const adaptiveGridTemplateColumns = resolveAdaptiveGridTemplateColumns(computedGridTemplateColumns)
+  if (!adaptiveGridTemplateColumns) {
+    return
+  }
+
+  editorContainer.value.style['grid-template-columns'] = adaptiveGridTemplateColumns
+}
+
+/**
  * 给当前 gutter 绑定“拖拽前同步列宽”的 capture 监听。
  * 这样可以确保 split-grid 自己的 mousedown / touchstart 处理前，已经拿到稳定的行内轨道定义。
  *
@@ -701,6 +720,7 @@ function resetSplitLayout() {
     columnGutters,
     minSize: 200,
     snapOffset: 0,
+    onDragEnd: syncInlineGridTemplateColumnsAsAdaptiveTracks,
   })
 }
 
@@ -1029,7 +1049,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full p-2"
+          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full p-2"
           :style="previewContainerStyle"
           :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
           @scroll="syncPreviewToEditor"
