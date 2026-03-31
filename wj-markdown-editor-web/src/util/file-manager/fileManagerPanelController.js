@@ -270,6 +270,8 @@ function buildBreadcrumbList(directoryPath) {
       currentPath = `${segment}/`
     } else if (currentPath === '/' || currentPath === '//') {
       currentPath = `${currentPath}${segment}`
+    } else if (currentPath.endsWith('/')) {
+      currentPath = `${currentPath}${segment}`
     } else {
       currentPath = currentPath ? `${currentPath}/${segment}` : segment
     }

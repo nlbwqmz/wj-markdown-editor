@@ -71,6 +71,17 @@ async function flushFileManagerPanel() {
   await nextTick()
 }
 
+function findFileManagerEntryByName(wrapper, name) {
+  const entry = wrapper.findAll('.file-manager-panel__entry')
+    .find(node => node.text().includes(name))
+
+  if (!entry) {
+    throw new Error(`未找到文件项：${name}`)
+  }
+
+  return entry
+}
+
 async function loadFileManagerPanelCompiledStyle() {
   const source = await readFile(path.resolve(process.cwd(), 'src/components/layout/FileManagerPanel.vue'), 'utf8')
   const { descriptor } = parse(source)
@@ -390,7 +401,7 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(true)
   })
 
-  it('文件管理栏工具区应显示当前目录标题或面包屑', async () => {
+  it('文件管理栏工具区应显示当前目录完整路径字符串', async () => {
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       directoryPath: 'D:/docs/project',
       entryList: [
@@ -402,15 +413,22 @@ describe('fileManagerPanel 组件', () => {
     mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
 
-    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('project')
+    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toBe('D:/docs/project')
   })
 
-  it('目录、Markdown、其他文件应显示不同图标，长文件名保持单行省略', async () => {
+  it('目录、Markdown、图片、视频及其他常见文件应显示对应图标，长文件名保持单行省略', async () => {
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       entryList: [
         { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
         { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
-        { name: 'very-long-attachment-name.zip', path: 'D:/docs/very-long-attachment-name.zip', kind: 'other' },
+        { name: 'cover.png', path: 'D:/docs/cover.png', kind: 'other' },
+        { name: 'trailer.mp4', path: 'D:/docs/trailer.mp4', kind: 'other' },
+        { name: 'report.pdf', path: 'D:/docs/report.pdf', kind: 'other' },
+        { name: 'proposal.docx', path: 'D:/docs/proposal.docx', kind: 'other' },
+        { name: 'sheet.xlsx', path: 'D:/docs/sheet.xlsx', kind: 'other' },
+        { name: 'archive.zip', path: 'D:/docs/archive.zip', kind: 'other' },
+        { name: 'audio.mp3', path: 'D:/docs/audio.mp3', kind: 'other' },
+        { name: 'very-long-attachment-name.unknown', path: 'D:/docs/very-long-attachment-name.unknown', kind: 'other' },
       ],
     }))
 
@@ -418,9 +436,16 @@ describe('fileManagerPanel 组件', () => {
     mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
 
-    expect(wrapper.get('[data-testid="file-manager-entry-icon-directory"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="file-manager-entry-icon-markdown"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="file-manager-entry-icon-other"]').exists()).toBe(true)
+    expect(findFileManagerEntryByName(wrapper, 'assets').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:folder')
+    expect(findFileManagerEntryByName(wrapper, 'current.md').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:markdown')
+    expect(findFileManagerEntryByName(wrapper, 'cover.png').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:photo')
+    expect(findFileManagerEntryByName(wrapper, 'trailer.mp4').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:movie')
+    expect(findFileManagerEntryByName(wrapper, 'report.pdf').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-pdf')
+    expect(findFileManagerEntryByName(wrapper, 'proposal.docx').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-word')
+    expect(findFileManagerEntryByName(wrapper, 'sheet.xlsx').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:table')
+    expect(findFileManagerEntryByName(wrapper, 'archive.zip').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:zip')
+    expect(findFileManagerEntryByName(wrapper, 'audio.mp3').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:music')
+    expect(findFileManagerEntryByName(wrapper, 'very-long-attachment-name.unknown').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file')
     wrapper.findAll('[data-testid="file-manager-entry-name"]').forEach((node) => {
       expect(node.classes()).toContain('truncate')
     })
@@ -628,15 +653,30 @@ describe('fileManagerPanel 组件', () => {
     expect(enUS.message.fileManagerOpenDirectoryFailed).toBeTruthy()
   })
 
-  it('文件管理栏样式应只让当前项使用文字高亮，而不是把全部非激活项降级成次级色', async () => {
+  it('文件管理栏样式应只让当前项使用蓝色文字高亮，而不是把全部非激活项降级成次级色', async () => {
     const css = await loadFileManagerPanelCompiledStyle()
     const entryDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__entry')
     const activeDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__entry.is-active')
 
     expect(entryDeclarations.get('color')).not.toBe('var(--wj-markdown-text-secondary)')
-    expect(activeDeclarations.get('color')).toBe('var(--wj-markdown-text-primary)')
+    expect(activeDeclarations.get('color')).toBe('#1677ff')
     expect(activeDeclarations.has('background')).toBe(false)
     expect(activeDeclarations.has('box-shadow')).toBe(false)
+  })
+
+  it('路径标题样式应使用纯 CSS 左侧省略，并为路径内容补充 LTR 顺序修正', async () => {
+    const css = await loadFileManagerPanelCompiledStyle()
+    const pathDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__path-text')
+    const pathValueDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__path-value')
+
+    expect(pathDeclarations.get('display')).toBe('block')
+    expect(pathDeclarations.get('overflow')).toBe('hidden')
+    expect(pathDeclarations.get('direction')).toBe('rtl')
+    expect(pathDeclarations.get('text-align')).toBe('left')
+    expect(pathDeclarations.get('text-overflow')).toBe('ellipsis')
+    expect(pathDeclarations.get('white-space')).toBe('nowrap')
+    expect(pathValueDeclarations.get('direction')).toBe('ltr')
+    expect(pathValueDeclarations.get('unicode-bidi')).toBe('bidi-override')
   })
 
   it('pOSIX 路径仅大小写不同，不应把其他文件误高亮成当前文件', async () => {

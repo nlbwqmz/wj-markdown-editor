@@ -1,6 +1,6 @@
 <script setup>
-import CommonVNode from '@/components/CommonVNode.vue'
 import { isVNode } from 'vue'
+import CommonVNode from '@/components/CommonVNode.vue'
 
 const props = defineProps({
   label: {

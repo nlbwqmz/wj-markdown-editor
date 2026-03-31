@@ -1,4 +1,6 @@
 <script setup>
+import { computed } from 'vue'
+import IconButton from '@/components/editor/IconButton.vue'
 import i18n from '@/i18n/index.js'
 import { useCommonStore } from '@/stores/counter.js'
 import { createFileManagerPanelController } from '@/util/file-manager/fileManagerPanelController.js'
@@ -22,17 +24,147 @@ const {
   pickDirectory,
 } = controller
 
-function resolveEntryIconTestId(entry) {
-  if (entry.kind === 'directory') {
-    return 'file-manager-entry-icon-directory'
-  }
+const imageExtensionSet = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'bmp',
+  'webp',
+  'svg',
+  'ico',
+  'avif',
+  'tif',
+  'tiff',
+  'heic',
+  'heif',
+])
+const videoExtensionSet = new Set([
+  'mp4',
+  'mov',
+  'm4v',
+  'avi',
+  'mkv',
+  'webm',
+  'wmv',
+  'flv',
+  'mpeg',
+  'mpg',
+])
+const pdfExtensionSet = new Set(['pdf'])
+const wordExtensionSet = new Set(['doc', 'docx', 'odt', 'rtf'])
+const sheetExtensionSet = new Set(['xls', 'xlsx', 'csv', 'ods'])
+const archiveExtensionSet = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'])
+const audioExtensionSet = new Set(['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'wma', 'opus'])
 
-  if (entry.kind === 'markdown') {
-    return 'file-manager-entry-icon-markdown'
-  }
-
-  return 'file-manager-entry-icon-other'
+const entryIconProfileMap = {
+  directory: {
+    iconClass: 'i-tabler:folder',
+    testId: 'file-manager-entry-icon-directory',
+  },
+  markdown: {
+    iconClass: 'i-tabler:markdown',
+    testId: 'file-manager-entry-icon-markdown',
+  },
+  image: {
+    iconClass: 'i-tabler:photo',
+    testId: 'file-manager-entry-icon-image',
+  },
+  video: {
+    iconClass: 'i-tabler:movie',
+    testId: 'file-manager-entry-icon-video',
+  },
+  pdf: {
+    iconClass: 'i-tabler:file-type-pdf',
+    testId: 'file-manager-entry-icon-pdf',
+  },
+  word: {
+    iconClass: 'i-tabler:file-word',
+    testId: 'file-manager-entry-icon-word',
+  },
+  sheet: {
+    iconClass: 'i-tabler:table',
+    testId: 'file-manager-entry-icon-sheet',
+  },
+  archive: {
+    iconClass: 'i-tabler:zip',
+    testId: 'file-manager-entry-icon-archive',
+  },
+  audio: {
+    iconClass: 'i-tabler:music',
+    testId: 'file-manager-entry-icon-audio',
+  },
+  other: {
+    iconClass: 'i-tabler:file',
+    testId: 'file-manager-entry-icon-other',
+  },
 }
+
+function resolveEntryFileExtension(entry) {
+  const targetName = typeof entry?.name === 'string' && entry.name.trim()
+    ? entry.name
+    : entry?.path || ''
+  const normalizedName = String(targetName)
+    .trim()
+    .split(/[\\/]/u)
+    .pop()
+    ?.split(/[?#]/u)[0] || ''
+  const extensionIndex = normalizedName.lastIndexOf('.')
+
+  if (extensionIndex <= 0 || extensionIndex === normalizedName.length - 1) {
+    return ''
+  }
+
+  return normalizedName.slice(extensionIndex + 1).toLowerCase()
+}
+
+function resolveEntryIconProfile(entry) {
+  if (entry?.kind === 'directory') {
+    return entryIconProfileMap.directory
+  }
+
+  const extension = resolveEntryFileExtension(entry)
+  if (entry?.kind === 'markdown' || extension === 'md' || extension === 'markdown') {
+    return entryIconProfileMap.markdown
+  }
+  if (imageExtensionSet.has(extension)) {
+    return entryIconProfileMap.image
+  }
+  if (videoExtensionSet.has(extension)) {
+    return entryIconProfileMap.video
+  }
+  if (pdfExtensionSet.has(extension)) {
+    return entryIconProfileMap.pdf
+  }
+  if (wordExtensionSet.has(extension)) {
+    return entryIconProfileMap.word
+  }
+  if (sheetExtensionSet.has(extension)) {
+    return entryIconProfileMap.sheet
+  }
+  if (archiveExtensionSet.has(extension)) {
+    return entryIconProfileMap.archive
+  }
+  if (audioExtensionSet.has(extension)) {
+    return entryIconProfileMap.audio
+  }
+
+  return entryIconProfileMap.other
+}
+
+function resolveEntryIconTestId(entry) {
+  return resolveEntryIconProfile(entry).testId
+}
+
+function resolveEntryIconClass(entry) {
+  return resolveEntryIconProfile(entry).iconClass
+}
+
+// 公共 IconButton 不处理禁用态时，在当前面板内补充交互限制和视觉弱化。
+const disabledToolbarButtonClass = 'pointer-events-none cursor-not-allowed opacity-45'
+const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
+  ? breadcrumbList.value[breadcrumbList.value.length - 1].path
+  : '')
 </script>
 
 <template>
@@ -40,57 +172,49 @@ function resolveEntryIconTestId(entry) {
     <div class="file-manager-panel__toolbar flex items-center gap-2 border-b border-b-border-primary border-b-solid p-1">
       <div
         data-testid="file-manager-breadcrumb"
-        class="min-w-0 flex-1 truncate text-sm color-text-secondary"
+        :title="resolvedDirectoryPath || undefined"
+        class="file-manager-panel__path min-w-0 flex-1 text-sm color-text-secondary"
       >
-        <template v-if="breadcrumbList.length">
-          <span
-            v-for="(item, index) in breadcrumbList"
-            :key="item.path"
-            class="file-manager-panel__breadcrumb-item"
-          >
-            <span class="truncate">{{ item.label }}</span>
-            <span v-if="index < breadcrumbList.length - 1" class="px-1">/</span>
-          </span>
-        </template>
+        <span v-if="resolvedDirectoryPath" class="file-manager-panel__path-text">
+          <span class="file-manager-panel__path-value">{{ resolvedDirectoryPath }}</span>
+        </span>
         <span v-else-if="emptyMessageKey">{{ t(emptyMessageKey) }}</span>
       </div>
       <div class="flex items-center gap-1">
-        <button
-          type="button"
+        <IconButton
           data-testid="file-manager-open-parent"
-          class="file-manager-panel__action-btn"
+          icon="i-tabler:arrow-up"
+          :label="t('message.fileManagerOpenParentDirectory')"
           :title="t('message.fileManagerOpenParentDirectory')"
-          :disabled="!canOpenParentDirectory"
-          @click="openParentDirectory"
-        >
-          <span class="i-tabler:arrow-up" />
-        </button>
-        <button
-          type="button"
+          :action="canOpenParentDirectory ? openParentDirectory : undefined"
+          :disabled="!canOpenParentDirectory ? true : undefined"
+          :class="!canOpenParentDirectory ? disabledToolbarButtonClass : undefined"
+        />
+        <IconButton
           data-testid="file-manager-open-directory"
-          class="file-manager-panel__action-btn"
-          @click="pickDirectory"
-        >
-          <span class="i-tabler:folder-open" />
-        </button>
-        <button
-          type="button"
+          icon="i-tabler:folder-open"
+          :label="t('message.fileManagerSelectDirectory')"
+          :title="t('message.fileManagerSelectDirectory')"
+          :action="pickDirectory"
+        />
+        <IconButton
           data-testid="file-manager-create-folder"
-          class="file-manager-panel__action-btn"
-          :disabled="!hasDirectory"
-          @click="createFolder"
-        >
-          <span class="i-tabler:folder-plus" />
-        </button>
-        <button
-          type="button"
+          icon="i-tabler:folder-plus"
+          :label="t('message.fileManagerCreateFolder')"
+          :title="t('message.fileManagerCreateFolder')"
+          :action="hasDirectory ? createFolder : undefined"
+          :disabled="!hasDirectory ? true : undefined"
+          :class="!hasDirectory ? disabledToolbarButtonClass : undefined"
+        />
+        <IconButton
           data-testid="file-manager-create-markdown"
-          class="file-manager-panel__action-btn"
-          :disabled="!hasDirectory"
-          @click="createMarkdown"
-        >
-          <span class="i-tabler:file-plus" />
-        </button>
+          icon="i-tabler:file-plus"
+          :label="t('message.fileManagerCreateMarkdown')"
+          :title="t('message.fileManagerCreateMarkdown')"
+          :action="hasDirectory ? createMarkdown : undefined"
+          :disabled="!hasDirectory ? true : undefined"
+          :class="!hasDirectory ? disabledToolbarButtonClass : undefined"
+        />
       </div>
     </div>
     <div class="h-0 min-h-0 flex-1 overflow-hidden">
@@ -130,11 +254,7 @@ function resolveEntryIconTestId(entry) {
           <span
             :data-testid="resolveEntryIconTestId(entry)"
             class="file-manager-panel__entry-icon"
-            :class="entry.kind === 'directory'
-              ? 'i-tabler:folder'
-              : entry.kind === 'markdown'
-                ? 'i-tabler:file-type-md'
-                : 'i-tabler:file'"
+            :class="resolveEntryIconClass(entry)"
           />
           <span
             data-testid="file-manager-entry-name"
@@ -156,33 +276,19 @@ function resolveEntryIconTestId(entry) {
 </template>
 
 <style scoped lang="scss">
-.file-manager-panel__breadcrumb-item {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
+.file-manager-panel__path-text {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
 }
 
-.file-manager-panel__action-btn {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--wj-markdown-text-secondary);
-  cursor: pointer;
-
-  &:hover:enabled {
-    background: var(--wj-markdown-bg-hover);
-    color: var(--wj-markdown-text-primary);
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.45;
-  }
+.file-manager-panel__path-value {
+  direction: ltr;
+  unicode-bidi: bidi-override;
 }
 
 .file-manager-panel__empty-btn {
@@ -216,9 +322,9 @@ function resolveEntryIconTestId(entry) {
     color: var(--wj-markdown-text-primary);
   }
 
-  // 当前文件改为以文字色和字重作为主表达，避免背景块喧宾夺主。
+  // 当前文件继续仅用文字高亮，但切到项目内统一使用的蓝色主视觉。
   &.is-active {
-    color: var(--wj-markdown-text-primary);
+    color: #1677ff;
     font-weight: 600;
   }
 }
