@@ -7,6 +7,7 @@ import {
   FILE_MANAGER_PANEL_DEFAULT_WIDTH,
   FILE_MANAGER_PANEL_MAX_WIDTH,
   FILE_MANAGER_PANEL_MIN_WIDTH,
+  resolveHomeViewFilePanelGridTemplateColumns,
 } from '../homeViewFilePanelLayoutUtil.js'
 
 const homeViewFilePanelLayoutState = vi.hoisted(() => ({
@@ -60,6 +61,10 @@ describe('homeViewFilePanelLayoutUtil', () => {
     expect(clampFileManagerPanelWidth(520)).toBe(420)
   })
 
+  it('文件管理栏展开态的 grid 列定义应使用 1px gutter 轨道', () => {
+    expect(resolveHomeViewFilePanelGridTemplateColumns(FILE_MANAGER_PANEL_DEFAULT_WIDTH)).toBe('260px 1px 1fr')
+  })
+
   it('拖拽回调会按当前轨道宽度钳制 panel 宽度', async () => {
     const panelWidthRef = ref(FILE_MANAGER_PANEL_DEFAULT_WIDTH)
     const controller = createHomeViewFilePanelLayoutController({
@@ -68,7 +73,7 @@ describe('homeViewFilePanelLayoutUtil', () => {
       panelWidthRef,
       nextTick,
       readComputedStyle: () => ({
-        gridTemplateColumns: '520px 2px 1fr',
+        gridTemplateColumns: '520px 1px 1fr',
       }),
     })
 

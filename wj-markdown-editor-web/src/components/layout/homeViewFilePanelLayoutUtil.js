@@ -24,7 +24,7 @@ export function clampFileManagerPanelWidth(width) {
  * @returns {string} 返回可直接写入 grid-template-columns 的列定义。
  */
 export function resolveHomeViewFilePanelGridTemplateColumns(width) {
-  return `${clampFileManagerPanelWidth(width)}px 2px 1fr`
+  return `${clampFileManagerPanelWidth(width)}px 1px 1fr`
 }
 
 /**
