@@ -37,7 +37,7 @@ function resolveEntryIconTestId(entry) {
 
 <template>
   <div class="file-manager-panel h-full min-w-0 flex flex-col overflow-hidden bg-bg-primary text-text-primary">
-    <div class="file-manager-panel__toolbar flex items-center gap-2 border-b border-b-border-primary border-b-solid px-3 py-2">
+    <div class="file-manager-panel__toolbar flex items-center gap-2 border-b border-b-border-primary border-b-solid p-1">
       <div
         data-testid="file-manager-breadcrumb"
         class="min-w-0 flex-1 truncate text-sm color-text-secondary"
