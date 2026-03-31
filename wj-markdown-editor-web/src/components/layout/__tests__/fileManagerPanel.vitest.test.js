@@ -194,7 +194,7 @@ describe('fileManagerPanel 组件', () => {
     vi.clearAllMocks()
   })
 
-  it('draft 会话应显示空状态，正常文件会话应显示目录列表并高亮当前文件', async () => {
+  it('draft 会话应显示空状态，正常文件会话应显示目录列表并保留当前文件激活态', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       path: null,
     })
@@ -204,6 +204,7 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     expect(draftWrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerSelectDirectory')
+    expect(draftWrapper.get('[data-testid="file-manager-open-parent"]').attributes('disabled')).toBeDefined()
 
     draftWrapper.unmount()
 
@@ -220,6 +221,53 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     expect(wrapper.get('[data-testid="file-manager-entry-current"]').classes()).toContain('is-active')
+    expect(wrapper.get('.file-manager-panel__list').classes()).toContain('wj-scrollbar')
+  })
+
+  it('工具栏应渲染上一级按钮，并在可用时打开父目录', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs/project',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/project/current.md', kind: 'markdown' },
+      ],
+    }))
+    fileManagerPanelState.requestFileManagerOpenDirectory.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'project', path: 'D:/docs/project', kind: 'directory' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    const openParentButton = wrapper.get('[data-testid="file-manager-open-parent"]')
+    expect(openParentButton.attributes('title')).toBe('translated:message.fileManagerOpenParentDirectory')
+    expect(openParentButton.attributes('disabled')).toBeUndefined()
+
+    await openParentButton.trigger('click')
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).toHaveBeenCalledWith({
+      directoryPath: 'D:/docs',
+    })
+    expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('docs')
+  })
+
+  it('根目录时上一级按钮应禁用', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/',
+      entryList: [
+        { name: 'docs', path: 'D:/docs', kind: 'directory' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('[data-testid="file-manager-open-parent"]').attributes('disabled')).toBeDefined()
   })
 
   it('recent-missing 父目录存在时应展示该目录且无高亮，父目录不存在时应直接空状态', async () => {
@@ -544,12 +592,17 @@ describe('fileManagerPanel 组件', () => {
     expect(enUS.message.fileManagerOpenDirectoryFailed).toBeTruthy()
   })
 
-  it('文件管理栏样式应复用主题变量，不应残留亮色硬编码', async () => {
+  it('文件管理栏样式应复用主题变量，并改用文字高亮表达当前文件', async () => {
     const source = await readFile(path.resolve(process.cwd(), 'src/components/layout/FileManagerPanel.vue'), 'utf8')
 
     expect(source).not.toMatch(/#1677ff|#fff|rgba\(22,\s*119,\s*255,\s*0\.12\)/u)
+    expect(source).toContain('wj-scrollbar')
     expect(source).toContain('var(--wj-markdown-bg-secondary)')
     expect(source).toContain('var(--wj-markdown-border-primary)')
+    expect(source).toContain('var(--wj-markdown-text-secondary)')
+    expect(source).toMatch(/&\.is-active\s*\{[^}]*color:\s*var\(--wj-markdown-text-primary\)/u)
+    expect(source).not.toMatch(/&\.is-active\s*\{[^}]*background\s*:/u)
+    expect(source).not.toMatch(/&\.is-active\s*\{[^}]*box-shadow\s*:/u)
   })
 
   it('pOSIX 路径仅大小写不同，不应把其他文件误高亮成当前文件', async () => {
@@ -719,14 +772,11 @@ describe('fileManagerPanelController', () => {
     expect(fileManagerPanelState.requestFileManagerOpenDirectory).toHaveBeenCalledWith({
       directoryPath: 'D:/docs',
     })
-    expect(openResult).toEqual({
+    expect(openResult).toEqual(expect.objectContaining({
       directoryPath: 'D:/docs',
-      entryList: [
-        { name: 'project', path: 'D:/docs/project', kind: 'directory', isActive: false },
-      ],
-      emptyMessageKey: 'message.fileManagerDirectoryEmpty',
-    })
+    }))
     expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.path)).toEqual(['D:/docs/project'])
 
     fileManagerPanelState.requestFileManagerOpenDirectory.mockClear()
 
@@ -738,6 +788,7 @@ describe('fileManagerPanelController', () => {
       ok: true,
       reason: 'noop-parent-directory',
     })
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).not.toHaveBeenCalled()
 
     controller.applyDirectoryState(createDirectoryState({
       directoryPath: '//server/share',

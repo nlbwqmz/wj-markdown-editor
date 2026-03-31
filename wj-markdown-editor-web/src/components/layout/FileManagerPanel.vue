@@ -11,12 +11,14 @@ const controller = createFileManagerPanelController({
 })
 const {
   breadcrumbList,
+  canOpenParentDirectory,
   createFolder,
   createMarkdown,
   emptyMessageKey,
   entryList,
   hasDirectory,
   openEntry,
+  openParentDirectory,
   pickDirectory,
 } = controller
 
@@ -53,6 +55,16 @@ function resolveEntryIconTestId(entry) {
         <span v-else-if="emptyMessageKey">{{ t(emptyMessageKey) }}</span>
       </div>
       <div class="flex items-center gap-1">
+        <button
+          type="button"
+          data-testid="file-manager-open-parent"
+          class="file-manager-panel__action-btn"
+          :title="t('message.fileManagerOpenParentDirectory')"
+          :disabled="!canOpenParentDirectory"
+          @click="openParentDirectory"
+        >
+          <span class="i-tabler:arrow-up" />
+        </button>
         <button
           type="button"
           data-testid="file-manager-open-directory"
@@ -104,7 +116,7 @@ function resolveEntryIconTestId(entry) {
       </div>
       <div
         v-else-if="entryList.length > 0"
-        class="file-manager-panel__list h-full min-h-0 overflow-y-auto px-2 py-2"
+        class="wj-scrollbar file-manager-panel__list h-full min-h-0 overflow-y-auto px-2 py-2"
       >
         <button
           v-for="entry in entryList"
@@ -196,17 +208,18 @@ function resolveEntryIconTestId(entry) {
   background: transparent;
   padding: 8px 10px;
   text-align: left;
-  color: inherit;
+  color: var(--wj-markdown-text-secondary);
   cursor: pointer;
 
   &:hover {
     background: var(--wj-markdown-bg-hover);
+    color: var(--wj-markdown-text-primary);
   }
 
+  // 当前文件改为以文字色和字重作为主表达，避免背景块喧宾夺主。
   &.is-active {
-    background: var(--wj-markdown-bg-secondary);
     color: var(--wj-markdown-text-primary);
-    box-shadow: inset 0 0 0 1px var(--wj-markdown-border-primary);
+    font-weight: 600;
   }
 }
 
