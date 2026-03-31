@@ -28,7 +28,7 @@ vi.mock('split-grid', () => ({
 
 function createHostElement() {
   const hostElement = document.createElement('div')
-  hostElement.style.gridTemplateColumns = `${FILE_MANAGER_PANEL_DEFAULT_WIDTH}px 2px 1fr`
+  hostElement.style.gridTemplateColumns = `${FILE_MANAGER_PANEL_DEFAULT_WIDTH}px 1px 1fr`
   document.body.appendChild(hostElement)
   return hostElement
 }
@@ -63,6 +63,12 @@ describe('homeViewFilePanelLayoutUtil', () => {
 
   it('文件管理栏展开态的 grid 列定义应使用 1px gutter 轨道', () => {
     expect(resolveHomeViewFilePanelGridTemplateColumns(FILE_MANAGER_PANEL_DEFAULT_WIDTH)).toBe('260px 1px 1fr')
+  })
+
+  it('测试宿主元素的初始 grid 列定义应与 1px gutter 需求保持一致', () => {
+    const hostElement = createHostElement()
+
+    expect(hostElement.style.gridTemplateColumns).toBe('260px 1px 1fr')
   })
 
   it('拖拽回调会按当前轨道宽度钳制 panel 宽度', async () => {
