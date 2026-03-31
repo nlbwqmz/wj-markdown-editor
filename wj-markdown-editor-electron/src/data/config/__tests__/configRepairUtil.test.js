@@ -51,19 +51,25 @@ describe('configRepairUtil', () => {
     expect(saveShortcutKey.type).toBe(defaultSaveShortcutKey.type)
   })
 
-  it('旧配置缺失全屏切换快捷键时必须自动补齐', () => {
+  it('旧配置缺失全屏切换与文件管理栏切换快捷键时必须自动补齐并保持新顺序', () => {
     const repaired = repairConfig({
-      shortcutKeyList: defaultConfig.shortcutKeyList.filter(item => item.id !== 'toggleFullScreen'),
+      shortcutKeyList: defaultConfig.shortcutKeyList.filter(item => !['toggleFullScreen', 'toggleFileManagerPanel'].includes(item.id)),
     }, defaultConfig)
 
     const toggleFullScreenShortcutKey = repaired.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
+    const toggleFileManagerPanelShortcutKey = repaired.shortcutKeyList.find(item => item.id === 'toggleFileManagerPanel')
     const defaultToggleFullScreenShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
+    const defaultToggleFileManagerPanelShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFileManagerPanel')
     const toggleFullScreenIndex = repaired.shortcutKeyList.findIndex(item => item.id === 'toggleFullScreen')
+    const toggleFileManagerPanelIndex = repaired.shortcutKeyList.findIndex(item => item.id === 'toggleFileManagerPanel')
 
     expect(toggleFullScreenShortcutKey).toBeDefined()
     expect(toggleFullScreenShortcutKey).toMatchObject(defaultToggleFullScreenShortcutKey)
+    expect(toggleFileManagerPanelShortcutKey).toBeDefined()
+    expect(toggleFileManagerPanelShortcutKey).toMatchObject(defaultToggleFileManagerPanelShortcutKey)
     expect(repaired.shortcutKeyList[toggleFullScreenIndex - 1]?.id).toBe('switchView')
-    expect(repaired.shortcutKeyList[toggleFullScreenIndex + 1]?.id).toBe('editor-heading-1')
+    expect(repaired.shortcutKeyList[toggleFullScreenIndex + 1]?.id).toBe('toggleFileManagerPanel')
+    expect(repaired.shortcutKeyList[toggleFileManagerPanelIndex + 1]?.id).toBe('editor-heading-1')
   })
 
   it('shortcutKeyList 含 null 等脏项时不得抛错，未知脏项必须被忽略且默认快捷键仍会补齐', () => {

@@ -123,4 +123,44 @@ describe('homeView shortcut key', () => {
 
     wrapper.unmount()
   })
+
+  it('文件管理栏快捷键默认留空时，不应误命中处理器', async () => {
+    mocked.store.config.shortcutKeyList = [
+      {
+        id: 'toggleFileManagerPanel',
+        keymap: '',
+        enabled: true,
+        type: 'web',
+      },
+    ]
+    mocked.shortcutKeyUtil.getShortcutKey.mockReturnValue('Ctrl+b')
+    const wrapper = mountHomeView()
+
+    const event = dispatchWindowKeydown('KeyB')
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(mocked.shortcutKeyUtil.getWebShortcutKeyHandler).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('文件管理栏快捷键配置后，应按当前配置命中 toggleFileManagerPanel', async () => {
+    mocked.store.config.shortcutKeyList = [
+      {
+        id: 'toggleFileManagerPanel',
+        keymap: 'Ctrl+b',
+        enabled: true,
+        type: 'web',
+      },
+    ]
+    mocked.shortcutKeyUtil.getShortcutKey.mockReturnValue('Ctrl+b')
+    const wrapper = mountHomeView()
+
+    const event = dispatchWindowKeydown('KeyB')
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(mocked.shortcutKeyUtil.getWebShortcutKeyHandler).toHaveBeenCalledWith('toggleFileManagerPanel', true)
+
+    wrapper.unmount()
+  })
 })

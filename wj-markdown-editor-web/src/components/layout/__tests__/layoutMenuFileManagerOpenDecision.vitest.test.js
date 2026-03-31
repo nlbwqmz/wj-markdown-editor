@@ -52,6 +52,11 @@ const store = reactive({
         keymap: 'F11',
         enabled: true,
       },
+      {
+        id: 'toggleFileManagerPanel',
+        keymap: '',
+        enabled: true,
+      },
     ],
   },
   setFileManagerPanelVisible: vi.fn(),
@@ -176,6 +181,11 @@ describe('layoutMenu 文件管理栏接线', () => {
       {
         id: 'toggleFullScreen',
         keymap: 'F11',
+        enabled: true,
+      },
+      {
+        id: 'toggleFileManagerPanel',
+        keymap: '',
         enabled: true,
       },
     ]
@@ -443,6 +453,55 @@ describe('layoutMenu 文件管理栏接线', () => {
     await nextToggleItem.click()
 
     expect(store.setFileManagerPanelVisible).toHaveBeenLastCalledWith(true)
+  })
+
+  it('文件管理栏快捷键为空时，视图菜单项不应显示空快捷键占位', () => {
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    const toggleItemLabel = extractTextFromNode(getMenuChildren(wrapper, 1)[2].label)
+
+    expect(toggleItemLabel).toBe('隐藏文件管理栏')
+  })
+
+  it('文件管理栏快捷键配置后，视图菜单项应显示当前快捷键', () => {
+    store.config.shortcutKeyList = [
+      {
+        id: 'switchView',
+        keymap: 'Ctrl+l',
+        enabled: true,
+      },
+      {
+        id: 'toggleFullScreen',
+        keymap: 'F11',
+        enabled: true,
+      },
+      {
+        id: 'toggleFileManagerPanel',
+        keymap: 'Ctrl+b',
+        enabled: true,
+      },
+    ]
+
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    const toggleItemLabel = extractTextFromNode(getMenuChildren(wrapper, 1)[2].label)
+
+    expect(toggleItemLabel).toContain('隐藏文件管理栏')
+    expect(toggleItemLabel).toContain('Ctrl+b')
   })
 
   it('中英文文案应补齐文件管理栏显示与隐藏的运行时 key', async () => {

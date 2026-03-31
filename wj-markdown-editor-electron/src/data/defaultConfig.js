@@ -132,6 +132,14 @@ export default {
     },
     {
       index: 7,
+      id: 'toggleFileManagerPanel',
+      name: '文件管理栏切换',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    },
+    {
+      index: 8,
       id: 'editor-heading-1',
       name: '一级标题',
       keymap: 'Ctrl+1',
@@ -139,7 +147,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 7,
+      index: 8,
       id: 'editor-heading-2',
       name: '二级标题',
       keymap: 'Ctrl+2',
@@ -147,7 +155,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 7,
+      index: 8,
       id: 'editor-heading-3',
       name: '三级标题',
       keymap: 'Ctrl+3',
@@ -155,7 +163,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 7,
+      index: 8,
       id: 'editor-heading-4',
       name: '四级标题',
       keymap: 'Ctrl+4',
@@ -163,7 +171,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 7,
+      index: 8,
       id: 'editor-heading-5',
       name: '五级标题',
       keymap: 'Ctrl+5',
@@ -171,7 +179,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 7,
+      index: 8,
       id: 'editor-heading-6',
       name: '六级标题',
       keymap: 'Ctrl+6',
@@ -179,7 +187,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 7,
+      index: 8,
       id: 'editor-bold',
       name: '加粗',
       keymap: 'Ctrl+Alt+1',
@@ -187,7 +195,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-underline',
       name: '下划线',
       keymap: 'Ctrl+Alt+2',
@@ -195,7 +203,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-italic',
       name: '斜体',
       keymap: 'Ctrl+Alt+3',
@@ -203,7 +211,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-del',
       name: '删除线',
       keymap: 'Ctrl+Alt+4',
@@ -211,7 +219,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-subscript',
       name: '下标',
       keymap: 'Ctrl+Alt+5',
@@ -219,7 +227,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-superscript',
       name: '上标',
       keymap: 'Ctrl+Alt+6',
@@ -227,7 +235,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-quote',
       name: '引用',
       keymap: 'Ctrl+Alt+7',
@@ -235,7 +243,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-list',
       name: '无序列表',
       keymap: 'Ctrl+Alt+8',
@@ -243,7 +251,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-list-numbers',
       name: '有序列表',
       keymap: 'Ctrl+Alt+9',
@@ -251,7 +259,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-list-check',
       name: '任务列表',
       keymap: 'Ctrl+Shift+Alt+!',
@@ -259,7 +267,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-code-inline',
       name: '行内代码',
       keymap: 'Ctrl+Shift+Alt+@',
@@ -267,7 +275,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-code-block',
       name: '代码块',
       keymap: 'Ctrl+Shift+Alt+#',
@@ -275,7 +283,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-link',
       name: '链接',
       keymap: 'Ctrl+Shift+Alt+$',
@@ -283,7 +291,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-mark',
       name: '标记',
       keymap: 'Ctrl+Shift+Alt+%',
@@ -291,7 +299,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-image-template',
       name: '插入图片模板',
       keymap: 'Ctrl+Alt+i',
@@ -299,7 +307,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-screenshot',
       name: '直接截图',
       keymap: 'Ctrl+Alt+p',
@@ -307,7 +315,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 8,
+      index: 9,
       id: 'editor-screenshot-hide',
       name: '隐藏截图',
       keymap: 'Ctrl+Shift+Alt+P',
@@ -315,7 +323,7 @@ export default {
       type: 'editor',
     },
     {
-      index: 9,
+      index: 10,
       id: 'editor-focus-line',
       name: '跳转到目标行',
       keymap: 'Ctrl+j',

@@ -1,4 +1,5 @@
 import router from '@/router/index.js'
+import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import {
   requestDocumentOpenDialog,
@@ -96,6 +97,19 @@ const keyMappings = {
 }
 
 const functionKeyCodePattern = /^F(?:[1-9]|1[0-2])$/
+
+function toggleFileManagerPanelAction() {
+  const store = useCommonStore()
+  const nextVisible = !store.fileManagerPanelVisible
+
+  if (typeof store.setFileManagerPanelVisible === 'function') {
+    store.setFileManagerPanelVisible(nextVisible)
+    return
+  }
+
+  store.fileManagerPanelVisible = nextVisible
+}
+
 const webShortcutKeyHandler = {
   createNew: () => {
     channelUtil.send({ event: 'create-new' }).then(() => {})
@@ -120,6 +134,7 @@ const webShortcutKeyHandler = {
     channelUtil.send({ event: 'open-setting' }).then(() => {})
   },
   toggleFullScreen: toggleFullScreenAction,
+  toggleFileManagerPanel: toggleFileManagerPanelAction,
 }
 
 /**

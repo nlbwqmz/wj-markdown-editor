@@ -254,6 +254,7 @@ export default {
     'setting': '设置',
     'switchView': '视图切换',
     'toggleFullScreen': '全屏切换',
+    'toggleFileManagerPanel': '文件管理栏切换',
     'editor-heading-1': '一级标题',
     'editor-heading-2': '二级标题',
     'editor-heading-3': '三级标题',

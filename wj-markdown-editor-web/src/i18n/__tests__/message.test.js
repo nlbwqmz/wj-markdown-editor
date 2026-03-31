@@ -37,6 +37,10 @@ test('中英文文案都应提供全屏相关文案', () => {
     zhCN.shortcutKey.toggleFullScreen,
     '全屏切换',
   )
+  assert.equal(
+    zhCN.shortcutKey.toggleFileManagerPanel,
+    '文件管理栏切换',
+  )
 
   assert.equal(
     enUS.top.enterFullScreen,
@@ -57,6 +61,10 @@ test('中英文文案都应提供全屏相关文案', () => {
   assert.equal(
     enUS.shortcutKey.toggleFullScreen,
     'Toggle full screen',
+  )
+  assert.equal(
+    enUS.shortcutKey.toggleFileManagerPanel,
+    'Toggle file manager panel',
   )
 })
 

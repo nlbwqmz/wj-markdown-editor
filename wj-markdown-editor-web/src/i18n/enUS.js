@@ -254,6 +254,7 @@ export default {
     'setting': 'Setting',
     'switchView': 'Switch view',
     'toggleFullScreen': 'Toggle full screen',
+    'toggleFileManagerPanel': 'Toggle file manager panel',
     'editor-heading-1': 'Level 1 Heading',
     'editor-heading-2': 'Level 2 Heading',
     'editor-heading-3': 'Level 3 Heading',
