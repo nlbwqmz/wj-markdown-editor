@@ -156,6 +156,26 @@ describe('homeView 文件管理栏宿主壳层', () => {
     wrapper.unmount()
   })
 
+  it('文件管理栏宿主应把右边界交给 gutter，而不是 panel slot', async () => {
+    const wrapper = await mountHomeView()
+    const fileManagerPanelSlot = wrapper.get('[data-testid="home-file-manager-panel-slot"]')
+
+    expect(fileManagerPanelSlot.classes()).not.toContain('b-r-1')
+    expect(fileManagerPanelSlot.classes()).not.toContain('b-r-border-primary')
+    expect(fileManagerPanelSlot.classes()).not.toContain('b-r-solid')
+    expect(fileManagerPanelSlot.classes()).toContain('b-t-1')
+  })
+
+  it('文件管理栏 gutter 必须保持可见，不能继续透明', async () => {
+    const wrapper = await mountHomeView()
+    const fileManagerGutter = wrapper.get('[data-testid="home-file-manager-gutter"]')
+
+    expect(fileManagerGutter.classes()).toContain('b-t-1')
+    expect(fileManagerGutter.classes()).not.toContain('op-0')
+    expect(fileManagerGutter.classes()).not.toContain('hidden')
+    expect(fileManagerGutter.classes()).not.toContain('invisible')
+  })
+
   it('文件管理栏只应在 editor 与 preview 路由显示，在 setting / export / about / guide 路由隐藏', async () => {
     expect((await mountHomeViewByRoute('/editor')).find('[data-testid="home-file-manager-host"]').exists()).toBe(true)
     expect((await mountHomeViewByRoute('/preview')).find('[data-testid="home-file-manager-host"]').exists()).toBe(true)

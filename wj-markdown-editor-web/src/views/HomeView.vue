@@ -99,7 +99,7 @@ watch(shouldEnableFileManagerSplit, async (visible) => {
         <div
           v-if="store.fileManagerPanelVisible"
           data-testid="home-file-manager-panel-slot"
-          class="h-full min-w-0 overflow-hidden b-r-1 b-t-1 b-r-border-primary b-t-border-primary b-r-solid b-t-solid"
+          class="h-full min-w-0 overflow-hidden b-t-1 b-t-border-primary b-t-solid"
         >
           <FileManagerPanel />
         </div>
@@ -107,7 +107,7 @@ watch(shouldEnableFileManagerSplit, async (visible) => {
           v-if="store.fileManagerPanelVisible"
           ref="fileManagerGutterRef"
           data-testid="home-file-manager-gutter"
-          class="h-full cursor-col-resize b-t-1 b-t-border-primary b-t-solid bg-[#E2E2E2] op-0"
+          class="home-view__file-manager-gutter h-full cursor-col-resize b-t-1 b-t-border-primary b-t-solid"
         />
         <LayoutContainer />
       </div>
@@ -116,3 +116,9 @@ watch(shouldEnableFileManagerSplit, async (visible) => {
     <ExternalFileChangeModal />
   </div>
 </template>
+
+<style scoped lang="scss">
+.home-view__file-manager-gutter {
+  background-color: var(--wj-markdown-border-primary);
+}
+</style>
