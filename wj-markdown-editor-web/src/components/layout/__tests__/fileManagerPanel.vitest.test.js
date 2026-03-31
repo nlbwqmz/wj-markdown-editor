@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
+import { compileString } from 'sass'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, reactive } from 'vue'
 
@@ -67,6 +69,40 @@ async function flushFileManagerPanel() {
   await nextTick()
   await Promise.resolve()
   await nextTick()
+}
+
+async function loadFileManagerPanelCompiledStyle() {
+  const source = await readFile(path.resolve(process.cwd(), 'src/components/layout/FileManagerPanel.vue'), 'utf8')
+  const { descriptor } = parse(source)
+  const styleBlock = descriptor.styles[0]
+
+  if (!styleBlock) {
+    throw new Error('FileManagerPanel.vue 缺少样式块')
+  }
+
+  return compileString(styleBlock.content, {
+    syntax: 'scss',
+  }).css
+}
+
+function extractCssRuleDeclarations(css, selector) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const matched = css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, 'u'))
+
+  if (!matched) {
+    throw new Error(`未找到选择器：${selector}`)
+  }
+
+  return matched[1]
+    .split(';')
+    .map(item => item.trim())
+    .filter(Boolean)
+    .reduce((declarationMap, declaration) => {
+      const [property, ...valueList] = declaration.split(':')
+
+      declarationMap.set(property.trim(), valueList.join(':').trim())
+      return declarationMap
+    }, new Map())
 }
 
 function createDeferred() {
@@ -592,17 +628,15 @@ describe('fileManagerPanel 组件', () => {
     expect(enUS.message.fileManagerOpenDirectoryFailed).toBeTruthy()
   })
 
-  it('文件管理栏样式应复用主题变量，并改用文字高亮表达当前文件', async () => {
-    const source = await readFile(path.resolve(process.cwd(), 'src/components/layout/FileManagerPanel.vue'), 'utf8')
+  it('文件管理栏样式应只让当前项使用文字高亮，而不是把全部非激活项降级成次级色', async () => {
+    const css = await loadFileManagerPanelCompiledStyle()
+    const entryDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__entry')
+    const activeDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__entry.is-active')
 
-    expect(source).not.toMatch(/#1677ff|#fff|rgba\(22,\s*119,\s*255,\s*0\.12\)/u)
-    expect(source).toContain('wj-scrollbar')
-    expect(source).toContain('var(--wj-markdown-bg-secondary)')
-    expect(source).toContain('var(--wj-markdown-border-primary)')
-    expect(source).toContain('var(--wj-markdown-text-secondary)')
-    expect(source).toMatch(/&\.is-active\s*\{[^}]*color:\s*var\(--wj-markdown-text-primary\)/u)
-    expect(source).not.toMatch(/&\.is-active\s*\{[^}]*background\s*:/u)
-    expect(source).not.toMatch(/&\.is-active\s*\{[^}]*box-shadow\s*:/u)
+    expect(entryDeclarations.get('color')).not.toBe('var(--wj-markdown-text-secondary)')
+    expect(activeDeclarations.get('color')).toBe('var(--wj-markdown-text-primary)')
+    expect(activeDeclarations.has('background')).toBe(false)
+    expect(activeDeclarations.has('box-shadow')).toBe(false)
   })
 
   it('pOSIX 路径仅大小写不同，不应把其他文件误高亮成当前文件', async () => {

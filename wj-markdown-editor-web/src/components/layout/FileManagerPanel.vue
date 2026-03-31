@@ -208,7 +208,7 @@ function resolveEntryIconTestId(entry) {
   background: transparent;
   padding: 8px 10px;
   text-align: left;
-  color: var(--wj-markdown-text-secondary);
+  color: inherit;
   cursor: pointer;
 
   &:hover {
