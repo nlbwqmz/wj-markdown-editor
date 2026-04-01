@@ -6,9 +6,11 @@ import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import { requestDocumentSessionSnapshot } from '@/util/document-session/rendererDocumentCommandUtil.js'
-import { waitForImagesSettled } from '@/util/exportImageLoadUtil.js'
+import { waitForExportRenderSettled } from '@/util/exportRenderReadyUtil.js'
 
 const content = ref('')
+const config = ref()
+const watermark = ref()
 let exportWaitingStarted = false
 
 async function waitingExport(type, filePath) {
@@ -19,7 +21,10 @@ async function waitingExport(type, filePath) {
   if (type === 'PDF' && document.documentElement.getAttribute('theme') !== 'light') {
     document.documentElement.setAttribute('theme', 'light')
   }
-  await waitForImagesSettled(document.querySelectorAll('img'))
+  await waitForExportRenderSettled({
+    themeName: config.value?.theme?.code,
+    images: document.querySelectorAll('img'),
+  })
   channelUtil.send({ event: 'export-end', data: { type, filePath } })
 }
 
@@ -43,8 +48,6 @@ function onRefreshComplete() {
   }
   waitingExport(type, filePath).then(() => {})
 }
-const config = ref()
-const watermark = ref()
 
 watch(() => useCommonStore().config, (newValue) => {
   // 水印
