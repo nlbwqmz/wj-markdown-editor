@@ -22,7 +22,6 @@ const fileManagerPanelState = vi.hoisted(() => {
     requestFileManagerCreateMarkdown: vi.fn(),
     requestFileManagerPickDirectory: vi.fn(),
     openDecisionOpenDocument: vi.fn(),
-    openDecisionFactory: vi.fn(),
     modalConfirm: vi.fn(),
     messageWarning: vi.fn(),
     registeredHandlerMap,
@@ -214,8 +213,11 @@ vi.mock('@/util/file-manager/fileManagerPanelCommandUtil.js', () => ({
   requestFileManagerPickDirectory: fileManagerPanelState.requestFileManagerPickDirectory,
 }))
 
+vi.mock('@/util/document-session/documentOpenInteractionService.js', () => ({
+  requestDocumentOpenPathByInteraction: fileManagerPanelState.openDecisionOpenDocument,
+}))
+
 vi.mock('@/util/file-manager/fileManagerOpenDecisionController.js', () => ({
-  createFileManagerOpenDecisionController: fileManagerPanelState.openDecisionFactory,
   resolveDocumentOpenCurrentPath(snapshot) {
     if (snapshot?.isRecentMissing === true) {
       return null
@@ -235,14 +237,10 @@ describe('fileManagerPanel 组件', () => {
     fileManagerPanelState.requestFileManagerCreateMarkdown.mockReset()
     fileManagerPanelState.requestFileManagerPickDirectory.mockReset()
     fileManagerPanelState.openDecisionOpenDocument.mockReset()
-    fileManagerPanelState.openDecisionFactory.mockReset()
     fileManagerPanelState.modalConfirm.mockReset()
     fileManagerPanelState.messageWarning.mockReset()
     fileManagerPanelState.registeredHandlerMap.clear()
     i18nState.t.mockClear()
-    fileManagerPanelState.openDecisionFactory.mockReturnValue({
-      openDocument: fileManagerPanelState.openDecisionOpenDocument,
-    })
   })
 
   afterEach(() => {
@@ -584,6 +582,26 @@ describe('fileManagerPanel 组件', () => {
     expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
   })
 
+  it('点击其他 Markdown 时，必须经由 HomeView 宿主的统一打开交互 service', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'next.md', path: 'D:/docs/next.md', kind: 'markdown' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('.file-manager-panel__entry').trigger('click')
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith('D:/docs/next.md', {
+      entrySource: 'file-manager',
+      trigger: 'user',
+    })
+  })
+
   it('点击其他文件类型时应提示当前仅支持 Markdown 打开', async () => {
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       entryList: [
@@ -804,13 +822,9 @@ describe('fileManagerPanelController', () => {
     fileManagerPanelState.requestFileManagerCreateMarkdown.mockReset()
     fileManagerPanelState.requestFileManagerPickDirectory.mockReset()
     fileManagerPanelState.openDecisionOpenDocument.mockReset()
-    fileManagerPanelState.openDecisionFactory.mockReset()
     fileManagerPanelState.modalConfirm.mockReset()
     fileManagerPanelState.messageWarning.mockReset()
     fileManagerPanelState.registeredHandlerMap.clear()
-    fileManagerPanelState.openDecisionFactory.mockReturnValue({
-      openDocument: fileManagerPanelState.openDecisionOpenDocument,
-    })
   })
 
   it('当前窗口切换文档后，文件管理栏应依据新的 session snapshot 重新解析目录并更新高亮', async () => {

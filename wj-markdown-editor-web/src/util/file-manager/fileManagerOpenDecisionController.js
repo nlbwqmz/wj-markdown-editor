@@ -1,13 +1,12 @@
 import { Button, message, Modal } from 'ant-design-vue'
 import { h } from 'vue'
+import { requestCurrentWindowOpenPreparation } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
   requestDocumentOpenPath,
   requestDocumentOpenPathInCurrentWindow,
+  requestDocumentResolveOpenTarget,
+  requestPrepareOpenPathInCurrentWindow,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
-
-function isWindowsCaseInsensitivePath(path) {
-  return /^[A-Za-z]:\//u.test(path) || path.startsWith('//')
-}
 
 function getUncShareRoot(path) {
   return path.match(/^(\/\/[^/]+\/[^/]+)\/*$/u)?.[1] || null
@@ -36,17 +35,6 @@ function normalizePath(path) {
 
   const trimmedPath = normalizedPath.replace(/\/+$/u, '')
   return trimmedPath || null
-}
-
-function normalizeComparablePath(path) {
-  const normalizedPath = normalizePath(path)
-  if (!normalizedPath) {
-    return null
-  }
-
-  return isWindowsCaseInsensitivePath(normalizedPath)
-    ? normalizedPath.toLowerCase()
-    : normalizedPath
 }
 
 /**
@@ -82,6 +70,33 @@ function appendStageList(result, stageList) {
   }
 }
 
+function resolveResultDecision(result) {
+  if (!result || typeof result !== 'object') {
+    return null
+  }
+
+  return typeof result.decision === 'string'
+    ? result.decision
+    : typeof result.reason === 'string'
+      ? result.reason
+      : null
+}
+
+function isFocusedExistingWindowResult(result) {
+  return resolveResultDecision(result) === 'focused-existing-window'
+}
+
+function resolveOpenInteractionMeta(options = {}) {
+  return {
+    entrySource: typeof options.entrySource === 'string' && options.entrySource
+      ? options.entrySource
+      : undefined,
+    trigger: typeof options.trigger === 'string' && options.trigger
+      ? options.trigger
+      : 'user',
+  }
+}
+
 function createThreeWayChoiceModal({
   title,
   content,
@@ -89,17 +104,28 @@ function createThreeWayChoiceModal({
   secondaryText,
   cancelText,
   createModal = config => Modal.confirm(config),
+  registerDestroyer = null,
 }) {
   return new Promise((resolve) => {
     let resolved = false
     let modalInstance = null
+    const clearRegisteredDestroyer = () => {
+      if (typeof registerDestroyer === 'function') {
+        registerDestroyer(null)
+      }
+    }
     const settle = (value) => {
       if (resolved) {
         return
       }
 
       resolved = true
+      clearRegisteredDestroyer()
       resolve(value)
+    }
+    const closeWith = (value) => {
+      modalInstance?.destroy?.()
+      settle(value)
     }
 
     modalInstance = createModal({
@@ -118,21 +144,18 @@ function createThreeWayChoiceModal({
       }, [
         h(Button, {
           onClick: () => {
-            modalInstance?.destroy?.()
-            settle('cancel')
+            closeWith('cancel')
           },
         }, () => cancelText),
         h(Button, {
           onClick: () => {
-            modalInstance?.destroy?.()
-            settle('secondary')
+            closeWith('secondary')
           },
         }, () => secondaryText),
         h(Button, {
           type: 'primary',
           onClick: () => {
-            modalInstance?.destroy?.()
-            settle('primary')
+            closeWith('primary')
           },
         }, () => primaryText),
       ]),
@@ -140,13 +163,19 @@ function createThreeWayChoiceModal({
         settle('cancel')
       },
     })
+
+    if (typeof registerDestroyer === 'function') {
+      registerDestroyer(() => {
+        closeWith('cancel')
+      })
+    }
   })
 }
 
 export function createDefaultPromptOpenModeChoice(t, {
   createModal = config => Modal.confirm(config),
 } = {}) {
-  return async () => {
+  return async ({ setActiveDialogDestroyer } = {}) => {
     const choice = await createThreeWayChoiceModal({
       title: t('message.fileManagerOpenModeTitle'),
       content: t('message.fileManagerOpenModeTip'),
@@ -154,6 +183,7 @@ export function createDefaultPromptOpenModeChoice(t, {
       secondaryText: t('message.fileManagerOpenInNewWindow'),
       cancelText: t('cancelText'),
       createModal,
+      registerDestroyer: setActiveDialogDestroyer,
     })
 
     if (choice === 'primary') {
@@ -171,7 +201,7 @@ export function createDefaultPromptOpenModeChoice(t, {
 export function createDefaultPromptSaveChoice(t, {
   createModal = config => Modal.confirm(config),
 } = {}) {
-  return async () => {
+  return async ({ setActiveDialogDestroyer } = {}) => {
     const choice = await createThreeWayChoiceModal({
       title: t('message.fileManagerSaveBeforeSwitchTitle'),
       content: t('message.theCurrentFileIsNotSaved'),
@@ -179,6 +209,7 @@ export function createDefaultPromptSaveChoice(t, {
       secondaryText: t('message.fileManagerDiscardAndSwitch'),
       cancelText: t('cancelText'),
       createModal,
+      registerDestroyer: setActiveDialogDestroyer,
     })
 
     if (choice === 'primary') {
@@ -202,31 +233,67 @@ export function createDefaultPromptSaveChoice(t, {
  */
 export function createFileManagerOpenDecisionController({
   t = value => value,
+  requestDocumentResolveOpenTarget: requestResolveOpenTarget = requestDocumentResolveOpenTarget,
+  requestPrepareOpenPathInCurrentWindow: requestPrepareCurrentWindowOpen = requestPrepareOpenPathInCurrentWindow,
   requestDocumentOpenPath: requestOpenPath = requestDocumentOpenPath,
   requestDocumentOpenPathInCurrentWindow: requestOpenPathInCurrentWindow = requestDocumentOpenPathInCurrentWindow,
+  requestCurrentWindowOpenPreparation: requestPreparation = requestCurrentWindowOpenPreparation,
   promptOpenModeChoice = createDefaultPromptOpenModeChoice(t),
   promptSaveChoice = createDefaultPromptSaveChoice(t),
   showInfoMessage = messageKey => message.info(t(messageKey)),
   showErrorMessage = messageKey => message.error(t(messageKey)),
+  notifySourceSessionChanged = () => message.warning(t('message.fileManagerSourceSessionChanged')),
 } = {}) {
   async function openDocument(targetPath, options = {}) {
     const stageList = []
-    const currentPath = normalizeComparablePath(options.currentPath)
+    const interactionMeta = resolveOpenInteractionMeta(options)
+    const isInteractionActive = typeof options.isInteractionActive === 'function'
+      ? options.isInteractionActive
+      : () => true
+    const setActiveDialogDestroyer = typeof options.setActiveDialogDestroyer === 'function'
+      ? options.setActiveDialogDestroyer
+      : () => {}
+    const resolveInvalidatedResult = () => ({
+      ok: false,
+      reason: 'request-invalidated',
+      path: targetPath,
+      stageList: [...stageList],
+    })
+    const stopIfInactive = () => {
+      return isInteractionActive() === true
+        ? null
+        : resolveInvalidatedResult()
+    }
+    const initialInvalidatedResult = stopIfInactive()
+    if (initialInvalidatedResult) {
+      return initialInvalidatedResult
+    }
 
-    if (normalizeComparablePath(targetPath) === currentPath) {
-      return {
-        ok: true,
-        reason: 'noop-current-file',
-        stageList,
-      }
+    stageList.push('target-preflight')
+    const targetPreflightResult = await requestResolveOpenTarget(targetPath, {
+      ...interactionMeta,
+    })
+    const targetPreflightInvalidatedResult = stopIfInactive()
+    if (targetPreflightInvalidatedResult) {
+      return targetPreflightInvalidatedResult
+    }
+    if (isFocusedExistingWindowResult(targetPreflightResult)) {
+      showInfoMessage('message.fileAlreadyOpenedInOtherWindow')
+    }
+    if (targetPreflightResult?.decision !== 'needs-open-mode-choice') {
+      return appendStageList(targetPreflightResult, stageList)
     }
 
     stageList.push('open-choice')
     const selectedOpenMode = options.openMode || await promptOpenModeChoice({
       targetPath,
-      currentPath: options.currentPath || null,
-      source: options.source || null,
+      ...interactionMeta,
+      setActiveDialogDestroyer,
     })
+    const openChoiceInvalidatedResult = stopIfInactive()
+    if (openChoiceInvalidatedResult) {
+      return openChoiceInvalidatedResult
+    }
 
     if (!selectedOpenMode || selectedOpenMode === 'cancel') {
       return {
@@ -238,24 +305,67 @@ export function createFileManagerOpenDecisionController({
 
     if (selectedOpenMode === 'new-window') {
       stageList.push('dispatch')
+      const beforeNewWindowDispatchInvalidatedResult = stopIfInactive()
+      if (beforeNewWindowDispatchInvalidatedResult) {
+        return beforeNewWindowDispatchInvalidatedResult
+      }
       const dispatchResult = await requestOpenPath(targetPath, {
-        source: options.source,
+        ...interactionMeta,
       })
-      if (dispatchResult?.reason === 'focused-existing-window') {
+      const newWindowDispatchInvalidatedResult = stopIfInactive()
+      if (newWindowDispatchInvalidatedResult) {
+        return newWindowDispatchInvalidatedResult
+      }
+      if (isFocusedExistingWindowResult(dispatchResult)) {
         showInfoMessage('message.fileAlreadyOpenedInOtherWindow')
       }
       return appendStageList(dispatchResult, stageList)
     }
 
-    let selectedSaveChoice = options.saveChoice
+    stageList.push('current-window-preflight')
+    const preparationResult = await requestPreparation({
+      path: targetPath,
+      ...interactionMeta,
+    })
+    const preparationInvalidatedResult = stopIfInactive()
+    if (preparationInvalidatedResult) {
+      return preparationInvalidatedResult
+    }
+    if (preparationResult?.ok !== true || !preparationResult?.snapshot) {
+      return appendStageList(preparationResult, stageList)
+    }
 
-    if (options.isDirty === true) {
+    const sourceSessionId = preparationResult.snapshot.sessionId
+    const sourceRevision = preparationResult.snapshot.revision
+    const currentWindowPreflightResult = await requestPrepareCurrentWindowOpen(targetPath, {
+      ...interactionMeta,
+      sourceSessionId,
+      sourceRevision,
+    })
+    const currentWindowPreflightInvalidatedResult = stopIfInactive()
+    if (currentWindowPreflightInvalidatedResult) {
+      return currentWindowPreflightInvalidatedResult
+    }
+    if (isFocusedExistingWindowResult(currentWindowPreflightResult)) {
+      showInfoMessage('message.fileAlreadyOpenedInOtherWindow')
+    }
+    if (currentWindowPreflightResult?.decision !== 'needs-save-choice'
+      && currentWindowPreflightResult?.decision !== 'ready-to-switch') {
+      return appendStageList(currentWindowPreflightResult, stageList)
+    }
+
+    let switchPolicy = 'direct-switch'
+    if (currentWindowPreflightResult?.decision === 'needs-save-choice') {
       stageList.push('save-choice')
-      selectedSaveChoice = selectedSaveChoice || await promptSaveChoice({
+      const selectedSaveChoice = options.saveChoice || await promptSaveChoice({
         targetPath,
-        currentPath: options.currentPath || null,
-        source: options.source || null,
+        ...interactionMeta,
+        setActiveDialogDestroyer,
       })
+      const saveChoiceInvalidatedResult = stopIfInactive()
+      if (saveChoiceInvalidatedResult) {
+        return saveChoiceInvalidatedResult
+      }
 
       if (!selectedSaveChoice || selectedSaveChoice === 'cancel') {
         return {
@@ -264,14 +374,26 @@ export function createFileManagerOpenDecisionController({
           stageList,
         }
       }
+
+      switchPolicy = selectedSaveChoice
     }
 
     stageList.push('dispatch')
+    const beforeCurrentWindowDispatchInvalidatedResult = stopIfInactive()
+    if (beforeCurrentWindowDispatchInvalidatedResult) {
+      return beforeCurrentWindowDispatchInvalidatedResult
+    }
     const dispatchResult = await requestOpenPathInCurrentWindow(targetPath, {
-      saveBeforeSwitch: selectedSaveChoice === 'save-before-switch',
-      source: options.source,
+      ...interactionMeta,
+      switchPolicy,
+      expectedSessionId: sourceSessionId,
+      expectedRevision: sourceRevision,
     })
-    if (dispatchResult?.reason === 'focused-existing-window') {
+    const currentWindowDispatchInvalidatedResult = stopIfInactive()
+    if (currentWindowDispatchInvalidatedResult) {
+      return currentWindowDispatchInvalidatedResult
+    }
+    if (isFocusedExistingWindowResult(dispatchResult)) {
       showInfoMessage('message.fileAlreadyOpenedInOtherWindow')
     }
     if (dispatchResult?.reason === 'save-before-switch-failed') {
@@ -279,6 +401,9 @@ export function createFileManagerOpenDecisionController({
     }
     if (dispatchResult?.reason === 'open-current-window-switch-failed') {
       showErrorMessage('message.fileManagerOpenCurrentWindowFailed')
+    }
+    if (dispatchResult?.reason === 'source-session-changed') {
+      notifySourceSessionChanged()
     }
     return appendStageList(dispatchResult, stageList)
   }

@@ -7,17 +7,14 @@ import LayoutMenu from '../LayoutMenu.vue'
 const mocked = vi.hoisted(() => ({
   channelSend: vi.fn(),
   shortcutKeyHandler: vi.fn(),
-  requestDocumentOpenPath: vi.fn(),
-  requestDocumentOpenPathInCurrentWindow: vi.fn(),
+  requestDocumentOpenByDialogAndOpen: vi.fn(),
+  requestDocumentOpenPathByInteraction: vi.fn(),
   requestRecentClear: vi.fn(),
-  openDecisionOpenDocument: vi.fn(),
-  openDecisionFactory: vi.fn(),
-  showInfoMessage: vi.fn(),
-  showErrorMessage: vi.fn(),
   recentFileNotExists: vi.fn(),
 }))
 const translationMap = {
   'topMenu.file.name': '文件',
+  'topMenu.file.children.openFile': '打开',
   'topMenu.file.children.recentFiles.name': '最近',
   'topMenu.file.children.recentFiles.noHistory': '暂无最近历史',
   'topMenu.view.name': '视图',
@@ -101,22 +98,14 @@ vi.mock('@/util/shortcutKeyUtil.js', () => ({
   },
 }))
 
-vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
-  requestDocumentOpenPath: mocked.requestDocumentOpenPath,
-  requestDocumentOpenPathInCurrentWindow: mocked.requestDocumentOpenPathInCurrentWindow,
-  requestRecentClear: mocked.requestRecentClear,
-  isDocumentOpenMissingResult: result => result === false || result?.reason === 'recent-missing' || result?.reason === 'open-target-missing',
+vi.mock('@/util/document-session/documentOpenInteractionService.js', () => ({
+  requestDocumentOpenByDialogAndOpen: mocked.requestDocumentOpenByDialogAndOpen,
+  requestDocumentOpenPathByInteraction: mocked.requestDocumentOpenPathByInteraction,
 }))
 
-vi.mock('@/util/file-manager/fileManagerOpenDecisionController.js', () => ({
-  createFileManagerOpenDecisionController: mocked.openDecisionFactory,
-  resolveDocumentOpenCurrentPath(snapshot) {
-    if (snapshot?.isRecentMissing === true) {
-      return null
-    }
-
-    return snapshot?.resourceContext?.documentPath || snapshot?.displayPath || null
-  },
+vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
+  requestRecentClear: mocked.requestRecentClear,
+  isDocumentOpenMissingResult: result => result === false || result?.reason === 'recent-missing' || result?.reason === 'open-target-missing',
 }))
 
 function extractTextFromNode(node) {
@@ -195,17 +184,15 @@ describe('layoutMenu 文件管理栏接线', () => {
     })
     mocked.channelSend.mockReset()
     mocked.shortcutKeyHandler.mockReset()
-    mocked.requestDocumentOpenPath.mockReset()
-    mocked.requestDocumentOpenPathInCurrentWindow.mockReset()
-    mocked.requestRecentClear.mockReset()
-    mocked.openDecisionOpenDocument.mockReset()
-    mocked.openDecisionFactory.mockReset()
-    mocked.showInfoMessage.mockReset()
-    mocked.showErrorMessage.mockReset()
-    mocked.recentFileNotExists.mockReset()
-    mocked.openDecisionFactory.mockReturnValue({
-      openDocument: mocked.openDecisionOpenDocument,
+    mocked.requestDocumentOpenByDialogAndOpen.mockReset()
+    mocked.requestDocumentOpenByDialogAndOpen.mockResolvedValue({
+      ok: false,
+      reason: 'cancelled',
+      path: null,
     })
+    mocked.requestDocumentOpenPathByInteraction.mockReset()
+    mocked.requestRecentClear.mockReset()
+    mocked.recentFileNotExists.mockReset()
   })
 
   it('最近历史点击应复用统一打开决策，并保留 recent-missing 提示能力', async () => {
@@ -213,14 +200,7 @@ describe('layoutMenu 文件管理栏接线', () => {
       path: 'D:/docs/history.md',
       name: 'history.md',
     }]
-    store.documentSessionSnapshot = {
-      dirty: true,
-      displayPath: 'D:/docs/current.md',
-      resourceContext: {
-        documentPath: 'D:/docs/current.md',
-      },
-    }
-    mocked.openDecisionOpenDocument.mockResolvedValue({
+    mocked.requestDocumentOpenPathByInteraction.mockResolvedValue({
       ok: false,
       reason: 'recent-missing',
     })
@@ -239,20 +219,19 @@ describe('layoutMenu 文件管理栏接线', () => {
 
     await recentItem.click()
 
-    expect(mocked.openDecisionOpenDocument).toHaveBeenCalledWith('D:/docs/history.md', expect.objectContaining({
-      currentPath: 'D:/docs/current.md',
-      isDirty: true,
-    }))
+    expect(mocked.requestDocumentOpenPathByInteraction).toHaveBeenCalledWith('D:/docs/history.md', {
+      entrySource: 'recent',
+      trigger: 'user',
+    })
     expect(mocked.recentFileNotExists).toHaveBeenCalledWith('D:/docs/history.md')
-    expect(mocked.requestDocumentOpenPath).not.toHaveBeenCalled()
   })
 
-  it('最近历史经统一打开决策后，控制器返回兼容 false 时仍应触发 recentFileNotExists', async () => {
+  it('最近历史经统一宿主 service 后，控制器返回兼容 false 时仍应触发 recentFileNotExists', async () => {
     store.recentList = [{
       path: 'D:/docs/missing.md',
       name: 'missing.md',
     }]
-    mocked.openDecisionOpenDocument.mockResolvedValue(false)
+    mocked.requestDocumentOpenPathByInteraction.mockResolvedValue(false)
 
     const wrapper = shallowMount(LayoutMenu, {
       global: {
@@ -268,36 +247,14 @@ describe('layoutMenu 文件管理栏接线', () => {
 
     await recentItem.click()
 
+    expect(mocked.requestDocumentOpenPathByInteraction).toHaveBeenCalledWith('D:/docs/missing.md', {
+      entrySource: 'recent',
+      trigger: 'user',
+    })
     expect(mocked.recentFileNotExists).toHaveBeenCalledWith('D:/docs/missing.md')
   })
 
-  it('最近历史经统一打开决策后，save-before-switch-failed 时必须提示保存失败', async () => {
-    const { createFileManagerOpenDecisionController } = await vi.importActual('@/util/file-manager/fileManagerOpenDecisionController.js')
-    store.recentList = [{
-      path: 'D:/docs/history.md',
-      name: 'history.md',
-    }]
-    store.documentSessionSnapshot = {
-      dirty: true,
-      displayPath: 'D:/docs/current.md',
-      resourceContext: {
-        documentPath: 'D:/docs/current.md',
-      },
-    }
-    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
-      ok: false,
-      reason: 'save-before-switch-failed',
-    })
-    mocked.openDecisionFactory.mockImplementation(options => createFileManagerOpenDecisionController({
-      ...options,
-      requestDocumentOpenPath: mocked.requestDocumentOpenPath,
-      requestDocumentOpenPathInCurrentWindow: mocked.requestDocumentOpenPathInCurrentWindow,
-      showInfoMessage: mocked.showInfoMessage,
-      showErrorMessage: mocked.showErrorMessage,
-      promptOpenModeChoice: vi.fn().mockResolvedValue('current-window'),
-      promptSaveChoice: vi.fn().mockResolvedValue('save-before-switch'),
-    }))
-
+  it('文件菜单“打开”应直接走统一打开交互 service，并保留 menu-open 来源语义', async () => {
     const wrapper = shallowMount(LayoutMenu, {
       global: {
         stubs: {
@@ -307,121 +264,15 @@ describe('layoutMenu 文件管理栏接线', () => {
       },
     })
 
-    const recentMenu = findMenuItemByLabel(getMenuChildren(wrapper, 0), '最近')
-    const recentItem = findMenuItemByLabel(recentMenu.children, 'history.md')
+    const openFileItem = findMenuItemByLabel(getMenuChildren(wrapper, 0), '打开')
 
-    await recentItem.click()
-    await Promise.resolve()
-    await nextTick()
+    await openFileItem.click()
 
-    expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('D:/docs/history.md', {
-      saveBeforeSwitch: true,
-      source: 'recent-list',
+    expect(mocked.requestDocumentOpenByDialogAndOpen).toHaveBeenCalledWith({
+      entrySource: 'menu-open',
+      trigger: 'user',
     })
-    expect(mocked.showErrorMessage).toHaveBeenCalledWith('message.fileManagerSaveBeforeSwitchFailed')
-    expect(mocked.recentFileNotExists).not.toHaveBeenCalled()
-  })
-
-  it('最近历史经统一打开决策后，save-before-switch-cancelled 时不应追加保存失败提示', async () => {
-    const { createFileManagerOpenDecisionController } = await vi.importActual('@/util/file-manager/fileManagerOpenDecisionController.js')
-    store.recentList = [{
-      path: 'D:/docs/history.md',
-      name: 'history.md',
-    }]
-    store.documentSessionSnapshot = {
-      dirty: true,
-      displayPath: 'D:/docs/current.md',
-      resourceContext: {
-        documentPath: 'D:/docs/current.md',
-      },
-    }
-    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
-      ok: false,
-      reason: 'save-before-switch-cancelled',
-    })
-    mocked.openDecisionFactory.mockImplementation(options => createFileManagerOpenDecisionController({
-      ...options,
-      requestDocumentOpenPath: mocked.requestDocumentOpenPath,
-      requestDocumentOpenPathInCurrentWindow: mocked.requestDocumentOpenPathInCurrentWindow,
-      showInfoMessage: mocked.showInfoMessage,
-      showErrorMessage: mocked.showErrorMessage,
-      promptOpenModeChoice: vi.fn().mockResolvedValue('current-window'),
-      promptSaveChoice: vi.fn().mockResolvedValue('save-before-switch'),
-    }))
-
-    const wrapper = shallowMount(LayoutMenu, {
-      global: {
-        stubs: {
-          'a-dropdown': true,
-          'a-menu': true,
-        },
-      },
-    })
-
-    const recentMenu = findMenuItemByLabel(getMenuChildren(wrapper, 0), '最近')
-    const recentItem = findMenuItemByLabel(recentMenu.children, 'history.md')
-
-    await recentItem.click()
-    await Promise.resolve()
-    await nextTick()
-
-    expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('D:/docs/history.md', {
-      saveBeforeSwitch: true,
-      source: 'recent-list',
-    })
-    expect(mocked.showErrorMessage).not.toHaveBeenCalledWith('message.fileManagerSaveBeforeSwitchFailed')
-    expect(mocked.recentFileNotExists).not.toHaveBeenCalled()
-  })
-
-  it('最近历史经统一打开决策后，open-current-window-switch-failed 时必须提示切换失败', async () => {
-    const { createFileManagerOpenDecisionController } = await vi.importActual('@/util/file-manager/fileManagerOpenDecisionController.js')
-    store.recentList = [{
-      path: 'D:/docs/history.md',
-      name: 'history.md',
-    }]
-    store.documentSessionSnapshot = {
-      dirty: false,
-      displayPath: 'D:/docs/current.md',
-      resourceContext: {
-        documentPath: 'D:/docs/current.md',
-      },
-    }
-    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
-      ok: false,
-      reason: 'open-current-window-switch-failed',
-    })
-    mocked.openDecisionFactory.mockImplementation(options => createFileManagerOpenDecisionController({
-      ...options,
-      requestDocumentOpenPath: mocked.requestDocumentOpenPath,
-      requestDocumentOpenPathInCurrentWindow: mocked.requestDocumentOpenPathInCurrentWindow,
-      showInfoMessage: mocked.showInfoMessage,
-      showErrorMessage: mocked.showErrorMessage,
-      promptOpenModeChoice: vi.fn().mockResolvedValue('current-window'),
-      promptSaveChoice: vi.fn().mockResolvedValue('save-before-switch'),
-    }))
-
-    const wrapper = shallowMount(LayoutMenu, {
-      global: {
-        stubs: {
-          'a-dropdown': true,
-          'a-menu': true,
-        },
-      },
-    })
-
-    const recentMenu = findMenuItemByLabel(getMenuChildren(wrapper, 0), '最近')
-    const recentItem = findMenuItemByLabel(recentMenu.children, 'history.md')
-
-    await recentItem.click()
-    await Promise.resolve()
-    await nextTick()
-
-    expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('D:/docs/history.md', {
-      saveBeforeSwitch: false,
-      source: 'recent-list',
-    })
-    expect(mocked.showErrorMessage).toHaveBeenCalledWith('message.fileManagerOpenCurrentWindowFailed')
-    expect(mocked.recentFileNotExists).not.toHaveBeenCalled()
+    expect(mocked.shortcutKeyHandler).not.toHaveBeenCalledWith('openFile', true)
   })
 
   it('视图菜单应提供文件管理栏开关，并在运行时状态切换后更新文案和动作', async () => {

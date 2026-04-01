@@ -36,8 +36,11 @@ vi.mock('@/stores/counter.js', () => ({
   useCommonStore: () => mockedStore,
 }))
 
+vi.mock('@/util/document-session/documentOpenInteractionService.js', () => ({
+  requestDocumentOpenByDialogAndOpen: vi.fn(() => Promise.resolve()),
+}))
+
 vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
-  requestDocumentOpenDialog: vi.fn(() => Promise.resolve()),
   requestDocumentSave: vi.fn(() => Promise.resolve()),
   requestDocumentSaveCopy: vi.fn(() => Promise.resolve()),
 }))
@@ -97,6 +100,20 @@ describe('shortcutKeyUtil', () => {
 
     expect(sharedToggleFullScreenAction).toHaveBeenCalledTimes(1)
     expect(channelUtil.send).not.toHaveBeenCalled()
+  })
+
+  it('openFile handler 选中的路径必须回流到统一打开交互 service', async () => {
+    const handler = shortcutKeyUtil.getWebShortcutKeyHandler('openFile')
+    const { requestDocumentOpenByDialogAndOpen } = await import('@/util/document-session/documentOpenInteractionService.js')
+
+    expect(handler).toBeTypeOf('function')
+
+    handler()
+
+    expect(requestDocumentOpenByDialogAndOpen).toHaveBeenCalledWith({
+      entrySource: 'shortcut-open-file',
+      trigger: 'user',
+    })
   })
 
   it('toggleFileManagerPanel handler 必须复用 store 文件管理栏开关动作', () => {

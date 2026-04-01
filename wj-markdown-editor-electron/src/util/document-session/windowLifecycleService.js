@@ -12,8 +12,10 @@ import resourceFileUtil from '../resourceFileUtil.js'
 import updateUtil from '../updateUtil.js'
 import {
   appendMarkdownExtension,
+  isMarkdownFilePath,
   MARKDOWN_FILE_EXTENSION_LIST,
   resolveDocumentOpenPath,
+  toComparableDocumentPath,
 } from './documentOpenTargetUtil.js'
 import {
   createBoundFileSession,
@@ -33,6 +35,12 @@ const __dirname = path.dirname(__filename)
 const MISSING_PATH_REASON = {
   OPEN_TARGET_MISSING: 'open-target-missing',
 }
+
+const OPEN_CURRENT_WINDOW_SWITCH_POLICY_SET = new Set([
+  'direct-switch',
+  'save-before-switch',
+  'discard-switch',
+])
 
 const REQUIRED_WINDOW_REGISTRY_METHODS = [
   'registerWindow',
@@ -209,6 +217,8 @@ function buildRuntimeHostDeps() {
   return {
     getWindowById: windowId => getWindowById(windowId),
     getDocumentContext: windowId => getDocumentContext(windowId),
+    getExistingWindowIdByDocumentPath: (targetPath, options = {}) => getExistingWindowIdByDocumentPath(targetPath, options),
+    focusWindowById: windowId => focusWindow(windowId),
     buildRunnerEffectContext: ({ windowId, dispatchCommand }) => {
       if (!getWindowById(windowId)) {
         return {}
@@ -272,6 +282,9 @@ function buildRuntimeHostDeps() {
     },
     openDocumentWindow: async (targetPath, options = {}) => {
       return await createNew(targetPath, options.isRecent === true)
+    },
+    prepareOpenPathInCurrentWindow: async (windowId, targetPath, options = {}) => {
+      return await prepareOpenPathInCurrentWindow(windowId, targetPath, options)
     },
     openDocumentInCurrentWindow: async (windowId, targetPath, options = {}) => {
       return await openDocumentInCurrentWindow(windowId, targetPath, options)
@@ -490,6 +503,15 @@ function publishHostWindowState(win) {
   publishWindowSizeChanged(win, win.isMaximized?.() === true)
   publishAlwaysOnTopChanged(win, win.isAlwaysOnTop?.() === true)
   return true
+}
+
+function publishHostWindowStateByWindowId(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  return publishHostWindowState(getWindowById(normalizedWindowId))
 }
 
 function getSnapshotSignature(snapshot) {
@@ -1063,6 +1085,158 @@ function createOpenCurrentWindowSwitchFailedResult(documentPath) {
   }
 }
 
+function createSourceSessionChangedResult(documentPath) {
+  return {
+    ok: false,
+    reason: 'source-session-changed',
+    path: documentPath || null,
+  }
+}
+
+function getFocusedExistingWindowResult(targetPath, { excludeWindowId = null } = {}) {
+  const existedWindowId = getExistingWindowIdByDocumentPath(targetPath, {
+    excludeWindowId,
+  })
+  if (!existedWindowId) {
+    return null
+  }
+
+  return {
+    ok: true,
+    reason: 'focused-existing-window',
+    windowId: existedWindowId,
+  }
+}
+
+async function isReadableRegularFile(documentPath) {
+  try {
+    const stat = await fs.stat(documentPath)
+    if (stat?.isFile?.() !== true) {
+      return {
+        ok: false,
+        reason: 'open-target-not-file',
+        path: documentPath || null,
+      }
+    }
+  } catch {
+    return {
+      ok: false,
+      reason: 'open-target-not-file',
+      path: documentPath || null,
+    }
+  }
+
+  try {
+    const content = await fs.readFile(documentPath, 'utf-8')
+    return {
+      ok: true,
+      path: documentPath,
+      content,
+    }
+  } catch {
+    return createOpenTargetReadFailedResult(documentPath)
+  }
+}
+
+async function validateSwitchTarget(documentPath) {
+  const normalizedDocumentPath = resolveDocumentOpenPath(documentPath)
+  if (!normalizedDocumentPath) {
+    return {
+      ok: false,
+      reason: 'open-target-missing',
+      path: null,
+    }
+  }
+
+  if (!await fs.pathExists(normalizedDocumentPath)) {
+    return {
+      ok: false,
+      reason: 'open-target-missing',
+      path: normalizedDocumentPath,
+    }
+  }
+
+  if (!isMarkdownFilePath(normalizedDocumentPath)) {
+    return {
+      ok: false,
+      reason: 'open-target-invalid-extension',
+      path: normalizedDocumentPath,
+    }
+  }
+
+  return await isReadableRegularFile(normalizedDocumentPath)
+}
+
+function matchesExpectedSourceSnapshot(windowId, {
+  expectedSessionId = null,
+  expectedRevision,
+} = {}) {
+  const snapshot = getSessionSnapshot(windowId)
+  if (!snapshot) {
+    return false
+  }
+
+  if (typeof expectedSessionId === 'string'
+    && expectedSessionId
+    && snapshot.sessionId !== expectedSessionId) {
+    return false
+  }
+
+  if (expectedRevision !== undefined
+    && expectedRevision !== null
+    && snapshot.revision !== expectedRevision) {
+    return false
+  }
+
+  return true
+}
+
+function hasValidOpenCurrentWindowExecutePayload({
+  switchPolicy = null,
+  expectedSessionId = null,
+  expectedRevision,
+} = {}) {
+  return OPEN_CURRENT_WINDOW_SWITCH_POLICY_SET.has(switchPolicy)
+    && typeof expectedSessionId === 'string'
+    && expectedSessionId
+    && Number.isFinite(expectedRevision)
+}
+
+async function prepareOpenPathInCurrentWindow(windowId, targetPath, options = {}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const targetWin = getWindowById(normalizedWindowId)
+  if (!normalizedWindowId || !isWindowAlive(targetWin)) {
+    return {
+      ok: false,
+      reason: 'window-not-found',
+      path: targetPath || null,
+    }
+  }
+
+  const existedWindowId = getExistingWindowIdByDocumentPath(targetPath, {
+    excludeWindowId: normalizedWindowId,
+  })
+  if (existedWindowId) {
+    return {
+      ok: true,
+      decision: 'focused-existing-window',
+      path: targetPath || null,
+      sourceSessionId: options.sourceSessionId || null,
+      sourceRevision: options.sourceRevision,
+      windowId: existedWindowId,
+    }
+  }
+
+  const snapshot = getSessionSnapshot(normalizedWindowId)
+  return {
+    ok: true,
+    decision: snapshot?.dirty === true ? 'needs-save-choice' : 'ready-to-switch',
+    path: targetPath || null,
+    sourceSessionId: options.sourceSessionId || null,
+    sourceRevision: options.sourceRevision,
+  }
+}
+
 function assertExternalWatchStarted(watchStartResult) {
   if (watchStartResult === false || watchStartResult?.ok === false) {
     throw watchStartResult?.error || new Error('external watch start failed')
@@ -1177,20 +1351,44 @@ async function openDocumentInCurrentWindow(windowId, targetPath, options = {}) {
     }
   }
 
-  const existedWindowId = getExistingWindowIdByDocumentPath(targetPath, {
-    excludeWindowId: normalizedWindowId,
-  })
-  if (existedWindowId) {
-    focusWindow(existedWindowId)
-    await refreshRecentOrderAfterOpen(targetPath)
+  // execute 阶段必须只接受完成预判后的完整协议，
+  // 缺失 switchPolicy / expected session 信号时一律拒绝，避免静默退回直接切换。
+  if (!hasValidOpenCurrentWindowExecutePayload(options)) {
+    return createSourceSessionChangedResult(targetPath)
+  }
+
+  if (!matchesExpectedSourceSnapshot(normalizedWindowId, {
+    expectedSessionId: options.expectedSessionId || null,
+    expectedRevision: options.expectedRevision,
+  })) {
+    return createSourceSessionChangedResult(targetPath)
+  }
+
+  const currentSnapshot = getSessionSnapshot(normalizedWindowId)
+  const currentDocumentPath = currentSnapshot?.isRecentMissing === true
+    ? null
+    : currentSnapshot?.resourceContext?.documentPath || null
+  if (toComparableDocumentPath(currentDocumentPath) === toComparableDocumentPath(targetPath)) {
     return {
       ok: true,
-      reason: 'focused-existing-window',
-      windowId: existedWindowId,
+      reason: 'noop-current-file',
+      path: targetPath || null,
     }
   }
 
-  if (options.saveBeforeSwitch === true) {
+  const focusedExistingWindowResult = getFocusedExistingWindowResult(targetPath, {
+    excludeWindowId: normalizedWindowId,
+  })
+  if (focusedExistingWindowResult) {
+    return focusedExistingWindowResult
+  }
+
+  let validationResult = await validateSwitchTarget(targetPath)
+  if (validationResult.ok !== true) {
+    return validationResult
+  }
+
+  if (options.switchPolicy === 'save-before-switch') {
     const saveResult = await executeDocumentSaveCommandWithDispatcherDetailed(
       normalizedWindowId,
       createRuntimeDispatchAdapter(normalizedWindowId, ensureSessionRuntimeInitialized()),
@@ -1200,18 +1398,25 @@ async function openDocumentInCurrentWindow(windowId, targetPath, options = {}) {
         ? createSaveBeforeSwitchCancelledResult(targetPath)
         : createSaveBeforeSwitchFailedResult(targetPath)
     }
-  }
 
-  let content = ''
-  try {
-    content = await fs.readFile(targetPath, 'utf-8')
-  } catch {
-    return createOpenTargetReadFailedResult(targetPath)
+    // save-before-switch 可能等待用户较久。
+    // 保存完成后需要重新校验目标占用和磁盘状态，避免沿用保存前的旧结论继续切换。
+    const refreshedFocusedExistingWindowResult = getFocusedExistingWindowResult(targetPath, {
+      excludeWindowId: normalizedWindowId,
+    })
+    if (refreshedFocusedExistingWindowResult) {
+      return refreshedFocusedExistingWindowResult
+    }
+
+    validationResult = await validateSwitchTarget(targetPath)
+    if (validationResult.ok !== true) {
+      return validationResult
+    }
   }
 
   return await switchSessionInCurrentWindow(normalizedWindowId, {
-    documentPath: targetPath,
-    content,
+    documentPath: validationResult.path,
+    content: validationResult.content,
     trigger: options.trigger || 'user',
   })
 }
@@ -1958,6 +2163,7 @@ Object.assign(windowLifecycleService, {
   getParentWindowIdByWebContentsId,
   listWindows,
   publishWindowMessage,
+  publishHostWindowStateByWindowId,
   getDocumentContext,
   getSessionSnapshot,
   handleLocalResourceLinkOpen,

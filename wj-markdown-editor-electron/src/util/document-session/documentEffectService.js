@@ -32,8 +32,67 @@ function getLanguage(getConfig) {
   return getConfig?.()?.language || 'zh-CN'
 }
 
-function getCurrentSnapshotDocumentPath(getSessionSnapshot) {
-  return getSessionSnapshot?.()?.resourceContext?.documentPath || null
+function getOpenTrigger(payload) {
+  return typeof payload?.trigger === 'string' && payload.trigger
+    ? payload.trigger
+    : 'user'
+}
+
+function getOpenEntrySource(payload, fallbackEntrySource = null) {
+  if (typeof payload?.entrySource === 'string' && payload.entrySource) {
+    return payload.entrySource
+  }
+  return fallbackEntrySource
+}
+
+function isRecentEntrySource(entrySource) {
+  return entrySource === 'recent'
+}
+
+function getComparableCurrentSnapshotDocumentPath(getSessionSnapshot) {
+  const snapshot = getSessionSnapshot?.() || null
+  if (snapshot?.isRecentMissing === true) {
+    return null
+  }
+  return toComparableDocumentPath(snapshot?.resourceContext?.documentPath || null)
+}
+
+function attachSourceSessionEnvelope(result, payload) {
+  if (!result || typeof result !== 'object') {
+    return result
+  }
+
+  const nextResult = {
+    ...result,
+  }
+  if (typeof payload?.sourceSessionId === 'string' && payload.sourceSessionId) {
+    nextResult.sourceSessionId = payload.sourceSessionId
+  }
+  if (payload?.sourceRevision !== undefined) {
+    nextResult.sourceRevision = payload.sourceRevision
+  }
+  return nextResult
+}
+
+function createSourceSessionChangedResult(documentPath) {
+  return {
+    ok: false,
+    reason: 'source-session-changed',
+    path: documentPath || null,
+  }
+}
+
+const OPEN_CURRENT_WINDOW_SWITCH_POLICY_SET = new Set([
+  'direct-switch',
+  'save-before-switch',
+  'discard-switch',
+])
+
+function hasValidOpenCurrentWindowExecutePayload(payload) {
+  return OPEN_CURRENT_WINDOW_SWITCH_POLICY_SET.has(payload?.switchPolicy)
+    && typeof payload?.expectedSessionId === 'string'
+    && payload.expectedSessionId
+    && Number.isFinite(payload?.expectedRevision)
 }
 
 // 判断目标路径是否是一个常规文件。
@@ -208,20 +267,24 @@ export function createDocumentEffectService({
    * 3. 是否是 markdown 扩展名
    * 4. 是否是常规文件而不是目录等其他实体
    */
-  async function validateExplicitOpenTarget(targetPath, { baseDir } = {}) {
+  async function validateExplicitOpenTarget(targetPath, {
+    baseDir,
+    missingReason = 'open-target-missing',
+    ensureReadable = false,
+  } = {}) {
     const resolvedTargetPath = resolveDocumentOpenPath(targetPath, { baseDir })
 
     if (!resolvedTargetPath) {
       return {
         ok: false,
-        reason: 'open-target-missing',
+        reason: missingReason,
         path: null,
       }
     }
     if (!await fsModule.pathExists(resolvedTargetPath)) {
       return {
         ok: false,
-        reason: 'open-target-missing',
+        reason: missingReason,
         path: resolvedTargetPath,
       }
     }
@@ -239,8 +302,69 @@ export function createDocumentEffectService({
         path: resolvedTargetPath,
       }
     }
+    if (ensureReadable) {
+      try {
+        await fsModule.readFile(resolvedTargetPath, 'utf-8')
+      } catch {
+        return {
+          ok: false,
+          reason: 'open-target-read-failed',
+          path: resolvedTargetPath,
+        }
+      }
+    }
     return {
       ok: true,
+      path: resolvedTargetPath,
+    }
+  }
+
+  async function resolveOpenTargetDecision(payload, {
+    getSessionSnapshot,
+    getExistingWindowIdByPath,
+    fallbackEntrySource = null,
+  } = {}) {
+    const entrySource = getOpenEntrySource(payload, fallbackEntrySource)
+    const validationResult = await validateExplicitOpenTarget(getRecentTargetPath(payload), {
+      baseDir: getOpenBaseDir(payload),
+      missingReason: isRecentEntrySource(entrySource) ? 'recent-missing' : 'open-target-missing',
+    })
+    if (validationResult.ok !== true) {
+      return validationResult
+    }
+
+    const resolvedTargetPath = validationResult.path
+    if (getComparableCurrentSnapshotDocumentPath(getSessionSnapshot) === toComparableDocumentPath(resolvedTargetPath)) {
+      return {
+        ok: true,
+        decision: 'noop-current-file',
+        path: resolvedTargetPath,
+      }
+    }
+
+    const existingWindowId = getExistingWindowIdByPath?.(resolvedTargetPath) || null
+    if (existingWindowId) {
+      return {
+        ok: true,
+        decision: 'focused-existing-window',
+        path: resolvedTargetPath,
+        windowId: existingWindowId,
+      }
+    }
+
+    try {
+      await fsModule.readFile(resolvedTargetPath, 'utf-8')
+    } catch {
+      return {
+        ok: false,
+        reason: 'open-target-read-failed',
+        path: resolvedTargetPath,
+      }
+    }
+
+    return {
+      ok: true,
+      decision: 'needs-open-mode-choice',
       path: resolvedTargetPath,
     }
   }
@@ -268,6 +392,38 @@ export function createDocumentEffectService({
 
   function publishWindowMessage(windowMessageController, data) {
     return windowMessageController?.publishWindowMessage?.(data) || null
+  }
+
+  async function finalizeFocusedExistingWindowResult(result, {
+    focusWindowById,
+    fallbackPath = null,
+  } = {}) {
+    const decision = typeof result?.decision === 'string'
+      ? result.decision
+      : result?.reason
+    if (result?.ok !== true || decision !== 'focused-existing-window' || !result.windowId) {
+      return result
+    }
+
+    try {
+      focusWindowById?.(result.windowId)
+    } catch {
+      // 聚焦失败不应反向打断结构化返回，保持调用方能继续按 focused-existing-window 处理。
+    }
+
+    const recentPath = typeof result?.path === 'string' && result.path
+      ? result.path
+      : fallbackPath
+    if (!recentPath) {
+      return result
+    }
+
+    try {
+      await recentStore.add(recentPath)
+    } catch {
+      // recent 顺序刷新只是附属副作用，失败时不能把“已聚焦已有窗口”的主结果改写成失败。
+    }
+    return result
   }
 
   function notifyExternalChange(effect, { focusWindow, windowMessageController }) {
@@ -314,142 +470,171 @@ export function createDocumentEffectService({
     windowId,
     command,
     payload,
-    dispatchCommand,
+    dispatchCommand: _dispatchCommand,
+    prepareOpenPathInCurrentWindow,
     openDocumentWindow,
     openDocumentInCurrentWindow,
+    getExistingWindowIdByPath,
     getSessionSnapshot,
+    focusWindowById,
   }) {
     switch (command) {
       case 'document.request-open-dialog': {
-        // 打开系统文件选择框，让用户显式选择一个 Markdown 文件。
-        // 这里使用同步 Electron dialog API，是为了保持当前命令链路的调用方式简单稳定。
-        const filePathList = dialogApi.showOpenDialogSync({
-          title: 'Open Markdown File',
-          properties: ['openFile'],
-          filters: [
-            { name: 'markdown file', extensions: MARKDOWN_FILE_EXTENSION_LIST },
-          ],
-        })
-        if (filePathList && filePathList.length > 0) {
-          // 对话框选择结果不在这里直接打开，而是回流到统一命令入口，
-          // 让后续路径校验和打开流程都走同一套分支。
-          return await dispatchCommand?.('dialog.open-target-selected', {
-            path: filePathList[0],
+        try {
+          // 打开系统文件选择框时只负责返回固定结果结构，
+          // 后续如何打开由 renderer 继续走新的决策链路。
+          const filePathList = dialogApi.showOpenDialogSync({
+            title: 'Open Markdown File',
+            properties: ['openFile'],
+            filters: [
+              { name: 'markdown file', extensions: MARKDOWN_FILE_EXTENSION_LIST },
+            ],
           })
+          if (filePathList && filePathList.length > 0) {
+            return {
+              ok: true,
+              reason: 'selected',
+              path: filePathList[0],
+            }
+          }
+          return {
+            ok: false,
+            reason: 'cancelled',
+            path: null,
+          }
+        } catch {
+          return {
+            ok: false,
+            reason: 'dialog-open-failed',
+            path: null,
+          }
         }
-        // 用户取消选择时，也走显式 cancelled 分支，避免调用方自己猜测 null 的语义。
-        return await dispatchCommand?.('dialog.open-target-cancelled')
       }
 
-      case 'dialog.open-target-selected': {
-        // 这是“用户已经选好打开目标”的回流入口。
-        // 先做统一校验，校验通过后再真正打开窗口。
-        const targetPath = getRecentTargetPath(payload)
-        const validationResult = await validateExplicitOpenTarget(targetPath, {
-          baseDir: getOpenBaseDir(payload),
+      case 'document.resolve-open-target':
+        return await finalizeFocusedExistingWindowResult(await resolveOpenTargetDecision(payload, {
+          getSessionSnapshot,
+          getExistingWindowIdByPath,
+        }), {
+          focusWindowById,
+          fallbackPath: getRecentTargetPath(payload),
         })
-        if (validationResult.ok !== true) {
-          return validationResult
+
+      case 'document.prepare-open-path-in-current-window': {
+        const resolveResult = await resolveOpenTargetDecision(payload, {
+          getSessionSnapshot,
+          getExistingWindowIdByPath,
+        })
+        if (resolveResult.ok !== true) {
+          return resolveResult
         }
-        return await openDocumentWindow?.(validationResult.path, {
-          isRecent: false,
-          trigger: 'user',
+        if (resolveResult.decision !== 'needs-open-mode-choice') {
+          return await finalizeFocusedExistingWindowResult(
+            attachSourceSessionEnvelope(resolveResult, payload),
+            {
+              focusWindowById,
+              fallbackPath: resolveResult.path,
+            },
+          )
+        }
+
+        if (typeof prepareOpenPathInCurrentWindow === 'function') {
+          const prepareResult = await prepareOpenPathInCurrentWindow(resolveResult.path, {
+            entrySource: getOpenEntrySource(payload),
+            trigger: getOpenTrigger(payload),
+            sourceSessionId: payload?.sourceSessionId || null,
+            sourceRevision: payload?.sourceRevision,
+          })
+          return await finalizeFocusedExistingWindowResult(
+            attachSourceSessionEnvelope(prepareResult, payload),
+            {
+              focusWindowById,
+              fallbackPath: resolveResult.path,
+            },
+          )
+        }
+
+        const snapshot = getSessionSnapshot?.() || null
+        return await finalizeFocusedExistingWindowResult(attachSourceSessionEnvelope({
+          ok: true,
+          decision: snapshot?.dirty === true ? 'needs-save-choice' : 'ready-to-switch',
+          path: resolveResult.path,
+        }, payload), {
+          focusWindowById,
+          fallbackPath: resolveResult.path,
         })
       }
 
       case 'document.open-path': {
-        // 直接按给定路径打开文档，常用于协议、命令行或内部跳转触发。
-        // 与 open-dialog 不同，这里不会弹系统选择框，但后续校验逻辑保持一致。
-        const targetPath = getRecentTargetPath(payload)
-        const trigger = payload?.trigger || 'user'
-        const validationResult = await validateExplicitOpenTarget(targetPath, {
-          baseDir: getOpenBaseDir(payload),
+        // 直接按给定路径打开文档前，也必须先复用统一预判 helper，
+        // 避免 open-path / recent / startup 分叉出不同的 current-file / focus 语义。
+        const resolveResult = await resolveOpenTargetDecision(payload, {
+          getSessionSnapshot,
+          getExistingWindowIdByPath,
         })
-        if (validationResult.ok !== true) {
-          return validationResult
+        if (resolveResult.ok !== true || resolveResult.decision !== 'needs-open-mode-choice') {
+          return await finalizeFocusedExistingWindowResult(resolveResult, {
+            focusWindowById,
+            fallbackPath: getRecentTargetPath(payload),
+          })
         }
-        return await openDocumentWindow?.(validationResult.path, {
+        return await openDocumentWindow?.(resolveResult.path, {
           isRecent: false,
-          trigger,
+          trigger: getOpenTrigger(payload),
         })
       }
 
       case 'document.open-path-in-current-window': {
-        const targetPath = getRecentTargetPath(payload)
-        const trigger = payload?.trigger || 'user'
-        const validationResult = await validateExplicitOpenTarget(targetPath, {
+        // execute 阶段只做当前窗口切换，
+        // 不再自行压缩成旧的 saveBeforeSwitch 布尔协议。
+        if (!hasValidOpenCurrentWindowExecutePayload(payload)) {
+          return createSourceSessionChangedResult(getRecentTargetPath(payload))
+        }
+
+        const validationResult = await validateExplicitOpenTarget(getRecentTargetPath(payload), {
           baseDir: getOpenBaseDir(payload),
         })
         if (validationResult.ok !== true) {
           return validationResult
         }
 
-        const currentDocumentPath = getCurrentSnapshotDocumentPath(getSessionSnapshot)
-        if (toComparableDocumentPath(currentDocumentPath) === toComparableDocumentPath(validationResult.path)) {
-          return {
-            ok: true,
-            reason: 'noop-current-file',
-            path: validationResult.path,
-          }
-        }
-
-        return await openDocumentInCurrentWindow?.(validationResult.path, {
-          trigger,
-          saveBeforeSwitch: payload?.saveBeforeSwitch === true,
+        return await finalizeFocusedExistingWindowResult(await openDocumentInCurrentWindow?.(validationResult.path, {
+          entrySource: getOpenEntrySource(payload),
+          trigger: getOpenTrigger(payload),
+          switchPolicy: payload?.switchPolicy || null,
+          expectedSessionId: payload?.expectedSessionId || null,
+          expectedRevision: payload?.expectedRevision,
+        }), {
+          focusWindowById,
+          fallbackPath: validationResult.path,
         })
       }
 
-      case 'dialog.open-target-cancelled':
-        // 显式返回取消结果，方便调用方区分“用户取消”和“路径无效”。
-        return {
-          ok: false,
-          reason: 'cancelled',
-          path: null,
-        }
-
       case 'document.open-recent': {
-        // recent 打开链路与显式打开不同：
-        // 对 user 触发，需要把“recent 指向的文件不存在”返回成 recent-missing，
-        // 便于上层决定是否展示缺失提示或 recent-missing 会话。
-        const targetPath = getRecentTargetPath(payload)
-        const trigger = payload?.trigger || 'user'
-        const resolvedTargetPath = resolveDocumentOpenPath(targetPath, {
-          baseDir: getOpenBaseDir(payload),
+        const trigger = getOpenTrigger(payload)
+        const resolveResult = await resolveOpenTargetDecision(payload, {
+          getSessionSnapshot,
+          getExistingWindowIdByPath,
+          fallbackEntrySource: 'recent',
         })
-
-        if (!resolvedTargetPath) {
-          return {
-            ok: false,
-            reason: 'open-recent-target-missing',
-            path: null,
+        if (resolveResult.ok !== true) {
+          if (resolveResult.reason !== 'recent-missing' || trigger !== 'startup') {
+            return resolveResult
           }
+          return await openDocumentWindow?.(resolveResult.path, {
+            isRecent: true,
+            trigger,
+          })
+        }
+        if (resolveResult.decision !== 'needs-open-mode-choice') {
+          return await finalizeFocusedExistingWindowResult(resolveResult, {
+            focusWindowById,
+            fallbackPath: getRecentTargetPath(payload),
+          })
         }
 
-        const exists = await fsModule.pathExists(resolvedTargetPath)
-        if (!exists && trigger === 'user') {
-          return {
-            ok: false,
-            reason: 'open-recent-target-missing',
-            path: resolvedTargetPath,
-          }
-        }
-        if (exists && !isMarkdownFilePath(resolvedTargetPath)) {
-          return {
-            ok: false,
-            reason: 'open-target-invalid-extension',
-            path: resolvedTargetPath,
-          }
-        }
-        if (exists && !await isRegularFile(fsModule, resolvedTargetPath)) {
-          return {
-            ok: false,
-            reason: 'open-target-not-file',
-            path: resolvedTargetPath,
-          }
-        }
-
-        // recent 路径通过校验后，仍然统一交给 openDocumentWindow 处理窗口复用/新建逻辑。
-        return await openDocumentWindow?.(resolvedTargetPath, {
+        // recent 路径通过统一预判后，仍然交给 openDocumentWindow 处理新建/复用结果。
+        return await openDocumentWindow?.(resolveResult.path, {
           isRecent: true,
           trigger,
         })

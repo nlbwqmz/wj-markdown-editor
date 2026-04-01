@@ -115,6 +115,17 @@ test('中英文文案都应提供打开 Markdown 文件失败提示', () => {
   )
 })
 
+test('中英文文案都应提供 source-session-changed 打开重试提示', () => {
+  assert.equal(
+    zhCN.message.fileManagerSourceSessionChanged,
+    '当前文档状态已变化，请重新执行打开操作。',
+  )
+  assert.equal(
+    enUS.message.fileManagerSourceSessionChanged,
+    'The current document state has changed. Please try opening the file again.',
+  )
+})
+
 test('中英文文案都应提供复制结果提示', () => {
   assert.equal(
     zhCN.message.noCopyableContent,

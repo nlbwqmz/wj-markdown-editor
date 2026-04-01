@@ -12,6 +12,7 @@ import channelUtil from '@/util/channel/channelUtil.js'
 import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
+import { setCurrentWindowOpenPreparationProvider } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
@@ -133,6 +134,7 @@ const activationRestoreScheduler = createEditorViewActivationRestoreScheduler({
     markdownEditRef.value?.scheduleRestoreForCurrentSnapshot(snapshotIdentity)?.then(() => {})
   },
 })
+let clearCurrentWindowOpenPreparationProvider = null
 
 // 统一封装“把外部内容应用到编辑器”的过程。
 // 除了正文本身，还会一起生成本次更新的元数据，供子组件恢复光标和滚动位置。
@@ -155,6 +157,32 @@ function updateEditorContent(nextContent, options = {}) {
 // 触发文档保存，请求具体由 rendererDocumentCommandUtil 转给主进程处理。
 function save() {
   requestDocumentSave().then(() => {})
+}
+
+// 当前窗口切换前，需要拿到与最终正文一致的稳定 snapshot。
+// 这里直接复用已验证稳定的 route leave 逻辑，避免再长出第二套正文收敛路径。
+async function requestCurrentWindowOpenPreparation() {
+  markdownEditRef.value?.flushPendingModelSync?.()
+
+  const latestSnapshot = content.value !== (store.documentSessionSnapshot?.content ?? '')
+    ? (await requestDocumentEdit(content.value))?.snapshot || await requestDocumentSessionSnapshot()
+    : await requestDocumentSessionSnapshot()
+
+  return {
+    ok: true,
+    reason: 'prepared',
+    snapshot: latestSnapshot,
+  }
+}
+
+function bindCurrentWindowOpenPreparationProvider() {
+  clearCurrentWindowOpenPreparationProvider?.()
+  clearCurrentWindowOpenPreparationProvider = setCurrentWindowOpenPreparationProvider(requestCurrentWindowOpenPreparation)
+}
+
+function clearBoundCurrentWindowOpenPreparationProvider() {
+  clearCurrentWindowOpenPreparationProvider?.()
+  clearCurrentWindowOpenPreparationProvider = null
 }
 
 // 把 document session snapshot 应用到当前编辑页。
@@ -197,6 +225,7 @@ async function loadCurrentDocumentSessionSnapshot() {
 
 onMounted(async () => {
   // 组件挂载时先激活快照控制器和事件订阅，为后续首次加载做好准备。
+  bindCurrentWindowOpenPreparationProvider()
   editorSessionSnapshotController.activate()
   documentSessionSnapshotSubscription.activate()
   // KeepAlive 页面首次进入时，真正的“进入策略”统一交给 onActivated。
@@ -210,6 +239,7 @@ onMounted(async () => {
 
 onActivated(() => {
   // keep-alive 恢复后重新接管快照流。
+  bindCurrentWindowOpenPreparationProvider()
   activationRestoreScheduler.markPendingRestore()
   editorSessionSnapshotController.activate()
   documentSessionSnapshotSubscription.activate()
@@ -234,6 +264,7 @@ onActivated(() => {
 
 onBeforeUnmount(() => {
   // 组件真正销毁时释放所有订阅和上下文，避免后续异步结果回写到已卸载页面。
+  clearBoundCurrentWindowOpenPreparationProvider()
   editorSessionSnapshotController.dispose()
   documentSessionSnapshotSubscription.dispose()
   previewAssetSessionController.invalidateActiveContext({
@@ -243,6 +274,7 @@ onBeforeUnmount(() => {
 
 onDeactivated(() => {
   // keep-alive 暂时失活时停止接收事件，并让资源相关 UI 全部失效。
+  clearBoundCurrentWindowOpenPreparationProvider()
   activationRestoreScheduler.cancelPendingRestore()
   editorSessionSnapshotController.deactivate()
   documentSessionSnapshotSubscription.deactivate()
@@ -295,6 +327,10 @@ watch(() => store.config, (newValue) => {
   watermark.value = tempWatermark
   config.value = newValue
 }, { deep: true, immediate: true })
+
+defineExpose({
+  requestCurrentWindowOpenPreparation,
+})
 
 // 关闭资源右键菜单，并清空关联的资源与上下文。
 function closePreviewAssetMenu() {

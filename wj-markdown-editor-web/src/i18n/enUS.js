@@ -320,6 +320,7 @@ export default {
     fileManagerOpenDirectoryFailed: 'Failed to open the directory. Please try again.',
     fileManagerSaveBeforeSwitchFailed: 'Failed to save the current file. Switching was cancelled.',
     fileManagerOpenCurrentWindowFailed: 'Failed to switch the current window. Please try again.',
+    fileManagerSourceSessionChanged: 'The current document state has changed. Please try opening the file again.',
     fileAlreadyOpenedInOtherWindow: 'The target file is already open in another window. Switched to that window for you.',
     openMarkdownFileFailed: 'Failed to open the Markdown file. Please check file permissions or whether it is in use.',
     invalidLocalResourceLink: 'The local resource link is invalid and cannot be resolved to a file.',

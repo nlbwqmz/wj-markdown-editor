@@ -23,6 +23,7 @@ async function createServiceContext() {
     isSupported: vi.fn(() => false),
   }
   const fsModule = {
+    readFile: vi.fn(),
     pathExists: vi.fn(),
     stat: vi.fn(),
     writeFile: vi.fn(),
@@ -90,45 +91,63 @@ function createEffectHostControllers(overrides = {}) {
 }
 
 describe('documentEffectService', () => {
-  it('document.request-open-dialog 选中文件时，必须通过 dialog.open-target-selected 回流', async () => {
+  it('document.request-open-dialog 选中文件时，必须直接返回 selected 结构，不能再回流旧命令', async () => {
     const { service, dialogApi } = await createServiceContext()
-    const dispatchCommand = vi.fn().mockResolvedValue({ ok: true })
 
     dialogApi.showOpenDialogSync.mockReturnValue(['C:/docs/demo.md'])
 
-    await service.executeCommand({
+    const result = await service.executeCommand({
       command: 'document.request-open-dialog',
-      dispatchCommand,
     })
 
-    expect(dispatchCommand).toHaveBeenCalledWith('dialog.open-target-selected', {
+    expect(result).toEqual({
+      ok: true,
+      reason: 'selected',
       path: 'C:/docs/demo.md',
     })
   })
 
-  it('document.request-open-dialog 取消时，必须通过 dialog.open-target-cancelled 回流', async () => {
+  it('document.request-open-dialog 取消时，必须直接返回 cancelled 结构，不能再回流旧命令', async () => {
     const { service, dialogApi } = await createServiceContext()
-    const dispatchCommand = vi.fn().mockResolvedValue({ ok: false })
 
     dialogApi.showOpenDialogSync.mockReturnValue(undefined)
 
-    await service.executeCommand({
+    const result = await service.executeCommand({
       command: 'document.request-open-dialog',
-      dispatchCommand,
     })
 
-    expect(dispatchCommand).toHaveBeenCalledWith('dialog.open-target-cancelled')
+    expect(result).toEqual({
+      ok: false,
+      reason: 'cancelled',
+      path: null,
+    })
+  })
+
+  it('document.request-open-dialog 打开系统对话框失败时，必须返回 dialog-open-failed 结构', async () => {
+    const { service, dialogApi } = await createServiceContext()
+
+    dialogApi.showOpenDialogSync.mockImplementation(() => {
+      throw new Error('dialog crashed')
+    })
+
+    const result = await service.executeCommand({
+      command: 'document.request-open-dialog',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'dialog-open-failed',
+      path: null,
+    })
   })
 
   it('document.request-open-dialog 的过滤器必须同时放行 .md 与 .markdown', async () => {
     const { service, dialogApi } = await createServiceContext()
-    const dispatchCommand = vi.fn().mockResolvedValue({ ok: false })
 
     dialogApi.showOpenDialogSync.mockReturnValue(undefined)
 
     await service.executeCommand({
       command: 'document.request-open-dialog',
-      dispatchCommand,
     })
 
     expect(dialogApi.showOpenDialogSync).toHaveBeenCalledWith(expect.objectContaining({
@@ -138,21 +157,20 @@ describe('documentEffectService', () => {
     }))
   })
 
-  it('dialog.open-target-selected 命中存在但非 .md 的路径时，必须拦截并返回 invalid-extension', async () => {
+  it('document.resolve-open-target 命中存在但非 .md 的路径时，必须拦截并返回 invalid-extension', async () => {
     const { service, fsModule } = await createServiceContext()
-    const openDocumentWindow = vi.fn()
 
     fsModule.pathExists.mockResolvedValue(true)
     fsModule.stat.mockResolvedValue({
       isFile: () => true,
     })
+    fsModule.readFile.mockResolvedValue('# plain')
 
     const result = await service.executeCommand({
-      command: 'dialog.open-target-selected',
+      command: 'document.resolve-open-target',
       payload: {
         path: 'C:/docs/plain.txt',
       },
-      openDocumentWindow,
     })
 
     expect(result).toEqual({
@@ -160,36 +178,157 @@ describe('documentEffectService', () => {
       reason: 'open-target-invalid-extension',
       path: 'C:/docs/plain.txt',
     })
-    expect(openDocumentWindow).not.toHaveBeenCalled()
   })
 
-  it('dialog.open-target-selected 命中 .markdown 路径时，必须按合法 Markdown 文件放行', async () => {
+  it('document.resolve-open-target 命中 .markdown 路径时，必须返回 needs-open-mode-choice', async () => {
     const { service, fsModule } = await createServiceContext()
-    const openDocumentWindow = vi.fn().mockResolvedValue({
-      ok: true,
-      reason: 'opened',
-    })
 
     fsModule.pathExists.mockResolvedValue(true)
     fsModule.stat.mockResolvedValue({
       isFile: () => true,
     })
+    fsModule.readFile.mockResolvedValue('# markdown')
 
     const result = await service.executeCommand({
-      command: 'dialog.open-target-selected',
+      command: 'document.resolve-open-target',
       payload: {
         path: 'C:/docs/demo.markdown',
       },
-      openDocumentWindow,
     })
 
-    expect(openDocumentWindow).toHaveBeenCalledWith('C:/docs/demo.markdown', {
-      isRecent: false,
-      trigger: 'user',
-    })
     expect(result).toEqual({
       ok: true,
-      reason: 'opened',
+      decision: 'needs-open-mode-choice',
+      path: 'C:/docs/demo.markdown',
+    })
+  })
+
+  it('document.resolve-open-target 命中当前已打开文档时，必须返回 noop-current-file', async () => {
+    const { service, fsModule } = await createServiceContext()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# current')
+
+    const result = await service.executeCommand({
+      command: 'document.resolve-open-target',
+      payload: {
+        path: 'C:/docs/current.md',
+      },
+      getSessionSnapshot: () => ({
+        isRecentMissing: false,
+        resourceContext: {
+          documentPath: 'C:/docs/current.md',
+        },
+      }),
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      decision: 'noop-current-file',
+      path: 'C:/docs/current.md',
+    })
+  })
+
+  it('document.resolve-open-target 在当前会话是 recent-missing 且路径文本相同时，也不能返回 noop-current-file', async () => {
+    const { service, fsModule } = await createServiceContext()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# restored')
+
+    const result = await service.executeCommand({
+      command: 'document.resolve-open-target',
+      payload: {
+        path: 'C:/docs/missing.md',
+        entrySource: 'recent',
+      },
+      getSessionSnapshot: () => ({
+        isRecentMissing: true,
+        recentMissingPath: 'C:/docs/missing.md',
+        resourceContext: {
+          documentPath: null,
+        },
+      }),
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      decision: 'needs-open-mode-choice',
+      path: 'C:/docs/missing.md',
+    })
+  })
+
+  it('document.resolve-open-target 命中其他窗口已打开目标时，必须返回 focused-existing-window', async () => {
+    const { service, fsModule } = await createServiceContext()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# opened elsewhere')
+
+    const result = await service.executeCommand({
+      command: 'document.resolve-open-target',
+      payload: {
+        path: 'C:/docs/other.md',
+      },
+      getExistingWindowIdByPath: vi.fn(() => 'window-2'),
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      decision: 'focused-existing-window',
+      path: 'C:/docs/other.md',
+      windowId: 'window-2',
+    })
+  })
+
+  it('document.resolve-open-target 对 recent 入口命中缺失文件时，必须返回 recent-missing', async () => {
+    const { service, fsModule } = await createServiceContext()
+
+    fsModule.pathExists.mockResolvedValue(false)
+
+    const result = await service.executeCommand({
+      command: 'document.resolve-open-target',
+      payload: {
+        path: 'C:/docs/missing.md',
+        entrySource: 'recent',
+        trigger: 'user',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'recent-missing',
+      path: 'C:/docs/missing.md',
+    })
+  })
+
+  it('document.resolve-open-target 预读目标失败时，必须返回 open-target-read-failed', async () => {
+    const { service, fsModule } = await createServiceContext()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockRejectedValue(new Error('EACCES'))
+
+    const result = await service.executeCommand({
+      command: 'document.resolve-open-target',
+      payload: {
+        path: 'C:/docs/locked.md',
+      },
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'C:/docs/locked.md',
     })
   })
 
@@ -205,6 +344,7 @@ describe('documentEffectService', () => {
     fsModule.stat.mockResolvedValue({
       isFile: () => true,
     })
+    fsModule.readFile.mockResolvedValue('# demo')
 
     const result = await service.executeCommand({
       command: 'document.open-path',
@@ -226,34 +366,202 @@ describe('documentEffectService', () => {
     })
   })
 
-  it('document.open-path-in-current-window 命中当前已打开文档时，必须返回结构化 no-op，不能继续触发 session 切换', async () => {
+  it('document.prepare-open-path-in-current-window 在当前文档 dirty 时，必须返回 needs-save-choice', async () => {
     const { service, fsModule } = await createServiceContext()
-    const openDocumentInCurrentWindow = vi.fn()
 
     fsModule.pathExists.mockResolvedValue(true)
     fsModule.stat.mockResolvedValue({
       isFile: () => true,
     })
+    fsModule.readFile.mockResolvedValue('# next')
 
     const result = await service.executeCommand({
-      command: 'document.open-path-in-current-window',
+      command: 'document.prepare-open-path-in-current-window',
       payload: {
-        path: 'C:/docs/demo.md',
+        path: 'C:/docs/next.md',
+        sourceSessionId: 'session-current',
+        sourceRevision: 7,
       },
       getSessionSnapshot: () => ({
+        sessionId: 'session-current',
+        revision: 7,
+        dirty: true,
+        isRecentMissing: false,
         resourceContext: {
-          documentPath: 'C:/docs/demo.md',
+          documentPath: 'C:/docs/current.md',
         },
       }),
-      openDocumentInCurrentWindow,
     })
 
     expect(result).toEqual({
       ok: true,
-      reason: 'noop-current-file',
-      path: 'C:/docs/demo.md',
+      decision: 'needs-save-choice',
+      path: 'C:/docs/next.md',
+      sourceSessionId: 'session-current',
+      sourceRevision: 7,
     })
-    expect(openDocumentInCurrentWindow).not.toHaveBeenCalled()
+  })
+
+  it('document.prepare-open-path-in-current-window 在当前文档 clean 时，必须返回 ready-to-switch', async () => {
+    const { service, fsModule } = await createServiceContext()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# next')
+
+    const result = await service.executeCommand({
+      command: 'document.prepare-open-path-in-current-window',
+      payload: {
+        path: 'C:/docs/next.md',
+        sourceSessionId: 'session-current',
+        sourceRevision: 7,
+      },
+      getSessionSnapshot: () => ({
+        sessionId: 'session-current',
+        revision: 7,
+        dirty: false,
+        isRecentMissing: false,
+        resourceContext: {
+          documentPath: 'C:/docs/current.md',
+        },
+      }),
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      decision: 'ready-to-switch',
+      path: 'C:/docs/next.md',
+      sourceSessionId: 'session-current',
+      sourceRevision: 7,
+    })
+  })
+
+  it('document.prepare-open-path-in-current-window 命中其他窗口已打开目标时，必须在 save-choice 前返回 focused-existing-window', async () => {
+    const { service, fsModule } = await createServiceContext()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# other')
+
+    const result = await service.executeCommand({
+      command: 'document.prepare-open-path-in-current-window',
+      payload: {
+        path: 'C:/docs/other.md',
+        sourceSessionId: 'session-current',
+        sourceRevision: 7,
+      },
+      getSessionSnapshot: () => ({
+        sessionId: 'session-current',
+        revision: 7,
+        dirty: true,
+        isRecentMissing: false,
+        resourceContext: {
+          documentPath: 'C:/docs/current.md',
+        },
+      }),
+      getExistingWindowIdByPath: vi.fn(() => 'window-2'),
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      decision: 'focused-existing-window',
+      path: 'C:/docs/other.md',
+      sourceSessionId: 'session-current',
+      sourceRevision: 7,
+      windowId: 'window-2',
+    })
+  })
+
+  it.each([
+    [
+      'document.open-path',
+      {
+        command: 'document.open-path',
+        payload: {
+          path: 'C:/docs/other.md',
+          trigger: 'user',
+        },
+      },
+      {
+        ok: true,
+        decision: 'focused-existing-window',
+        path: 'C:/docs/other.md',
+        windowId: 'window-2',
+      },
+    ],
+    [
+      'document.open-recent',
+      {
+        command: 'document.open-recent',
+        payload: {
+          path: 'C:/docs/other.md',
+          trigger: 'user',
+        },
+      },
+      {
+        ok: true,
+        decision: 'focused-existing-window',
+        path: 'C:/docs/other.md',
+        windowId: 'window-2',
+      },
+    ],
+    [
+      'document.prepare-open-path-in-current-window',
+      {
+        command: 'document.prepare-open-path-in-current-window',
+        payload: {
+          path: 'C:/docs/other.md',
+          sourceSessionId: 'session-current',
+          sourceRevision: 7,
+        },
+        getSessionSnapshot: () => ({
+          sessionId: 'session-current',
+          revision: 7,
+          dirty: true,
+          isRecentMissing: false,
+          resourceContext: {
+            documentPath: 'C:/docs/current.md',
+          },
+        }),
+      },
+      {
+        ok: true,
+        decision: 'focused-existing-window',
+        path: 'C:/docs/other.md',
+        sourceSessionId: 'session-current',
+        sourceRevision: 7,
+        windowId: 'window-2',
+      },
+    ],
+  ])('%s 命中其他窗口已打开目标时，必须通过统一副作用同时聚焦并刷新 recent 顺序', async (_title, commandInput, expectedResult) => {
+    const { service, fsModule, recentStore } = await createServiceContext()
+    const focusWindowById = vi.fn(() => true)
+    const openDocumentWindow = vi.fn()
+    const prepareOpenPathInCurrentWindow = vi.fn()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# other')
+
+    const result = await service.executeCommand({
+      ...commandInput,
+      getExistingWindowIdByPath: vi.fn(() => 'window-2'),
+      focusWindowById,
+      openDocumentWindow,
+      prepareOpenPathInCurrentWindow,
+    })
+
+    expect(result).toEqual(expectedResult)
+    expect(focusWindowById).toHaveBeenCalledWith('window-2')
+    expect(recentStore.add).toHaveBeenCalledWith('C:/docs/other.md')
+    expect(openDocumentWindow).not.toHaveBeenCalled()
+    expect(prepareOpenPathInCurrentWindow).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -261,6 +569,8 @@ describe('documentEffectService', () => {
       '缺失路径',
       {
         path: 'C:/docs/missing.md',
+        sourceSessionId: 'session-current',
+        sourceRevision: 7,
       },
       async (fsModule) => {
         fsModule.pathExists.mockResolvedValue(false)
@@ -275,12 +585,15 @@ describe('documentEffectService', () => {
       '非 Markdown 扩展',
       {
         path: 'C:/docs/plain.txt',
+        sourceSessionId: 'session-current',
+        sourceRevision: 7,
       },
       async (fsModule) => {
         fsModule.pathExists.mockResolvedValue(true)
         fsModule.stat.mockResolvedValue({
           isFile: () => true,
         })
+        fsModule.readFile.mockResolvedValue('# plain')
       },
       {
         ok: false,
@@ -292,6 +605,8 @@ describe('documentEffectService', () => {
       '目录型 Markdown 目标',
       {
         path: 'C:/docs/folder.md',
+        sourceSessionId: 'session-current',
+        sourceRevision: 7,
       },
       async (fsModule) => {
         fsModule.pathExists.mockResolvedValue(true)
@@ -305,19 +620,16 @@ describe('documentEffectService', () => {
         path: 'C:/docs/folder.md',
       },
     ],
-  ])('document.open-path-in-current-window 命中%s时，必须返回结构化失败结果', async (_title, payload, prepareFs, expectedResult) => {
+  ])('document.prepare-open-path-in-current-window 命中%s时，必须保留阶段一失败结果', async (_title, payload, prepareFs, expectedResult) => {
     const { service, fsModule } = await createServiceContext()
-    const openDocumentInCurrentWindow = vi.fn()
     await prepareFs(fsModule)
 
     const result = await service.executeCommand({
-      command: 'document.open-path-in-current-window',
+      command: 'document.prepare-open-path-in-current-window',
       payload,
-      openDocumentInCurrentWindow,
     })
 
     expect(result).toEqual(expectedResult)
-    expect(openDocumentInCurrentWindow).not.toHaveBeenCalled()
   })
 
   it('document.open-recent(trigger=user) 命中缺失文件时，不能改动当前 active session', async () => {
@@ -339,7 +651,7 @@ describe('documentEffectService', () => {
 
     expect(result).toEqual({
       ok: false,
-      reason: 'open-recent-target-missing',
+      reason: 'recent-missing',
       path: 'C:/docs/missing.md',
     })
     expect(openDocumentWindow).not.toHaveBeenCalled()
@@ -354,6 +666,7 @@ describe('documentEffectService', () => {
     fsModule.stat.mockResolvedValue({
       isFile: () => true,
     })
+    fsModule.readFile.mockResolvedValue('# plain')
 
     const userResult = await service.executeCommand({
       command: 'document.open-recent',
@@ -395,11 +708,10 @@ describe('documentEffectService', () => {
     })
 
     const dialogResult = await service.executeCommand({
-      command: 'dialog.open-target-selected',
+      command: 'document.resolve-open-target',
       payload: {
         path: 'C:/docs/folder.md',
       },
-      openDocumentWindow,
     })
     const recentResult = await service.executeCommand({
       command: 'document.open-recent',
@@ -454,6 +766,47 @@ describe('documentEffectService', () => {
     })
     expect(result.snapshot.isRecentMissing).toBe(true)
     expect(result.snapshot.recentMissingPath).toBe('C:/docs/missing.md')
+  })
+
+  it('document.open-path-in-current-window 必须把 switchPolicy 和 expected session 信息原样交给 execute 阶段', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentInCurrentWindow = vi.fn().mockResolvedValue({
+      ok: true,
+      reason: 'opened',
+      path: 'C:/docs/next.md',
+    })
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# next')
+
+    const result = await service.executeCommand({
+      command: 'document.open-path-in-current-window',
+      payload: {
+        path: 'C:/docs/next.md',
+        entrySource: 'file-manager',
+        trigger: 'user',
+        switchPolicy: 'discard-switch',
+        expectedSessionId: 'session-current',
+        expectedRevision: 7,
+      },
+      openDocumentInCurrentWindow,
+    })
+
+    expect(openDocumentInCurrentWindow).toHaveBeenCalledWith('C:/docs/next.md', {
+      entrySource: 'file-manager',
+      trigger: 'user',
+      switchPolicy: 'discard-switch',
+      expectedSessionId: 'session-current',
+      expectedRevision: 7,
+    })
+    expect(result).toEqual({
+      ok: true,
+      reason: 'opened',
+      path: 'C:/docs/next.md',
+    })
   })
 
   it('recent.clear 在列表本来就是空时，不应触发真实清空副作用', async () => {

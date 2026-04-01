@@ -7,21 +7,18 @@ import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import {
+  requestDocumentOpenByDialogAndOpen,
+  requestDocumentOpenPathByInteraction,
+} from '@/util/document-session/documentOpenInteractionService.js'
+import {
   isDocumentOpenMissingResult,
   requestRecentClear,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
-import {
-  createFileManagerOpenDecisionController,
-  resolveDocumentOpenCurrentPath,
-} from '@/util/file-manager/fileManagerOpenDecisionController.js'
 import toggleFullScreenAction from '@/util/fullScreenActionUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const { t } = useI18n()
 const store = useCommonStore()
-const openDecisionController = createFileManagerOpenDecisionController({
-  t,
-})
 
 const menuList = ref([])
 const shortcutKeyList = ref(store.config.shortcutKeyList)
@@ -61,10 +58,9 @@ function createRecentListVNode() {
       key: commonUtil.createId(),
       label: commonUtil.createRecentLabel(item.path, item.name),
       click: () => {
-        openDecisionController.openDocument(item.path, {
-          currentPath: resolveDocumentOpenCurrentPath(store.documentSessionSnapshot),
-          isDirty: store.documentSessionSnapshot?.dirty === true,
-          source: 'recent-list',
+        requestDocumentOpenPathByInteraction(item.path, {
+          entrySource: 'recent',
+          trigger: 'user',
         }).then((result) => {
           if (isDocumentOpenMissingResult(result)) {
             commonUtil.recentFileNotExists(item.path)
@@ -130,7 +126,10 @@ function updateMenuList() {
           key: commonUtil.createId(),
           label: createMenuLabel(t('topMenu.file.children.openFile'), 'openFile'),
           click: () => {
-            shortcutKeyUtil.getWebShortcutKeyHandler('openFile', true)
+            requestDocumentOpenByDialogAndOpen({
+              entrySource: 'menu-open',
+              trigger: 'user',
+            }).then(() => {})
           },
         },
         {

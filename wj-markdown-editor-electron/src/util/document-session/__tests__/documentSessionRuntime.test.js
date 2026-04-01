@@ -4,6 +4,7 @@ import {
   createDocumentSessionRuntime,
   getDocumentSessionRuntime,
   initializeDocumentSessionRuntime,
+  normalizeOpenCommandResult,
   openDocumentWindowWithRuntimePolicy,
   resetDocumentSessionRuntime,
 } from '../documentSessionRuntime.js'
@@ -104,25 +105,44 @@ function createRuntimeContext(overrides = {}) {
     executeCommand: vi.fn(async ({
       command,
       payload,
+      prepareOpenPathInCurrentWindow,
       openDocumentInCurrentWindow,
       openDocumentWindow,
       getSessionSnapshot,
     }) => {
       switch (command) {
+        case 'document.resolve-open-target':
+          return {
+            ok: true,
+            decision: 'needs-open-mode-choice',
+            path: payload.path,
+          }
+        case 'document.prepare-open-path-in-current-window':
+          return await prepareOpenPathInCurrentWindow(payload.path, {
+            entrySource: payload.entrySource,
+            trigger: payload.trigger,
+            sourceSessionId: payload.sourceSessionId,
+            sourceRevision: payload.sourceRevision,
+          })
         case 'document.open-path':
           return await openDocumentWindow(payload.path, {
             isRecent: false,
+            entrySource: payload.entrySource,
             trigger: payload.trigger,
           })
         case 'document.open-recent':
           return await openDocumentWindow(payload.path, {
             isRecent: true,
+            entrySource: payload.entrySource,
             trigger: payload.trigger,
           })
         case 'document.open-path-in-current-window':
           return await openDocumentInCurrentWindow(payload.path, {
+            entrySource: payload.entrySource,
             trigger: payload.trigger,
-            saveBeforeSwitch: payload.saveBeforeSwitch === true,
+            switchPolicy: payload.switchPolicy,
+            expectedSessionId: payload.expectedSessionId,
+            expectedRevision: payload.expectedRevision,
           })
         case 'document.get-session-snapshot':
           return getSessionSnapshot()
@@ -231,6 +251,11 @@ function createRuntimeContext(overrides = {}) {
     reason: 'opened',
     path: targetPath,
   }))
+  const prepareOpenPathInCurrentWindow = vi.fn(async targetPath => ({
+    ok: true,
+    decision: 'ready-to-switch',
+    path: targetPath,
+  }))
   const publishOpenFailureSystemNotification = vi.fn()
 
   const runtime = createDocumentSessionRuntime({
@@ -257,6 +282,7 @@ function createRuntimeContext(overrides = {}) {
     getWindowById,
     getDocumentContext,
     openDocumentWindow,
+    prepareOpenPathInCurrentWindow,
     openDocumentInCurrentWindow,
     publishOpenFailureSystemNotification,
     ...overrides,
@@ -273,6 +299,7 @@ function createRuntimeContext(overrides = {}) {
     getWindowById,
     getDocumentContext,
     openDocumentWindow,
+    prepareOpenPathInCurrentWindow,
     openDocumentInCurrentWindow,
     publishOpenFailureSystemNotification,
   }
@@ -545,6 +572,75 @@ describe('documentSessionRuntime', () => {
       marker: '11:function',
     }))
     expect(effectCommandCall).not.toHaveProperty('winInfo')
+  })
+
+  it('document.resolve-open-target / document.prepare-open-path-in-current-window 必须作为新的 effect 命令暴露给 runtime', async () => {
+    const {
+      runtime,
+      effectService,
+      openDocumentWindow,
+      prepareOpenPathInCurrentWindow,
+      openDocumentInCurrentWindow,
+    } = createRuntimeContext()
+    effectService.executeCommand
+      .mockResolvedValueOnce({
+        ok: true,
+        decision: 'needs-open-mode-choice',
+        path: 'C:/docs/next.md',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        decision: 'ready-to-switch',
+        path: 'C:/docs/next.md',
+      })
+
+    const resolveResult = await runtime.executeUiCommand(11, 'document.resolve-open-target', {
+      path: 'C:/docs/next.md',
+      entrySource: 'file-manager',
+      trigger: 'user',
+    })
+    const prepareResult = await runtime.executeUiCommand(11, 'document.prepare-open-path-in-current-window', {
+      path: 'C:/docs/next.md',
+      entrySource: 'file-manager',
+      trigger: 'user',
+      sourceSessionId: 'session-current',
+      sourceRevision: 7,
+    })
+
+    expect(resolveResult).toEqual({
+      ok: true,
+      decision: 'needs-open-mode-choice',
+      path: 'C:/docs/next.md',
+    })
+    expect(prepareResult).toEqual({
+      ok: true,
+      decision: 'ready-to-switch',
+      path: 'C:/docs/next.md',
+    })
+    expect(effectService.executeCommand).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      windowId: 11,
+      command: 'document.resolve-open-target',
+      payload: {
+        path: 'C:/docs/next.md',
+        entrySource: 'file-manager',
+        trigger: 'user',
+      },
+    }))
+    expect(effectService.executeCommand).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      windowId: 11,
+      command: 'document.prepare-open-path-in-current-window',
+      payload: {
+        path: 'C:/docs/next.md',
+        entrySource: 'file-manager',
+        trigger: 'user',
+        sourceSessionId: 'session-current',
+        sourceRevision: 7,
+      },
+      prepareOpenPathInCurrentWindow: expect.any(Function),
+    }))
+    expect(openDocumentWindow).not.toHaveBeenCalled()
+    expect(prepareOpenPathInCurrentWindow).not.toHaveBeenCalled()
+    expect(openDocumentInCurrentWindow).not.toHaveBeenCalled()
   })
 
   it('document.save / save-copy / document.edit 这类状态推进命令必须经 runtime 回流到真实 dispatch 链路', async () => {
@@ -962,7 +1058,7 @@ describe('documentSessionRuntime', () => {
     }))
   })
 
-  it('openDocumentWindowWithRuntimePolicy 必须只接受 openWindow 返回的 windowId，并通过 getWindowById 关闭空白草稿源窗口', async () => {
+  it('openDocumentWindowWithRuntimePolicy 必须只接受 openWindow 返回的 windowId，且不得自动关闭 pristine draft 来源窗口', async () => {
     const sourceWin = {
       id: 7,
       close: vi.fn(),
@@ -1022,8 +1118,8 @@ describe('documentSessionRuntime', () => {
       isRecent: false,
       trigger: 'user',
     })
-    expect(getWindowById).toHaveBeenCalledWith(7)
-    expect(sourceWin.close).toHaveBeenCalledTimes(1)
+    expect(getWindowById).not.toHaveBeenCalled()
+    expect(sourceWin.close).not.toHaveBeenCalled()
     expect(result).toEqual({
       ok: true,
       reason: 'opened',
@@ -1037,7 +1133,48 @@ describe('documentSessionRuntime', () => {
     })
   })
 
-  it('document.open-path 必须由 runtime 组装打开结果，并在打开其他文档后关闭空白草稿源窗口', async () => {
+  it('document.open-path 命中 focused-existing-window 时，runtime 只能透传已有窗口结果，且不得关闭来源窗口', async () => {
+    const {
+      runtime,
+      effectService,
+      getWindowById,
+      openDocumentWindow,
+    } = createRuntimeContext()
+    const sourceWindow = getWindowById(7)
+    getWindowById.mockClear()
+    effectService.executeCommand.mockResolvedValueOnce({
+      ok: true,
+      decision: 'focused-existing-window',
+      path: 'C:/docs/already-opened.md',
+      windowId: 23,
+    })
+
+    const result = await runtime.executeUiCommand(7, 'document.open-path', {
+      path: 'C:/docs/already-opened.md',
+      trigger: 'user',
+    })
+
+    expect(effectService.executeCommand).toHaveBeenCalledWith(expect.objectContaining({
+      windowId: 7,
+      command: 'document.open-path',
+      payload: {
+        path: 'C:/docs/already-opened.md',
+        trigger: 'user',
+      },
+      openDocumentWindow: expect.any(Function),
+    }))
+    expect(openDocumentWindow).not.toHaveBeenCalled()
+    expect(getWindowById).not.toHaveBeenCalled()
+    expect(sourceWindow.close).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: true,
+      decision: 'focused-existing-window',
+      path: 'C:/docs/already-opened.md',
+      windowId: 23,
+    })
+  })
+
+  it('document.open-path 必须由 runtime 组装打开结果，且不得在 new-window 打开后自动关闭 pristine draft 来源窗口', async () => {
     const {
       runtime,
       openDocumentWindow,
@@ -1078,7 +1215,11 @@ describe('documentSessionRuntime', () => {
       saved: windowId === 7,
     }))
 
-    const sourceWindow = getWindowById(7)
+    const sourceWindow = {
+      id: 7,
+      close: vi.fn(),
+    }
+    getWindowById.mockImplementation(windowId => (windowId === 7 ? sourceWindow : null))
     const result = await runtime.executeUiCommand(7, 'document.open-path', {
       path: 'C:/docs/opened.md',
       trigger: 'user',
@@ -1088,7 +1229,7 @@ describe('documentSessionRuntime', () => {
       isRecent: false,
       trigger: 'user',
     })
-    expect(sourceWindow.close).toHaveBeenCalledTimes(1)
+    expect(sourceWindow.close).not.toHaveBeenCalled()
     expect(result).toEqual({
       ok: true,
       reason: 'opened',
@@ -1116,7 +1257,10 @@ describe('documentSessionRuntime', () => {
 
     const result = await runtime.executeUiCommand(8, 'document.open-path-in-current-window', {
       path: 'C:/docs/current.md',
-      saveBeforeSwitch: true,
+      entrySource: 'file-manager',
+      switchPolicy: 'discard-switch',
+      expectedSessionId: 'session-current',
+      expectedRevision: 5,
     })
 
     expect(result).toEqual({
@@ -1125,8 +1269,11 @@ describe('documentSessionRuntime', () => {
       path: 'C:/docs/current.md',
     })
     expect(openDocumentInCurrentWindow).toHaveBeenCalledWith(8, 'C:/docs/current.md', {
+      entrySource: 'file-manager',
       trigger: 'user',
-      saveBeforeSwitch: true,
+      switchPolicy: 'discard-switch',
+      expectedSessionId: 'session-current',
+      expectedRevision: 5,
     })
     expect(openDocumentWindow).not.toHaveBeenCalled()
   })
@@ -1243,14 +1390,32 @@ describe('documentSessionRuntime', () => {
     })
   })
 
-  it('document.open-recent(trigger=user) 必须由 runtime 把内部 missing 信号映射成 recent-missing 结果', async () => {
+  it('normalizeOpenCommandResult 不得继续把旧 recent missing reason 改写成新语义', () => {
+    const result = normalizeOpenCommandResult({
+      command: 'document.open-recent',
+      result: {
+        ok: false,
+        reason: 'open-recent-target-missing',
+        path: 'C:/docs/missing-user.md',
+      },
+      targetPath: 'C:/docs/missing-user.md',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-recent-target-missing',
+      path: 'C:/docs/missing-user.md',
+    })
+  })
+
+  it('document.open-recent(trigger=user) 命中 recent-missing 时必须透传新的主进程预判结果', async () => {
     const {
       runtime,
       effectService,
     } = createRuntimeContext()
     effectService.executeCommand.mockResolvedValueOnce({
       ok: false,
-      reason: 'open-recent-target-missing',
+      reason: 'recent-missing',
       path: 'C:/docs/missing-user.md',
     })
 

@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { nextTick, reactive } from 'vue'
 
 import HomeView from '../HomeView.vue'
 import HomeViewSource from '../HomeView.vue?raw'
@@ -17,22 +17,22 @@ const mountedHomeViewWrappers = []
 let homeViewStyleElement = null
 
 const homeViewFileManagerHostState = vi.hoisted(() => ({
-  route: {
-    name: 'editor',
-  },
+  route: null,
   splitDestroy: vi.fn(),
+  openPreparationHandlers: [],
+  openInteractionHandlers: [],
+  openInteractionServiceCreateOptionsList: [],
+  openDecisionOpenDocument: vi.fn(),
+  openDecisionFactory: vi.fn(),
+  registeredInteractionServiceList: [],
+  invalidateActiveRequest: vi.fn(),
+  requestDocumentOpenDialog: vi.fn(),
   shortcutKeyUtil: {
     isShortcutKey: vi.fn(() => false),
     getShortcutKey: vi.fn(),
     getWebShortcutKeyHandler: vi.fn(),
   },
-  store: {
-    config: {
-      shortcutKeyList: [],
-    },
-    fileManagerPanelVisible: true,
-    setFileManagerPanelVisible: vi.fn(),
-  },
+  store: null,
 }))
 
 vi.mock('split-grid', () => ({
@@ -49,6 +49,21 @@ vi.mock('vue-router', () => ({
   },
 }))
 
+vi.mock('vue-i18n', () => ({
+  createI18n() {
+    return {
+      global: {
+        t: value => value,
+      },
+    }
+  },
+  useI18n() {
+    return {
+      t: value => value,
+    }
+  },
+}))
+
 vi.mock('@/stores/counter.js', () => ({
   useCommonStore() {
     return homeViewFileManagerHostState.store
@@ -57,6 +72,70 @@ vi.mock('@/stores/counter.js', () => ({
 
 vi.mock('@/util/shortcutKeyUtil.js', () => ({
   default: homeViewFileManagerHostState.shortcutKeyUtil,
+}))
+
+vi.mock('@/util/document-session/currentWindowOpenPreparationService.js', () => ({
+  registerCurrentWindowOpenPreparation(handler) {
+    homeViewFileManagerHostState.openPreparationHandlers.push(handler)
+    return () => {
+      const handlerIndex = homeViewFileManagerHostState.openPreparationHandlers.indexOf(handler)
+      if (handlerIndex >= 0) {
+        homeViewFileManagerHostState.openPreparationHandlers.splice(handlerIndex, 1)
+      }
+    }
+  },
+}))
+
+vi.mock('@/util/document-session/documentOpenInteractionService.js', () => ({
+  createDocumentOpenInteractionService(options = {}) {
+    homeViewFileManagerHostState.openInteractionServiceCreateOptionsList.push(options)
+    return {
+      setOpenHandler(handler) {
+        homeViewFileManagerHostState.openInteractionHandlers.push(handler)
+        return () => {
+          const handlerIndex = homeViewFileManagerHostState.openInteractionHandlers.indexOf(handler)
+          if (handlerIndex >= 0) {
+            homeViewFileManagerHostState.openInteractionHandlers.splice(handlerIndex, 1)
+          }
+        }
+      },
+      invalidateActiveRequest: homeViewFileManagerHostState.invalidateActiveRequest,
+      requestDocumentOpenByDialog: vi.fn(async () => {
+        const selectedPath = await options.requestDocumentOpenDialog?.()
+        if (typeof selectedPath !== 'string' || !selectedPath) {
+          return {
+            ok: false,
+            reason: 'cancelled',
+            path: null,
+          }
+        }
+
+        return {
+          ok: true,
+          reason: 'selected',
+          path: selectedPath,
+        }
+      }),
+      requestDocumentOpenPath: vi.fn(),
+    }
+  },
+  registerDocumentOpenInteractionService(service) {
+    homeViewFileManagerHostState.registeredInteractionServiceList.push(service)
+    return () => {
+      const serviceIndex = homeViewFileManagerHostState.registeredInteractionServiceList.indexOf(service)
+      if (serviceIndex >= 0) {
+        homeViewFileManagerHostState.registeredInteractionServiceList.splice(serviceIndex, 1)
+      }
+    }
+  },
+}))
+
+vi.mock('@/util/file-manager/fileManagerOpenDecisionController.js', () => ({
+  createFileManagerOpenDecisionController: homeViewFileManagerHostState.openDecisionFactory,
+}))
+
+vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
+  requestDocumentOpenDialog: homeViewFileManagerHostState.requestDocumentOpenDialog,
 }))
 
 vi.mock('@/components/layout/LayoutTop.vue', async () => {
@@ -90,6 +169,18 @@ vi.mock('@/components/layout/LayoutContainer.vue', async () => {
       name: 'LayoutContainerStub',
       setup() {
         return () => h('div', { 'data-testid': 'layout-container-stub' })
+      },
+    }),
+  }
+})
+
+vi.mock('@/components/layout/FileManagerPanel.vue', async () => {
+  const { defineComponent, h } = await import('vue')
+  return {
+    default: defineComponent({
+      name: 'FileManagerPanelStub',
+      setup() {
+        return () => h('div', { 'data-testid': 'file-manager-panel-stub' })
       },
     }),
   }
@@ -140,14 +231,36 @@ async function mountHomeViewByRoute(path) {
 
 describe('homeView 文件管理栏宿主壳层', () => {
   beforeEach(() => {
-    homeViewFileManagerHostState.route.name = 'editor'
+    homeViewFileManagerHostState.route = reactive({
+      name: 'editor',
+    })
+    homeViewFileManagerHostState.store = reactive({
+      config: {
+        shortcutKeyList: [],
+      },
+      fileManagerPanelVisible: true,
+      documentSessionSnapshot: null,
+      setFileManagerPanelVisible: vi.fn(),
+    })
     homeViewFileManagerHostState.splitDestroy.mockReset()
+    homeViewFileManagerHostState.openPreparationHandlers.splice(0)
+    homeViewFileManagerHostState.openInteractionHandlers.splice(0)
+    homeViewFileManagerHostState.openInteractionServiceCreateOptionsList.splice(0)
+    homeViewFileManagerHostState.registeredInteractionServiceList.splice(0)
+    homeViewFileManagerHostState.openDecisionOpenDocument.mockReset()
+    homeViewFileManagerHostState.openDecisionFactory.mockReset()
+    homeViewFileManagerHostState.invalidateActiveRequest.mockReset()
+    homeViewFileManagerHostState.requestDocumentOpenDialog.mockReset()
+    homeViewFileManagerHostState.requestDocumentOpenDialog.mockResolvedValue('D:/docs/from-dialog.md')
     homeViewFileManagerHostState.shortcutKeyUtil.isShortcutKey.mockReset()
     homeViewFileManagerHostState.shortcutKeyUtil.getShortcutKey.mockReset()
     homeViewFileManagerHostState.shortcutKeyUtil.getWebShortcutKeyHandler.mockReset()
     homeViewFileManagerHostState.shortcutKeyUtil.isShortcutKey.mockReturnValue(false)
     homeViewFileManagerHostState.store.fileManagerPanelVisible = true
     homeViewFileManagerHostState.store.setFileManagerPanelVisible.mockReset()
+    homeViewFileManagerHostState.openDecisionFactory.mockReturnValue({
+      openDocument: homeViewFileManagerHostState.openDecisionOpenDocument,
+    })
     document.documentElement.style.setProperty('--wj-markdown-border-primary', FILE_MANAGER_GUTTER_BORDER_COLOR)
     homeViewStyleElement = document.createElement('style')
     homeViewStyleElement.textContent = HOME_VIEW_SCOPED_STYLE_TEXT
@@ -162,6 +275,8 @@ describe('homeView 文件管理栏宿主壳层', () => {
     homeViewStyleElement?.remove()
     homeViewStyleElement = null
     document.body.innerHTML = ''
+    homeViewFileManagerHostState.route = null
+    homeViewFileManagerHostState.store = null
     vi.clearAllMocks()
   })
 
@@ -231,5 +346,109 @@ describe('homeView 文件管理栏宿主壳层', () => {
     expect(wrapper.get('[data-testid="home-file-manager-host"]').attributes('style')).toContain('grid-template-columns: 1fr;')
 
     wrapper.unmount()
+  })
+
+  it('homeView 作为宿主时，应注册统一打开交互处理器和当前窗口准备器', async () => {
+    const wrapper = await mountHomeView()
+
+    expect(homeViewFileManagerHostState.openPreparationHandlers.length).toBe(1)
+    expect(homeViewFileManagerHostState.openInteractionHandlers.length).toBe(1)
+    expect(homeViewFileManagerHostState.registeredInteractionServiceList).toHaveLength(1)
+    expect(homeViewFileManagerHostState.openInteractionServiceCreateOptionsList).toHaveLength(1)
+    expect(homeViewFileManagerHostState.openInteractionServiceCreateOptionsList[0].requestDocumentOpenDialog).toBeTypeOf('function')
+
+    wrapper.unmount()
+  })
+
+  it('homeView 创建统一打开交互 service 时，必须接入 renderer 的 requestDocumentOpenDialog', async () => {
+    await mountHomeView()
+
+    const dialogResult = await homeViewFileManagerHostState.registeredInteractionServiceList[0].requestDocumentOpenByDialog()
+
+    expect(homeViewFileManagerHostState.requestDocumentOpenDialog).toHaveBeenCalledTimes(1)
+    expect(dialogResult).toEqual({
+      ok: true,
+      reason: 'selected',
+      path: 'D:/docs/from-dialog.md',
+    })
+  })
+
+  it('统一打开交互处理器应把请求转发给 renderer 打开编排 controller', async () => {
+    homeViewFileManagerHostState.openDecisionOpenDocument.mockResolvedValue({
+      ok: true,
+      reason: 'opened',
+      path: 'D:/docs/next.md',
+    })
+    await mountHomeView()
+
+    const result = await homeViewFileManagerHostState.openInteractionHandlers[0]({
+      path: 'D:/docs/next.md',
+      entrySource: 'shortcut-open-file',
+      trigger: 'user',
+    })
+
+    expect(homeViewFileManagerHostState.openDecisionOpenDocument).toHaveBeenCalledWith('D:/docs/next.md', {
+      entrySource: 'shortcut-open-file',
+      trigger: 'user',
+    })
+    expect(result).toEqual({
+      ok: true,
+      reason: 'opened',
+      path: 'D:/docs/next.md',
+    })
+  })
+
+  it('homeView 卸载时，应使当前活动打开请求失效', async () => {
+    const wrapper = await mountHomeView()
+
+    expect(homeViewFileManagerHostState.invalidateActiveRequest).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+
+    expect(homeViewFileManagerHostState.invalidateActiveRequest).toHaveBeenCalledTimes(1)
+    expect(homeViewFileManagerHostState.registeredInteractionServiceList).toHaveLength(0)
+  })
+
+  it('session identity 变化时，应使当前活动打开请求失效', async () => {
+    await mountHomeView()
+
+    expect(homeViewFileManagerHostState.invalidateActiveRequest).not.toHaveBeenCalled()
+
+    homeViewFileManagerHostState.store.documentSessionSnapshot = {
+      sessionId: 'session-1',
+      revision: 1,
+    }
+    await flushHomeView()
+
+    expect(homeViewFileManagerHostState.invalidateActiveRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('仅 revision 变化时，不应使当前活动打开请求失效', async () => {
+    await mountHomeView()
+    homeViewFileManagerHostState.store.documentSessionSnapshot = {
+      sessionId: 'session-1',
+      revision: 1,
+    }
+    await flushHomeView()
+    homeViewFileManagerHostState.invalidateActiveRequest.mockClear()
+
+    homeViewFileManagerHostState.store.documentSessionSnapshot = {
+      sessionId: 'session-1',
+      revision: 2,
+    }
+    await flushHomeView()
+
+    expect(homeViewFileManagerHostState.invalidateActiveRequest).not.toHaveBeenCalled()
+  })
+
+  it('route.name 变化时，应使当前活动打开请求失效', async () => {
+    await mountHomeView()
+
+    expect(homeViewFileManagerHostState.invalidateActiveRequest).not.toHaveBeenCalled()
+
+    homeViewFileManagerHostState.route.name = 'preview'
+    await flushHomeView()
+
+    expect(homeViewFileManagerHostState.invalidateActiveRequest).toHaveBeenCalledTimes(1)
   })
 })

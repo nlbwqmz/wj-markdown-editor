@@ -1,11 +1,9 @@
 import { Input, message, Modal } from 'ant-design-vue'
 import { computed, createVNode, onScopeDispose, ref, watch } from 'vue'
 import eventEmit from '@/util/channel/eventEmit.js'
+import { requestDocumentOpenPathByInteraction } from '@/util/document-session/documentOpenInteractionService.js'
 import { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } from './fileManagerEventUtil.js'
-import {
-  createFileManagerOpenDecisionController,
-  resolveDocumentOpenCurrentPath,
-} from './fileManagerOpenDecisionController.js'
+import { resolveDocumentOpenCurrentPath } from './fileManagerOpenDecisionController.js'
 import {
   requestFileManagerCreateFolder,
   requestFileManagerCreateMarkdown,
@@ -375,15 +373,12 @@ export function createFileManagerPanelController({
   requestCreateFolder = requestFileManagerCreateFolder,
   requestCreateMarkdown = requestFileManagerCreateMarkdown,
   requestPickDirectory = requestFileManagerPickDirectory,
-  createOpenDecisionController = createFileManagerOpenDecisionController,
+  requestDocumentOpenPathByInteraction: requestOpenDocumentPath = requestDocumentOpenPathByInteraction,
   openNameInputModal = createDefaultOpenNameInputModal({ t }),
   showWarningMessage = messageKey => message.warning(t(messageKey)),
   subscribeEvent = (eventName, handler) => eventEmit.on(eventName, handler),
   unsubscribeEvent = (eventName, handler) => eventEmit.remove(eventName, handler),
 } = {}) {
-  const openDecisionController = createOpenDecisionController({
-    t,
-  })
   const directoryState = ref(createEmptyDirectoryState())
   const loading = ref(false)
   let latestDirectoryStateRequestId = 0
@@ -646,10 +641,9 @@ export function createFileManagerPanelController({
         }
       }
 
-      return await openDecisionController.openDocument(entry.path, {
-        currentPath: resolveDocumentOpenCurrentPath(store?.documentSessionSnapshot),
-        isDirty: store?.documentSessionSnapshot?.dirty === true,
-        source: 'file-panel-entry',
+      return await requestOpenDocumentPath(entry.path, {
+        entrySource: 'file-manager',
+        trigger: 'user',
       })
     }
 

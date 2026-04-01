@@ -28,6 +28,7 @@ const {
   ipcMainHandle,
   ipcMainOn,
   openLocalResourceInFolder,
+  publishHostWindowStateByWindowId,
   recentSetMax,
   registerWindowContext,
   requestForceClose,
@@ -98,6 +99,7 @@ const {
     ipcMainHandle: vi.fn(),
     ipcMainOn: vi.fn(),
     openLocalResourceInFolder: vi.fn(),
+    publishHostWindowStateByWindowId: vi.fn(),
     recentSetMax: vi.fn(),
     registerWindowContext: vi.fn(({ windowId, win, documentContext } = {}) => {
       const normalizedWindowId = normalizeWindowId(windowId)
@@ -292,6 +294,7 @@ vi.mock('../document-session/windowLifecycleService.js', () => {
       getWindowById: getWindowByIdMock,
       getWindowIdByWin: getWindowIdByWinMock,
       listWindows: vi.fn(() => []),
+      publishHostWindowStateByWindowId,
       requestForceClose,
       publishWindowMessage: vi.fn((windowId, data) => {
         const win = getWindowByIdMock(windowId)
@@ -344,6 +347,7 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
     ipcMainOn.mockReset()
     browserWindowFromWebContents.mockReset()
     openLocalResourceInFolder.mockReset()
+    publishHostWindowStateByWindowId.mockReset()
     resetWindowContext.mockClear()
     resetWindowContext()
     requestForceClose.mockReset()
@@ -1225,6 +1229,12 @@ describe('ipcMainUtil command mapping', () => {
     const sender = { id: 9527 }
     const win = {
       id: 1,
+      maximize: vi.fn(),
+      restore: vi.fn(),
+      unmaximize: vi.fn(),
+      isMaximized: vi.fn(() => false),
+      isMinimized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
       setFullScreen: vi.fn(),
     }
     browserWindowFromWebContents.mockReturnValue(win)
@@ -1269,8 +1279,13 @@ describe('ipcMainUtil command mapping', () => {
 
   it('document.request-open-dialog 直连入口必须直接走统一命令流', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    runtimeExecuteUiCommand.mockResolvedValueOnce({
+      ok: true,
+      reason: 'selected',
+      path: 'D:\\docs\\opened.md',
+    })
 
-    await sendToMainHandler({ sender }, {
+    const result = await sendToMainHandler({ sender }, {
       event: 'document.request-open-dialog',
       data: null,
     })
@@ -1278,6 +1293,79 @@ describe('ipcMainUtil command mapping', () => {
     expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.request-open-dialog', null)
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(dialogShowOpenDialogSync).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: true,
+      reason: 'selected',
+      path: 'D:\\docs\\opened.md',
+    })
+  })
+
+  it('document.resolve-open-target 必须暴露为新的 IPC 命令，并把 entrySource / trigger 原样透传给 runtime', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    runtimeExecuteUiCommand.mockResolvedValueOnce({
+      ok: true,
+      decision: 'needs-open-mode-choice',
+      path: 'D:\\docs\\opened.md',
+    })
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.resolve-open-target',
+      data: {
+        path: 'D:\\docs\\opened.md',
+        entrySource: 'file-manager',
+        trigger: 'user',
+      },
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.resolve-open-target', {
+      path: 'D:\\docs\\opened.md',
+      entrySource: 'file-manager',
+      trigger: 'user',
+    })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: true,
+      decision: 'needs-open-mode-choice',
+      path: 'D:\\docs\\opened.md',
+    })
+  })
+
+  it('document.prepare-open-path-in-current-window 必须暴露为新的 IPC 命令，并透传 source session 信息', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    runtimeExecuteUiCommand.mockResolvedValueOnce({
+      ok: true,
+      decision: 'ready-to-switch',
+      path: 'D:\\docs\\opened.md',
+      sourceSessionId: 'session-current',
+      sourceRevision: 7,
+    })
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.prepare-open-path-in-current-window',
+      data: {
+        path: 'D:\\docs\\opened.md',
+        entrySource: 'file-manager',
+        trigger: 'user',
+        sourceSessionId: 'session-current',
+        sourceRevision: 7,
+      },
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.prepare-open-path-in-current-window', {
+      path: 'D:\\docs\\opened.md',
+      entrySource: 'file-manager',
+      trigger: 'user',
+      sourceSessionId: 'session-current',
+      sourceRevision: 7,
+    })
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: true,
+      decision: 'ready-to-switch',
+      path: 'D:\\docs\\opened.md',
+      sourceSessionId: 'session-current',
+      sourceRevision: 7,
+    })
   })
 
   it('document.open-path 直连入口必须直接把结构化 payload 送入新命令', async () => {
@@ -1368,7 +1456,7 @@ describe('ipcMainUtil command mapping', () => {
     })
   })
 
-  it('document.open-path-in-current-window 必须暴露为新的 IPC 命令，并把 saveBeforeSwitch 原样透传给 runtime', async () => {
+  it('document.open-path-in-current-window 必须暴露为新的 IPC 命令，并把 switchPolicy 与 expected session 信息原样透传给 runtime', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     runtimeExecuteUiCommand.mockResolvedValueOnce({
       ok: true,
@@ -1380,13 +1468,19 @@ describe('ipcMainUtil command mapping', () => {
       event: 'document.open-path-in-current-window',
       data: {
         path: 'D:\\docs\\current.md',
-        saveBeforeSwitch: true,
+        entrySource: 'file-manager',
+        switchPolicy: 'discard-switch',
+        expectedSessionId: 'session-current',
+        expectedRevision: 7,
       },
     })
 
     expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.open-path-in-current-window', {
       path: 'D:\\docs\\current.md',
-      saveBeforeSwitch: true,
+      entrySource: 'file-manager',
+      switchPolicy: 'discard-switch',
+      expectedSessionId: 'session-current',
+      expectedRevision: 7,
     })
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
     expect(result).toEqual({
@@ -1775,6 +1869,62 @@ describe('ipcMainUtil command mapping', () => {
     expect(result).toBeUndefined()
     expect(win.setFullScreen).toHaveBeenCalledTimes(1)
     expect(win.setFullScreen).toHaveBeenCalledWith(false)
+    expect(runtimeExecuteUiCommand).not.toHaveBeenCalled()
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+  })
+
+  it('restore IPC 在窗口已最大化时，必须调用 unmaximize 并主动回灌宿主状态', async () => {
+    const { sender, sendToMainHandler, win, winInfoUtil } = await setupCommandHandler()
+    win.isMaximized.mockReturnValueOnce(true)
+    winInfoUtil.publishHostWindowStateByWindowId.mockClear()
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'restore',
+      data: null,
+    })
+
+    expect(result).toBeUndefined()
+    expect(win.unmaximize).toHaveBeenCalledTimes(1)
+    expect(win.restore).not.toHaveBeenCalled()
+    expect(win.setFullScreen).not.toHaveBeenCalled()
+    expect(winInfoUtil.publishHostWindowStateByWindowId).toHaveBeenCalledTimes(1)
+    expect(winInfoUtil.publishHostWindowStateByWindowId).toHaveBeenCalledWith(1)
+    expect(runtimeExecuteUiCommand).not.toHaveBeenCalled()
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+  })
+
+  it('restore IPC 在窗口已是普通态但前端图标仍卡在还原态时，必须主动回灌宿主状态纠偏', async () => {
+    const { sender, sendToMainHandler, win, winInfoUtil } = await setupCommandHandler()
+    winInfoUtil.publishHostWindowStateByWindowId.mockClear()
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'restore',
+      data: null,
+    })
+
+    expect(result).toBeUndefined()
+    expect(win.restore).not.toHaveBeenCalled()
+    expect(win.unmaximize).not.toHaveBeenCalled()
+    expect(win.setFullScreen).not.toHaveBeenCalled()
+    expect(winInfoUtil.publishHostWindowStateByWindowId).toHaveBeenCalledTimes(1)
+    expect(winInfoUtil.publishHostWindowStateByWindowId).toHaveBeenCalledWith(1)
+    expect(runtimeExecuteUiCommand).not.toHaveBeenCalled()
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+  })
+
+  it('maximize IPC 即使窗口状态曾漂移，也必须在触发最大化后主动回灌宿主状态', async () => {
+    const { sender, sendToMainHandler, win, winInfoUtil } = await setupCommandHandler()
+    winInfoUtil.publishHostWindowStateByWindowId.mockClear()
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'maximize',
+      data: null,
+    })
+
+    expect(result).toBeUndefined()
+    expect(win.maximize).toHaveBeenCalledTimes(1)
+    expect(winInfoUtil.publishHostWindowStateByWindowId).toHaveBeenCalledTimes(1)
+    expect(winInfoUtil.publishHostWindowStateByWindowId).toHaveBeenCalledWith(1)
     expect(runtimeExecuteUiCommand).not.toHaveBeenCalled()
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })

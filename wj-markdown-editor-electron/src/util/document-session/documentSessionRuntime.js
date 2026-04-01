@@ -24,33 +24,9 @@ function createFallbackDocumentContext(snapshot) {
   }
 }
 
-function isPristineDraftWindow({
-  windowId,
-  getDocumentContext,
-  getSessionSnapshot,
-}) {
-  const documentContext = getDocumentContext(windowId)
-  const snapshot = getSessionSnapshot(windowId)
-  return !documentContext?.path
-    && snapshot?.saved === true
-    && snapshot?.isRecentMissing !== true
-}
-
 export function normalizeOpenCommandResult({
-  command,
   result,
-  targetPath = null,
 }) {
-  if (command === 'document.open-recent'
-    && result?.ok === false
-    && result.reason === 'open-recent-target-missing') {
-    return {
-      ok: false,
-      reason: 'recent-missing',
-      path: result.path ?? targetPath,
-    }
-  }
-
   return result
 }
 
@@ -78,7 +54,6 @@ export async function openDocumentWindowWithRuntimePolicy({
   isRecent = false,
   sourceWindowId = null,
   openWindow,
-  getWindowById = () => null,
   getDocumentContext = () => null,
   getSessionSnapshot = () => null,
 }) {
@@ -105,17 +80,6 @@ export async function openDocumentWindowWithRuntimePolicy({
   const normalizedOpenedWindowId = isValidWindowId(openedWindowId)
     ? openedWindowId
     : null
-
-  if (normalizedSourceWindowId != null
-    && normalizedOpenedWindowId != null
-    && String(normalizedOpenedWindowId) !== String(normalizedSourceWindowId)
-    && isPristineDraftWindow({
-      windowId: normalizedSourceWindowId,
-      getDocumentContext,
-      getSessionSnapshot,
-    })) {
-    getWindowById(normalizedSourceWindowId)?.close?.()
-  }
 
   const snapshot = normalizedOpenedWindowId == null
     ? null
@@ -191,9 +155,11 @@ export function createDocumentSessionRuntime(deps = {}) {
   const commandService = deps.commandService
   const effectService = deps.effectService
   const windowBridge = deps.windowBridge
-  const getWindowById = deps.getWindowById || (() => null)
   const getDocumentContextByWindowId = deps.getDocumentContext || null
+  const getExistingWindowIdByDocumentPath = deps.getExistingWindowIdByDocumentPath || (() => null)
+  const focusWindowById = deps.focusWindowById || (() => false)
   const openDocumentWindow = deps.openDocumentWindow || null
+  const prepareOpenPathInCurrentWindow = deps.prepareOpenPathInCurrentWindow || null
   const openDocumentInCurrentWindow = deps.openDocumentInCurrentWindow || null
   const publishOpenFailureSystemNotification = deps.publishOpenFailureSystemNotification || (() => null)
   const buildRunnerEffectContext = deps.buildRunnerEffectContext || (() => ({}))
@@ -454,9 +420,27 @@ export function createDocumentSessionRuntime(deps = {}) {
           isRecent: options.isRecent === true,
           sourceWindowId: normalizedWindowId,
           openWindow: openDocumentWindow,
-          getWindowById,
           getDocumentContext,
           getSessionSnapshot,
+        })
+      },
+      prepareOpenPathInCurrentWindow: (targetPath, options = {}) => {
+        if (typeof prepareOpenPathInCurrentWindow !== 'function') {
+          const currentSnapshot = getSessionSnapshot(normalizedWindowId)
+          return {
+            ok: true,
+            decision: currentSnapshot?.dirty === true ? 'needs-save-choice' : 'ready-to-switch',
+            path: targetPath || null,
+            sourceSessionId: options.sourceSessionId || null,
+            sourceRevision: options.sourceRevision,
+          }
+        }
+
+        return prepareOpenPathInCurrentWindow(normalizedWindowId, targetPath, {
+          entrySource: options.entrySource || null,
+          trigger: options.trigger || 'user',
+          sourceSessionId: options.sourceSessionId || null,
+          sourceRevision: options.sourceRevision,
         })
       },
       openDocumentInCurrentWindow: (targetPath, options = {}) => {
@@ -469,10 +453,17 @@ export function createDocumentSessionRuntime(deps = {}) {
         }
 
         return openDocumentInCurrentWindow(normalizedWindowId, targetPath, {
+          entrySource: options.entrySource || null,
           trigger: options.trigger || 'user',
-          saveBeforeSwitch: options.saveBeforeSwitch === true,
+          switchPolicy: options.switchPolicy || null,
+          expectedSessionId: options.expectedSessionId || null,
+          expectedRevision: options.expectedRevision,
         })
       },
+      getExistingWindowIdByPath: targetPath => getExistingWindowIdByDocumentPath(targetPath, {
+        excludeWindowId: normalizedWindowId,
+      }),
+      focusWindowById,
       getSessionSnapshot: () => getSessionSnapshot(normalizedWindowId),
       ...effectContext,
     })).then(result => normalizeEffectCommandResult(
@@ -502,6 +493,7 @@ export function createDocumentSessionRuntime(deps = {}) {
   function openDocumentPath(targetPath, options = {}) {
     return executeUiCommand(options.sourceWindowId || null, 'document.open-path', {
       path: targetPath,
+      entrySource: options.entrySource || null,
       trigger: options.trigger || 'user',
       baseDir: options.baseDir || null,
     })
@@ -510,6 +502,7 @@ export function createDocumentSessionRuntime(deps = {}) {
   function openRecent(targetPath, options = {}) {
     return executeUiCommand(options.sourceWindowId || null, 'document.open-recent', {
       path: targetPath,
+      entrySource: options.entrySource || 'recent',
       trigger: options.trigger || 'user',
       baseDir: options.baseDir || null,
     })

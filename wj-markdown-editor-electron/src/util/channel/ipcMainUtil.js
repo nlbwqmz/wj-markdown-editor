@@ -68,6 +68,19 @@ function createWindowMessageNotifier(win) {
   }
 }
 
+/**
+ * 顶栏按钮依赖 renderer store 的窗口状态镜像。
+ * 当宿主命令是 no-op 或 renderer 已经漂移时，需要主动回灌一次真实窗口状态来纠偏。
+ */
+function republishHostWindowState(windowContext) {
+  const windowId = windowContext?.windowId ?? null
+  if (windowId == null) {
+    return null
+  }
+
+  return windowLifecycleService.publishHostWindowStateByWindowId(windowId)
+}
+
 async function uploadImage(windowContext, data) {
   const config = configUtil.getConfig()
   const documentPath = getCurrentDocumentPath(windowContext)
@@ -168,9 +181,17 @@ const handlerList = {
   },
   'maximize': (windowContext) => {
     windowContext.win.maximize()
+    republishHostWindowState(windowContext)
   },
   'restore': (windowContext) => {
-    windowContext.win.restore()
+    if (windowContext.win.isMinimized?.() === true) {
+      windowContext.win.restore()
+    } else if (windowContext.win.isFullScreen?.() === true) {
+      windowContext.win.setFullScreen(false)
+    } else if (windowContext.win.isMaximized?.() === true) {
+      windowContext.win.unmaximize()
+    }
+    republishHostWindowState(windowContext)
   },
   'full-screen': (windowContext, flag) => {
     if (typeof flag !== 'boolean') {
@@ -239,6 +260,12 @@ const handlerList = {
   },
   'document.request-open-dialog': async (windowContext) => {
     return await executeRuntimeUiCommand(windowContext, 'document.request-open-dialog', null)
+  },
+  'document.resolve-open-target': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.resolve-open-target', data)
+  },
+  'document.prepare-open-path-in-current-window': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.prepare-open-path-in-current-window', data)
   },
   'document.open-path': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'document.open-path', data)

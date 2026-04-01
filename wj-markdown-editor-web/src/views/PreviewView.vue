@@ -14,6 +14,7 @@ import channelUtil from '@/util/channel/channelUtil.js'
 import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
+import { setCurrentWindowOpenPreparationProvider } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
@@ -92,6 +93,7 @@ const previewSessionSnapshotController = createRendererSessionSnapshotController
   syncClosePrompt: syncClosePromptSnapshot,
   store,
 })
+let clearCurrentWindowOpenPreparationProvider = null
 
 function getPreviewSearchTargetElements() {
   return collectSearchTargetElements(previewContainer.value)
@@ -106,6 +108,26 @@ function closePreviewSearchBar() {
     controller: previewSearchBarController,
     store,
   })
+}
+
+// 纯预览页没有编辑器实例时，只暴露稳定快照降级能力。
+async function requestCurrentWindowOpenPreparation() {
+  const snapshot = await requestDocumentSessionSnapshot()
+  return {
+    ok: true,
+    reason: 'prepared',
+    snapshot,
+  }
+}
+
+function bindCurrentWindowOpenPreparationProvider() {
+  clearCurrentWindowOpenPreparationProvider?.()
+  clearCurrentWindowOpenPreparationProvider = setCurrentWindowOpenPreparationProvider(requestCurrentWindowOpenPreparation)
+}
+
+function clearBoundCurrentWindowOpenPreparationProvider() {
+  clearCurrentWindowOpenPreparationProvider?.()
+  clearCurrentWindowOpenPreparationProvider = null
 }
 
 // 关闭纯预览页的资源右键菜单，并清空冻结的 actionContext。
@@ -518,6 +540,7 @@ watch(() => store.config, (newValue) => {
 
 onMounted(() => {
   menuVisible.value = store.config.menuVisible
+  bindCurrentWindowOpenPreparationProvider()
   previewSearchTargetBridge.activate()
   previewSessionSnapshotController.activate()
   documentSessionSnapshotSubscription.activate()
@@ -529,6 +552,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearBoundCurrentWindowOpenPreparationProvider()
   previewSessionSnapshotController.dispose()
   documentSessionSnapshotSubscription.dispose()
   previewAssetSessionController.invalidateActiveContext({
@@ -561,6 +585,7 @@ watch(() => menuVisible.value, (newValue) => {
 })
 
 onActivated(async () => {
+  bindCurrentWindowOpenPreparationProvider()
   pendingRestoreOnActivation = true
   previewSessionSnapshotController.activate()
   documentSessionSnapshotSubscription.activate()
@@ -585,6 +610,7 @@ onActivated(async () => {
 })
 
 onDeactivated(() => {
+  clearBoundCurrentWindowOpenPreparationProvider()
   pendingRestoreOnActivation = false
   previewPageScrollAnchor.cancelPendingRestore()
   previewSessionSnapshotController.deactivate()
@@ -806,6 +832,10 @@ function onAssetOpen(assetInfo) {
     },
   })
 }
+
+defineExpose({
+  requestCurrentWindowOpenPreparation,
+})
 </script>
 
 <template>

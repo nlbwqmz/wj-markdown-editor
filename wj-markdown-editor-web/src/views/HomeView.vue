@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import ExternalFileChangeModal from '@/components/ExternalFileChangeModal.vue'
 import FileManagerPanel from '@/components/layout/FileManagerPanel.vue'
@@ -12,14 +13,28 @@ import LayoutContainer from '@/components/layout/LayoutContainer.vue'
 import LayoutMenu from '@/components/layout/LayoutMenu.vue'
 import LayoutTop from '@/components/layout/LayoutTop.vue'
 import { useCommonStore } from '@/stores/counter.js'
+import { registerCurrentWindowOpenPreparation } from '@/util/document-session/currentWindowOpenPreparationService.js'
+import {
+  createDocumentOpenInteractionService,
+  registerDocumentOpenInteractionService,
+} from '@/util/document-session/documentOpenInteractionService.js'
+import { requestDocumentOpenDialog } from '@/util/document-session/rendererDocumentCommandUtil.js'
+import { createFileManagerOpenDecisionController } from '@/util/file-manager/fileManagerOpenDecisionController.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const functionShortcutKeyPattern = /^F(?:[1-9]|1[0-2])$/
+const { t } = useI18n()
 const store = useCommonStore()
 const route = useRoute()
 const fileManagerHostRef = ref()
 const fileManagerGutterRef = ref()
 const fileManagerPanelWidth = ref(FILE_MANAGER_PANEL_DEFAULT_WIDTH)
+const documentOpenInteractionService = createDocumentOpenInteractionService({
+  requestDocumentOpenDialog,
+})
+const fileManagerOpenDecisionController = createFileManagerOpenDecisionController({
+  t,
+})
 const shouldShowFileManagerShell = computed(() => ['editor', 'preview'].includes(String(route.name ?? '')))
 const shouldEnableFileManagerSplit = computed(() => shouldShowFileManagerShell.value && Boolean(store.fileManagerPanelVisible))
 const homeViewFileManagerHostStyle = computed(() => {
@@ -44,6 +59,18 @@ const homeViewFilePanelLayoutController = createHomeViewFilePanelLayoutControlle
   panelWidthRef: fileManagerPanelWidth,
   nextTick,
 })
+const unregisterCurrentWindowOpenPreparation = registerCurrentWindowOpenPreparation(async ({ provider }) => {
+  if (typeof provider !== 'function') {
+    return {
+      ok: false,
+      reason: 'preparation-unavailable',
+    }
+  }
+
+  return await provider()
+})
+const unregisterDocumentOpenInteractionService = registerDocumentOpenInteractionService(documentOpenInteractionService)
+const unregisterDocumentOpenHandler = documentOpenInteractionService.setOpenHandler(async ({ path, ...options }) => await fileManagerOpenDecisionController.openDocument(path, options))
 
 function findShortcutKeyId(keymap) {
   const shortcutKeyList = store.config.shortcutKeyList
@@ -76,12 +103,24 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  unregisterCurrentWindowOpenPreparation()
+  unregisterDocumentOpenInteractionService()
+  unregisterDocumentOpenHandler()
+  documentOpenInteractionService.invalidateActiveRequest()
   homeViewFilePanelLayoutController.destroySplitLayout()
 })
 
 watch(shouldEnableFileManagerSplit, async (visible) => {
   await homeViewFilePanelLayoutController.rebuildSplitLayout(visible)
 }, { immediate: true })
+
+watch(() => store.documentSessionSnapshot?.sessionId ?? null, () => {
+  documentOpenInteractionService.invalidateActiveRequest()
+})
+
+watch(() => route.name, () => {
+  documentOpenInteractionService.invalidateActiveRequest()
+})
 </script>
 
 <template>

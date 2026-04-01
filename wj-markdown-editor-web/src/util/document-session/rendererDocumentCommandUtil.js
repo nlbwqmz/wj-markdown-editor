@@ -61,35 +61,111 @@ export function requestDocumentOpenDialog() {
 }
 
 /**
+ * 请求主进程先对目标路径做“打开前预判”。
+ *
+ * renderer 不在本地猜测最终策略，
+ * 而是先拿结构化预判结果再决定是否需要弹窗。
+ */
+export function requestDocumentResolveOpenTarget(targetPath, options = {}) {
+  const data = {
+    path: targetPath,
+  }
+  if (typeof options.entrySource === 'string' && options.entrySource) {
+    data.entrySource = options.entrySource
+  }
+  if (typeof options.trigger === 'string' && options.trigger) {
+    data.trigger = options.trigger
+  }
+
+  return channelUtil.send({
+    event: 'document.resolve-open-target',
+    data,
+  })
+}
+
+/**
  * 请求主进程直接打开指定路径。
  *
  * recent 菜单、历史记录点击等“已知路径”的入口都应该走这里，
  * 这样 renderer 可以直接拿到结构化打开结果，而不是继续依赖历史兼容布尔值。
  */
 export function requestDocumentOpenPath(targetPath, options = {}) {
+  const data = {
+    path: targetPath,
+  }
+  if (typeof options.entrySource === 'string' && options.entrySource) {
+    data.entrySource = options.entrySource
+  }
+  if (typeof options.trigger === 'string' && options.trigger) {
+    data.trigger = options.trigger
+  }
+
   return channelUtil.send({
     event: 'document.open-path',
-    data: {
-      path: targetPath,
-      ...options,
-    },
+    data,
+  })
+}
+
+/**
+ * 请求主进程在执行当前窗口切换前先做预判。
+ *
+ * 这里会带上来源会话 identity，
+ * 让主进程在 save-choice 前先决定是否允许继续切换。
+ */
+export function requestPrepareOpenPathInCurrentWindow(targetPath, options = {}) {
+  const data = {
+    path: targetPath,
+  }
+  if (typeof options.entrySource === 'string' && options.entrySource) {
+    data.entrySource = options.entrySource
+  }
+  if (typeof options.trigger === 'string' && options.trigger) {
+    data.trigger = options.trigger
+  }
+  if (typeof options.sourceSessionId === 'string' && options.sourceSessionId) {
+    data.sourceSessionId = options.sourceSessionId
+  }
+  if (options.sourceRevision !== undefined) {
+    data.sourceRevision = options.sourceRevision
+  }
+
+  return channelUtil.send({
+    event: 'document.prepare-open-path-in-current-window',
+    data,
   })
 }
 
 /**
  * 请求主进程在当前窗口直接切换到指定路径。
  *
- * 文件管理栏在“当前窗口打开”分支下需要显式声明：
- * 1. 目标路径
- * 2. 切换前是否需要先保存当前脏文档
+ * 当前窗口执行切换时必须显式声明：
+ * 1. 切换策略 `switchPolicy`
+ * 2. 来源会话的 `expectedSessionId`
+ * 3. 来源会话的 `expectedRevision`
  */
 export function requestDocumentOpenPathInCurrentWindow(targetPath, options = {}) {
+  const data = {
+    path: targetPath,
+  }
+  if (typeof options.entrySource === 'string' && options.entrySource) {
+    data.entrySource = options.entrySource
+  }
+  if (typeof options.trigger === 'string' && options.trigger) {
+    data.trigger = options.trigger
+  }
+  if (typeof options.switchPolicy === 'string' && options.switchPolicy) {
+    data.switchPolicy = options.switchPolicy
+  }
+  if (typeof options.expectedSessionId === 'string' && options.expectedSessionId) {
+    data.expectedSessionId = options.expectedSessionId
+  }
+  if (options.expectedRevision !== undefined) {
+    data.expectedRevision = options.expectedRevision
+  }
+
   return channelUtil.send({
     event: 'document.open-path-in-current-window',
-    data: {
-      path: targetPath,
-      ...options,
-    },
+    data,
   })
 }
 
@@ -155,6 +231,8 @@ export default {
   requestDocumentSaveCopy,
   requestDocumentEdit,
   requestDocumentOpenDialog,
+  requestDocumentResolveOpenTarget,
+  requestPrepareOpenPathInCurrentWindow,
   requestDocumentOpenPath,
   requestDocumentOpenPathInCurrentWindow,
   requestDocumentSessionSnapshot,

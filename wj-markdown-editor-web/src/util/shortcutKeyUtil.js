@@ -1,8 +1,8 @@
 import router from '@/router/index.js'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import { requestDocumentOpenByDialogAndOpen } from '@/util/document-session/documentOpenInteractionService.js'
 import {
-  requestDocumentOpenDialog,
   requestDocumentSave,
   requestDocumentSaveCopy,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
@@ -115,7 +115,10 @@ const webShortcutKeyHandler = {
     channelUtil.send({ event: 'create-new' }).then(() => {})
   },
   openFile: () => {
-    requestDocumentOpenDialog().then(() => {})
+    requestDocumentOpenByDialogAndOpen({
+      entrySource: 'shortcut-open-file',
+      trigger: 'user',
+    }).then(() => {})
   },
   switchView: () => {
     if (router.currentRoute.value.name === 'editor') {

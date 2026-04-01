@@ -320,6 +320,7 @@ export default {
     fileManagerOpenDirectoryFailed: '打开目录失败，请重试。',
     fileManagerSaveBeforeSwitchFailed: '保存当前文件失败，已取消切换。',
     fileManagerOpenCurrentWindowFailed: '切换当前窗口失败，请重试。',
+    fileManagerSourceSessionChanged: '当前文档状态已变化，请重新执行打开操作。',
     fileAlreadyOpenedInOtherWindow: '目标文件已在其他窗口打开，已为你切换到对应窗口。',
     openMarkdownFileFailed: '打开 Markdown 文件失败，请检查文件权限或占用状态。',
     invalidLocalResourceLink: '当前本地资源链接无效，无法定位到对应文件。',

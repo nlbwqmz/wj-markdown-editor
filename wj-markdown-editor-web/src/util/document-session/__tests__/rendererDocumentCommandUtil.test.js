@@ -24,6 +24,8 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
   const {
     requestDocumentEdit,
     requestDocumentOpenDialog,
+    requestDocumentResolveOpenTarget,
+    requestPrepareOpenPathInCurrentWindow,
     requestDocumentOpenPath,
     requestDocumentOpenPathInCurrentWindow,
     requestDocumentSave,
@@ -43,9 +45,26 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
   await requestDocumentSaveCopy()
   await requestDocumentEdit('# 新内容')
   await requestDocumentOpenDialog()
-  await requestDocumentOpenPath('C:/docs/note.md')
+  await requestDocumentResolveOpenTarget('C:/docs/note.md', {
+    entrySource: 'recent',
+    trigger: 'user',
+  })
+  await requestPrepareOpenPathInCurrentWindow('C:/docs/note.md', {
+    entrySource: 'recent',
+    sourceSessionId: 'session-1',
+    sourceRevision: 5,
+    trigger: 'user',
+  })
+  await requestDocumentOpenPath('C:/docs/note.md', {
+    entrySource: 'recent',
+    trigger: 'user',
+  })
   await requestDocumentOpenPathInCurrentWindow('C:/docs/note.md', {
-    saveBeforeSwitch: true,
+    entrySource: 'recent',
+    switchPolicy: 'discard-switch',
+    expectedSessionId: 'session-1',
+    expectedRevision: 5,
+    trigger: 'user',
   })
   await requestRecentClear()
   await requestRecentRemove('C:/docs/note.md')
@@ -62,16 +81,40 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
     },
     { event: 'document.request-open-dialog' },
     {
+      event: 'document.resolve-open-target',
+      data: {
+        entrySource: 'recent',
+        path: 'C:/docs/note.md',
+        trigger: 'user',
+      },
+    },
+    {
+      event: 'document.prepare-open-path-in-current-window',
+      data: {
+        entrySource: 'recent',
+        path: 'C:/docs/note.md',
+        sourceSessionId: 'session-1',
+        sourceRevision: 5,
+        trigger: 'user',
+      },
+    },
+    {
       event: 'document.open-path',
       data: {
+        entrySource: 'recent',
         path: 'C:/docs/note.md',
+        trigger: 'user',
       },
     },
     {
       event: 'document.open-path-in-current-window',
       data: {
+        entrySource: 'recent',
         path: 'C:/docs/note.md',
-        saveBeforeSwitch: true,
+        switchPolicy: 'discard-switch',
+        expectedSessionId: 'session-1',
+        expectedRevision: 5,
+        trigger: 'user',
       },
     },
     { event: 'recent.clear' },
@@ -107,4 +150,91 @@ test('recent 缺失路径判定必须兼容结构化新结果，避免继续依�
     ok: true,
     reason: 'opened',
   }), false)
+})
+
+test('打开相关 renderer wrapper 必须使用白名单 payload，不能让冲突字段覆盖关键参数', async () => {
+  assert.ok(rendererDocumentCommandUtilModule, '缺少 renderer 文档命令工具')
+
+  const {
+    requestDocumentResolveOpenTarget,
+    requestPrepareOpenPathInCurrentWindow,
+    requestDocumentOpenPath,
+    requestDocumentOpenPathInCurrentWindow,
+  } = rendererDocumentCommandUtilModule
+  const sentPayloadList = []
+
+  installWindowNodeMock(async (payload) => {
+    sentPayloadList.push(payload)
+    return payload
+  })
+
+  await requestDocumentResolveOpenTarget('C:/docs/actual.md', {
+    path: 'C:/docs/forbidden.md',
+    entrySource: 'recent',
+    trigger: 'user',
+    unexpected: 'ignored',
+  })
+  await requestPrepareOpenPathInCurrentWindow('C:/docs/actual.md', {
+    path: 'C:/docs/forbidden.md',
+    entrySource: 'file-manager',
+    trigger: 'user',
+    sourceSessionId: 'session-current',
+    sourceRevision: 12,
+    unexpected: 'ignored',
+  })
+  await requestDocumentOpenPath('C:/docs/actual.md', {
+    path: 'C:/docs/forbidden.md',
+    entrySource: 'menu-open',
+    trigger: 'user',
+    unexpected: 'ignored',
+  })
+  await requestDocumentOpenPathInCurrentWindow('C:/docs/actual.md', {
+    path: 'C:/docs/forbidden.md',
+    entrySource: 'shortcut-open-file',
+    trigger: 'user',
+    switchPolicy: 'discard-switch',
+    expectedSessionId: 'session-current',
+    expectedRevision: 12,
+    unexpected: 'ignored',
+  })
+
+  assert.deepEqual(sentPayloadList, [
+    {
+      event: 'document.resolve-open-target',
+      data: {
+        path: 'C:/docs/actual.md',
+        entrySource: 'recent',
+        trigger: 'user',
+      },
+    },
+    {
+      event: 'document.prepare-open-path-in-current-window',
+      data: {
+        path: 'C:/docs/actual.md',
+        entrySource: 'file-manager',
+        trigger: 'user',
+        sourceSessionId: 'session-current',
+        sourceRevision: 12,
+      },
+    },
+    {
+      event: 'document.open-path',
+      data: {
+        path: 'C:/docs/actual.md',
+        entrySource: 'menu-open',
+        trigger: 'user',
+      },
+    },
+    {
+      event: 'document.open-path-in-current-window',
+      data: {
+        path: 'C:/docs/actual.md',
+        entrySource: 'shortcut-open-file',
+        trigger: 'user',
+        switchPolicy: 'discard-switch',
+        expectedSessionId: 'session-current',
+        expectedRevision: 12,
+      },
+    },
+  ])
 })
