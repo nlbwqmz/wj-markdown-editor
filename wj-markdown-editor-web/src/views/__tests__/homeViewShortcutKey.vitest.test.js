@@ -16,6 +16,8 @@ const mocked = vi.hoisted(() => ({
     config: {
       shortcutKeyList: [],
     },
+    fileManagerPanelVisible: false,
+    documentSessionSnapshot: null,
   },
 }))
 
@@ -31,8 +33,85 @@ vi.mock('vue-router', async (importOriginal) => {
   }
 })
 
+vi.mock('vue-i18n', () => ({
+  useI18n() {
+    return {
+      t(key) {
+        return key
+      },
+    }
+  },
+}))
+
 vi.mock('@/util/shortcutKeyUtil.js', () => ({
   default: mocked.shortcutKeyUtil,
+}))
+
+vi.mock('@/util/document-session/currentWindowOpenPreparationService.js', () => ({
+  registerCurrentWindowOpenPreparation() {
+    return () => {}
+  },
+}))
+
+vi.mock('@/util/document-session/documentOpenInteractionService.js', () => ({
+  createDocumentOpenInteractionService() {
+    return {
+      setOpenHandler() {
+        return () => {}
+      },
+      invalidateActiveRequest: vi.fn(),
+    }
+  },
+  registerDocumentOpenInteractionService() {
+    return () => {}
+  },
+}))
+
+vi.mock('@/util/file-manager/fileManagerOpenDecisionController.js', () => ({
+  createFileManagerOpenDecisionController() {
+    return {
+      openDocument: vi.fn(),
+    }
+  },
+}))
+
+vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
+  requestDocumentOpenDialog: vi.fn(),
+}))
+
+vi.mock('@/components/layout/LayoutTop.vue', () => ({
+  default: {
+    name: 'LayoutTopStub',
+    template: '<div data-testid="layout-top-stub" />',
+  },
+}))
+
+vi.mock('@/components/layout/LayoutMenu.vue', () => ({
+  default: {
+    name: 'LayoutMenuStub',
+    template: '<div data-testid="layout-menu-stub" />',
+  },
+}))
+
+vi.mock('@/components/layout/LayoutContainer.vue', () => ({
+  default: {
+    name: 'LayoutContainerStub',
+    template: '<div data-testid="layout-container-stub" />',
+  },
+}))
+
+vi.mock('@/components/layout/FileManagerPanel.vue', () => ({
+  default: {
+    name: 'FileManagerPanelStub',
+    template: '<div data-testid="file-manager-panel-stub" />',
+  },
+}))
+
+vi.mock('@/components/ExternalFileChangeModal.vue', () => ({
+  default: {
+    name: 'ExternalFileChangeModalStub',
+    template: '<div data-testid="external-file-change-modal-stub" />',
+  },
 }))
 
 function mountHomeView() {

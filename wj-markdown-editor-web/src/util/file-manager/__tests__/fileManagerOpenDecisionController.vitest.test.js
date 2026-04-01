@@ -45,8 +45,10 @@ function createController(options = {}) {
   })
 }
 
+const controllerModule = await import('../fileManagerOpenDecisionController.js')
+
 describe('fileManagerOpenDecisionController', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     mocked.requestDocumentResolveOpenTarget.mockReset()
     mocked.requestPrepareOpenPathInCurrentWindow.mockReset()
     mocked.requestDocumentOpenPath.mockReset()
@@ -90,13 +92,11 @@ describe('fileManagerOpenDecisionController', () => {
     })
     mocked.promptOpenModeChoice.mockResolvedValue('current-window')
     mocked.promptSaveChoice.mockResolvedValue('save-before-switch')
-
-    const { createFileManagerOpenDecisionController } = await import('../fileManagerOpenDecisionController.js')
-    mocked.controllerFactory = createFileManagerOpenDecisionController
+    mocked.controllerFactory = controllerModule.createFileManagerOpenDecisionController
   })
 
   it('默认打开模式选择弹窗在真正取消时必须返回 cancel，且保留三选一 footer', async () => {
-    const { createDefaultPromptOpenModeChoice } = await import('../fileManagerOpenDecisionController.js')
+    const { createDefaultPromptOpenModeChoice } = controllerModule
     let modalConfig = null
     const registerDestroyer = vi.fn()
     const prompt = createDefaultPromptOpenModeChoice(value => value, {
@@ -122,7 +122,7 @@ describe('fileManagerOpenDecisionController', () => {
   })
 
   it('默认保存选择弹窗在真正取消时必须返回 cancel，且保留三选一 footer', async () => {
-    const { createDefaultPromptSaveChoice } = await import('../fileManagerOpenDecisionController.js')
+    const { createDefaultPromptSaveChoice } = controllerModule
     let modalConfig = null
     const registerDestroyer = vi.fn()
     const prompt = createDefaultPromptSaveChoice(value => value, {
@@ -148,7 +148,7 @@ describe('fileManagerOpenDecisionController', () => {
   })
 
   it('默认打开模式选择弹窗注册的 destroyer 被宿主触发时，应主动销毁弹窗并结束为 cancel', async () => {
-    const { createDefaultPromptOpenModeChoice } = await import('../fileManagerOpenDecisionController.js')
+    const { createDefaultPromptOpenModeChoice } = controllerModule
     const modalDestroy = vi.fn()
     let registeredDestroyer = null
     const prompt = createDefaultPromptOpenModeChoice(value => value, {
@@ -172,7 +172,7 @@ describe('fileManagerOpenDecisionController', () => {
   })
 
   it('默认保存选择弹窗注册的 destroyer 被宿主触发时，应主动销毁弹窗并结束为 cancel', async () => {
-    const { createDefaultPromptSaveChoice } = await import('../fileManagerOpenDecisionController.js')
+    const { createDefaultPromptSaveChoice } = controllerModule
     const modalDestroy = vi.fn()
     let registeredDestroyer = null
     const prompt = createDefaultPromptSaveChoice(value => value, {
