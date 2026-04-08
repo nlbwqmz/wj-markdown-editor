@@ -850,10 +850,10 @@ defineExpose({
   <div
     v-show="ready" ref="previewContainer"
     class="allow-search grid h-full w-full overflow-hidden b-t-1 b-t-border-primary b-t-solid"
-    :class="menuController ? 'grid-cols-[200px_2px_1fr]' : 'grid-cols-[1fr]'"
+    :class="menuController ? 'grid-cols-[200px_1px_1fr]' : 'grid-cols-[1fr]'"
   >
-    <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewContainerRef" :close="() => { menuVisible = false }" class="b-r-1 b-r-border-primary b-r-solid" />
-    <div v-if="menuController" ref="gutterRef" class="h-full cursor-col-resize bg-[#E2E2E2] op-0" />
+    <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewContainerRef" :close="() => { menuVisible = false }" />
+    <div v-if="menuController" ref="gutterRef" class="wj-sash wj-sash--vertical h-full" />
     <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">
         <div class="h-full w-full" :style="{ width: `${config.previewWidth}%` }">

@@ -146,7 +146,7 @@ watch(() => route.name, () => {
           v-if="store.fileManagerPanelVisible"
           ref="fileManagerGutterRef"
           data-testid="home-file-manager-gutter"
-          class="home-view__file-manager-gutter h-full cursor-col-resize b-t-1 b-t-border-primary b-t-solid"
+          class="wj-sash wj-sash--vertical h-full"
         />
         <LayoutContainer />
       </div>
@@ -157,7 +157,4 @@ watch(() => route.name, () => {
 </template>
 
 <style scoped lang="scss">
-.home-view__file-manager-gutter {
-  background-color: var(--wj-markdown-border-primary);
-}
 </style>

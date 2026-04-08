@@ -61,11 +61,11 @@ describe('homeViewFilePanelLayoutUtil', () => {
     expect(clampFileManagerPanelWidth(520)).toBe(420)
   })
 
-  it('文件管理栏展开态的 grid 列定义应使用 1px gutter 轨道', () => {
+  it('文件管理栏展开态的 grid 列定义应使用 1px sash 轨道', () => {
     expect(resolveHomeViewFilePanelGridTemplateColumns(FILE_MANAGER_PANEL_DEFAULT_WIDTH)).toBe('280px 1px 1fr')
   })
 
-  it('测试宿主元素的初始 grid 列定义应与 1px gutter 需求保持一致', () => {
+  it('测试宿主元素的初始 grid 列定义应与 1px sash 需求保持一致', () => {
     const hostElement = createHostElement()
 
     expect(hostElement.style.gridTemplateColumns).toBe('280px 1px 1fr')

@@ -377,9 +377,9 @@ describe('markdownEdit 布局运行时接线', () => {
       'gutter-preview',
     ])
     const menuLayoutItem = wrapper.get('[data-layout-item="menu"]')
-    expect(menuLayoutItem.classes()).toContain('b-r-1')
-    expect(menuLayoutItem.classes()).toContain('b-r-border-primary')
-    expect(menuLayoutItem.classes()).toContain('b-r-solid')
+    expect(menuLayoutItem.classes()).not.toContain('b-r-1')
+    expect(menuLayoutItem.classes()).not.toContain('b-r-border-primary')
+    expect(menuLayoutItem.classes()).not.toContain('b-r-solid')
   })
 
   it('右侧三栏布局不应给 menu 注入左侧布局专用右边框 class', async () => {
@@ -459,7 +459,7 @@ describe('markdownEdit 布局运行时接线', () => {
     const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => {
       if (element === layoutElement) {
         return {
-          gridTemplateColumns: '600px 2px 300px 2px 300px',
+          gridTemplateColumns: '600px 1px 300px 1px 300px',
         }
       }
 
@@ -470,7 +470,7 @@ describe('markdownEdit 布局运行时接线', () => {
 
     splitState.calls.at(-1)?.onDragEnd?.('column', 1)
 
-    expect(layoutElement.style.gridTemplateColumns).toBe('0.5fr 2px 0.25fr 2px 0.25fr')
+    expect(layoutElement.style.gridTemplateColumns).toBe('0.5fr 1px 0.25fr 1px 0.25fr')
 
     getComputedStyleSpy.mockRestore()
   })

@@ -1,0 +1,100 @@
+// Unified resizable sash (splitter / gutter) styles.
+// Inspired by VS Code's sash implementation:
+// - The grid track stays thin (1px) so panels appear flush
+// - The element extends its hit-zone via negative margins + padding
+// - A ::before pseudo-element draws the visible 1px border line
+// - Hover highlights with a short delay; active/dragging highlights immediately
+
+$sash-size: 1px;       // visible track width in the grid
+$sash-hit-zone: 4px;   // extra hit-zone on each side of the track
+
+.wj-sash {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 2;
+  touch-action: none;
+
+  // The visible border line — always centered
+  &::before {
+    content: '';
+    position: absolute;
+    background-color: var(--wj-markdown-border-primary);
+    pointer-events: none;
+    transition: background-color 0s linear;
+  }
+
+  // Hover highlight overlay — covers the full hit-zone
+  &::after {
+    content: '';
+    position: absolute;
+    background-color: transparent;
+    pointer-events: none;
+    transition: background-color 0s linear 0.3s;
+  }
+
+  &:hover::after {
+    background-color: var(--wj-markdown-sash-hover);
+    transition-delay: 0.3s;
+  }
+
+  &:active::after,
+  &.wj-sash--dragging::after {
+    background-color: var(--wj-markdown-sash-hover);
+    transition-delay: 0s;
+  }
+}
+
+// Vertical sash (for column resizing, cursor: col-resize)
+.wj-sash--vertical {
+  cursor: col-resize;
+  width: $sash-size;
+  height: 100%;
+  // Expand the clickable area without affecting layout
+  margin-left: -$sash-hit-zone;
+  margin-right: -$sash-hit-zone;
+  padding-left: $sash-hit-zone;
+  padding-right: $sash-hit-zone;
+
+  // The 1px visible border line
+  &::before {
+    top: 0;
+    bottom: 0;
+    left: $sash-hit-zone;
+    width: $sash-size;
+  }
+
+  // The hover highlight overlay
+  &::after {
+    top: 0;
+    bottom: 0;
+    left: $sash-hit-zone - 1;
+    width: $sash-size + 2;
+    border-radius: 1px;
+  }
+}
+
+// Horizontal sash (for row resizing, cursor: row-resize)
+.wj-sash--horizontal {
+  cursor: row-resize;
+  height: $sash-size;
+  width: 100%;
+  margin-top: -$sash-hit-zone;
+  margin-bottom: -$sash-hit-zone;
+  padding-top: $sash-hit-zone;
+  padding-bottom: $sash-hit-zone;
+
+  &::before {
+    left: 0;
+    right: 0;
+    top: $sash-hit-zone;
+    height: $sash-size;
+  }
+
+  &::after {
+    left: 0;
+    right: 0;
+    top: $sash-hit-zone - 1;
+    height: $sash-size + 2;
+    border-radius: 1px;
+  }
+}

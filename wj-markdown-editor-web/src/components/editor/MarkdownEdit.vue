@@ -536,9 +536,6 @@ const previewContainerStyle = computed(() => {
 
 const editorContainerClass = computed(() => layoutMode.value.gridTemplateClass)
 const layoutRenderItems = computed(() => resolveMarkdownEditRenderItems(layoutMode.value))
-// 仅左侧三栏布局需要给大纲面板补右边框，与外层分栏边界保持一致。
-const menuLeftBordered = computed(() => layoutMode.value.columnOrder[0] === 'menu')
-
 const modelSyncScheduler = createFlushableDebounce(() => {
   const view = editorView.value
   if (!view) {
@@ -1043,15 +1040,14 @@ defineExpose({
           v-else-if="item.type === 'gutter-preview'"
           :ref="setPreviewGutterElement"
           data-layout-item="gutter-preview"
-          class="markdown-edit-layout__gutter markdown-edit-layout__gutter--preview h-full cursor-col-resize bg-[#E2E2E2] op-0"
+          class="markdown-edit-layout__gutter markdown-edit-layout__gutter--preview wj-sash wj-sash--vertical h-full"
         />
         <div
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full p-2"
+          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full overflow-y-auto p-2"
           :style="previewContainerStyle"
-          :class="menuController ? 'overflow-y-scroll' : 'overflow-y-auto'"
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"
         >
@@ -1071,7 +1067,7 @@ defineExpose({
           v-else-if="item.type === 'gutter-menu'"
           :ref="setMenuGutterElement"
           data-layout-item="gutter-menu"
-          class="markdown-edit-layout__gutter markdown-edit-layout__gutter--menu h-full cursor-col-resize bg-[#E2E2E2] op-0"
+          class="markdown-edit-layout__gutter markdown-edit-layout__gutter--menu wj-sash wj-sash--vertical h-full"
         />
         <MarkdownMenu
           v-else-if="item.type === 'menu'"
@@ -1080,7 +1076,6 @@ defineExpose({
           :close="() => { menuVisible = false }"
           data-layout-item="menu"
           class="allow-search markdown-edit-layout__menu"
-          :class="menuLeftBordered ? 'b-r-1 b-r-border-primary b-r-solid' : ''"
         />
       </template>
     </div>
@@ -1133,22 +1128,22 @@ defineExpose({
 }
 
 .markdown-edit-layout--editor-preview {
-  grid-template-columns: 1fr 2px 1fr 0px 0fr;
+  grid-template-columns: 1fr 1px 1fr 0px 0fr;
   grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
 }
 
 .markdown-edit-layout--editor-preview-menu {
-  grid-template-columns: 1fr 2px 1fr 2px 0.4fr;
+  grid-template-columns: 1fr 1px 1fr 1px 0.4fr;
   grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
 }
 
 .markdown-edit-layout--preview-editor {
-  grid-template-columns: 1fr 2px 1fr 0px 0fr;
+  grid-template-columns: 1fr 1px 1fr 0px 0fr;
   grid-template-areas: 'preview gutter-preview editor gutter-menu menu';
 }
 
 .markdown-edit-layout--menu-preview-editor {
-  grid-template-columns: 0.4fr 2px 1fr 2px 1fr;
+  grid-template-columns: 0.4fr 1px 1fr 1px 1fr;
   grid-template-areas: 'menu gutter-menu preview gutter-preview editor';
 }
 
