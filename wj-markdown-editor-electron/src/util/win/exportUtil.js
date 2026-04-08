@@ -21,6 +21,10 @@ function createExportWin({ parentWindow, documentContext, type, target = 'file',
     notify({ type: 'warning', content: 'message.contentIsEmpty' })
     return
   }
+  if (type === 'PDF' && target === 'clipboard') {
+    notify({ type: 'error', content: 'message.exportFailed' })
+    return
+  }
 
   let filePath = null
   if (target === 'file') {

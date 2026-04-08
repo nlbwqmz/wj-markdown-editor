@@ -1139,6 +1139,22 @@ describe('ipcMainUtil 工具模块参数组装', () => {
     })
   })
 
+  it('export-start 兼容旧字符串 payload 时，必须回退为 file 目标导出', async () => {
+    const { sender, win, sendToMainHandler } = await setupToolHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'export-start',
+      data: 'PNG',
+    })
+
+    expect(exportCreateExportWin).toHaveBeenCalledWith(expect.objectContaining({
+      parentWindow: win,
+      type: 'PNG',
+      target: 'file',
+      notify: expect.any(Function),
+    }))
+  })
+
   it('export-end 必须继续把结构化 data 和 notify 组装成显式参数对象传给 exportUtil.doExport', async () => {
     const { sender, win, sendToMainHandler } = await setupToolHandler()
     exportDoExport.mockResolvedValueOnce({ ok: true })

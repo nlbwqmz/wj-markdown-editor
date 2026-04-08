@@ -194,6 +194,30 @@ describe('exportUtil', () => {
     }))
   })
 
+  it('createExportWin 在 type=PDF 且 target=clipboard 时必须在创建导出窗口前直接失败', async () => {
+    const { default: exportUtil } = await import('./exportUtil.js')
+    const notify = vi.fn()
+
+    const result = await exportUtil.createExportWin({
+      parentWindow: { id: 1 },
+      documentContext: {
+        path: 'D:/docs/demo.md',
+        content: '# 导出内容',
+      },
+      type: 'PDF',
+      target: 'clipboard',
+      notify,
+    })
+
+    expect(result).toBeUndefined()
+    expect(dialogShowSaveDialogSync).not.toHaveBeenCalled()
+    expect(browserWindowInstances).toHaveLength(0)
+    expect(notify).toHaveBeenCalledWith({
+      type: 'error',
+      content: 'message.exportFailed',
+    })
+  })
+
   it('documentContext.content 为空时，必须通过 notify 发出 contentIsEmpty 提示且不启动导出流程', async () => {
     const { default: exportUtil } = await import('./exportUtil.js')
     const parentWindow = { id: 1 }
@@ -253,6 +277,35 @@ describe('exportUtil', () => {
     expect(fsWriteFile).not.toHaveBeenCalled()
   })
 
+  it('doExport 在未显式提供 target 时必须继续按文件导出 PNG', async () => {
+    const { default: exportUtil } = await import('./exportUtil.js')
+    const notify = vi.fn()
+
+    await exportUtil.createExportWin({
+      parentWindow: { id: 1 },
+      documentContext: {
+        path: 'D:/docs/demo.md',
+        content: '# 导出内容',
+      },
+      type: 'PNG',
+      notify,
+    })
+
+    browserWindowInstances[0].webContents.executeJavaScript.mockResolvedValueOnce(480)
+    captureExportImageBuffer.mockResolvedValueOnce(Buffer.from('png-file-buffer'))
+
+    await exportUtil.doExport({
+      data: {
+        type: 'PNG',
+        filePath: 'D:/exports/demo.png',
+      },
+      notify,
+    })
+
+    expect(fsWriteFile).toHaveBeenCalledWith('D:/exports/demo.png', Buffer.from('png-file-buffer'))
+    expect(clipboardWriteImage).not.toHaveBeenCalled()
+  })
+
   it('doExport 在 target=clipboard 且 type=PDF 时必须走失败分支', async () => {
     const { default: exportUtil } = await import('./exportUtil.js')
     const notify = vi.fn()
@@ -266,7 +319,7 @@ describe('exportUtil', () => {
           content: '# 导出内容',
         },
         type: 'PDF',
-        target: 'clipboard',
+        target: 'file',
         notify,
       })
 
@@ -294,6 +347,36 @@ describe('exportUtil', () => {
     } finally {
       consoleErrorSpy.mockRestore()
     }
+  })
+
+  it('doExport 在 target=file 且 type=PDF 时必须继续写入文件', async () => {
+    const { default: exportUtil } = await import('./exportUtil.js')
+    const notify = vi.fn()
+
+    await exportUtil.createExportWin({
+      parentWindow: { id: 1 },
+      documentContext: {
+        path: 'D:/docs/demo.md',
+        content: '# 导出内容',
+      },
+      type: 'PDF',
+      target: 'file',
+      notify,
+    })
+
+    browserWindowInstances[0].webContents.printToPDF.mockResolvedValueOnce(Buffer.from('pdf-file-buffer'))
+
+    await exportUtil.doExport({
+      data: {
+        type: 'PDF',
+        target: 'file',
+        filePath: 'D:/exports/demo.pdf',
+      },
+      notify,
+    })
+
+    expect(fsWriteFile).toHaveBeenCalledWith('D:/exports/demo.pdf', Buffer.from('pdf-file-buffer'))
+    expect(clipboardWriteImage).not.toHaveBeenCalled()
   })
 
   it('默认导出不应继续暴露失效的 channel 入口，避免旧形态调用绕过显式参数边界', async () => {
