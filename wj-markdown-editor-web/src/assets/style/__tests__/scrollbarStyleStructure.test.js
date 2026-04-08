@@ -65,8 +65,8 @@ test('scroll.scss 必须集中定义共享滚动条变量并覆盖 wj-scrollbar 
 
   assert.deepEqual(
     normalizedSelectorList,
-    ['.wj-scrollbar', '.wj-scrollbar *', '.cm-editor .cm-scroller', '.cm-editor .cm-scroller *'],
-    'scroll.scss 的共享规则必须同时覆盖 .wj-scrollbar 与 .cm-editor .cm-scroller（含子元素）',
+    ['.wj-scrollbar', '.wj-scrollbar *', '.cm-editor .cm-scroller', '.cm-editor .cm-scroller *', '.cm-tooltip-autocomplete > ul'],
+    'scroll.scss 的共享规则必须同时覆盖 .wj-scrollbar、.cm-editor .cm-scroller 以及自动补全列表滚动容器',
   )
 
   const hitSize = getPxVariableValue(sharedWhereRule.block, 'wj-scrollbar-hit-size')

@@ -1,4 +1,10 @@
-:where(.wj-scrollbar, .wj-scrollbar *, .cm-editor .cm-scroller, .cm-editor .cm-scroller *) {
+:where(
+  .wj-scrollbar,
+  .wj-scrollbar *,
+  .cm-editor .cm-scroller,
+  .cm-editor .cm-scroller *,
+  .cm-tooltip-autocomplete > ul
+) {
   --wj-scrollbar-hit-size: 8px;
   --wj-scrollbar-thumb-border-idle: 2px;
   --wj-scrollbar-thumb-border-active: 1px;
