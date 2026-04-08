@@ -5,8 +5,8 @@
 // - A ::before pseudo-element draws the visible 1px border line
 // - Hover highlights with a short delay; active/dragging highlights immediately
 
-$sash-size: 1px;       // visible track width in the grid
-$sash-hit-zone: 4px;   // extra hit-zone on each side of the track
+$sash-size: 1px; // visible track width in the grid
+$sash-hit-zone: 4px; // extra hit-zone on each side of the track
 
 .wj-sash {
   position: relative;
