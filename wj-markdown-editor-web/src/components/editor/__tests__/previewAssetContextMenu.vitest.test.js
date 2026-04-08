@@ -146,7 +146,7 @@ describe('previewAssetContextMenu', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
-  it('危险项会保留显式红色类，普通项不会带显式红色类', () => {
+  it('危险项只保留显式红色类，不再携带危险态语义类', () => {
     const wrapper = mountContextMenu({
       items: [
         {
@@ -167,6 +167,7 @@ describe('previewAssetContextMenu', () => {
 
     expect(normalItem.classes()).not.toContain('!color-red')
     expect(dangerItem.classes()).toContain('!color-red')
+    expect(dangerItem.classes()).not.toContain('menu-item-danger')
   })
 
   it('菜单组发生切换时，应在新组前渲染分隔线', () => {

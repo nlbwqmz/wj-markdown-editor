@@ -154,7 +154,6 @@ onBeforeUnmount(() => {
           <!-- 危险项保留显式红色类，避免被项目级下拉菜单文字颜色覆盖。 -->
           <a-menu-item
             :class="item.danger === true ? '!color-red' : undefined"
-            :danger="item.danger === true"
             :data-menu-key="item.key"
             @click="onMenuItemClick(item.key)"
           >
