@@ -17,6 +17,9 @@ const translationMap = {
   'topMenu.file.children.openFile': '打开',
   'topMenu.file.children.recentFiles.name': '最近',
   'topMenu.file.children.recentFiles.noHistory': '暂无最近历史',
+  'topMenu.file.children.export.exportToFile': '导出到文件',
+  'topMenu.file.children.export.exportToClipboard': '导出到剪切板',
+  'topMenu.file.children.export.pdfTip': '不支持暗黑主题',
   'topMenu.view.name': '视图',
   'topMenu.view.children.switchView': '切换',
   'topMenu.view.children.enterFullScreen': '进入全屏',
@@ -275,6 +278,43 @@ describe('layoutMenu 文件管理栏接线', () => {
     expect(mocked.shortcutKeyHandler).not.toHaveBeenCalledWith('openFile', true)
   })
 
+  it('文件菜单应拆分为导出到文件和导出到剪切板，并发送结构化导出 payload', async () => {
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    const fileMenuChildren = getMenuChildren(wrapper, 0)
+    const exportToFileItem = findMenuItemByLabel(fileMenuChildren, '导出到文件')
+    const exportToClipboardItem = findMenuItemByLabel(fileMenuChildren, '导出到剪切板')
+
+    expect(exportToFileItem).toBeTruthy()
+    expect(exportToClipboardItem).toBeTruthy()
+    expect(exportToFileItem.children.map(item => extractTextFromNode(item.label))).toEqual([
+      'PDF',
+      'PNG',
+      'JPEG',
+    ])
+    expect(exportToClipboardItem.children.map(item => extractTextFromNode(item.label))).toEqual([
+      'PNG',
+      'JPEG',
+    ])
+
+    await exportToClipboardItem.children[0].click()
+
+    expect(mocked.channelSend).toHaveBeenCalledWith({
+      event: 'export-start',
+      data: {
+        type: 'PNG',
+        target: 'clipboard',
+      },
+    })
+  })
+
   it('视图菜单应提供文件管理栏开关，并在运行时状态切换后更新文案和动作', async () => {
     const wrapper = shallowMount(LayoutMenu, {
       global: {
@@ -361,8 +401,12 @@ describe('layoutMenu 文件管理栏接线', () => {
 
     expect(zhCN.topMenu.view.children.showFileManager).toBe('显示文件管理栏')
     expect(zhCN.topMenu.view.children.hideFileManager).toBe('隐藏文件管理栏')
+    expect(zhCN.topMenu.file.children.export.exportToFile).toBe('导出到文件')
+    expect(zhCN.topMenu.file.children.export.exportToClipboard).toBe('导出到剪切板')
     expect(enUS.topMenu.view.children.showFileManager).toBe('Show file manager')
     expect(enUS.topMenu.view.children.hideFileManager).toBe('Hide file manager')
+    expect(enUS.topMenu.file.children.export.exportToFile).toBe('Export to File')
+    expect(enUS.topMenu.file.children.export.exportToClipboard).toBe('Export to Clipboard')
     expect(zhCN.message.onlyMarkdownFilesCanBeOpened).toBe('只能打开 Markdown（.md / .markdown）文件。')
     expect(enUS.message.onlyMarkdownFilesCanBeOpened).toBe('Only Markdown (.md / .markdown) files can be opened.')
     expect(zhCN.message.fileAlreadyOpenedInOtherWindow).toBe('目标文件已在其他窗口打开，已为你切换到对应窗口。')
