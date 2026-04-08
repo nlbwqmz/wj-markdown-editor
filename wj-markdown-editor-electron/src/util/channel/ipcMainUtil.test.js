@@ -1139,10 +1139,11 @@ describe('ipcMainUtil 工具模块参数组装', () => {
     })
   })
 
-  it('export-end 必须把结构化 data 和 notify 组装成显式参数对象传给 exportUtil.doExport', async () => {
+  it('export-end 必须继续把结构化 data 和 notify 组装成显式参数对象传给 exportUtil.doExport', async () => {
     const { sender, win, sendToMainHandler } = await setupToolHandler()
     exportDoExport.mockResolvedValueOnce({ ok: true })
 
+    // 当前 IPC 已经是透传结构；这里补回归测试，避免后续为了支持 target 分流时破坏既有契约。
     const exportData = {
       type: 'PNG',
       target: 'clipboard',

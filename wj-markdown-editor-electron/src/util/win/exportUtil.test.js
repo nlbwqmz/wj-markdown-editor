@@ -28,6 +28,8 @@ vi.mock('electron', () => {
   class BrowserWindow {
     constructor(options) {
       this.options = options
+      this.loadURL = vi.fn(() => Promise.resolve())
+      this.loadFile = vi.fn(() => Promise.resolve())
       this.webContents = {
         executeJavaScript: vi.fn(),
         printToPDF: vi.fn(),
@@ -36,14 +38,6 @@ vi.mock('electron', () => {
     }
 
     close() {}
-
-    loadURL() {
-      return Promise.resolve()
-    }
-
-    loadFile() {
-      return Promise.resolve()
-    }
   }
 
   return {
@@ -188,6 +182,16 @@ describe('exportUtil', () => {
       key: 'export-loading-key',
     }))
     expect(browserWindowInstances).toHaveLength(1)
+    expect(browserWindowInstances[0].loadFile).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      hash: 'export',
+      search: expect.stringContaining('type=PNG'),
+    }))
+    expect(browserWindowInstances[0].loadFile).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      search: expect.stringContaining('target=clipboard'),
+    }))
+    expect(browserWindowInstances[0].loadFile).toHaveBeenCalledWith(expect.any(String), expect.not.objectContaining({
+      search: expect.stringContaining('filePath='),
+    }))
   })
 
   it('documentContext.content 为空时，必须通过 notify 发出 contentIsEmpty 提示且不启动导出流程', async () => {
@@ -276,7 +280,9 @@ describe('exportUtil', () => {
     })
 
     expect(clipboardWriteImage).not.toHaveBeenCalled()
+    expect(configGetConfig).not.toHaveBeenCalled()
     expect(fsWriteFile).not.toHaveBeenCalled()
+    expect(browserWindowInstances[0].webContents.printToPDF).not.toHaveBeenCalled()
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       type: 'error',
       content: 'message.exportFailed',
