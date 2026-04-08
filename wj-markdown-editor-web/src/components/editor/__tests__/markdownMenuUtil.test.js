@@ -1,0 +1,83 @@
+import assert from 'node:assert/strict'
+
+const { test } = await import('node:test')
+const markdownMenuUtilModule = await import('../markdownMenuUtil.js')
+
+const {
+  flattenMarkdownMenuAnchors,
+  resolveMarkdownMenuActiveHref,
+  resolveMarkdownMenuTargetScrollTop,
+} = markdownMenuUtilModule
+
+test('flattenMarkdownMenuAnchors 应按前序顺序拍平目录树并保留层级深度', () => {
+  const anchorList = [
+    {
+      key: 'intro',
+      href: '#intro',
+      title: '介绍',
+      level: 1,
+      children: [
+        {
+          key: 'session',
+          href: '#session',
+          title: '会话',
+          level: 2,
+          children: [],
+        },
+      ],
+    },
+    {
+      key: 'appendix',
+      href: '#appendix',
+      title: '附录',
+      level: 1,
+      children: [],
+    },
+  ]
+
+  assert.deepEqual(flattenMarkdownMenuAnchors(anchorList), [
+    { key: 'intro', href: '#intro', title: '介绍', level: 1, depth: 0 },
+    { key: 'session', href: '#session', title: '会话', level: 2, depth: 1 },
+    { key: 'appendix', href: '#appendix', title: '附录', level: 1, depth: 0 },
+  ])
+})
+
+test('resolveMarkdownMenuActiveHref 应跟随 scrollTop 选择当前阅读位置最近的标题', () => {
+  const headingRecords = [
+    { href: '#intro', top: 0 },
+    { href: '#session', top: 120 },
+    { href: '#resource', top: 260 },
+  ]
+
+  assert.equal(resolveMarkdownMenuActiveHref({
+    headingRecords,
+    scrollTop: 0,
+    clientHeight: 320,
+    scrollHeight: 900,
+  }), '#intro')
+
+  assert.equal(resolveMarkdownMenuActiveHref({
+    headingRecords,
+    scrollTop: 150,
+    clientHeight: 320,
+    scrollHeight: 900,
+  }), '#session')
+
+  assert.equal(resolveMarkdownMenuActiveHref({
+    headingRecords,
+    scrollTop: 640,
+    clientHeight: 320,
+    scrollHeight: 900,
+  }), '#resource')
+})
+
+test('resolveMarkdownMenuTargetScrollTop 应按容器相对坐标计算平滑滚动目标位置', () => {
+  const targetScrollTop = resolveMarkdownMenuTargetScrollTop({
+    containerTop: 100,
+    containerScrollTop: 40,
+    containerClientTop: 2,
+    targetTop: 260,
+  })
+
+  assert.equal(targetScrollTop, 198)
+})
