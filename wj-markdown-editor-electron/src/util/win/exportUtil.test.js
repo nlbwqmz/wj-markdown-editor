@@ -256,39 +256,44 @@ describe('exportUtil', () => {
   it('doExport 在 target=clipboard 且 type=PDF 时必须走失败分支', async () => {
     const { default: exportUtil } = await import('./exportUtil.js')
     const notify = vi.fn()
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await exportUtil.createExportWin({
-      parentWindow: { id: 1 },
-      documentContext: {
-        path: 'D:/docs/demo.md',
-        content: '# 导出内容',
-      },
-      type: 'PDF',
-      target: 'clipboard',
-      notify,
-    })
-
-    browserWindowInstances[0].webContents.printToPDF.mockResolvedValueOnce(Buffer.from('pdf-buffer'))
-
-    await exportUtil.doExport({
-      data: {
+    try {
+      await exportUtil.createExportWin({
+        parentWindow: { id: 1 },
+        documentContext: {
+          path: 'D:/docs/demo.md',
+          content: '# 导出内容',
+        },
         type: 'PDF',
         target: 'clipboard',
-        filePath: null,
-      },
-      notify,
-    })
+        notify,
+      })
 
-    expect(clipboardWriteImage).not.toHaveBeenCalled()
-    expect(configGetConfig).not.toHaveBeenCalled()
-    expect(fsWriteFile).not.toHaveBeenCalled()
-    expect(browserWindowInstances[0].webContents.printToPDF).not.toHaveBeenCalled()
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'error',
-      content: 'message.exportFailed',
-      duration: 3,
-      key: 'export-loading-key',
-    }))
+      browserWindowInstances[0].webContents.printToPDF.mockResolvedValueOnce(Buffer.from('pdf-buffer'))
+
+      await exportUtil.doExport({
+        data: {
+          type: 'PDF',
+          target: 'clipboard',
+          filePath: null,
+        },
+        notify,
+      })
+
+      expect(clipboardWriteImage).not.toHaveBeenCalled()
+      expect(configGetConfig).not.toHaveBeenCalled()
+      expect(fsWriteFile).not.toHaveBeenCalled()
+      expect(browserWindowInstances[0].webContents.printToPDF).not.toHaveBeenCalled()
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'error',
+        content: 'message.exportFailed',
+        duration: 3,
+        key: 'export-loading-key',
+      }))
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 
   it('默认导出不应继续暴露失效的 channel 入口，避免旧形态调用绕过显式参数边界', async () => {

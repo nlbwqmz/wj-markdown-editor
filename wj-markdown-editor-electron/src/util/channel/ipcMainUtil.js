@@ -155,11 +155,16 @@ const handlerList = {
   ...settingUtil.channel,
   ...aboutUtil.channel,
   ...guideUtil.channel,
-  'export-start': (windowContext, type) => {
+  'export-start': (windowContext, data) => {
+    const exportRequest = typeof data === 'string'
+      ? { type: data, target: 'file' }
+      : (data || {})
+
     return exportUtil.createExportWin({
       parentWindow: windowContext.win,
       documentContext: windowLifecycleService.getDocumentContext(windowContext.windowId),
-      type,
+      type: exportRequest.type,
+      target: exportRequest.target,
       notify: createWindowMessageNotifier(windowContext.win),
     })
   },
