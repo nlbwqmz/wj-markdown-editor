@@ -1,52 +1,51 @@
-.wj-scrollbar {
+:where(.wj-scrollbar, .wj-scrollbar *, .cm-editor .cm-scroller, .cm-editor .cm-scroller *) {
+  --wj-scrollbar-hit-size: 8px;
+  --wj-scrollbar-thumb-border-idle: 2px;
+  --wj-scrollbar-thumb-border-active: 1px;
+  --wj-scrollbar-thumb-radius: 999px;
+  --wj-scrollbar-thumb-bg: #0000004d;
+  --wj-scrollbar-thumb-bg-hover: #00000059;
+  --wj-scrollbar-thumb-bg-active: #00000061;
+
   &::-webkit-scrollbar {
     display: revert;
-    width: 6px;
-    height: 6px;
+    width: var(--wj-scrollbar-hit-size);
+    height: var(--wj-scrollbar-hit-size);
+    background-color: transparent;
   }
-  /*滚动条里面轨道*/
+
   &::-webkit-scrollbar-track {
-    background-color: var(--wj-markdown-scroll-bg);
+    background-color: transparent;
   }
 
   &::-webkit-scrollbar-corner {
+    background-color: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border: var(--wj-scrollbar-thumb-border-idle) solid transparent;
+    border-radius: var(--wj-scrollbar-thumb-radius);
+    background-color: var(--wj-scrollbar-thumb-bg);
+    background-clip: content-box;
+  }
+
+  /* 仅在滚动条真实命中区交互时显示轨道并加粗视觉 */
+  &::-webkit-scrollbar:hover {
     background-color: var(--wj-markdown-scroll-bg);
   }
 
-  /*滚动条的样式*/
-  &::-webkit-scrollbar-thumb {
-    border-radius: 4px;
-    background-color: #0000004d;
+  &::-webkit-scrollbar-track:hover {
+    background-color: var(--wj-markdown-scroll-bg);
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background-color: #00000059;
+    border: var(--wj-scrollbar-thumb-border-active) solid transparent;
+    background-color: var(--wj-scrollbar-thumb-bg-hover);
   }
 
   &::-webkit-scrollbar-thumb:active {
-    background-color: #00000061;
-  }
-
-  *::-webkit-scrollbar {
-    display: revert;
-    width: 6px;
-    height: 6px;
-  }
-  *::-webkit-scrollbar-track {
-    background-color: var(--wj-markdown-scroll-bg);
-  }
-  *::-webkit-scrollbar-corner {
-    background: var(--wj-markdown-scroll-bg);
-  }
-  *::-webkit-scrollbar-thumb {
-    border-radius: 4px;
-    background-color: #0000004d;
-  }
-  *::-webkit-scrollbar-thumb:hover {
-    background-color: #00000059;
-  }
-  *::-webkit-scrollbar-thumb:active {
-    background-color: #00000061;
+    border: var(--wj-scrollbar-thumb-border-active) solid transparent;
+    background-color: var(--wj-scrollbar-thumb-bg-active);
   }
 }
 

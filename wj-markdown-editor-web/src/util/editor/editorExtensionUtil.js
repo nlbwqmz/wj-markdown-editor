@@ -66,29 +66,6 @@ const fixedExtension = [
       height: 0,
       overflow: 'hidden',
     },
-    '*::-webkit-scrollbar': {
-      display: 'revert',
-      width: '6px',
-      height: '6px',
-    },
-    /* 滚动条里面轨道 */
-    '*::-webkit-scrollbar-track': {
-      backgroundColor: 'var(--wj-markdown-scroll-bg)',
-    },
-    '*::-webkit-scrollbar-corner': {
-      backgroundColor: 'var(--wj-markdown-scroll-bg)',
-    },
-    /* 滚动条的样式 */
-    '*::-webkit-scrollbar-thumb': {
-      borderRadius: '4px',
-      backgroundColor: '#0000004d',
-    },
-    '*::-webkit-scrollbar-thumb:hover': {
-      backgroundColor: '#00000059',
-    },
-    '*::-webkit-scrollbar-thumb:active': {
-      backgroundColor: '#00000061',
-    },
   }),
   autocompletion({
     override: [
