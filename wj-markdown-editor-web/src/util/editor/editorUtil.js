@@ -424,11 +424,16 @@ function doPrettier(editorView) {
       '',
     )
 
-    // 4. 更新编辑器内容
-    const transaction = editorView.state.update({
+    // 4. 点击外部工具栏后，编辑器可能先因为失焦等 DOM 同步推进内部 state。
+    // 这里必须让 dispatch 基于“当前 state”即时创建事务，不能复用预先构造的 Transaction。
+    if (editorView.state.doc.toString() !== content) {
+      return
+    }
+
+    editorView.dispatch({
       changes: { from: 0, to: content.length, insert: final },
     })
-    editorView.dispatch(transaction)
+    editorView.focus?.()
   })
 }
 
