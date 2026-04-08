@@ -52,6 +52,16 @@ function createMenuLabel(label, shortcutKeyId) {
   return keymap ? commonUtil.createLabel(label, keymap) : label
 }
 
+function sendExportStart(type, target) {
+  channelUtil.send({
+    event: 'export-start',
+    data: {
+      type,
+      target,
+    },
+  })
+}
+
 function createRecentListVNode() {
   return recentList.value.map((item) => {
     return {
@@ -152,24 +162,40 @@ function updateMenuList() {
         },
         {
           key: commonUtil.createId(),
-          label: t('topMenu.file.children.export.name'),
+          label: t('topMenu.file.children.export.exportToFile'),
           children: [
             {
               key: commonUtil.createId(),
               label: h(Tooltip, { 'title': t('topMenu.file.children.export.pdfTip'), 'auto-adjust-overflow': true, 'placement': 'right', 'color': '#1677ff' }, () => [
                 h('div', {}, 'PDF'),
               ]),
-              click: () => { channelUtil.send({ event: 'export-start', data: 'PDF' }) },
+              click: () => { sendExportStart('PDF', 'file') },
             },
             {
               key: commonUtil.createId(),
               label: 'PNG',
-              click: () => { channelUtil.send({ event: 'export-start', data: 'PNG' }) },
+              click: () => { sendExportStart('PNG', 'file') },
             },
             {
               key: commonUtil.createId(),
               label: 'JPEG',
-              click: () => { channelUtil.send({ event: 'export-start', data: 'JPEG' }) },
+              click: () => { sendExportStart('JPEG', 'file') },
+            },
+          ],
+        },
+        {
+          key: commonUtil.createId(),
+          label: t('topMenu.file.children.export.exportToClipboard'),
+          children: [
+            {
+              key: commonUtil.createId(),
+              label: 'PNG',
+              click: () => { sendExportStart('PNG', 'clipboard') },
+            },
+            {
+              key: commonUtil.createId(),
+              label: 'JPEG',
+              click: () => { sendExportStart('JPEG', 'clipboard') },
             },
           ],
         },

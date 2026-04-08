@@ -13,7 +13,7 @@ const config = ref()
 const watermark = ref()
 let exportWaitingStarted = false
 
-async function waitingExport(type, filePath) {
+async function waitingExport({ type, target, filePath }) {
   if (exportWaitingStarted) {
     return
   }
@@ -25,7 +25,14 @@ async function waitingExport(type, filePath) {
     themeName: config.value?.theme?.code,
     images: document.querySelectorAll('img'),
   })
-  channelUtil.send({ event: 'export-end', data: { type, filePath } })
+  channelUtil.send({
+    event: 'export-end',
+    data: {
+      type,
+      target,
+      filePath: filePath || null,
+    },
+  })
 }
 
 onBeforeMount(async () => {
@@ -38,6 +45,7 @@ onBeforeMount(async () => {
 })
 function onRefreshComplete() {
   const type = commonUtil.getUrlParam('type')
+  const target = commonUtil.getUrlParam('target')
   const filePath = commonUtil.getUrlParam('filePath')
   // 展开details
   const detailsAll = document.querySelectorAll('details')
@@ -46,7 +54,7 @@ function onRefreshComplete() {
       item.open = true
     }
   }
-  waitingExport(type, filePath).then(() => {})
+  waitingExport({ type, target, filePath }).then(() => {})
 }
 
 watch(() => useCommonStore().config, (newValue) => {

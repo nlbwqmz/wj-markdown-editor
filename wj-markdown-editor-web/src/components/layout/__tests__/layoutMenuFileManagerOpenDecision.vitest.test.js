@@ -294,11 +294,10 @@ describe('layoutMenu 文件管理栏接线', () => {
 
     expect(exportToFileItem).toBeTruthy()
     expect(exportToClipboardItem).toBeTruthy()
-    expect(exportToFileItem.children.map(item => extractTextFromNode(item.label))).toEqual([
-      'PDF',
-      'PNG',
-      'JPEG',
-    ])
+    expect(exportToFileItem.children).toHaveLength(3)
+    expect(exportToFileItem.children[0].label.props.title).toBe('不支持暗黑主题')
+    expect(extractTextFromNode(exportToFileItem.children[1].label)).toBe('PNG')
+    expect(extractTextFromNode(exportToFileItem.children[2].label)).toBe('JPEG')
     expect(exportToClipboardItem.children.map(item => extractTextFromNode(item.label))).toEqual([
       'PNG',
       'JPEG',
