@@ -1104,21 +1104,27 @@ describe('ipcMainUtil 工具模块参数组装', () => {
     })
   })
 
-  it('export-start 必须把 parentWindow、documentContext、type 和 notify 组装成显式参数对象传给 exportUtil.createExportWin', async () => {
+  it('export-start 必须把 parentWindow、documentContext、type、target 和 notify 组装成显式参数对象传给 exportUtil.createExportWin', async () => {
     const { sender, win, sendToMainHandler } = await setupToolHandler()
 
     await sendToMainHandler({ sender }, {
       event: 'export-start',
-      data: 'PDF',
+      data: {
+        type: 'PNG',
+        target: 'clipboard',
+      },
     })
 
+    expect(exportCreateExportWin).toHaveBeenCalledTimes(1)
+    expect(exportCreateExportWin.mock.calls[0]).toHaveLength(1)
     expect(exportCreateExportWin).toHaveBeenCalledWith(expect.objectContaining({
       parentWindow: win,
       documentContext: expect.objectContaining({
         path: 'D:\\docs\\note.md',
         content: '# 导出内容',
       }),
-      type: 'PDF',
+      type: 'PNG',
+      target: 'clipboard',
       notify: expect.any(Function),
     }))
 
@@ -1133,13 +1139,14 @@ describe('ipcMainUtil 工具模块参数组装', () => {
     })
   })
 
-  it('export-end 必须把 data 和 notify 组装成显式参数对象传给 exportUtil.doExport', async () => {
+  it('export-end 必须把结构化 data 和 notify 组装成显式参数对象传给 exportUtil.doExport', async () => {
     const { sender, win, sendToMainHandler } = await setupToolHandler()
     exportDoExport.mockResolvedValueOnce({ ok: true })
 
     const exportData = {
-      type: 'PDF',
-      filePath: 'D:\\exports\\demo.pdf',
+      type: 'PNG',
+      target: 'clipboard',
+      filePath: null,
     }
 
     const result = await sendToMainHandler({ sender }, {
@@ -1150,10 +1157,10 @@ describe('ipcMainUtil 工具模块参数组装', () => {
     expect(result).toEqual({ ok: true })
     expect(exportDoExport).toHaveBeenCalledTimes(1)
     expect(exportDoExport.mock.calls[0]).toHaveLength(1)
-    expect(exportDoExport).toHaveBeenCalledWith(expect.objectContaining({
+    expect(exportDoExport).toHaveBeenCalledWith({
       data: exportData,
       notify: expect.any(Function),
-    }))
+    })
 
     const notify = exportDoExport.mock.calls[0][0].notify
     notify({ type: 'success', content: 'message.exportSuccessfully' })
