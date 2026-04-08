@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick, ref } from 'vue'
 
 import MarkdownMenu from '../MarkdownMenu.vue'
 
@@ -70,6 +71,7 @@ function createWrapper(props = {}) {
 
 describe('markdownMenu', () => {
   let container
+  let secondaryContainer
   let scrollIntoViewSpy
 
   beforeEach(() => {
@@ -90,6 +92,24 @@ describe('markdownMenu', () => {
     container.getBoundingClientRect = () => ({ top: 100 })
     container.scrollTo = vi.fn(({ top }) => {
       container.scrollTop = top
+    })
+    secondaryContainer = document.createElement('div')
+    secondaryContainer.scrollTop = 0
+    Object.defineProperty(secondaryContainer, 'clientTop', {
+      configurable: true,
+      value: 0,
+    })
+    Object.defineProperty(secondaryContainer, 'clientHeight', {
+      configurable: true,
+      value: 240,
+    })
+    Object.defineProperty(secondaryContainer, 'scrollHeight', {
+      configurable: true,
+      value: 800,
+    })
+    secondaryContainer.getBoundingClientRect = () => ({ top: 100 })
+    secondaryContainer.scrollTo = vi.fn(({ top }) => {
+      secondaryContainer.scrollTop = top
     })
 
     scrollIntoViewSpy = vi.fn()
@@ -179,5 +199,46 @@ describe('markdownMenu', () => {
       top: 260,
       behavior: 'smooth',
     })
+  })
+
+  it('预览滚动容器引用切换后，会重新绑定新的滚动监听并解绑旧容器', async () => {
+    container.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container, top: 0 }),
+        '#session': createHeading({ container, top: 120 }),
+        '#resource': createHeading({ container, top: 260 }),
+      }
+      return map[selector] || null
+    })
+    secondaryContainer.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container: secondaryContainer, top: 0 }),
+        '#session': createHeading({ container: secondaryContainer, top: 120 }),
+        '#resource': createHeading({ container: secondaryContainer, top: 260 }),
+      }
+      return map[selector] || null
+    })
+    const containerRef = ref(container)
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => containerRef,
+    })
+
+    containerRef.value = secondaryContainer
+    await nextTick()
+    await wrapper.vm.$nextTick()
+
+    secondaryContainer.scrollTop = 160
+    secondaryContainer.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#session')
+
+    container.scrollTop = 260
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#session')
   })
 })

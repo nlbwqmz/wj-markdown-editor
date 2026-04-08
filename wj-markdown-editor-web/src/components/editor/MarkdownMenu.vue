@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, isRef, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import commonUtil from '@/util/commonUtil.js'
 import {
   findPreviewAnchorTarget,
@@ -34,7 +34,11 @@ const flattenedAnchorList = computed(() => flattenMarkdownMenuAnchors(props.anch
 
 function resolveMenuContainer() {
   const candidate = props.getContainer?.()
-  return candidate?.value ?? candidate ?? null
+  if (isRef(candidate)) {
+    return candidate.value ?? null
+  }
+
+  return candidate ?? null
 }
 
 function resolveAnchorTarget(previewRoot, href) {
@@ -92,11 +96,15 @@ const syncActiveHref = commonUtil.debounce(() => {
     scrollHeight: container.scrollHeight,
   })
 
-  if (!nextActiveHref || nextActiveHref === activeHref.value) {
+  if (nextActiveHref === activeHref.value) {
     return
   }
 
   activeHref.value = nextActiveHref
+  if (!nextActiveHref) {
+    return
+  }
+
   nextTick(() => {
     menuItemElementMap[nextActiveHref]?.scrollIntoView?.({
       behavior: 'smooth',
@@ -160,6 +168,12 @@ watch(() => props.anchorList, () => {
     bindContainer()
   })
 }, { deep: true, immediate: true })
+
+watch(resolveMenuContainer, () => {
+  nextTick(() => {
+    bindContainer()
+  })
+})
 
 onMounted(() => {
   bindContainer()
@@ -247,7 +261,7 @@ onBeforeUnmount(() => {
     left: 0;
     width: 3px;
     border-radius: 999px;
-    background: #007fd4;
+    background: var(--wj-markdown-sash-hover);
     content: '';
   }
 }
