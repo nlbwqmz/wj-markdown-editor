@@ -201,6 +201,44 @@ describe('markdownMenu', () => {
     expect(wrapper.find('[data-href="#session"]').attributes('title')).toBe('文档会话模型')
   })
 
+  it('目录映射刷新遇到未命中的非法 CSS 锚点时，不应因选择器回退而抛异常', () => {
+    container.querySelectorAll = vi.fn(() => [])
+
+    expect(() => {
+      createWrapper({
+        anchorList: [
+          {
+            key: 'encoded-cn-heading',
+            href: '#2024%E6%80%BB%E7%BB%93',
+            title: '2024总结',
+            level: 1,
+            children: [],
+          },
+        ],
+        getContainer: () => container,
+      })
+    }).not.toThrow()
+  })
+
+  it('目录映射刷新遇到未命中的原始中文数字锚点时，不应在挂载阶段抛出选择器异常', () => {
+    container.querySelectorAll = vi.fn(() => [])
+
+    expect(() => {
+      createWrapper({
+        anchorList: [
+          {
+            key: 'raw-cn-heading',
+            href: '#2024总结',
+            title: '2024总结',
+            level: 1,
+            children: [],
+          },
+        ],
+        getContainer: () => container,
+      })
+    }).not.toThrow()
+  })
+
   it('空目录时会保留空状态', async () => {
     const wrapper = createWrapper({
       anchorList: [],
@@ -365,6 +403,60 @@ describe('markdownMenu', () => {
     expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
 
     restoreAnimationFrame()
+  })
+
+  it('目录点击命中底部被浏览器 clamp 时，应结束程序化滚动保护并恢复后续手动滚动联动', async () => {
+    installHeadingTargets(container)
+    Object.defineProperty(container, 'scrollHeight', {
+      configurable: true,
+      value: 400,
+    })
+    container.scrollTo = vi.fn(({ top }) => {
+      const maxScrollTop = container.scrollHeight - container.clientHeight
+      container.scrollTop = Math.min(top, maxScrollTop)
+    })
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    await wrapper.find('[data-href="#resource"]').trigger('click')
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
+
+    container.scrollTop = 0
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#intro')
+  })
+
+  it('向上点击目录时，中途滚动事件不应提前释放保护并把高亮抢回旧章节', async () => {
+    installHeadingTargets(container)
+    container.scrollTop = 260
+    container.scrollTo = vi.fn()
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
+
+    await wrapper.find('[data-href="#intro"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#intro')
+
+    container.scrollTop = 220
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#intro')
   })
 
   it('预览滚动容器切换时，应按新容器的滚动位置重新计算 active 项', async () => {

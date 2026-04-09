@@ -72,7 +72,7 @@ function rebuildHeadingTargetElementMap(container) {
       previewRoot: container,
       href: item.href,
       candidateList,
-    }) || container.querySelector?.(item.href)
+    })
 
     if (targetElement) {
       nextHeadingTargetElementMap.set(item.href, targetElement)
@@ -182,12 +182,20 @@ function stopProgrammaticScroll() {
   programmaticScrollTargetTop = null
 }
 
+function resolveReachableProgrammaticScrollTarget(container, targetScrollTop) {
+  const numericTargetScrollTop = Number.isFinite(targetScrollTop) ? targetScrollTop : 0
+  const maxScrollTop = Math.max(0, (container?.scrollHeight ?? 0) - (container?.clientHeight ?? 0))
+  return Math.min(Math.max(numericTargetScrollTop, 0), maxScrollTop)
+}
+
 function shouldFinishProgrammaticScroll(container) {
   if (!container || Number.isFinite(programmaticScrollTargetTop) !== true) {
     return true
   }
 
-  return container.scrollTop + 5 >= programmaticScrollTargetTop - 1
+  // smooth scroll 过程中浏览器可能因为到达底部而 clamp，也可能是向上滚动。
+  // 这里统一按“是否已经接近可达目标位置”判断结束，避免只对向下滚动生效。
+  return Math.abs(container.scrollTop - programmaticScrollTargetTop) <= 5
 }
 
 function updateActiveHref() {
@@ -222,9 +230,10 @@ const syncActiveHref = commonUtil.debounce(() => {
 
 function startProgrammaticScroll(container, targetScrollTop) {
   stopProgrammaticScroll()
+  const reachableTargetScrollTop = resolveReachableProgrammaticScrollTarget(container, targetScrollTop)
   isProgrammaticScrolling = true
-  programmaticScrollTargetTop = targetScrollTop
-  if (Math.abs((container?.scrollTop ?? 0) - targetScrollTop) < 1) {
+  programmaticScrollTargetTop = reachableTargetScrollTop
+  if (Math.abs((container?.scrollTop ?? 0) - reachableTargetScrollTop) < 1) {
     stopProgrammaticScroll()
     updateActiveHref()
   }
