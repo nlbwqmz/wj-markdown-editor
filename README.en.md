@@ -24,7 +24,7 @@ A Markdown writing, preview, export, and asset management tool for Windows and L
 - 🗂️ Built-in file manager panel for browsing directories, creating folders, creating Markdown files, and opening files in the current or a new window.
 - 👀 Precise editor-preview sync scrolling, scroll-anchor restore, left/right preview switching, standalone preview mode, and unified search targeting.
 - 🖼️ Complete asset workflow with images, attachments, audio, video, screenshots, image-bed uploads, and preview-side context actions.
-- 🎨 `72` code highlight themes, `8` preview themes, light/dark modes, watermarks, per-area font settings, and multiple export options.
+- 🎨 `72` code highlight themes, `8` preview themes, light/dark modes, watermarks, per-area font settings, and export to files or the system clipboard.
 - 🖥️ Desktop-focused capabilities including single-instance lock, `.md` file association, auto-update, system notifications, and external file change handling.
 
 ## 🚀 Features
@@ -99,7 +99,8 @@ A Markdown writing, preview, export, and asset management tool for Windows and L
 - Preview width, font size, and per-area font settings for editor / preview / code / other regions
 - System font loading for direct local font selection
 - Watermark customization with content, timestamp, angle, spacing, and font styling
-- Export to `PDF / PNG / JPEG`
+- Export to files as `PDF / PNG / JPEG`
+- Export the current document to the system clipboard as `PNG / JPEG` through `File > Export to Clipboard`
 - Custom PDF header, footer, and page number
 
 ### 🖥️ Desktop Capabilities
