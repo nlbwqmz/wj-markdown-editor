@@ -9,6 +9,7 @@ import {
   flattenMarkdownMenuAnchors,
   resolveMarkdownMenuActiveHref,
   resolveMarkdownMenuTargetScrollTop,
+  resolveMarkdownMenuTypography,
 } from './markdownMenuUtil.js'
 
 const props = defineProps({
@@ -134,6 +135,15 @@ function isActiveHref(href) {
   return activeHref.value === href
 }
 
+function resolveMenuItemStyle(item) {
+  const typography = resolveMarkdownMenuTypography(item?.level)
+  return {
+    '--wj-markdown-menu-depth': item.depth,
+    '--wj-markdown-menu-font-size': typography.fontSize,
+    '--wj-markdown-menu-font-weight': typography.fontWeight,
+  }
+}
+
 function onAnchorClick(event, href) {
   event.preventDefault()
 
@@ -206,12 +216,13 @@ onBeforeUnmount(() => {
           :key="item.key"
           :ref="element => setMenuItemRef(item.href, element)"
           type="button"
-          class="markdown-menu__item"
-          :class="{ 'markdown-menu__item--active': isActiveHref(item.href), 'markdown-menu__item--level-1': item.level === 1 }"
-          :style="{ '--wj-markdown-menu-depth': item.depth }"
+          class="markdown-menu__item cursor-pointer"
+          :class="{ 'markdown-menu__item--active': isActiveHref(item.href) }"
+          :style="resolveMenuItemStyle(item)"
           data-testid="markdown-menu-item"
           :data-href="item.href"
           :data-depth="String(item.depth)"
+          :data-level="String(item.level)"
           :data-active="String(isActiveHref(item.href))"
           @click="event => onAnchorClick(event, item.href)"
         >
@@ -233,6 +244,8 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: transparent;
   color: var(--wj-markdown-text-secondary);
+  font-size: var(--wj-markdown-menu-font-size);
+  font-weight: var(--wj-markdown-menu-font-weight);
   text-align: left;
   transition:
     background-color 0.15s ease,
@@ -244,15 +257,9 @@ onBeforeUnmount(() => {
   }
 }
 
-.markdown-menu__item--level-1 {
-  color: var(--wj-markdown-text-primary);
-  font-weight: 600;
-}
-
 .markdown-menu__item--active {
   background: var(--wj-markdown-bg-secondary);
   color: var(--wj-markdown-text-primary);
-  font-weight: 600;
 
   &::before {
     position: absolute;

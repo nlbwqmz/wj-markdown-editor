@@ -2,6 +2,32 @@ function normalizeAnchorChildren(children) {
   return Array.isArray(children) ? children : []
 }
 
+const MARKDOWN_MENU_TYPOGRAPHY_MAP = Object.freeze({
+  1: Object.freeze({ fontSize: '15px', fontWeight: 600 }),
+  2: Object.freeze({ fontSize: '14px', fontWeight: 600 }),
+  3: Object.freeze({ fontSize: '13px', fontWeight: 500 }),
+  4: Object.freeze({ fontSize: '12px', fontWeight: 500 }),
+  5: Object.freeze({ fontSize: '12px', fontWeight: 400 }),
+  6: Object.freeze({ fontSize: '11px', fontWeight: 400 }),
+})
+
+function normalizeHeadingLevel(level) {
+  const numericLevel = Number(level)
+  if (!Number.isInteger(numericLevel)) {
+    return 6
+  }
+
+  if (numericLevel < 1) {
+    return 1
+  }
+
+  if (numericLevel > 6) {
+    return 6
+  }
+
+  return numericLevel
+}
+
 export function flattenMarkdownMenuAnchors(anchorList, depth = 0, collection = []) {
   const normalizedAnchorList = Array.isArray(anchorList) ? anchorList : []
 
@@ -56,4 +82,8 @@ export function resolveMarkdownMenuTargetScrollTop({
   targetTop,
 }) {
   return targetTop - containerTop - containerClientTop + containerScrollTop
+}
+
+export function resolveMarkdownMenuTypography(level) {
+  return MARKDOWN_MENU_TYPOGRAPHY_MAP[normalizeHeadingLevel(level)]
 }

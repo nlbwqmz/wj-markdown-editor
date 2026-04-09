@@ -142,6 +142,12 @@ describe('markdownMenu', () => {
     const items = wrapper.findAll('[data-testid="markdown-menu-item"]')
     expect(items).toHaveLength(3)
     expect(items[1].attributes('data-depth')).toBe('1')
+    expect(items[0].attributes('data-level')).toBe('1')
+    expect(items[0].attributes('style')).toContain('--wj-markdown-menu-font-size: 15px;')
+    expect(items[0].attributes('style')).toContain('--wj-markdown-menu-font-weight: 600;')
+    expect(items[1].attributes('style')).toContain('--wj-markdown-menu-font-size: 14px;')
+    expect(items[1].attributes('style')).toContain('--wj-markdown-menu-font-weight: 600;')
+    expect(items[0].classes()).toContain('cursor-pointer')
     expect(items[0].text()).toBe('介绍')
   })
 

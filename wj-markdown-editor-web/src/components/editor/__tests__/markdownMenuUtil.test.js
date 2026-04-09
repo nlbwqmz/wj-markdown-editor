@@ -6,6 +6,7 @@ const markdownMenuUtilModule = await import('../markdownMenuUtil.js')
 const {
   flattenMarkdownMenuAnchors,
   resolveMarkdownMenuActiveHref,
+  resolveMarkdownMenuTypography,
   resolveMarkdownMenuTargetScrollTop,
 } = markdownMenuUtilModule
 
@@ -80,4 +81,26 @@ test('resolveMarkdownMenuTargetScrollTop 应按容器相对坐标计算平滑滚
   })
 
   assert.equal(targetScrollTop, 198)
+})
+
+test('resolveMarkdownMenuTypography 应按标题等级返回递减的字号与字重', () => {
+  assert.deepEqual(resolveMarkdownMenuTypography(1), {
+    fontSize: '15px',
+    fontWeight: 600,
+  })
+
+  assert.deepEqual(resolveMarkdownMenuTypography(3), {
+    fontSize: '13px',
+    fontWeight: 500,
+  })
+
+  assert.deepEqual(resolveMarkdownMenuTypography(6), {
+    fontSize: '11px',
+    fontWeight: 400,
+  })
+
+  assert.deepEqual(resolveMarkdownMenuTypography(9), {
+    fontSize: '11px',
+    fontWeight: 400,
+  })
 })
