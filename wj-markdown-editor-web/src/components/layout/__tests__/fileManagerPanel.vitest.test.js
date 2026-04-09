@@ -147,8 +147,17 @@ vi.mock('ant-design-vue', async () => {
   return {
     Empty: defineComponent({
       name: 'AEmptyStub',
-      setup(_props, { slots }) {
-        return () => h('div', { 'data-testid': 'empty-stub' }, slots.default?.())
+      props: {
+        description: {
+          type: null,
+          default: null,
+        },
+      },
+      setup(props, { slots }) {
+        return () => h('div', { 'data-testid': 'empty-stub' }, [
+          props.description,
+          ...(slots.default?.() || []),
+        ])
       },
     }),
     Input: defineComponent({
@@ -740,6 +749,24 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('translated:message.fileManagerSelectDirectory')
     expect(wrapper.get('[data-testid="file-manager-empty-state"]').find('[data-testid="empty-stub"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toBe('')
+  })
+
+  it('搜索无结果时应显示搜索空状态文案，而不是目录空状态文案', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'draft-note.md', path: 'D:/docs/draft-note.md', kind: 'markdown' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('.file-manager-panel__search-input').setValue('missing-keyword')
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerNoSearchResults')
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).not.toContain('translated:message.fileManagerDirectoryEmpty')
   })
 
   it('中英文文案应补齐文件管理栏真实使用到的 key', async () => {
