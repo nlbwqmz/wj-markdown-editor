@@ -64,7 +64,10 @@ export function resolveMarkdownMenuActiveHref({
     return ''
   }
 
-  if (scrollTop + clientHeight >= scrollHeight - 1) {
+  const numericClientHeight = Number.isFinite(clientHeight) ? clientHeight : 0
+  const numericScrollHeight = Number.isFinite(scrollHeight) ? scrollHeight : 0
+  const maxScrollTop = Math.max(0, numericScrollHeight - numericClientHeight)
+  if (maxScrollTop > 0 && scrollTop >= maxScrollTop - 1) {
     return normalizedHeadingRecords.at(-1)?.href || ''
   }
 

@@ -40,14 +40,37 @@ function createAnchorList() {
   ]
 }
 
-function createHeading({ container, top }) {
+function createHeading({ container, top, id }) {
   return {
+    id,
+    getAttribute(attributeName) {
+      if (attributeName === 'name') {
+        return null
+      }
+
+      return null
+    },
     getBoundingClientRect() {
       return {
         top: 100 + top - container.scrollTop,
       }
     },
   }
+}
+
+function createHeadingTargetMap(container) {
+  return {
+    '#intro': createHeading({ container, top: 0, id: 'intro' }),
+    '#session': createHeading({ container, top: 120, id: 'session' }),
+    '#resource': createHeading({ container, top: 260, id: 'resource' }),
+  }
+}
+
+function installHeadingTargets(container) {
+  const headingTargetMap = createHeadingTargetMap(container)
+  container.querySelector = vi.fn(selector => headingTargetMap[selector] || null)
+  container.querySelectorAll = vi.fn(() => Object.values(headingTargetMap))
+  return headingTargetMap
 }
 
 function createWrapper(props = {}) {
@@ -148,14 +171,7 @@ describe('markdownMenu', () => {
   })
 
   it('会按层级渲染目录项', async () => {
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
 
     const wrapper = createWrapper({
       anchorList: createAnchorList(),
@@ -175,14 +191,7 @@ describe('markdownMenu', () => {
   })
 
   it('目录项应通过 title 保留完整标题文本，供悬浮时查看', async () => {
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
 
     const wrapper = createWrapper({
       anchorList: createAnchorList(),
@@ -203,14 +212,7 @@ describe('markdownMenu', () => {
   })
 
   it('默认会显示标题栏，并在可关闭时复用 IconButton 作为关闭入口', async () => {
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
 
     const wrapper = createWrapper({
       anchorList: createAnchorList(),
@@ -223,14 +225,7 @@ describe('markdownMenu', () => {
   })
 
   it('showHeader 为 false 时不显示标题栏，但仍保留目录内容', async () => {
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
 
     const wrapper = createWrapper({
       anchorList: createAnchorList(),
@@ -245,14 +240,7 @@ describe('markdownMenu', () => {
   })
 
   it('预览容器滚动后会切换 active 项，并把 active 项滚入目录可视区', async () => {
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
 
     const wrapper = createWrapper({
       anchorList: createAnchorList(),
@@ -267,17 +255,8 @@ describe('markdownMenu', () => {
     expect(scrollIntoViewSpy).toHaveBeenCalled()
   })
 
-  it('点击目录项时会使用 JS 动画滚动到目标标题', async () => {
-    vi.useFakeTimers()
-    const restoreAnimationFrame = installRequestAnimationFrameStub()
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+  it('点击目录项时应复用预览 hash 锚点的 smooth 滚动语义', async () => {
+    installHeadingTargets(container)
 
     const wrapper = createWrapper({
       anchorList: createAnchorList(),
@@ -285,26 +264,17 @@ describe('markdownMenu', () => {
     })
 
     await wrapper.find('[data-href="#resource"]').trigger('click')
-    vi.advanceTimersByTime(500)
     await wrapper.vm.$nextTick()
 
     expect(container.scrollTo).toHaveBeenCalled()
     expect(container.scrollTo).toHaveBeenLastCalledWith({
       top: 260,
+      behavior: 'smooth',
     })
-
-    restoreAnimationFrame()
   })
 
   it('点击目录后滚动停在目标标题上方极小距离时，仍应高亮当前锚点', async () => {
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
     container.scrollTo = vi.fn(({ top }) => {
       container.scrollTop = top - 1
     })
@@ -323,14 +293,8 @@ describe('markdownMenu', () => {
 
   it('点击目录后的长距离滚动超过初始同步窗口时，最终轻微欠滚仍应保持当前锚点高亮', async () => {
     vi.useFakeTimers()
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    const restoreAnimationFrame = installRequestAnimationFrameStub()
+    installHeadingTargets(container)
     container.scrollTo = vi.fn()
 
     const wrapper = createWrapper({
@@ -360,17 +324,11 @@ describe('markdownMenu', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
+    restoreAnimationFrame()
   })
 
   it('普通滚动停在目标标题上方极小距离时，应按 a-anchor 的 bounds 语义切换到当前锚点', async () => {
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
 
     const wrapper = createWrapper({
       anchorList: createAnchorList(),
@@ -387,14 +345,8 @@ describe('markdownMenu', () => {
   it('点击目录后在程序化滚动进行中，滚动事件不应抢走当前点击项的高亮', async () => {
     vi.useFakeTimers()
     const restoreAnimationFrame = installRequestAnimationFrameStub()
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
+    container.scrollTo = vi.fn()
 
     const wrapper = createWrapper({
       anchorList: createAnchorList(),
@@ -416,22 +368,8 @@ describe('markdownMenu', () => {
   })
 
   it('预览滚动容器切换时，应按新容器的滚动位置重新计算 active 项', async () => {
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
-    secondaryContainer.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container: secondaryContainer, top: 0 }),
-        '#session': createHeading({ container: secondaryContainer, top: 120 }),
-        '#resource': createHeading({ container: secondaryContainer, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
+    installHeadingTargets(secondaryContainer)
     container.scrollTo = vi.fn(({ top }) => {
       container.scrollTop = top - 1
     })
@@ -453,22 +391,8 @@ describe('markdownMenu', () => {
   })
 
   it('预览滚动容器引用切换后，会重新绑定新的滚动监听并解绑旧容器', async () => {
-    container.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container, top: 0 }),
-        '#session': createHeading({ container, top: 120 }),
-        '#resource': createHeading({ container, top: 260 }),
-      }
-      return map[selector] || null
-    })
-    secondaryContainer.querySelector = vi.fn((selector) => {
-      const map = {
-        '#intro': createHeading({ container: secondaryContainer, top: 0 }),
-        '#session': createHeading({ container: secondaryContainer, top: 120 }),
-        '#resource': createHeading({ container: secondaryContainer, top: 260 }),
-      }
-      return map[selector] || null
-    })
+    installHeadingTargets(container)
+    installHeadingTargets(secondaryContainer)
     const containerRef = ref(container)
 
     const wrapper = createWrapper({
@@ -491,5 +415,26 @@ describe('markdownMenu', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#session')
+  })
+
+  it('目录滚动联动应复用已建立的标题映射，不在每次 scroll 时重复全量扫描预览 DOM', async () => {
+    installHeadingTargets(container)
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    const initialQuerySelectorAllCallCount = container.querySelectorAll.mock.calls.length
+
+    container.scrollTop = 120
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    container.scrollTop = 260
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(container.querySelectorAll).toHaveBeenCalledTimes(initialQuerySelectorAllCallCount)
   })
 })

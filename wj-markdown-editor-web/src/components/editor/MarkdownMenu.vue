@@ -4,8 +4,8 @@ import IconButton from '@/components/editor/IconButton.vue'
 import commonUtil from '@/util/commonUtil.js'
 import {
   findPreviewAnchorTarget,
-  resolvePreviewScrollContainer,
-} from '@/util/editor/previewAnchorLinkScrollUtil.js'
+  scrollPreviewToAnchor,
+} from '@/util/editor/previewAnchorScrollUtil.js'
 import {
   flattenMarkdownMenuAnchors,
   resolveMarkdownMenuActiveHref,
@@ -32,13 +32,13 @@ const props = defineProps({
   },
 })
 
-const MARKDOWN_MENU_SCROLL_DURATION_MS = 450
-
 const menuItemElementMap = Object.create(null)
 let currentContainer = null
-let scrollAnimationFrameId = null
-let scrollAnimationToken = 0
+let headingTargetElementMap = new Map()
+let currentContainerMutationObserver = null
+let pendingHeadingTargetRefresh = false
 let isProgrammaticScrolling = false
+let programmaticScrollTargetTop = null
 const activeHref = ref('')
 
 const flattenedAnchorList = computed(() => flattenMarkdownMenuAnchors(props.anchorList))
@@ -52,17 +52,38 @@ function resolveMenuContainer() {
   return candidate ?? null
 }
 
-function resolveAnchorTarget(previewRoot, href) {
-  const targetElement = findPreviewAnchorTarget({
-    previewRoot,
-    href,
-  })
+function clearHeadingTargetElementMap() {
+  headingTargetElementMap = new Map()
+}
 
-  if (targetElement) {
-    return targetElement
+function rebuildHeadingTargetElementMap(container) {
+  if (!container?.querySelectorAll) {
+    clearHeadingTargetElementMap()
+    return
   }
 
-  return previewRoot?.querySelector?.(href) ?? null
+  // 目录滚动联动会频繁读取标题位置，这里先把 href 对应的真实标题元素缓存下来，
+  // 避免在每次 scroll 时都重新全量扫描预览 DOM。
+  const candidateList = Array.from(container.querySelectorAll('[id], a[name]'))
+  const nextHeadingTargetElementMap = new Map()
+
+  flattenedAnchorList.value.forEach((item) => {
+    const targetElement = findPreviewAnchorTarget({
+      previewRoot: container,
+      href: item.href,
+      candidateList,
+    }) || container.querySelector?.(item.href)
+
+    if (targetElement) {
+      nextHeadingTargetElementMap.set(item.href, targetElement)
+    }
+  })
+
+  headingTargetElementMap = nextHeadingTargetElementMap
+}
+
+function resolveAnchorTarget(href) {
+  return headingTargetElementMap.get(href) ?? null
 }
 
 function getContainerHeadingRecords(container) {
@@ -74,7 +95,7 @@ function getContainerHeadingRecords(container) {
 
   return flattenedAnchorList.value
     .map((item) => {
-      const targetElement = resolveAnchorTarget(container, item.href)
+      const targetElement = resolveAnchorTarget(item.href)
       if (!targetElement?.getBoundingClientRect) {
         return null
       }
@@ -93,46 +114,44 @@ function getContainerHeadingRecords(container) {
     .filter(Boolean)
 }
 
-function requestMenuAnimationFrame(callback) {
-  if (typeof globalThis.requestAnimationFrame === 'function') {
-    return globalThis.requestAnimationFrame(callback)
-  }
-
-  return globalThis.setTimeout(() => {
-    callback(Date.now())
-  }, 16)
+function disconnectContainerMutationObserver() {
+  currentContainerMutationObserver?.disconnect?.()
+  currentContainerMutationObserver = null
 }
 
-function cancelMenuAnimationFrame(frameId) {
-  if (frameId === null) {
+function scheduleHeadingTargetRefresh() {
+  if (pendingHeadingTargetRefresh === true) {
     return
   }
 
-  if (typeof globalThis.cancelAnimationFrame === 'function') {
-    globalThis.cancelAnimationFrame(frameId)
+  pendingHeadingTargetRefresh = true
+  nextTick(() => {
+    pendingHeadingTargetRefresh = false
+    if (!currentContainer) {
+      clearHeadingTargetElementMap()
+      return
+    }
+
+    rebuildHeadingTargetElementMap(currentContainer)
+    if (isProgrammaticScrolling !== true) {
+      updateActiveHref()
+    }
+  })
+}
+
+function observeContainerMutations(container) {
+  disconnectContainerMutationObserver()
+  if (!container || typeof MutationObserver !== 'function') {
     return
   }
 
-  clearTimeout(frameId)
-}
-
-function easeInOutCubic(time, start, change, duration) {
-  let normalizedTime = time / (duration / 2)
-  if (normalizedTime < 1) {
-    return (change / 2 * normalizedTime * normalizedTime * normalizedTime) + start
-  }
-
-  normalizedTime -= 2
-  return (change / 2 * ((normalizedTime * normalizedTime * normalizedTime) + 2)) + start
-}
-
-function applyContainerScrollTop(container, scrollTop) {
-  if (typeof container?.scrollTo === 'function') {
-    container.scrollTo({ top: scrollTop })
-    return
-  }
-
-  container.scrollTop = scrollTop
+  currentContainerMutationObserver = new MutationObserver(() => {
+    scheduleHeadingTargetRefresh()
+  })
+  currentContainerMutationObserver.observe(container, {
+    childList: true,
+    subtree: true,
+  })
 }
 
 function syncActiveMenuItemIntoView(href) {
@@ -158,6 +177,19 @@ function setCurrentActiveHref(href) {
   syncActiveMenuItemIntoView(href)
 }
 
+function stopProgrammaticScroll() {
+  isProgrammaticScrolling = false
+  programmaticScrollTargetTop = null
+}
+
+function shouldFinishProgrammaticScroll(container) {
+  if (!container || Number.isFinite(programmaticScrollTargetTop) !== true) {
+    return true
+  }
+
+  return container.scrollTop + 5 >= programmaticScrollTargetTop - 1
+}
+
 function updateActiveHref() {
   const container = resolveMenuContainer()
   if (!container) {
@@ -178,75 +210,37 @@ function updateActiveHref() {
 
 const syncActiveHref = commonUtil.debounce(() => {
   if (isProgrammaticScrolling) {
+    if (shouldFinishProgrammaticScroll(resolveMenuContainer()) === true) {
+      stopProgrammaticScroll()
+      updateActiveHref()
+    }
     return
   }
 
   updateActiveHref()
 }, 60)
 
-function stopProgrammaticScroll() {
-  isProgrammaticScrolling = false
-  scrollAnimationToken += 1
-  if (scrollAnimationFrameId === null) {
-    return
-  }
-
-  cancelMenuAnimationFrame(scrollAnimationFrameId)
-  scrollAnimationFrameId = null
-}
-
 function startProgrammaticScroll(container, targetScrollTop) {
   stopProgrammaticScroll()
-
-  const startScrollTop = container?.scrollTop ?? 0
-  if (Math.abs(targetScrollTop - startScrollTop) < 1) {
-    applyContainerScrollTop(container, targetScrollTop)
-    updateActiveHref()
-    return
-  }
-
-  const currentAnimationToken = scrollAnimationToken + 1
-  scrollAnimationToken = currentAnimationToken
   isProgrammaticScrolling = true
-  const startTime = Date.now()
-  const changeInScrollTop = targetScrollTop - startScrollTop
-
-  const tick = () => {
-    if (currentAnimationToken !== scrollAnimationToken) {
-      return
-    }
-
-    const elapsed = Math.max(0, Date.now() - startTime)
-    const nextScrollTop = easeInOutCubic(
-      Math.min(elapsed, MARKDOWN_MENU_SCROLL_DURATION_MS),
-      startScrollTop,
-      changeInScrollTop,
-      MARKDOWN_MENU_SCROLL_DURATION_MS,
-    )
-    applyContainerScrollTop(container, nextScrollTop)
-
-    if (elapsed < MARKDOWN_MENU_SCROLL_DURATION_MS) {
-      scrollAnimationFrameId = requestMenuAnimationFrame(tick)
-      return
-    }
-
-    scrollAnimationFrameId = null
-    isProgrammaticScrolling = false
-    applyContainerScrollTop(container, targetScrollTop)
+  programmaticScrollTargetTop = targetScrollTop
+  if (Math.abs((container?.scrollTop ?? 0) - targetScrollTop) < 1) {
+    stopProgrammaticScroll()
     updateActiveHref()
   }
-
-  scrollAnimationFrameId = requestMenuAnimationFrame(tick)
 }
 
 function bindContainer() {
   const nextContainer = resolveMenuContainer()
   currentContainer?.removeEventListener?.('scroll', syncActiveHref)
+  disconnectContainerMutationObserver()
   if (currentContainer !== nextContainer) {
     stopProgrammaticScroll()
   }
   currentContainer = nextContainer
+  rebuildHeadingTargetElementMap(currentContainer)
   currentContainer?.addEventListener?.('scroll', syncActiveHref)
+  observeContainerMutations(currentContainer)
   updateActiveHref()
 }
 
@@ -276,27 +270,19 @@ function onAnchorClick(event, href) {
   event.preventDefault()
 
   const previewRoot = resolveMenuContainer()
-  const container = resolvePreviewScrollContainer({
+  const targetElement = resolveAnchorTarget(href)
+  const scrollResult = scrollPreviewToAnchor({
     previewRoot,
     previewScrollContainer: previewRoot,
+    href,
+    targetElement,
   })
-  const targetElement = resolveAnchorTarget(previewRoot, href)
-
-  if (!container?.scrollTo || !container?.getBoundingClientRect || !targetElement?.getBoundingClientRect) {
+  if (!scrollResult) {
     return
   }
 
-  const containerRect = container.getBoundingClientRect()
-  const targetRect = targetElement.getBoundingClientRect()
-  const targetScrollTop = resolveMarkdownMenuTargetScrollTop({
-    containerTop: containerRect.top,
-    containerScrollTop: container.scrollTop,
-    containerClientTop: container.clientTop,
-    targetTop: targetRect.top,
-  })
-
   setCurrentActiveHref(href)
-  startProgrammaticScroll(container, targetScrollTop)
+  startProgrammaticScroll(scrollResult.container, scrollResult.targetTop)
 }
 
 watch(() => props.anchorList, () => {
@@ -317,6 +303,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   currentContainer?.removeEventListener?.('scroll', syncActiveHref)
+  disconnectContainerMutationObserver()
   stopProgrammaticScroll()
 })
 </script>
