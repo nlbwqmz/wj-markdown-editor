@@ -1,10 +1,14 @@
 :root[theme='dark'] {
   // 搜索匹配项(未选中)的高亮
-  .cm-selectionMatch{
+  .cm-selectionMatch {
     //outline: 1px #ff9900 solid
   }
   // 当前选中匹配项的高亮
   .cm-searchMatch-selected {
-    outline: 1px #E3B999 solid !important;
+    outline: 1px #e3b999 solid !important;
+  }
+  // oneDark 会把 gutter 边框整体清掉，这里只补回编辑区行号区域的右边框。
+  .cm-gutters {
+    border-right: 1px solid var(--wj-markdown-border-primary);
   }
 }
