@@ -27,15 +27,13 @@ const props = defineProps({
   },
 })
 
-// Chromium 平滑滚动结束时，scrollTop 可能比目标标题小 1-4px。
-// 仅在点击目录触发的滚动同步期内放宽判定，避免普通滚动提前切换激活项。
-const MARKDOWN_MENU_CLICK_ACTIVE_AHEAD_TOLERANCE = 4
-const MARKDOWN_MENU_CLICK_ACTIVE_IDLE_WINDOW_MS = 400
+const MARKDOWN_MENU_SCROLL_DURATION_MS = 450
 
 const menuItemElementMap = Object.create(null)
 let currentContainer = null
-let pendingClickActiveHref = ''
-let pendingClickActiveTimer = null
+let scrollAnimationFrameId = null
+let scrollAnimationToken = 0
+let isProgrammaticScrolling = false
 const activeHref = ref('')
 
 const flattenedAnchorList = computed(() => flattenMarkdownMenuAnchors(props.anchorList))
@@ -90,100 +88,161 @@ function getContainerHeadingRecords(container) {
     .filter(Boolean)
 }
 
-function clearPendingClickActiveState() {
-  pendingClickActiveHref = ''
-  if (pendingClickActiveTimer !== null) {
-    clearTimeout(pendingClickActiveTimer)
-    pendingClickActiveTimer = null
+function requestMenuAnimationFrame(callback) {
+  if (typeof globalThis.requestAnimationFrame === 'function') {
+    return globalThis.requestAnimationFrame(callback)
   }
+
+  return globalThis.setTimeout(() => {
+    callback(Date.now())
+  }, 16)
 }
 
-function schedulePendingClickActiveStateCleanup() {
-  if (!pendingClickActiveHref) {
+function cancelMenuAnimationFrame(frameId) {
+  if (frameId === null) {
     return
   }
 
-  if (pendingClickActiveTimer !== null) {
-    clearTimeout(pendingClickActiveTimer)
+  if (typeof globalThis.cancelAnimationFrame === 'function') {
+    globalThis.cancelAnimationFrame(frameId)
+    return
   }
-  pendingClickActiveTimer = window.setTimeout(() => {
-    clearPendingClickActiveState()
-  }, MARKDOWN_MENU_CLICK_ACTIVE_IDLE_WINDOW_MS)
+
+  clearTimeout(frameId)
 }
 
-function startPendingClickActiveState(href) {
-  clearPendingClickActiveState()
-  pendingClickActiveHref = href
-  schedulePendingClickActiveStateCleanup()
+function easeInOutCubic(time, start, change, duration) {
+  let normalizedTime = time / (duration / 2)
+  if (normalizedTime < 1) {
+    return (change / 2 * normalizedTime * normalizedTime * normalizedTime) + start
+  }
+
+  normalizedTime -= 2
+  return (change / 2 * ((normalizedTime * normalizedTime * normalizedTime) + 2)) + start
 }
 
-function resolveEffectiveScrollTop(container, headingRecords) {
-  const currentScrollTop = container?.scrollTop ?? 0
-  if (!pendingClickActiveHref) {
-    return currentScrollTop
+function applyContainerScrollTop(container, scrollTop) {
+  if (typeof container?.scrollTo === 'function') {
+    container.scrollTo({ top: scrollTop })
+    return
   }
 
-  const pendingTargetRecord = headingRecords.find(record => record.href === pendingClickActiveHref)
-  if (!pendingTargetRecord) {
-    clearPendingClickActiveState()
-    return currentScrollTop
-  }
-
-  if (currentScrollTop >= pendingTargetRecord.top) {
-    clearPendingClickActiveState()
-    return currentScrollTop
-  }
-
-  schedulePendingClickActiveStateCleanup()
-  if (pendingTargetRecord.top - currentScrollTop <= MARKDOWN_MENU_CLICK_ACTIVE_AHEAD_TOLERANCE) {
-    return pendingTargetRecord.top
-  }
-
-  return currentScrollTop
+  container.scrollTop = scrollTop
 }
 
-const syncActiveHref = commonUtil.debounce(() => {
+function syncActiveMenuItemIntoView(href) {
+  if (!href) {
+    return
+  }
+
+  nextTick(() => {
+    menuItemElementMap[href]?.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest',
+    })
+  })
+}
+
+function setCurrentActiveHref(href) {
+  if (href === activeHref.value) {
+    return
+  }
+
+  activeHref.value = href
+  syncActiveMenuItemIntoView(href)
+}
+
+function updateActiveHref() {
   const container = resolveMenuContainer()
   if (!container) {
-    activeHref.value = ''
+    setCurrentActiveHref('')
     return
   }
 
   const headingRecords = getContainerHeadingRecords(container)
   const nextActiveHref = resolveMarkdownMenuActiveHref({
     headingRecords,
-    scrollTop: resolveEffectiveScrollTop(container, headingRecords),
+    scrollTop: container.scrollTop,
     clientHeight: container.clientHeight,
     scrollHeight: container.scrollHeight,
   })
 
-  if (nextActiveHref === activeHref.value) {
+  setCurrentActiveHref(nextActiveHref)
+}
+
+const syncActiveHref = commonUtil.debounce(() => {
+  if (isProgrammaticScrolling) {
     return
   }
 
-  activeHref.value = nextActiveHref
-  if (!nextActiveHref) {
-    return
-  }
-
-  nextTick(() => {
-    menuItemElementMap[nextActiveHref]?.scrollIntoView?.({
-      behavior: 'smooth',
-      block: 'center',
-      inline: 'nearest',
-    })
-  })
+  updateActiveHref()
 }, 60)
+
+function stopProgrammaticScroll() {
+  isProgrammaticScrolling = false
+  scrollAnimationToken += 1
+  if (scrollAnimationFrameId === null) {
+    return
+  }
+
+  cancelMenuAnimationFrame(scrollAnimationFrameId)
+  scrollAnimationFrameId = null
+}
+
+function startProgrammaticScroll(container, targetScrollTop) {
+  stopProgrammaticScroll()
+
+  const startScrollTop = container?.scrollTop ?? 0
+  if (Math.abs(targetScrollTop - startScrollTop) < 1) {
+    applyContainerScrollTop(container, targetScrollTop)
+    updateActiveHref()
+    return
+  }
+
+  const currentAnimationToken = scrollAnimationToken + 1
+  scrollAnimationToken = currentAnimationToken
+  isProgrammaticScrolling = true
+  const startTime = Date.now()
+  const changeInScrollTop = targetScrollTop - startScrollTop
+
+  const tick = () => {
+    if (currentAnimationToken !== scrollAnimationToken) {
+      return
+    }
+
+    const elapsed = Math.max(0, Date.now() - startTime)
+    const nextScrollTop = easeInOutCubic(
+      Math.min(elapsed, MARKDOWN_MENU_SCROLL_DURATION_MS),
+      startScrollTop,
+      changeInScrollTop,
+      MARKDOWN_MENU_SCROLL_DURATION_MS,
+    )
+    applyContainerScrollTop(container, nextScrollTop)
+
+    if (elapsed < MARKDOWN_MENU_SCROLL_DURATION_MS) {
+      scrollAnimationFrameId = requestMenuAnimationFrame(tick)
+      return
+    }
+
+    scrollAnimationFrameId = null
+    isProgrammaticScrolling = false
+    applyContainerScrollTop(container, targetScrollTop)
+    updateActiveHref()
+  }
+
+  scrollAnimationFrameId = requestMenuAnimationFrame(tick)
+}
 
 function bindContainer() {
   const nextContainer = resolveMenuContainer()
   currentContainer?.removeEventListener?.('scroll', syncActiveHref)
   if (currentContainer !== nextContainer) {
-    clearPendingClickActiveState()
+    stopProgrammaticScroll()
   }
   currentContainer = nextContainer
   currentContainer?.addEventListener?.('scroll', syncActiveHref)
-  syncActiveHref()
+  updateActiveHref()
 }
 
 function setMenuItemRef(href, element) {
@@ -231,18 +290,15 @@ function onAnchorClick(event, href) {
     targetTop: targetRect.top,
   })
 
-  startPendingClickActiveState(href)
-  container.scrollTo({
-    top: targetScrollTop,
-    behavior: 'smooth',
-  })
+  setCurrentActiveHref(href)
+  startProgrammaticScroll(container, targetScrollTop)
 }
 
 watch(() => props.anchorList, () => {
   nextTick(() => {
     bindContainer()
   })
-}, { deep: true, immediate: true })
+}, { deep: true })
 
 watch(resolveMenuContainer, () => {
   nextTick(() => {
@@ -256,7 +312,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   currentContainer?.removeEventListener?.('scroll', syncActiveHref)
-  clearPendingClickActiveState()
+  stopProgrammaticScroll()
 })
 </script>
 
@@ -290,6 +346,7 @@ onBeforeUnmount(() => {
           :data-depth="String(item.depth)"
           :data-level="String(item.level)"
           :data-active="String(isActiveHref(item.href))"
+          :title="item.title"
           @click="event => onAnchorClick(event, item.href)"
         >
           <span class="markdown-menu__item-text">{{ item.title }}</span>

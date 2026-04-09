@@ -69,6 +69,27 @@ function createWrapper(props = {}) {
   })
 }
 
+function installRequestAnimationFrameStub() {
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+  let rafTimestamp = 0
+
+  globalThis.requestAnimationFrame = (callback) => {
+    return setTimeout(() => {
+      rafTimestamp += 16
+      callback(rafTimestamp)
+    }, 16)
+  }
+  globalThis.cancelAnimationFrame = (id) => {
+    clearTimeout(id)
+  }
+
+  return () => {
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame
+  }
+}
+
 describe('markdownMenu', () => {
   let container
   let secondaryContainer
@@ -152,6 +173,24 @@ describe('markdownMenu', () => {
     expect(items[0].text()).toBe('介绍')
   })
 
+  it('目录项应通过 title 保留完整标题文本，供悬浮时查看', async () => {
+    container.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container, top: 0 }),
+        '#session': createHeading({ container, top: 120 }),
+        '#resource': createHeading({ container, top: 260 }),
+      }
+      return map[selector] || null
+    })
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    expect(wrapper.find('[data-href="#session"]').attributes('title')).toBe('文档会话模型')
+  })
+
   it('空目录时会保留空状态', async () => {
     const wrapper = createWrapper({
       anchorList: [],
@@ -185,7 +224,9 @@ describe('markdownMenu', () => {
     expect(scrollIntoViewSpy).toHaveBeenCalled()
   })
 
-  it('点击目录项时会使用 JS 平滑滚动到目标标题', async () => {
+  it('点击目录项时会使用 JS 动画滚动到目标标题', async () => {
+    vi.useFakeTimers()
+    const restoreAnimationFrame = installRequestAnimationFrameStub()
     container.querySelector = vi.fn((selector) => {
       const map = {
         '#intro': createHeading({ container, top: 0 }),
@@ -201,11 +242,15 @@ describe('markdownMenu', () => {
     })
 
     await wrapper.find('[data-href="#resource"]').trigger('click')
+    vi.advanceTimersByTime(500)
+    await wrapper.vm.$nextTick()
 
-    expect(container.scrollTo).toHaveBeenCalledWith({
+    expect(container.scrollTo).toHaveBeenCalled()
+    expect(container.scrollTo).toHaveBeenLastCalledWith({
       top: 260,
-      behavior: 'smooth',
     })
+
+    restoreAnimationFrame()
   })
 
   it('点击目录后滚动停在目标标题上方极小距离时，仍应高亮当前锚点', async () => {
@@ -274,7 +319,7 @@ describe('markdownMenu', () => {
     expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
   })
 
-  it('普通滚动停在目标标题上方极小距离时，仍应保持上一个锚点高亮', async () => {
+  it('普通滚动停在目标标题上方极小距离时，应按 a-anchor 的 bounds 语义切换到当前锚点', async () => {
     container.querySelector = vi.fn((selector) => {
       const map = {
         '#intro': createHeading({ container, top: 0 }),
@@ -293,10 +338,41 @@ describe('markdownMenu', () => {
     container.dispatchEvent(new Event('scroll'))
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#session')
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
   })
 
-  it('预览滚动容器切换时，应清理旧容器残留的点击同步态', async () => {
+  it('点击目录后在程序化滚动进行中，滚动事件不应抢走当前点击项的高亮', async () => {
+    vi.useFakeTimers()
+    const restoreAnimationFrame = installRequestAnimationFrameStub()
+    container.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container, top: 0 }),
+        '#session': createHeading({ container, top: 120 }),
+        '#resource': createHeading({ container, top: 260 }),
+      }
+      return map[selector] || null
+    })
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    await wrapper.find('[data-href="#resource"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
+
+    container.scrollTop = 80
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
+
+    restoreAnimationFrame()
+  })
+
+  it('预览滚动容器切换时，应按新容器的滚动位置重新计算 active 项', async () => {
     container.querySelector = vi.fn((selector) => {
       const map = {
         '#intro': createHeading({ container, top: 0 }),
@@ -324,7 +400,7 @@ describe('markdownMenu', () => {
     })
 
     await wrapper.find('[data-href="#resource"]').trigger('click')
-    secondaryContainer.scrollTop = 259
+    secondaryContainer.scrollTop = 160
     containerRef.value = secondaryContainer
     await nextTick()
     await wrapper.vm.$nextTick()

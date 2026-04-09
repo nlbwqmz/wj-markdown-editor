@@ -2,6 +2,8 @@ function normalizeAnchorChildren(children) {
   return Array.isArray(children) ? children : []
 }
 
+const MARKDOWN_MENU_ACTIVE_BOUNDS = 5
+
 const MARKDOWN_MENU_TYPOGRAPHY_MAP = Object.freeze({
   1: Object.freeze({ fontSize: '15px', fontWeight: 600 }),
   2: Object.freeze({ fontSize: '14px', fontWeight: 600 }),
@@ -55,6 +57,7 @@ export function resolveMarkdownMenuActiveHref({
   scrollTop,
   clientHeight,
   scrollHeight,
+  bounds = MARKDOWN_MENU_ACTIVE_BOUNDS,
 }) {
   const normalizedHeadingRecords = Array.isArray(headingRecords) ? headingRecords : []
   if (normalizedHeadingRecords.length === 0) {
@@ -67,7 +70,7 @@ export function resolveMarkdownMenuActiveHref({
 
   let activeHref = normalizedHeadingRecords[0]?.href || ''
   normalizedHeadingRecords.forEach((record) => {
-    if (record.top <= scrollTop) {
+    if (record.top < scrollTop + bounds) {
       activeHref = record.href
     }
   })
