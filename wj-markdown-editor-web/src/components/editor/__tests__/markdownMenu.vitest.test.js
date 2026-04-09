@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 
+import IconButton from '../IconButton.vue'
 import MarkdownMenu from '../MarkdownMenu.vue'
 
 vi.mock('@/util/commonUtil.js', () => ({
@@ -199,6 +200,48 @@ describe('markdownMenu', () => {
 
     expect(wrapper.find('[data-testid="empty-stub"]').exists()).toBe(true)
     expect(wrapper.findAll('[data-testid="markdown-menu-item"]')).toHaveLength(0)
+  })
+
+  it('默认会显示标题栏，并在可关闭时复用 IconButton 作为关闭入口', async () => {
+    container.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container, top: 0 }),
+        '#session': createHeading({ container, top: 120 }),
+        '#resource': createHeading({ container, top: 260 }),
+      }
+      return map[selector] || null
+    })
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+      close: vi.fn(),
+    })
+
+    expect(wrapper.text()).toContain('outline')
+    expect(wrapper.findComponent(IconButton).exists()).toBe(true)
+  })
+
+  it('showHeader 为 false 时不显示标题栏，但仍保留目录内容', async () => {
+    container.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container, top: 0 }),
+        '#session': createHeading({ container, top: 120 }),
+        '#resource': createHeading({ container, top: 260 }),
+      }
+      return map[selector] || null
+    })
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+      close: vi.fn(),
+      showHeader: false,
+    })
+
+    expect(wrapper.text()).not.toContain('outline')
+    expect(wrapper.findComponent(IconButton).exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid="markdown-menu-item"]')).toHaveLength(3)
   })
 
   it('预览容器滚动后会切换 active 项，并把 active 项滚入目录可视区', async () => {

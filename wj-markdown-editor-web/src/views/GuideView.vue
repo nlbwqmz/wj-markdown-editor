@@ -81,7 +81,7 @@ onUnmounted(() => {
       </div>
     </template>
     <div ref="guideContainerRef" class="allow-search grid grid-cols-[200px_1px_1fr] h-full w-full overflow-hidden b-t-1 b-t-border-primary b-t-solid">
-      <MarkdownMenu :anchor-list="anchorList" :get-container="() => previewContainerRef" />
+      <MarkdownMenu :anchor-list="anchorList" :get-container="() => previewContainerRef" :show-header="false" />
       <div ref="gutterRef" class="wj-sash wj-sash--vertical h-full" />
       <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
         <div class="h-full w-full flex justify-center">

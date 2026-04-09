@@ -37,6 +37,10 @@ const markdownPreviewStubState = vi.hoisted(() => ({
   nextId: 0,
 }))
 
+const markdownMenuStubState = vi.hoisted(() => ({
+  latestShowHeader: null,
+}))
+
 vi.mock('split-grid', () => ({
   default(options) {
     const destroy = vi.fn()
@@ -87,7 +91,34 @@ vi.mock('@/components/editor/ImageNetworkModal.vue', () => ({
 }))
 
 vi.mock('@/components/editor/MarkdownMenu.vue', () => ({
-  default: createStubComponent('MarkdownMenuStub'),
+  default: defineComponent({
+    name: 'MarkdownMenuStub',
+    props: {
+      anchorList: {
+        type: Array,
+        default: () => [],
+      },
+      getContainer: {
+        type: Function,
+        default: null,
+      },
+      close: {
+        type: Function,
+        default: null,
+      },
+      showHeader: {
+        type: Boolean,
+        default: true,
+      },
+    },
+    setup(props, { attrs, slots }) {
+      markdownMenuStubState.latestShowHeader = props.showHeader
+      return () => h('div', {
+        ...attrs,
+        'data-show-header': String(props.showHeader),
+      }, slots.default ? slots.default() : [])
+    },
+  }),
 }))
 
 vi.mock('@/components/editor/MarkdownPreview.vue', () => ({
@@ -315,6 +346,7 @@ describe('markdownEdit 布局运行时接线', () => {
     splitState.destroySpies.length = 0
     markdownPreviewStubState.instances.length = 0
     markdownPreviewStubState.nextId = 0
+    markdownMenuStubState.latestShowHeader = null
     previewLayoutWiringState.rebuildPreviewLayoutIndex.mockClear()
     previewLayoutWiringState.jumpToTargetLine.mockClear()
     previewLayoutWiringState.syncEditorToPreview.mockClear()
@@ -392,6 +424,16 @@ describe('markdownEdit 布局运行时接线', () => {
     expect(menuLayoutItem.classes()).not.toContain('b-r-1')
     expect(menuLayoutItem.classes()).not.toContain('b-r-border-primary')
     expect(menuLayoutItem.classes()).not.toContain('b-r-solid')
+  })
+
+  it('编辑页中的目录菜单会关闭顶部标题栏', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: true,
+    })
+
+    expect(markdownMenuStubState.latestShowHeader).toBe(false)
+    expect(wrapper.get('[data-layout-item="menu"]').attributes('data-show-header')).toBe('false')
   })
 
   it('previewPosition 从 right 切到 left 时，会重建 Split 并同步新的真实 DOM 顺序', async () => {

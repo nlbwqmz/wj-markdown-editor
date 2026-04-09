@@ -2,6 +2,7 @@ export default {
   prompt: '提示',
   okText: '确认',
   cancelText: '取消',
+  close: '关闭',
   outline: '大纲',
   noOutline: '暂无大纲',
   editor: {

@@ -1046,7 +1046,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full overflow-y-auto p-2"
+          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full overflow-y-auto p-2"
           :style="previewContainerStyle"
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"
@@ -1067,13 +1067,14 @@ defineExpose({
           v-else-if="item.type === 'gutter-menu'"
           :ref="setMenuGutterElement"
           data-layout-item="gutter-menu"
-          class="markdown-edit-layout__gutter markdown-edit-layout__gutter--menu wj-sash wj-sash--vertical h-full"
+          class="markdown-edit-layout__gutter wj-sash wj-sash--vertical markdown-edit-layout__gutter--menu h-full"
         />
         <MarkdownMenu
           v-else-if="item.type === 'menu'"
           :anchor-list="anchorList"
           :get-container="() => previewRef"
           :close="() => { menuVisible = false }"
+          :show-header="false"
           data-layout-item="menu"
           class="allow-search markdown-edit-layout__menu"
         />

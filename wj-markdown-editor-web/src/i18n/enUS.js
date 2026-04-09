@@ -2,6 +2,7 @@ export default {
   prompt: 'Prompt',
   okText: 'OK',
   cancelText: 'Cancel',
+  close: 'Close',
   outline: 'Outline',
   noOutline: 'No outline',
   editor: {

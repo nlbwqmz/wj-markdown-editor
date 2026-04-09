@@ -1,5 +1,6 @@
 <script setup>
 import { computed, isRef, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import IconButton from '@/components/editor/IconButton.vue'
 import commonUtil from '@/util/commonUtil.js'
 import {
   findPreviewAnchorTarget,
@@ -24,6 +25,10 @@ const props = defineProps({
   close: {
     type: Function,
     default: null,
+  },
+  showHeader: {
+    type: Boolean,
+    default: true,
   },
 })
 
@@ -318,11 +323,20 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="h-full w-full flex flex-col overflow-hidden">
-    <div class="flex items-center b-b-1 b-b-border-primary b-b-solid p-2 font-size-3.5 text-text-primary" :class="close ? 'justify-between' : 'justify-center'">
-      <div class="select-none">
+    <div
+      v-if="showHeader"
+      class="flex items-center b-b-1 b-b-border-primary b-b-solid p-1 font-size-3.5"
+      :class="close ? 'justify-between' : 'justify-center'"
+    >
+      <div class="select-none color-text-secondary">
         {{ $t('outline') }}
       </div>
-      <div v-if="close" class="i-tabler:x cursor-pointer" @click="close" />
+      <IconButton
+        v-if="close"
+        :label="$t('close')"
+        icon="i-tabler:x"
+        :action="close"
+      />
     </div>
     <div class="wj-scrollbar relative h-0 h-full flex-1 overflow-y-auto p-b-2 p-l-3 p-r-3 p-t-2">
       <div v-if="flattenedAnchorList.length === 0" class="h-full flex items-center justify-center">
