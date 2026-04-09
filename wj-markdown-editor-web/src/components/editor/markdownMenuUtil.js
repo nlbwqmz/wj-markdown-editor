@@ -10,7 +10,6 @@ const MARKDOWN_MENU_TYPOGRAPHY_MAP = Object.freeze({
   5: Object.freeze({ fontSize: '12px', fontWeight: 400 }),
   6: Object.freeze({ fontSize: '11px', fontWeight: 400 }),
 })
-const MARKDOWN_MENU_ACTIVE_AHEAD_TOLERANCE = 4
 
 function normalizeHeadingLevel(level) {
   const numericLevel = Number(level)
@@ -66,10 +65,9 @@ export function resolveMarkdownMenuActiveHref({
     return normalizedHeadingRecords.at(-1)?.href || ''
   }
 
-  const activationScrollTop = scrollTop + MARKDOWN_MENU_ACTIVE_AHEAD_TOLERANCE
   let activeHref = normalizedHeadingRecords[0]?.href || ''
   normalizedHeadingRecords.forEach((record) => {
-    if (record.top <= activationScrollTop) {
+    if (record.top <= scrollTop) {
       activeHref = record.href
     }
   })

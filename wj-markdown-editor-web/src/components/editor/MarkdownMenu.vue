@@ -27,8 +27,15 @@ const props = defineProps({
   },
 })
 
+// Chromium 平滑滚动结束时，scrollTop 可能比目标标题小 1-4px。
+// 仅在点击目录触发的滚动同步期内放宽判定，避免普通滚动提前切换激活项。
+const MARKDOWN_MENU_CLICK_ACTIVE_AHEAD_TOLERANCE = 4
+const MARKDOWN_MENU_CLICK_ACTIVE_IDLE_WINDOW_MS = 400
+
 const menuItemElementMap = Object.create(null)
 let currentContainer = null
+let pendingClickActiveHref = ''
+let pendingClickActiveTimer = null
 const activeHref = ref('')
 
 const flattenedAnchorList = computed(() => flattenMarkdownMenuAnchors(props.anchorList))
@@ -83,6 +90,58 @@ function getContainerHeadingRecords(container) {
     .filter(Boolean)
 }
 
+function clearPendingClickActiveState() {
+  pendingClickActiveHref = ''
+  if (pendingClickActiveTimer !== null) {
+    clearTimeout(pendingClickActiveTimer)
+    pendingClickActiveTimer = null
+  }
+}
+
+function schedulePendingClickActiveStateCleanup() {
+  if (!pendingClickActiveHref) {
+    return
+  }
+
+  if (pendingClickActiveTimer !== null) {
+    clearTimeout(pendingClickActiveTimer)
+  }
+  pendingClickActiveTimer = window.setTimeout(() => {
+    clearPendingClickActiveState()
+  }, MARKDOWN_MENU_CLICK_ACTIVE_IDLE_WINDOW_MS)
+}
+
+function startPendingClickActiveState(href) {
+  clearPendingClickActiveState()
+  pendingClickActiveHref = href
+  schedulePendingClickActiveStateCleanup()
+}
+
+function resolveEffectiveScrollTop(container, headingRecords) {
+  const currentScrollTop = container?.scrollTop ?? 0
+  if (!pendingClickActiveHref) {
+    return currentScrollTop
+  }
+
+  const pendingTargetRecord = headingRecords.find(record => record.href === pendingClickActiveHref)
+  if (!pendingTargetRecord) {
+    clearPendingClickActiveState()
+    return currentScrollTop
+  }
+
+  if (currentScrollTop >= pendingTargetRecord.top) {
+    clearPendingClickActiveState()
+    return currentScrollTop
+  }
+
+  schedulePendingClickActiveStateCleanup()
+  if (pendingTargetRecord.top - currentScrollTop <= MARKDOWN_MENU_CLICK_ACTIVE_AHEAD_TOLERANCE) {
+    return pendingTargetRecord.top
+  }
+
+  return currentScrollTop
+}
+
 const syncActiveHref = commonUtil.debounce(() => {
   const container = resolveMenuContainer()
   if (!container) {
@@ -90,9 +149,10 @@ const syncActiveHref = commonUtil.debounce(() => {
     return
   }
 
+  const headingRecords = getContainerHeadingRecords(container)
   const nextActiveHref = resolveMarkdownMenuActiveHref({
-    headingRecords: getContainerHeadingRecords(container),
-    scrollTop: container.scrollTop,
+    headingRecords,
+    scrollTop: resolveEffectiveScrollTop(container, headingRecords),
     clientHeight: container.clientHeight,
     scrollHeight: container.scrollHeight,
   })
@@ -116,8 +176,12 @@ const syncActiveHref = commonUtil.debounce(() => {
 }, 60)
 
 function bindContainer() {
+  const nextContainer = resolveMenuContainer()
   currentContainer?.removeEventListener?.('scroll', syncActiveHref)
-  currentContainer = resolveMenuContainer()
+  if (currentContainer !== nextContainer) {
+    clearPendingClickActiveState()
+  }
+  currentContainer = nextContainer
   currentContainer?.addEventListener?.('scroll', syncActiveHref)
   syncActiveHref()
 }
@@ -167,6 +231,7 @@ function onAnchorClick(event, href) {
     targetTop: targetRect.top,
   })
 
+  startPendingClickActiveState(href)
   container.scrollTo({
     top: targetScrollTop,
     behavior: 'smooth',
@@ -191,6 +256,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   currentContainer?.removeEventListener?.('scroll', syncActiveHref)
+  clearPendingClickActiveState()
 })
 </script>
 

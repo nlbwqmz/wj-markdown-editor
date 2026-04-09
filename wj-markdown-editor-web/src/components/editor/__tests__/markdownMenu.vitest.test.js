@@ -120,6 +120,7 @@ describe('markdownMenu', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
     document.body.innerHTML = ''
   })
@@ -230,6 +231,106 @@ describe('markdownMenu', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
+  })
+
+  it('点击目录后的长距离滚动超过初始同步窗口时，最终轻微欠滚仍应保持当前锚点高亮', async () => {
+    vi.useFakeTimers()
+    container.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container, top: 0 }),
+        '#session': createHeading({ container, top: 120 }),
+        '#resource': createHeading({ container, top: 260 }),
+      }
+      return map[selector] || null
+    })
+    container.scrollTo = vi.fn()
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    await wrapper.find('[data-href="#resource"]').trigger('click')
+
+    container.scrollTop = 80
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+    vi.advanceTimersByTime(350)
+
+    container.scrollTop = 170
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+    vi.advanceTimersByTime(350)
+
+    container.scrollTop = 230
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+    vi.advanceTimersByTime(350)
+
+    container.scrollTop = 259
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
+  })
+
+  it('普通滚动停在目标标题上方极小距离时，仍应保持上一个锚点高亮', async () => {
+    container.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container, top: 0 }),
+        '#session': createHeading({ container, top: 120 }),
+        '#resource': createHeading({ container, top: 260 }),
+      }
+      return map[selector] || null
+    })
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    container.scrollTop = 259
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#session')
+  })
+
+  it('预览滚动容器切换时，应清理旧容器残留的点击同步态', async () => {
+    container.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container, top: 0 }),
+        '#session': createHeading({ container, top: 120 }),
+        '#resource': createHeading({ container, top: 260 }),
+      }
+      return map[selector] || null
+    })
+    secondaryContainer.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container: secondaryContainer, top: 0 }),
+        '#session': createHeading({ container: secondaryContainer, top: 120 }),
+        '#resource': createHeading({ container: secondaryContainer, top: 260 }),
+      }
+      return map[selector] || null
+    })
+    container.scrollTo = vi.fn(({ top }) => {
+      container.scrollTop = top - 1
+    })
+    const containerRef = ref(container)
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => containerRef,
+    })
+
+    await wrapper.find('[data-href="#resource"]').trigger('click')
+    secondaryContainer.scrollTop = 259
+    containerRef.value = secondaryContainer
+    await nextTick()
+    await wrapper.vm.$nextTick()
+    await nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#session')
   })
 
   it('预览滚动容器引用切换后，会重新绑定新的滚动监听并解绑旧容器', async () => {
