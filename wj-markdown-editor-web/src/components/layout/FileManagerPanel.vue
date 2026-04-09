@@ -282,6 +282,7 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  line-height: 1.5;
   direction: rtl;
   text-align: left;
 }
@@ -324,5 +325,6 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
 .file-manager-panel__entry-name {
   min-width: 0;
   flex: 1 1 auto;
+  line-height: 1.5;
 }
 </style>

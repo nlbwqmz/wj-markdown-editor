@@ -301,7 +301,7 @@ export default {
   message: {
     anchorTargetDoesNotExist: '锚点目标位置不存在',
     theFileDoesNotExist: '文件不存在',
-    onlyMarkdownFilesCanBeOpened: '只能打开 Markdown（.md / .markdown）文件。',
+    onlyMarkdownFilesCanBeOpened: '不支当前文件格式',
     fileManagerSelectDirectory: '选择目录',
     fileManagerDirectoryEmpty: '当前目录为空',
     fileManagerOpenParentDirectory: '返回上一级',

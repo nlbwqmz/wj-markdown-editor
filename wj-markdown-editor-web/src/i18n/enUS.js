@@ -301,7 +301,7 @@ export default {
   message: {
     anchorTargetDoesNotExist: 'The anchor target does not exist.',
     theFileDoesNotExist: 'The file does not exist.',
-    onlyMarkdownFilesCanBeOpened: 'Only Markdown (.md / .markdown) files can be opened.',
+    onlyMarkdownFilesCanBeOpened: 'Current file format is not supported.',
     fileManagerSelectDirectory: 'Select a directory',
     fileManagerDirectoryEmpty: 'This directory is empty.',
     fileManagerOpenParentDirectory: 'Go to parent directory',

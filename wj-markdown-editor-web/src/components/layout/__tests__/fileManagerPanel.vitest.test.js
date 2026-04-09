@@ -793,6 +793,15 @@ describe('fileManagerPanel 组件', () => {
     expect(pathValueDeclarations.get('unicode-bidi')).toBe('bidi-override')
   })
 
+  it('文件名与路径文本样式应显式声明行高，避免下伸字母被裁切', async () => {
+    const css = await loadFileManagerPanelCompiledStyle()
+    const pathDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__path-text')
+    const entryNameDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__entry-name')
+
+    expect(pathDeclarations.get('line-height')).toBeTruthy()
+    expect(entryNameDeclarations.get('line-height')).toBeTruthy()
+  })
+
   it('pOSIX 路径仅大小写不同，不应把其他文件误高亮成当前文件', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       path: '/workspace/Readme.md',
