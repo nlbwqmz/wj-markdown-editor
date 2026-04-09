@@ -72,6 +72,28 @@ test('resolveMarkdownMenuActiveHref 应跟随 scrollTop 选择当前阅读位置
   }), '#resource')
 })
 
+test('resolveMarkdownMenuActiveHref 在滚动停在目标标题上方极小距离时，仍应命中当前标题', () => {
+  const headingRecords = [
+    { href: '#intro', top: 0 },
+    { href: '#session', top: 120 },
+    { href: '#resource', top: 260 },
+  ]
+
+  assert.equal(resolveMarkdownMenuActiveHref({
+    headingRecords,
+    scrollTop: 255,
+    clientHeight: 320,
+    scrollHeight: 900,
+  }), '#session')
+
+  assert.equal(resolveMarkdownMenuActiveHref({
+    headingRecords,
+    scrollTop: 259,
+    clientHeight: 320,
+    scrollHeight: 900,
+  }), '#resource')
+})
+
 test('resolveMarkdownMenuTargetScrollTop 应按容器相对坐标计算平滑滚动目标位置', () => {
   const targetScrollTop = resolveMarkdownMenuTargetScrollTop({
     containerTop: 100,

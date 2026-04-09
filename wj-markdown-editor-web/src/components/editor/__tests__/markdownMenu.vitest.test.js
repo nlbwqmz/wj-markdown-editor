@@ -207,6 +207,31 @@ describe('markdownMenu', () => {
     })
   })
 
+  it('点击目录后滚动停在目标标题上方极小距离时，仍应高亮当前锚点', async () => {
+    container.querySelector = vi.fn((selector) => {
+      const map = {
+        '#intro': createHeading({ container, top: 0 }),
+        '#session': createHeading({ container, top: 120 }),
+        '#resource': createHeading({ container, top: 260 }),
+      }
+      return map[selector] || null
+    })
+    container.scrollTo = vi.fn(({ top }) => {
+      container.scrollTop = top - 1
+    })
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    await wrapper.find('[data-href="#resource"]').trigger('click')
+    container.dispatchEvent(new Event('scroll'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#resource')
+  })
+
   it('预览滚动容器引用切换后，会重新绑定新的滚动监听并解绑旧容器', async () => {
     container.querySelector = vi.fn((selector) => {
       const map = {
