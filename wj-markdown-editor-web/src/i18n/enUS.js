@@ -303,7 +303,7 @@ export default {
     theFileDoesNotExist: 'The file does not exist.',
     onlyMarkdownFilesCanBeOpened: 'Current file format is not supported.',
     fileManagerSelectDirectory: 'Select a directory',
-    fileManagerDirectoryEmpty: 'This directory is empty.',
+    fileManagerDirectoryEmpty: 'This directory is empty',
     fileManagerOpenParentDirectory: 'Go to parent directory',
     fileManagerFocusCurrentFileDirectory: 'Locate current file directory',
     fileManagerCreateFolder: 'New folder',
@@ -375,5 +375,7 @@ export default {
     fileExternalChangeAutoApplied: 'The file was modified externally and the latest content has been applied automatically.',
     fileExternalChangeNotificationTitle: 'File content updated',
     fileExternalChangeNotificationBody: 'The file was modified externally and the latest content has been applied automatically.',
+    fileManagerSearchPlaceholder: 'Search',
+    fileManagerNoSearchResults: 'No match found',
   },
 }

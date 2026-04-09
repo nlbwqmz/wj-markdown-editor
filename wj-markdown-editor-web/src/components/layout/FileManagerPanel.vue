@@ -1,6 +1,6 @@
 <script setup>
 import { Empty as AEmpty } from 'ant-design-vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import IconButton from '@/components/editor/IconButton.vue'
 import i18n from '@/i18n/index.js'
 import { useCommonStore } from '@/stores/counter.js'
@@ -26,6 +26,18 @@ const {
   openParentDirectory,
   pickDirectory,
 } = controller
+
+const searchQuery = ref('')
+
+const filteredEntryList = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return entryList.value
+  }
+  const query = searchQuery.value.toLowerCase()
+  return entryList.value.filter(entry =>
+    entry.name.toLowerCase().includes(query),
+  )
+})
 
 const imageExtensionSet = new Set([
   'png',
@@ -172,7 +184,7 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
 
 <template>
   <div class="file-manager-panel h-full min-w-0 flex flex-col overflow-hidden bg-bg-primary text-text-primary">
-    <div class="file-manager-panel__toolbar flex items-center gap-2 border-b border-b-border-primary border-b-solid p-1">
+    <div class="file-manager-panel__toolbar flex items-center gap-2 border-b border-b-border-primary border-b-solid p-1 p-l-2">
       <div
         data-testid="file-manager-breadcrumb"
         :title="resolvedDirectoryPath || undefined"
@@ -181,7 +193,9 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
         <span v-if="resolvedDirectoryPath" class="file-manager-panel__path-text">
           <span class="file-manager-panel__path-value">{{ resolvedDirectoryPath }}</span>
         </span>
-        <span v-else-if="emptyMessageKey">{{ t(emptyMessageKey) }}</span>
+        <span v-else-if="emptyMessageKey" class="block w-full overflow-hidden text-ellipsis whitespace-nowrap">
+          <span>{{ t(emptyMessageKey) }}</span>
+        </span>
       </div>
       <div class="flex items-center gap-1">
         <IconButton
@@ -229,6 +243,14 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
         />
       </div>
     </div>
+    <div v-if="hasDirectory" class="file-manager-panel__search border-b border-b-border-primary border-b-solid px-2 py-2">
+      <input
+        v-model="searchQuery"
+        type="text"
+        :placeholder="t('message.fileManagerSearchPlaceholder')"
+        class="file-manager-panel__search-input w-full border border-border-primary rounded border-solid bg-bg-primary px-2 py-1.5 text-sm text-text-primary outline-none transition-colors focus:border-blue-500"
+      >
+    </div>
     <div class="h-0 min-h-0 flex-1 overflow-hidden">
       <div
         v-if="!hasDirectory"
@@ -238,11 +260,11 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
         <AEmpty :description="null" />
       </div>
       <div
-        v-else-if="entryList.length > 0"
+        v-else-if="filteredEntryList.length > 0"
         class="wj-scrollbar file-manager-panel__list h-full min-h-0 overflow-y-auto px-2 py-2"
       >
         <button
-          v-for="entry in entryList"
+          v-for="entry in filteredEntryList"
           :key="entry.path"
           :title="entry.name"
           type="button"
@@ -267,9 +289,9 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
       <div
         v-else
         data-testid="file-manager-empty-state"
-        class="file-manager-panel__empty h-full flex items-center justify-center px-4 text-center text-sm color-text-secondary"
+        class="file-manager-panel__empty h-full flex items-center justify-center px-4"
       >
-        {{ t(emptyMessageKey) }}
+        <AEmpty :description="searchQuery ? t('message.fileManagerNoSearchResults') : t(emptyMessageKey)" />
       </div>
     </div>
   </div>

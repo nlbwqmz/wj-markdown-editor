@@ -375,5 +375,7 @@ export default {
     fileExternalChangeAutoApplied: '检测到文件被外部修改，已自动应用最新内容。',
     fileExternalChangeNotificationTitle: '文件内容已更新',
     fileExternalChangeNotificationBody: '检测到文件被外部修改，已自动应用最新内容。',
+    fileManagerSearchPlaceholder: '搜索',
+    fileManagerNoSearchResults: '未找到匹配项',
   },
 }
