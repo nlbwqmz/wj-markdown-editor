@@ -1,5 +1,5 @@
 <script setup>
-import { Empty as AEmpty } from 'ant-design-vue'
+import { Empty as AEmpty, Input as AInput } from 'ant-design-vue'
 import { computed, ref } from 'vue'
 import IconButton from '@/components/editor/IconButton.vue'
 import i18n from '@/i18n/index.js'
@@ -244,12 +244,12 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
       </div>
     </div>
     <div v-if="hasDirectory" class="file-manager-panel__search border-b border-b-border-primary border-b-solid px-2 py-2">
-      <input
-        v-model="searchQuery"
-        type="text"
+      <AInput
+        v-model:value="searchQuery"
+        allow-clear
         :placeholder="t('message.fileManagerSearchPlaceholder')"
-        class="file-manager-panel__search-input w-full border border-border-primary rounded border-solid bg-bg-primary px-2 py-1.5 text-sm text-text-primary outline-none transition-colors focus:border-blue-500"
-      >
+        class="file-manager-panel__search-input w-full"
+      />
     </div>
     <div class="h-0 min-h-0 flex-1 overflow-hidden">
       <div

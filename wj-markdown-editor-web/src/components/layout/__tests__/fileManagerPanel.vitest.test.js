@@ -166,18 +166,42 @@ vi.mock('ant-design-vue', async () => {
     }),
     Input: defineComponent({
       name: 'AInputStub',
+      inheritAttrs: false,
       props: {
         value: {
           type: String,
           default: '',
         },
+        placeholder: {
+          type: String,
+          default: '',
+        },
+        type: {
+          type: String,
+          default: 'text',
+        },
+        allowClear: {
+          type: Boolean,
+          default: false,
+        },
       },
       emits: ['update:value'],
-      setup(props, { emit }) {
-        return () => h('input', {
-          value: props.value,
-          onInput: event => emit('update:value', event.target.value),
-        })
+      setup(props, { attrs, emit }) {
+        return () => h('div', attrs, [
+          h('input', {
+            value: props.value,
+            type: props.type,
+            placeholder: props.placeholder,
+            onInput: event => emit('update:value', event.target.value),
+          }),
+          props.allowClear && props.value
+            ? h('button', {
+                'type': 'button',
+                'data-testid': 'file-manager-search-clear',
+                'onClick': () => emit('update:value', ''),
+              })
+            : null,
+        ])
       },
     }),
     Modal: {
@@ -767,12 +791,41 @@ describe('fileManagerPanel 组件', () => {
     mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
 
-    await wrapper.get('.file-manager-panel__search-input').setValue('missing-keyword')
+    await wrapper.get('.file-manager-panel__search-input input').setValue('missing-keyword')
     await flushFileManagerPanel()
 
     expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerNoSearchResults')
     expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).not.toContain('translated:message.fileManagerDirectoryEmpty')
     expect(wrapper.get('.file-manager-panel__empty-description').classes()).toContain('color-gray-500')
+  })
+
+  it('搜索框输入后应显示清空入口，清空后恢复完整列表', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'draft-note.md', path: 'D:/docs/draft-note.md', kind: 'markdown' },
+        { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('.file-manager-panel__search-input input').setValue('missing-keyword')
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="file-manager-search-clear"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="file-manager-search-clear"]').trigger('click')
+    await flushFileManagerPanel()
+
+    expect(wrapper.find('[data-testid="file-manager-empty-state"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="file-manager-search-clear"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text()).sort()).toEqual([
+      'draft-note.md',
+      'assets',
+    ].sort())
   })
 
   it('中英文文案应补齐文件管理栏真实使用到的 key', async () => {

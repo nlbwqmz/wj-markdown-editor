@@ -148,6 +148,11 @@
   }
 
   .ant-input-affix-wrapper {
+    background-color: var(--wj-markdown-bg-secondary);
+    color: var(--wj-markdown-text-primary);
+    &:not(.ant-input-affix-wrapper-focused):not(:hover) {
+      border-color: var(--wj-markdown-bg-secondary);
+    }
     .ant-input-suffix {
       .anticon {
         color: var(--wj-markdown-text-tertiary);
