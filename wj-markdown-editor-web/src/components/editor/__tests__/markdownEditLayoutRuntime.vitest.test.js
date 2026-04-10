@@ -192,6 +192,7 @@ vi.mock('@/components/editor/composables/useEditorCore.js', () => ({
   useEditorCore() {
     return {
       editorView: createFakeRef(null),
+      isCompositionActive: () => false,
       initEditor: vi.fn(),
       destroyEditor: vi.fn(),
       reconfigureTheme: vi.fn(),

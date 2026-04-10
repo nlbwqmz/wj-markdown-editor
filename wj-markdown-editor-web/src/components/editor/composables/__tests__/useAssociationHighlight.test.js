@@ -271,6 +271,58 @@ test('光标联动高亮在索引命中失效节点时，应自动回退到 shar
   }
 })
 
+test('普通输入路径请求 previewOnly 高亮时，只刷新预览侧，不再向编辑器追加装饰事务', () => {
+  const previewRoot = createPreviewRoot()
+  const previewBlock = previewRoot.appendChild(createPreviewBlock({ lineStart: 6 }))
+  const scheduler = installFakeAnimationFrame()
+
+  try {
+    const { dispatchCalls, highlightByEditorCursor } = createHarness({
+      currentLine: 6,
+      previewRoot,
+    })
+
+    highlightByEditorCursor(undefined, {
+      previewOnly: true,
+    })
+    scheduler.flushNext()
+
+    assert.equal(previewBlock.classList.contains('wj-preview-link-highlight'), true)
+    assert.equal(dispatchCalls.length, 0)
+  } finally {
+    scheduler.restore()
+  }
+})
+
+test('同一行先执行 previewOnly 再执行完整高亮时，必须允许补回编辑区装饰事务', () => {
+  const previewRoot = createPreviewRoot()
+  previewRoot.appendChild(createPreviewBlock({ lineStart: 8 }))
+  const scheduler = installFakeAnimationFrame()
+
+  try {
+    const { dispatchCalls, highlightByEditorCursor } = createHarness({
+      currentLine: 8,
+      previewRoot,
+    })
+
+    highlightByEditorCursor(undefined, {
+      previewOnly: true,
+    })
+    scheduler.flushNext()
+    assert.equal(dispatchCalls.length, 0)
+
+    highlightByEditorCursor()
+    scheduler.flushNext()
+
+    assert.deepEqual(getLastDispatchedLineRange(dispatchCalls), {
+      startLine: 8,
+      endLine: 8,
+    })
+  } finally {
+    scheduler.restore()
+  }
+})
+
 test('点击预览区后，双侧高亮仍按 data-line-start / data-line-end 语义生效', () => {
   const previewRoot = createPreviewRoot()
   const previewBlock = previewRoot.appendChild(createPreviewBlock({ lineStart: 3, lineEnd: 5 }))

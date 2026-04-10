@@ -1,19 +1,47 @@
-import editorExtensionUtil from '@/util/editor/editorExtensionUtil.js'
 import { Compartment } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView, keymap } from '@codemirror/view'
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
+import { isEditorCompositionActive } from '@/util/editor/compositionStateUtil.js'
+import editorExtensionUtil from '@/util/editor/editorExtensionUtil.js'
 
 /**
  * 编辑器核心初始化与重配置
  * 统一管理 EditorView 生命周期，避免业务组件直接处理底层细节
  */
 export function useEditorCore({ editorRef }) {
-  const editorView = ref(null)
-  const isComposing = ref(false)
+  const editorView = shallowRef(null)
+  const domCompositionActive = ref(false)
+  const compositionIdlePending = ref(false)
   const keymapCompartment = new Compartment()
   const themeCompartment = new Compartment()
   const dynamicExtension = editorExtensionUtil.getDynamicExtension()
+
+  function isCompositionActive() {
+    return isEditorCompositionActive({
+      view: editorView.value,
+      fallbackActive: domCompositionActive.value,
+    })
+  }
+
+  function queueCompositionIdleCheck(callback) {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(callback)
+      return
+    }
+
+    Promise.resolve().then(callback)
+  }
+
+  function tryFlushCompositionIdle(onCompositionIdle) {
+    if (compositionIdlePending.value !== true || isCompositionActive() === true) {
+      return false
+    }
+
+    compositionIdlePending.value = false
+    onCompositionIdle && onCompositionIdle()
+    return true
+  }
 
   function getDynamicExtensionList(extensionOptions) {
     const extensionList = []
@@ -33,7 +61,7 @@ export function useEditorCore({ editorRef }) {
     extraExtensions = [],
     onDocChange,
     onSelectionChange,
-    onCompositionEnd,
+    onCompositionIdle,
     onPaste,
     onDrop,
     onClick,
@@ -53,21 +81,26 @@ export function useEditorCore({ editorRef }) {
         ...editorExtensionUtil.getDefault(),
         ...dynamicExtensionList,
         EditorView.updateListener.of((update) => {
-          if (update.docChanged && isComposing.value === false) {
+          if (update.docChanged && isCompositionActive() === false) {
             onDocChange && onDocChange()
           }
           if (update.selectionSet) {
             onSelectionChange && onSelectionChange(update)
           }
+          tryFlushCompositionIdle(onCompositionIdle)
         }),
         EditorView.domEventHandlers({
           compositionstart: () => {
-            // @codemirror/view 固定 6.27.0，该版本事件行为稳定
-            isComposing.value = true
+            // DOM composition 事件只作为兜底标记，真正的输入状态仍以 CodeMirror view 自身状态为准。
+            domCompositionActive.value = true
+            compositionIdlePending.value = false
           },
           compositionend: () => {
-            isComposing.value = false
-            onCompositionEnd && onCompositionEnd()
+            domCompositionActive.value = false
+            compositionIdlePending.value = true
+            queueCompositionIdleCheck(() => {
+              tryFlushCompositionIdle(onCompositionIdle)
+            })
           },
           paste: (event, view) => {
             onPaste && onPaste(event, view)
@@ -89,6 +122,8 @@ export function useEditorCore({ editorRef }) {
       editorView.value.destroy()
       editorView.value = null
     }
+    domCompositionActive.value = false
+    compositionIdlePending.value = false
   }
 
   function reconfigureTheme(theme) {
@@ -128,6 +163,7 @@ export function useEditorCore({ editorRef }) {
 
   return {
     editorView,
+    isCompositionActive,
     initEditor,
     destroyEditor,
     reconfigureTheme,

@@ -19,9 +19,28 @@ export function useAssociationHighlight({
   let activePreviewHighlightElement = null
   let cursorHighlightRafId = null
   let pendingCursorLineNumber = null
+  let pendingCursorHighlightOptions = null
   let lastSyncedCursorLineNumber = null
+  let lastSyncedHighlightMode = null
 
   const setLinkedSourceHighlightEffect = StateEffect.define()
+
+  function normalizeCursorHighlightOptions(options = {}) {
+    return {
+      previewOnly: options.previewOnly === true,
+    }
+  }
+
+  function mergeCursorHighlightOptions(previousOptions, nextOptions) {
+    const normalizedPreviousOptions = normalizeCursorHighlightOptions(previousOptions)
+    const normalizedNextOptions = normalizeCursorHighlightOptions(nextOptions)
+
+    return {
+      // 只要任一方需要完整高亮，就以后者中的“完整模式”为准。
+      previewOnly: normalizedPreviousOptions.previewOnly === true
+        && normalizedNextOptions.previewOnly === true,
+    }
+  }
 
   function createRafTask(callback) {
     if (typeof requestAnimationFrame === 'function') {
@@ -44,6 +63,7 @@ export function useAssociationHighlight({
       cursorHighlightRafId = null
     }
     pendingCursorLineNumber = null
+    pendingCursorHighlightOptions = null
   }
 
   function isSameLineRange(rangeA, rangeB) {
@@ -164,6 +184,7 @@ export function useAssociationHighlight({
     clearLinkedHighlightDisplay()
     linkedHighlightState.value = null
     lastSyncedCursorLineNumber = null
+    lastSyncedHighlightMode = null
   }
 
   function setPreviewLinkedHighlight(element) {
@@ -231,11 +252,12 @@ export function useAssociationHighlight({
     setPreviewLinkedHighlight(previewElement.element)
   }
 
-  function highlightBothSidesByLineRange(startLine, endLine, preferLine = startLine) {
+  function highlightBothSidesByLineRange(startLine, endLine, preferLine = startLine, options = {}) {
     const view = editorViewRef.value
     if (!view || associationHighlight.value !== true) {
       return
     }
+    const previewOnly = options.previewOnly === true
     const normalizedLineRange = normalizeLineRange(startLine, endLine)
     const normalizedPreferLine = normalizeLineNumber(preferLine)
     if (!isPreviewPanelActive()) {
@@ -243,7 +265,9 @@ export function useAssociationHighlight({
         ...normalizedLineRange,
         preferLine: normalizedPreferLine,
       }
-      clearLinkedHighlightDisplay()
+      if (previewOnly !== true) {
+        clearLinkedHighlightDisplay()
+      }
       return
     }
     const previewElement = findPreviewMatchByLine(normalizedPreferLine, view.state.doc.lines)
@@ -262,28 +286,46 @@ export function useAssociationHighlight({
       preferLine: normalizedPreferLine,
     }
     linkedHighlightState.value = nextLinkedHighlightState
-    setEditorLinkedHighlight(normalizedLineRange)
+    if (previewOnly !== true) {
+      setEditorLinkedHighlight(normalizedLineRange)
+    }
     setPreviewLinkedHighlight(previewElement.element)
   }
 
-  function highlightByEditorCursor(state) {
+  function highlightByEditorCursor(state, options = {}) {
     const view = editorViewRef.value
     if (!view || associationHighlight.value !== true) {
       return
     }
     const currentState = state || view.state
     const lineNumber = currentState.doc.lineAt(currentState.selection.main.to).number
-    if (lineNumber === lastSyncedCursorLineNumber || lineNumber === pendingCursorLineNumber) {
+    const normalizedOptions = normalizeCursorHighlightOptions(options)
+
+    if (lineNumber === pendingCursorLineNumber) {
+      pendingCursorHighlightOptions = mergeCursorHighlightOptions(pendingCursorHighlightOptions, normalizedOptions)
       return
     }
+
+    if (lineNumber === lastSyncedCursorLineNumber) {
+      const canUpgradePreviewOnlyHighlight = lastSyncedHighlightMode === 'preview-only'
+        && normalizedOptions.previewOnly !== true
+      if (canUpgradePreviewOnlyHighlight !== true) {
+        return
+      }
+    }
+
     pendingCursorLineNumber = lineNumber
+    pendingCursorHighlightOptions = normalizedOptions
+
     if (cursorHighlightRafId !== null) {
       return
     }
     cursorHighlightRafId = createRafTask(() => {
       cursorHighlightRafId = null
       const targetLineNumber = pendingCursorLineNumber
+      const targetOptions = pendingCursorHighlightOptions ?? normalizeCursorHighlightOptions()
       pendingCursorLineNumber = null
+      pendingCursorHighlightOptions = null
       if (targetLineNumber === null || targetLineNumber === undefined) {
         return
       }
@@ -291,8 +333,9 @@ export function useAssociationHighlight({
       if (!currentView || associationHighlight.value !== true) {
         return
       }
-      highlightBothSidesByLineRange(targetLineNumber, targetLineNumber, targetLineNumber)
+      highlightBothSidesByLineRange(targetLineNumber, targetLineNumber, targetLineNumber, targetOptions)
       lastSyncedCursorLineNumber = targetLineNumber
+      lastSyncedHighlightMode = targetOptions.previewOnly === true ? 'preview-only' : 'full'
     })
   }
 
@@ -314,6 +357,7 @@ export function useAssociationHighlight({
     }
     cancelScheduledCursorHighlight()
     lastSyncedCursorLineNumber = null
+    lastSyncedHighlightMode = null
     highlightBothSidesByLineRange(lineRange.startLine, lineRange.endLine, lineRange.startLine)
   }
 

@@ -28,6 +28,9 @@ import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { createPreviewRefreshCoordinator } from '@/components/editor/previewRefreshCoordinator.js'
 import { useCommonStore } from '@/stores/counter.js'
 import {
+  shouldDeferExternalEditorDispatch,
+} from '@/util/editor/compositionStateUtil.js'
+import {
   resolvePendingContentUpdateMeta,
   shouldDeferStaleContentSync,
 } from '@/util/editor/contentUpdateMetaUtil.js'
@@ -139,6 +142,7 @@ const restoreState = ref({
 })
 // 记录编辑器最近一次已经向上游暴露的正文，用于识别滞后的 snapshot echo。
 const lastExposedContent = ref(props.modelValue)
+const pendingExternalSync = ref(null)
 // 仅在当前 keep-alive 编辑页实例内存活的滚动锚点缓存。
 // 不做全局单例，避免不同编辑页实例之间互相污染。
 const viewScrollAnchorStore = createViewScrollAnchorSessionStore()
@@ -168,6 +172,7 @@ function closePreviewSearchBar() {
 
 const {
   editorView,
+  isCompositionActive,
   initEditor,
   destroyEditor,
   reconfigureTheme,
@@ -542,6 +547,8 @@ const modelSyncScheduler = createFlushableDebounce(() => {
     return
   }
   lastExposedContent.value = view.state.doc.toString()
+  // 输入稳定后再刷新关联高亮，避免在原生输入/DOMObserver 处理中追加第二次编辑器事务。
+  highlightByEditorCursor(view.state)
   emits('update:modelValue', lastExposedContent.value)
 }, EDITOR_EMIT_DEBOUNCE_MS)
 
@@ -816,6 +823,187 @@ function setMenuGutterElement(element) {
   gutterMenuRef.value = element
 }
 
+function getCurrentEditorContent(view = editorView.value) {
+  return view?.state?.doc?.toString?.() ?? ''
+}
+
+function markHandledContentUpdateToken(token) {
+  if (Number.isInteger(token) !== true || token <= handledContentUpdateToken.value) {
+    return
+  }
+
+  handledContentUpdateToken.value = token
+}
+
+function createPendingExternalSyncPayload({
+  nextContent,
+  pendingContentUpdateMeta,
+  cursorPosition,
+}) {
+  return {
+    nextContent,
+    pendingContentUpdateMeta,
+    cursorPosition,
+    contentUpdateToken: pendingContentUpdateMeta.nextHandledToken,
+  }
+}
+
+function applyExternalEditorSync({
+  view,
+  nextContent,
+  pendingContentUpdateMeta,
+  cursorPosition,
+}) {
+  const currentValue = getCurrentEditorContent(view)
+
+  if (currentValue !== nextContent) {
+    const transaction = {
+      changes: {
+        from: 0,
+        to: currentValue.length,
+        insert: nextContent,
+      },
+    }
+    if (cursorPosition !== null) {
+      transaction.selection = {
+        anchor: cursorPosition,
+        head: cursorPosition,
+      }
+      transaction.scrollIntoView = pendingContentUpdateMeta.scrollIntoView
+    }
+    view.dispatch(transaction)
+  } else if (cursorPosition !== null) {
+    view.dispatch({
+      selection: {
+        anchor: cursorPosition,
+        head: cursorPosition,
+      },
+      scrollIntoView: pendingContentUpdateMeta.scrollIntoView,
+    })
+  }
+
+  if (cursorPosition !== null && pendingContentUpdateMeta.focus === true) {
+    view.focus()
+  }
+
+  lastExposedContent.value = nextContent
+  restorePreviewLinkedHighlight()
+}
+
+function flushPendingExternalSync() {
+  const payload = pendingExternalSync.value
+  if (!payload) {
+    return false
+  }
+
+  const view = editorView.value
+  if (!view) {
+    return false
+  }
+
+  const currentValue = getCurrentEditorContent(view)
+  const compositionActive = isCompositionActive()
+  if (shouldDeferExternalEditorDispatch({
+    compositionActive,
+    currentContent: currentValue,
+    nextContent: payload.nextContent,
+    shouldApplySelection: payload.pendingContentUpdateMeta.shouldApplySelection,
+  })) {
+    return false
+  }
+
+  pendingExternalSync.value = null
+
+  if (shouldDeferStaleContentSync({
+    currentContent: currentValue,
+    nextContent: payload.nextContent,
+    lastExposedContent: lastExposedContent.value,
+    hasExplicitSelection: payload.pendingContentUpdateMeta.shouldApplySelection,
+  })) {
+    markHandledContentUpdateToken(payload.contentUpdateToken)
+    restorePreviewLinkedHighlight()
+    return true
+  }
+
+  applyExternalEditorSync({
+    view,
+    nextContent: payload.nextContent,
+    pendingContentUpdateMeta: payload.pendingContentUpdateMeta,
+    cursorPosition: payload.cursorPosition,
+  })
+  markHandledContentUpdateToken(payload.contentUpdateToken)
+  return true
+}
+
+function syncExternalModelValue(newValue = props.modelValue) {
+  const view = editorView.value
+  const pendingContentUpdateMeta = resolvePendingContentUpdateMeta({
+    handledToken: handledContentUpdateToken.value,
+    contentUpdateMeta: props.contentUpdateMeta,
+  })
+
+  const cursorPosition = pendingContentUpdateMeta.shouldApplySelection
+    ? Math.max(0, Math.min(newValue.length, pendingContentUpdateMeta.cursorPosition))
+    : null
+
+  if (!view) {
+    pendingExternalSync.value = pendingContentUpdateMeta.shouldApplySelection === true
+      ? createPendingExternalSyncPayload({
+          nextContent: newValue,
+          pendingContentUpdateMeta,
+          cursorPosition,
+        })
+      : null
+    lastExposedContent.value = newValue
+    restorePreviewLinkedHighlight()
+    return
+  }
+
+  const currentValue = getCurrentEditorContent(view)
+
+  // 编辑器已经继续输入、但父层这时只回放了上一轮已上浮内容时，说明拿到的是滞后的 echo。
+  // 这类内容如果整段重放，会把 CodeMirror 光标错误映射到文首。
+  if (shouldDeferStaleContentSync({
+    currentContent: currentValue,
+    nextContent: newValue,
+    lastExposedContent: lastExposedContent.value,
+    hasExplicitSelection: pendingContentUpdateMeta.shouldApplySelection,
+  })) {
+    pendingExternalSync.value = null
+    markHandledContentUpdateToken(pendingContentUpdateMeta.nextHandledToken)
+    restorePreviewLinkedHighlight()
+    return
+  }
+
+  const compositionActive = isCompositionActive()
+  if (shouldDeferExternalEditorDispatch({
+    compositionActive,
+    currentContent: currentValue,
+    nextContent: newValue,
+    shouldApplySelection: pendingContentUpdateMeta.shouldApplySelection,
+  })) {
+    pendingExternalSync.value = createPendingExternalSyncPayload({
+      nextContent: newValue,
+      pendingContentUpdateMeta,
+      cursorPosition,
+    })
+    restorePreviewLinkedHighlight()
+    return
+  }
+
+  // 一旦当前这次外部同步已经可以直接落到编辑器，先丢弃更早的挂起 payload，
+  // 避免 onCompositionIdle 的延后冲刷把更新过的新快照回滚成旧状态。
+  pendingExternalSync.value = null
+
+  applyExternalEditorSync({
+    view,
+    nextContent: newValue,
+    pendingContentUpdateMeta,
+    cursorPosition,
+  })
+  markHandledContentUpdateToken(pendingContentUpdateMeta.nextHandledToken)
+}
+
 async function onInsertNetworkImage() {
   try {
     await onInsertImgNetwork()
@@ -833,64 +1021,8 @@ watch(() => props.extension, (newValue) => {
 }, { deep: true })
 
 watch(() => [props.modelValue, props.contentUpdateMeta?.token], ([newValue]) => {
-  const view = editorView.value
-  if (view) {
-    const currentValue = view.state.doc.toString()
-    const pendingContentUpdateMeta = resolvePendingContentUpdateMeta({
-      handledToken: handledContentUpdateToken.value,
-      contentUpdateMeta: props.contentUpdateMeta,
-    })
-    handledContentUpdateToken.value = pendingContentUpdateMeta.nextHandledToken
-
-    const cursorPosition = pendingContentUpdateMeta.shouldApplySelection
-      ? Math.max(0, Math.min(newValue.length, pendingContentUpdateMeta.cursorPosition))
-      : null
-
-    // 编辑器已经继续输入、但父层这时只回放了上一轮已上浮内容时，说明拿到的是滞后的 echo。
-    // 这类内容如果整段重放，会把 CodeMirror 光标错误映射到文首。
-    if (shouldDeferStaleContentSync({
-      currentContent: currentValue,
-      nextContent: newValue,
-      lastExposedContent: lastExposedContent.value,
-      hasExplicitSelection: pendingContentUpdateMeta.shouldApplySelection,
-    })) {
-      restorePreviewLinkedHighlight()
-      return
-    }
-
-    if (currentValue !== newValue) {
-      const transaction = {
-        changes: {
-          from: 0,
-          to: currentValue.length,
-          insert: newValue,
-        },
-      }
-      if (cursorPosition !== null) {
-        transaction.selection = {
-          anchor: cursorPosition,
-          head: cursorPosition,
-        }
-        transaction.scrollIntoView = pendingContentUpdateMeta.scrollIntoView
-      }
-      view.dispatch(transaction)
-    } else if (cursorPosition !== null) {
-      view.dispatch({
-        selection: {
-          anchor: cursorPosition,
-          head: cursorPosition,
-        },
-        scrollIntoView: pendingContentUpdateMeta.scrollIntoView,
-      })
-    }
-
-    if (cursorPosition !== null && pendingContentUpdateMeta.focus === true) {
-      view.focus()
-    }
-  }
-  lastExposedContent.value = newValue
-  restorePreviewLinkedHighlight()
-})
+  syncExternalModelValue(newValue)
+}, { immediate: true })
 
 watch(() => props.associationHighlight, (enabled) => {
   if (enabled === true) {
@@ -962,9 +1094,26 @@ onMounted(() => {
       if (isPointerSelectionUpdate(update)) {
         return
       }
+      // 组合输入期间完全跳过联动高亮，避免输入法仍在占用 DOM 时再触发额外读写。
+      if (isCompositionActive() === true) {
+        return
+      }
+      // 普通输入会同时带来 docChanged + selectionSet。
+      // 这类原生输入尚未稳定时，只刷新预览侧联动高亮；
+      // 编辑区装饰统一延后到正文上浮阶段补做一次，避免在 DOMObserver 仍处理输入变更时追加第二次编辑器事务。
+      if (update.docChanged === true) {
+        highlightByEditorCursor(update.state, { previewOnly: true })
+        return
+      }
       highlightByEditorCursor(update.state)
     },
-    onCompositionEnd: scheduleModelSync,
+    onCompositionIdle: () => {
+      const handledExternalSync = flushPendingExternalSync()
+      if (handledExternalSync !== true) {
+        scheduleModelSync()
+      }
+      highlightByEditorCursor()
+    },
     onPaste: (event, view) => {
       const clipboardData = event.clipboardData
       if (!clipboardData) {
@@ -972,7 +1121,12 @@ onMounted(() => {
       }
       pasteOrDrop(event, view, clipboardData.types, clipboardData.files)
     },
-    onClick: view => highlightByEditorCursor(view.state),
+    onClick: (view) => {
+      if (isCompositionActive() === true) {
+        return
+      }
+      highlightByEditorCursor(view.state)
+    },
     onDrop: (event, view) => {
       const dataTransfer = event.dataTransfer
       if (!dataTransfer) {
@@ -983,6 +1137,7 @@ onMounted(() => {
   })
 
   nextTick(() => {
+    flushPendingExternalSync()
     bindEvents()
     if (props.associationHighlight === true) {
       highlightByEditorCursor()
@@ -993,9 +1148,13 @@ onMounted(() => {
 onActivated(() => {
   previewSearchTargetBridge.activate()
   closePreviewSearchBar()
+  nextTick(() => {
+    flushPendingExternalSync()
+  })
 })
 
 onDeactivated(() => {
+  modelSyncScheduler.cancel()
   cancelPendingViewScrollRestore()
   closePreviewSearchBar()
   previewSearchTargetBridge.deactivate()
@@ -1012,6 +1171,7 @@ onBeforeUnmount(() => {
   clearScrollTimer()
   destroySplitLayout()
   destroyEditor()
+  pendingExternalSync.value = null
 })
 
 defineExpose({
@@ -1046,7 +1206,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full overflow-y-auto p-2"
+          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full overflow-y-auto p-2"
           :style="previewContainerStyle"
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"

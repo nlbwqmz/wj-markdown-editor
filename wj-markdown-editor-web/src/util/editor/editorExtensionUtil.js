@@ -17,12 +17,12 @@ import {
   crosshairCursor,
   drawSelection,
   dropCursor,
+  EditorView,
   highlightActiveLine,
   highlightSpecialChars,
   lineNumbers,
   rectangularSelection,
 } from '@codemirror/view'
-import { EditorView } from 'codemirror'
 import completionHandler from '@/util/editor/completion/completionHandler.js'
 
 /**
@@ -34,8 +34,8 @@ const fixedExtension = [
   dropCursor(),
   indentOnInput(),
   search({
-    // 显式使用当前编辑器实例对应的 EditorView 生成滚动效果，避免 @codemirror/search 内部依赖的 view 副本导致跳转仅更新选区、不触发滚动
-    scrollToMatch: range => EditorView.scrollIntoView(range, { y: 'center' }),
+    // 显式使用当前编辑器实例的 EditorView 生成滚动效果，保证搜索命令既更新选区，也触发可预期的滚动定位。
+    scrollToMatch: (range, _view) => EditorView.scrollIntoView(range, { y: 'center' }),
   }),
   markdown({ codeLanguages: languages }),
   EditorView.theme({
