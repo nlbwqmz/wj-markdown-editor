@@ -291,7 +291,13 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
         data-testid="file-manager-empty-state"
         class="file-manager-panel__empty h-full flex items-center justify-center px-4"
       >
-        <AEmpty :description="searchQuery ? t('message.fileManagerNoSearchResults') : t(emptyMessageKey)" />
+        <AEmpty>
+          <template #description>
+            <span class="file-manager-panel__empty-description color-gray-500">
+              {{ searchQuery ? t('message.fileManagerNoSearchResults') : t(emptyMessageKey) }}
+            </span>
+          </template>
+        </AEmpty>
       </div>
     </div>
   </div>

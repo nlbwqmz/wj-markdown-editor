@@ -154,10 +154,14 @@ vi.mock('ant-design-vue', async () => {
         },
       },
       setup(props, { slots }) {
-        return () => h('div', { 'data-testid': 'empty-stub' }, [
-          props.description,
-          ...(slots.default?.() || []),
-        ])
+        return () => {
+          const descriptionChildren = slots.description?.() ?? [props.description]
+
+          return h('div', { 'data-testid': 'empty-stub' }, [
+            ...descriptionChildren,
+            ...(slots.default?.() || []),
+          ])
+        }
       },
     }),
     Input: defineComponent({
@@ -458,6 +462,7 @@ describe('fileManagerPanel 组件', () => {
 
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('docs')
     expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerDirectoryEmpty')
+    expect(wrapper.get('.file-manager-panel__empty-description').classes()).toContain('color-gray-500')
     expect(wrapper.find('[data-testid="file-manager-empty-open-directory"]').exists()).toBe(false)
   })
 
@@ -767,6 +772,7 @@ describe('fileManagerPanel 组件', () => {
 
     expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerNoSearchResults')
     expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).not.toContain('translated:message.fileManagerDirectoryEmpty')
+    expect(wrapper.get('.file-manager-panel__empty-description').classes()).toContain('color-gray-500')
   })
 
   it('中英文文案应补齐文件管理栏真实使用到的 key', async () => {
