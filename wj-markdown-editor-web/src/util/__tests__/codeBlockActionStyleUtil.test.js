@@ -40,6 +40,9 @@ test('能从合法的 hljs 前景和背景派生结构层变量', () => {
   assert.equal(typeof vars['--wj-code-block-action-bg'], 'string')
   assert.equal(typeof vars['--wj-code-block-action-border'], 'string')
   assert.equal(typeof vars['--wj-code-block-action-shadow'], 'string')
+  assert.equal(typeof vars['--wj-code-block-scrollbar-thumb-bg'], 'string')
+  assert.equal(typeof vars['--wj-code-block-scrollbar-thumb-bg-hover'], 'string')
+  assert.equal(typeof vars['--wj-code-block-scrollbar-thumb-bg-active'], 'string')
   assert.notEqual(vars['--wj-code-block-action-bg'], 'rgba(0, 0, 0, 0.16)')
 })
 
@@ -57,7 +60,37 @@ test('背景透明或采样失败时必须回退到安全值', () => {
     '--wj-code-block-action-bg': 'rgba(0, 0, 0, 0.16)',
     '--wj-code-block-action-border': 'rgba(255, 255, 255, 0.16)',
     '--wj-code-block-action-shadow': '0 1px 2px rgba(0, 0, 0, 0.18)',
+    '--wj-code-block-scrollbar-thumb-bg': 'rgba(255, 255, 255, 0.32)',
+    '--wj-code-block-scrollbar-thumb-bg-hover': 'rgba(255, 255, 255, 0.44)',
+    '--wj-code-block-scrollbar-thumb-bg-active': 'rgba(255, 255, 255, 0.56)',
   })
+})
+
+test('深浅背景下必须派生不同的代码块滚动条滑块颜色', () => {
+  const { deriveCodeBlockActionVariables } = requireCodeBlockActionStyleUtil()
+  const darkVars = deriveCodeBlockActionVariables({
+    color: 'rgb(255, 255, 255)',
+    backgroundColor: 'rgb(30, 41, 59)',
+    backgroundImage: 'none',
+  })
+  const lightVars = deriveCodeBlockActionVariables({
+    color: 'rgb(36, 41, 46)',
+    backgroundColor: 'rgb(255, 255, 255)',
+    backgroundImage: 'none',
+  })
+
+  assert.notEqual(
+    darkVars['--wj-code-block-scrollbar-thumb-bg'],
+    lightVars['--wj-code-block-scrollbar-thumb-bg'],
+  )
+  assert.notEqual(
+    darkVars['--wj-code-block-scrollbar-thumb-bg-hover'],
+    lightVars['--wj-code-block-scrollbar-thumb-bg-hover'],
+  )
+  assert.notEqual(
+    darkVars['--wj-code-block-scrollbar-thumb-bg-active'],
+    lightVars['--wj-code-block-scrollbar-thumb-bg-active'],
+  )
 })
 
 test('同步函数在重复调用时必须用最新 hljs 样式覆盖旧变量', () => {
@@ -86,6 +119,7 @@ test('同步函数在重复调用时必须用最新 hljs 样式覆盖旧变量',
   })
 
   const firstValue = previewRoot.style.getPropertyValue('--wj-code-block-action-fg')
+  const firstScrollbarValue = previewRoot.style.getPropertyValue('--wj-code-block-scrollbar-thumb-bg')
 
   syncCodeBlockActionVariables(previewRoot, {
     getComputedStyle: () => ({
@@ -98,6 +132,10 @@ test('同步函数在重复调用时必须用最新 hljs 样式覆盖旧变量',
   assert.notEqual(
     previewRoot.style.getPropertyValue('--wj-code-block-action-fg'),
     firstValue,
+  )
+  assert.notEqual(
+    previewRoot.style.getPropertyValue('--wj-code-block-scrollbar-thumb-bg'),
+    firstScrollbarValue,
   )
 })
 
@@ -127,5 +165,9 @@ test('找不到 hljs 节点时也必须把默认变量写回预览根节点', ()
   assert.equal(
     previewRoot.style.getPropertyValue('--wj-code-block-action-bg'),
     'rgba(0, 0, 0, 0.16)',
+  )
+  assert.equal(
+    previewRoot.style.getPropertyValue('--wj-code-block-scrollbar-thumb-bg'),
+    'rgba(255, 255, 255, 0.32)',
   )
 })

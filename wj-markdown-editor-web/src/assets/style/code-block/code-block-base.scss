@@ -89,6 +89,35 @@
     min-width: 0;
     overflow: auto;
     border-radius: inherit;
+
+    &::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+      background-color: transparent;
+    }
+
+    &::-webkit-scrollbar-track {
+      background-color: transparent;
+    }
+
+    &::-webkit-scrollbar-corner {
+      background-color: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 999px;
+      background-color: var(--wj-code-block-scrollbar-thumb-bg);
+      background-clip: content-box;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background-color: var(--wj-code-block-scrollbar-thumb-bg-hover);
+    }
+
+    &::-webkit-scrollbar-thumb:active {
+      background-color: var(--wj-code-block-scrollbar-thumb-bg-active);
+    }
   }
 
   :where(pre.mermaid, pre.mermaid-cache) {

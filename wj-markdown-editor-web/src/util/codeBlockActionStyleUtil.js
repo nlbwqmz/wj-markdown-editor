@@ -4,6 +4,9 @@ const ACTION_VARIABLE_DEFAULTS = Object.freeze({
   '--wj-code-block-action-bg': 'rgba(0, 0, 0, 0.16)',
   '--wj-code-block-action-border': 'rgba(255, 255, 255, 0.16)',
   '--wj-code-block-action-shadow': '0 1px 2px rgba(0, 0, 0, 0.18)',
+  '--wj-code-block-scrollbar-thumb-bg': 'rgba(255, 255, 255, 0.32)',
+  '--wj-code-block-scrollbar-thumb-bg-hover': 'rgba(255, 255, 255, 0.44)',
+  '--wj-code-block-scrollbar-thumb-bg-active': 'rgba(255, 255, 255, 0.56)',
 })
 
 const LIGHT_COLOR = { r: 255, g: 255, b: 255, a: 1 }
@@ -131,6 +134,9 @@ export function deriveCodeBlockActionVariables(snapshot = {}) {
   const overlayBaseColor = isDarkBackground ? LIGHT_COLOR : DARK_COLOR
   const backgroundWeight = isDarkBackground ? 0.16 : 0.08
   const borderWeight = isDarkBackground ? 0.24 : 0.14
+  const scrollbarWeight = isDarkBackground ? 0.36 : 0.7
+  const scrollbarHoverWeight = isDarkBackground ? 0.48 : 0.78
+  const scrollbarActiveWeight = isDarkBackground ? 0.6 : 0.86
   const shadow = isDarkBackground
     ? '0 1px 2px rgba(0, 0, 0, 0.28)'
     : ACTION_VARIABLE_DEFAULTS['--wj-code-block-action-shadow']
@@ -141,6 +147,15 @@ export function deriveCodeBlockActionVariables(snapshot = {}) {
     '--wj-code-block-action-bg': toRgbaText(mixColor(backgroundColor, overlayBaseColor, backgroundWeight, 0.94)),
     '--wj-code-block-action-border': toRgbaText(mixColor(backgroundColor, overlayBaseColor, borderWeight, 0.92)),
     '--wj-code-block-action-shadow': shadow,
+    '--wj-code-block-scrollbar-thumb-bg': toRgbaText(
+      mixColor(backgroundColor, overlayBaseColor, scrollbarWeight, isDarkBackground ? 0.42 : 0.34),
+    ),
+    '--wj-code-block-scrollbar-thumb-bg-hover': toRgbaText(
+      mixColor(backgroundColor, overlayBaseColor, scrollbarHoverWeight, isDarkBackground ? 0.56 : 0.48),
+    ),
+    '--wj-code-block-scrollbar-thumb-bg-active': toRgbaText(
+      mixColor(backgroundColor, overlayBaseColor, scrollbarActiveWeight, isDarkBackground ? 0.68 : 0.58),
+    ),
   }
 }
 

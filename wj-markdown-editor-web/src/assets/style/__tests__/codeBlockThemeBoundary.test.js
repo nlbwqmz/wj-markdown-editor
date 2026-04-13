@@ -555,6 +555,46 @@ test('code-block-base.scss 不得承接 code theme 分支和 token 颜色规则'
   )
 })
 
+test('code-block-base.scss 必须仅在代码块 pre 作用域内声明局部滚动条规则', () => {
+  const codeBlockBaseSource = readSource('../code-block/code-block-base.scss')
+  const previewThemeScopeBlock = getSelectorBlockRange(codeBlockBaseSource, '.wj-preview-theme').blockSource
+  const preBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container pre)').blockSource
+
+  assert.match(preBlock, /&::-webkit-scrollbar\s*\{/u)
+  assert.match(preBlock, /&::-webkit-scrollbar-track\s*\{/u)
+  assert.match(preBlock, /&::-webkit-scrollbar-corner\s*\{/u)
+  assert.match(preBlock, /&::-webkit-scrollbar-thumb\s*\{/u)
+  assert.doesNotMatch(
+    codeBlockBaseSource,
+    /\.wj-scrollbar\b/u,
+    'code-block-base.scss 不得引入全局 .wj-scrollbar 选择器',
+  )
+})
+
+test('code-block-base.scss 的代码块滚动条必须保持透明轨道并消费局部变量', () => {
+  const codeBlockBaseSource = readSource('../code-block/code-block-base.scss')
+  const previewThemeScopeBlock = getSelectorBlockRange(codeBlockBaseSource, '.wj-preview-theme').blockSource
+  const preBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container pre)').blockSource
+  const scrollbarBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar').blockSource
+  const trackBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-track').blockSource
+  const cornerBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-corner').blockSource
+  const thumbBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-thumb').blockSource
+  const thumbHoverBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-thumb:hover').blockSource
+  const thumbActiveBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-thumb:active').blockSource
+
+  assert.match(scrollbarBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(trackBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(cornerBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(thumbBlock, /var\(--wj-code-block-scrollbar-thumb-bg\)/u)
+  assert.match(thumbHoverBlock, /var\(--wj-code-block-scrollbar-thumb-bg-hover\)/u)
+  assert.match(thumbActiveBlock, /var\(--wj-code-block-scrollbar-thumb-bg-active\)/u)
+  assert.doesNotMatch(
+    preBlock,
+    /&::-webkit-scrollbar:hover/u,
+    '代码块滚动条不得通过 ::-webkit-scrollbar:hover 显示轨道',
+  )
+})
+
 test('preview theme 文件不得继续声明 fenced code block / mermaid 变量族', () => {
   previewThemeFiles.forEach((fileName) => {
     const source = readPreviewThemeSource(fileName)
