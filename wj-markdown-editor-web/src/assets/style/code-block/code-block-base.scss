@@ -100,6 +100,14 @@
       background-color: transparent;
     }
 
+    &::-webkit-scrollbar:hover {
+      background-color: transparent;
+    }
+
+    &::-webkit-scrollbar-track:hover {
+      background-color: transparent;
+    }
+
     &::-webkit-scrollbar-corner {
       background-color: transparent;
     }
@@ -112,10 +120,53 @@
     }
 
     &::-webkit-scrollbar-thumb:hover {
+      border: 2px solid transparent;
       background-color: var(--wj-code-block-scrollbar-thumb-bg-hover);
     }
 
     &::-webkit-scrollbar-thumb:active {
+      border: 2px solid transparent;
+      background-color: var(--wj-code-block-scrollbar-thumb-bg-active);
+    }
+  }
+
+  :where(.pre-container pre code.hljs) {
+    &::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+      background-color: transparent;
+    }
+
+    &::-webkit-scrollbar-track {
+      background-color: transparent;
+    }
+
+    &::-webkit-scrollbar:hover {
+      background-color: transparent;
+    }
+
+    &::-webkit-scrollbar-track:hover {
+      background-color: transparent;
+    }
+
+    &::-webkit-scrollbar-corner {
+      background-color: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 999px;
+      background-color: var(--wj-code-block-scrollbar-thumb-bg);
+      background-clip: content-box;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      border: 2px solid transparent;
+      background-color: var(--wj-code-block-scrollbar-thumb-bg-hover);
+    }
+
+    &::-webkit-scrollbar-thumb:active {
+      border: 2px solid transparent;
       background-color: var(--wj-code-block-scrollbar-thumb-bg-active);
     }
   }

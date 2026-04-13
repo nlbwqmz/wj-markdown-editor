@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import { compileString } from 'sass'
 
 const { test } = await import('node:test')
 
@@ -59,6 +60,48 @@ function getSelectorBlockRange(source, selector) {
 
 function readPreviewThemeSource(fileName) {
   return stripScssComments(readSource(`../preview-theme/theme/${fileName}`))
+}
+
+function extractCompiledSelector(cssSource, selectorPattern, errorMessage) {
+  const normalizedCssSource = cssSource.replace(/\s+/gu, ' ').trim()
+  const selectorMatch = normalizedCssSource.match(selectorPattern)
+
+  assert.ok(selectorMatch, errorMessage)
+  return selectorMatch[1].trim()
+}
+
+function getSelectorSpecificity(selector) {
+  const selectorWithoutWhere = selector
+    .replace(/:where\([^)]*\)/gu, '')
+    .replace(/::[\w-]+/gu, '')
+
+  const idCount = (selectorWithoutWhere.match(/#[\w-]+/gu) || []).length
+  const classLikeCount = (selectorWithoutWhere.match(/\.[\w-]+/gu) || []).length
+    + (selectorWithoutWhere.match(/\[[^\]]+\]/gu) || []).length
+    + (selectorWithoutWhere.match(/:[\w-]+(?:\([^)]*\))?/gu) || []).length
+  const selectorWithoutClassLike = selectorWithoutWhere
+    .replace(/#[\w-]+/gu, ' ')
+    .replace(/\.[\w-]+/gu, ' ')
+    .replace(/\[[^\]]+\]/gu, ' ')
+    .replace(/:[\w-]+(?:\([^)]*\))?/gu, ' ')
+  const typeCount = (selectorWithoutClassLike.match(/\b[a-z][\w-]*\b/giu) || [])
+    .filter(token => token !== 'where')
+    .length
+
+  return [idCount, classLikeCount, typeCount]
+}
+
+function compareSpecificity(leftSelector, rightSelector) {
+  const leftSpecificity = getSelectorSpecificity(leftSelector)
+  const rightSpecificity = getSelectorSpecificity(rightSelector)
+
+  for (let i = 0; i < leftSpecificity.length; i++) {
+    if (leftSpecificity[i] !== rightSpecificity[i]) {
+      return leftSpecificity[i] - rightSpecificity[i]
+    }
+  }
+
+  return 0
 }
 
 const previewThemeFiles = [
@@ -198,6 +241,105 @@ test('main.js 必须在 preview theme 之后导入 code block base', () => {
   assert.ok(
     codeBlockBaseImportIndex > previewThemeImportIndex,
     'code-block-base.scss 必须排在 preview-theme.scss 之后导入',
+  )
+})
+
+test('代码块滚动条 hover 覆盖必须通过更高特异性压过全局 scroll.scss，而不是依赖导入顺序', () => {
+  const compiledScrollCss = compileString(readSource('../scroll.scss')).css
+  const compiledCodeBlockCss = compileString(readSource('../code-block/code-block-base.scss')).css
+
+  const globalScrollbarHoverSelector = extractCompiledSelector(
+    compiledScrollCss,
+    /(:where\([^)]*\)::-webkit-scrollbar:hover)\s*\{/u,
+    'scroll.scss 必须继续产出共享 ::-webkit-scrollbar:hover 选择器',
+  )
+  const localScrollbarHoverSelector = extractCompiledSelector(
+    compiledCodeBlockCss,
+    /(\.wj-preview-theme\s+:where\(\.pre-container pre\)::-webkit-scrollbar:hover)\s*\{/u,
+    'code-block-base.scss 必须产出代码块局部 ::-webkit-scrollbar:hover 选择器',
+  )
+  const globalTrackHoverSelector = extractCompiledSelector(
+    compiledScrollCss,
+    /(:where\([^)]*\)::-webkit-scrollbar-track:hover)\s*\{/u,
+    'scroll.scss 必须继续产出共享 ::-webkit-scrollbar-track:hover 选择器',
+  )
+  const localTrackHoverSelector = extractCompiledSelector(
+    compiledCodeBlockCss,
+    /(\.wj-preview-theme\s+:where\(\.pre-container pre\)::-webkit-scrollbar-track:hover)\s*\{/u,
+    'code-block-base.scss 必须产出代码块局部 ::-webkit-scrollbar-track:hover 选择器',
+  )
+  const globalThumbHoverSelector = extractCompiledSelector(
+    compiledScrollCss,
+    /(:where\([^)]*\)::-webkit-scrollbar-thumb:hover)\s*\{/u,
+    'scroll.scss 必须继续产出共享 ::-webkit-scrollbar-thumb:hover 选择器',
+  )
+  const localThumbHoverSelector = extractCompiledSelector(
+    compiledCodeBlockCss,
+    /(\.wj-preview-theme\s+:where\(\.pre-container pre\)::-webkit-scrollbar-thumb:hover)\s*\{/u,
+    'code-block-base.scss 必须产出代码块局部 ::-webkit-scrollbar-thumb:hover 选择器',
+  )
+  const globalThumbActiveSelector = extractCompiledSelector(
+    compiledScrollCss,
+    /(:where\([^)]*\)::-webkit-scrollbar-thumb:active)\s*\{/u,
+    'scroll.scss 必须继续产出共享 ::-webkit-scrollbar-thumb:active 选择器',
+  )
+  const localThumbActiveSelector = extractCompiledSelector(
+    compiledCodeBlockCss,
+    /(\.wj-preview-theme\s+:where\(\.pre-container pre\)::-webkit-scrollbar-thumb:active)\s*\{/u,
+    'code-block-base.scss 必须产出代码块局部 ::-webkit-scrollbar-thumb:active 选择器',
+  )
+  const localCodeScrollbarHoverSelector = extractCompiledSelector(
+    compiledCodeBlockCss,
+    /(\.wj-preview-theme\s+:where\(\.pre-container pre code\.hljs\)::-webkit-scrollbar:hover)\s*\{/u,
+    'code-block-base.scss 必须产出 code.hljs 局部 ::-webkit-scrollbar:hover 选择器',
+  )
+  const localCodeTrackHoverSelector = extractCompiledSelector(
+    compiledCodeBlockCss,
+    /(\.wj-preview-theme\s+:where\(\.pre-container pre code\.hljs\)::-webkit-scrollbar-track:hover)\s*\{/u,
+    'code-block-base.scss 必须产出 code.hljs 局部 ::-webkit-scrollbar-track:hover 选择器',
+  )
+  const localCodeThumbHoverSelector = extractCompiledSelector(
+    compiledCodeBlockCss,
+    /(\.wj-preview-theme\s+:where\(\.pre-container pre code\.hljs\)::-webkit-scrollbar-thumb:hover)\s*\{/u,
+    'code-block-base.scss 必须产出 code.hljs 局部 ::-webkit-scrollbar-thumb:hover 选择器',
+  )
+  const localCodeThumbActiveSelector = extractCompiledSelector(
+    compiledCodeBlockCss,
+    /(\.wj-preview-theme\s+:where\(\.pre-container pre code\.hljs\)::-webkit-scrollbar-thumb:active)\s*\{/u,
+    'code-block-base.scss 必须产出 code.hljs 局部 ::-webkit-scrollbar-thumb:active 选择器',
+  )
+
+  assert.ok(
+    compareSpecificity(localScrollbarHoverSelector, globalScrollbarHoverSelector) > 0,
+    '代码块局部 ::-webkit-scrollbar:hover 选择器必须比全局共享规则拥有更高特异性',
+  )
+  assert.ok(
+    compareSpecificity(localTrackHoverSelector, globalTrackHoverSelector) > 0,
+    '代码块局部 ::-webkit-scrollbar-track:hover 选择器必须比全局共享规则拥有更高特异性',
+  )
+  assert.ok(
+    compareSpecificity(localThumbHoverSelector, globalThumbHoverSelector) > 0,
+    '代码块局部 ::-webkit-scrollbar-thumb:hover 选择器必须比全局共享规则拥有更高特异性',
+  )
+  assert.ok(
+    compareSpecificity(localThumbActiveSelector, globalThumbActiveSelector) > 0,
+    '代码块局部 ::-webkit-scrollbar-thumb:active 选择器必须比全局共享规则拥有更高特异性',
+  )
+  assert.ok(
+    compareSpecificity(localCodeScrollbarHoverSelector, globalScrollbarHoverSelector) > 0,
+    'code.hljs 局部 ::-webkit-scrollbar:hover 选择器必须比全局共享规则拥有更高特异性',
+  )
+  assert.ok(
+    compareSpecificity(localCodeTrackHoverSelector, globalTrackHoverSelector) > 0,
+    'code.hljs 局部 ::-webkit-scrollbar-track:hover 选择器必须比全局共享规则拥有更高特异性',
+  )
+  assert.ok(
+    compareSpecificity(localCodeThumbHoverSelector, globalThumbHoverSelector) > 0,
+    'code.hljs 局部 ::-webkit-scrollbar-thumb:hover 选择器必须比全局共享规则拥有更高特异性',
+  )
+  assert.ok(
+    compareSpecificity(localCodeThumbActiveSelector, globalThumbActiveSelector) > 0,
+    'code.hljs 局部 ::-webkit-scrollbar-thumb:active 选择器必须比全局共享规则拥有更高特异性',
   )
 })
 
@@ -555,15 +697,20 @@ test('code-block-base.scss 不得承接 code theme 分支和 token 颜色规则'
   )
 })
 
-test('code-block-base.scss 必须仅在代码块 pre 作用域内声明局部滚动条规则', () => {
+test('code-block-base.scss 必须同时覆盖 pre 与 code.hljs 两层代码块滚动容器', () => {
   const codeBlockBaseSource = readSource('../code-block/code-block-base.scss')
   const previewThemeScopeBlock = getSelectorBlockRange(codeBlockBaseSource, '.wj-preview-theme').blockSource
   const preBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container pre)').blockSource
+  const codeBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container pre code.hljs)').blockSource
 
   assert.match(preBlock, /&::-webkit-scrollbar\s*\{/u)
   assert.match(preBlock, /&::-webkit-scrollbar-track\s*\{/u)
   assert.match(preBlock, /&::-webkit-scrollbar-corner\s*\{/u)
   assert.match(preBlock, /&::-webkit-scrollbar-thumb\s*\{/u)
+  assert.match(codeBlock, /&::-webkit-scrollbar\s*\{/u)
+  assert.match(codeBlock, /&::-webkit-scrollbar-track\s*\{/u)
+  assert.match(codeBlock, /&::-webkit-scrollbar-corner\s*\{/u)
+  assert.match(codeBlock, /&::-webkit-scrollbar-thumb\s*\{/u)
   assert.doesNotMatch(
     codeBlockBaseSource,
     /\.wj-scrollbar\b/u,
@@ -571,28 +718,48 @@ test('code-block-base.scss 必须仅在代码块 pre 作用域内声明局部滚
   )
 })
 
-test('code-block-base.scss 的代码块滚动条必须保持透明轨道并消费局部变量', () => {
+test('code-block-base.scss 的代码块滚动条必须在 pre 与 code.hljs 两层都保持透明轨道并消费局部变量', () => {
   const codeBlockBaseSource = readSource('../code-block/code-block-base.scss')
   const previewThemeScopeBlock = getSelectorBlockRange(codeBlockBaseSource, '.wj-preview-theme').blockSource
   const preBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container pre)').blockSource
+  const codeBlock = getSelectorBlockRange(previewThemeScopeBlock, ':where(.pre-container pre code.hljs)').blockSource
   const scrollbarBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar').blockSource
   const trackBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-track').blockSource
   const cornerBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-corner').blockSource
+  const scrollbarHoverBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar:hover').blockSource
+  const trackHoverBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-track:hover').blockSource
   const thumbBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-thumb').blockSource
   const thumbHoverBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-thumb:hover').blockSource
   const thumbActiveBlock = getSelectorBlockRange(preBlock, '&::-webkit-scrollbar-thumb:active').blockSource
+  const codeScrollbarBlock = getSelectorBlockRange(codeBlock, '&::-webkit-scrollbar').blockSource
+  const codeTrackBlock = getSelectorBlockRange(codeBlock, '&::-webkit-scrollbar-track').blockSource
+  const codeCornerBlock = getSelectorBlockRange(codeBlock, '&::-webkit-scrollbar-corner').blockSource
+  const codeScrollbarHoverBlock = getSelectorBlockRange(codeBlock, '&::-webkit-scrollbar:hover').blockSource
+  const codeTrackHoverBlock = getSelectorBlockRange(codeBlock, '&::-webkit-scrollbar-track:hover').blockSource
+  const codeThumbBlock = getSelectorBlockRange(codeBlock, '&::-webkit-scrollbar-thumb').blockSource
+  const codeThumbHoverBlock = getSelectorBlockRange(codeBlock, '&::-webkit-scrollbar-thumb:hover').blockSource
+  const codeThumbActiveBlock = getSelectorBlockRange(codeBlock, '&::-webkit-scrollbar-thumb:active').blockSource
 
   assert.match(scrollbarBlock, /background-color\s*:\s*transparent\s*;/u)
   assert.match(trackBlock, /background-color\s*:\s*transparent\s*;/u)
   assert.match(cornerBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(scrollbarHoverBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(trackHoverBlock, /background-color\s*:\s*transparent\s*;/u)
   assert.match(thumbBlock, /var\(--wj-code-block-scrollbar-thumb-bg\)/u)
   assert.match(thumbHoverBlock, /var\(--wj-code-block-scrollbar-thumb-bg-hover\)/u)
   assert.match(thumbActiveBlock, /var\(--wj-code-block-scrollbar-thumb-bg-active\)/u)
-  assert.doesNotMatch(
-    preBlock,
-    /&::-webkit-scrollbar:hover/u,
-    '代码块滚动条不得通过 ::-webkit-scrollbar:hover 显示轨道',
-  )
+  assert.match(thumbHoverBlock, /border\s*:\s*2px\s+solid\s+transparent\s*;/u)
+  assert.match(thumbActiveBlock, /border\s*:\s*2px\s+solid\s+transparent\s*;/u)
+  assert.match(codeScrollbarBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(codeTrackBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(codeCornerBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(codeScrollbarHoverBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(codeTrackHoverBlock, /background-color\s*:\s*transparent\s*;/u)
+  assert.match(codeThumbBlock, /var\(--wj-code-block-scrollbar-thumb-bg\)/u)
+  assert.match(codeThumbHoverBlock, /var\(--wj-code-block-scrollbar-thumb-bg-hover\)/u)
+  assert.match(codeThumbActiveBlock, /var\(--wj-code-block-scrollbar-thumb-bg-active\)/u)
+  assert.match(codeThumbHoverBlock, /border\s*:\s*2px\s+solid\s+transparent\s*;/u)
+  assert.match(codeThumbActiveBlock, /border\s*:\s*2px\s+solid\s+transparent\s*;/u)
 })
 
 test('preview theme 文件不得继续声明 fenced code block / mermaid 变量族', () => {
