@@ -28,6 +28,7 @@ const fileManagerPanelState = vi.hoisted(() => {
     requestFileManagerCreateMarkdown: vi.fn(),
     requestFileManagerPickDirectory: vi.fn(),
     openDecisionOpenDocument: vi.fn(),
+    channelSend: vi.fn(),
     modalConfirm: vi.fn(),
     messageWarning: vi.fn(),
     registeredHandlerMap,
@@ -260,6 +261,12 @@ vi.mock('@/util/document-session/documentOpenInteractionService.js', () => ({
   requestDocumentOpenPathByInteraction: fileManagerPanelState.openDecisionOpenDocument,
 }))
 
+vi.mock('@/util/channel/channelUtil.js', () => ({
+  default: {
+    send: fileManagerPanelState.channelSend,
+  },
+}))
+
 vi.mock('@/util/file-manager/fileManagerOpenDecisionController.js', () => ({
   resolveDocumentOpenCurrentPath(snapshot) {
     if (snapshot?.isRecentMissing === true) {
@@ -284,6 +291,10 @@ describe('fileManagerPanel 组件', () => {
     fileManagerPanelState.requestFileManagerCreateMarkdown.mockReset()
     fileManagerPanelState.requestFileManagerPickDirectory.mockReset()
     fileManagerPanelState.openDecisionOpenDocument.mockReset()
+    fileManagerPanelState.channelSend.mockReset()
+    fileManagerPanelState.channelSend.mockResolvedValue({
+      ok: true,
+    })
     fileManagerPanelState.modalConfirm.mockReset()
     fileManagerPanelState.messageWarning.mockReset()
     fileManagerPanelState.registeredHandlerMap.clear()
@@ -668,7 +679,35 @@ describe('fileManagerPanel 组件', () => {
     expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
   })
 
-  it('点击工具区新建文件夹按钮后，应走创建文件夹链路', async () => {
+  it('工具区应改为一个新建下拉和一个排序下拉，并在 setupState 暴露对应菜单项', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.find('[data-testid="file-manager-create-folder"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="file-manager-create-markdown"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="file-manager-create-entry"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="file-manager-sort-entry"]').exists()).toBe(true)
+    expect(wrapper.vm.$.setupState.createMenuList.map(item => item.label)).toEqual([
+      'translated:message.fileManagerCreateFolder',
+      'translated:message.fileManagerCreateMarkdown',
+    ])
+    expect(wrapper.vm.$.setupState.sortMenuList.map(item => item.label)).toEqual([
+      'translated:message.fileManagerSortNameAsc',
+      'translated:message.fileManagerSortNameDesc',
+      'translated:message.fileManagerSortModifiedTimeAsc',
+      'translated:message.fileManagerSortModifiedTimeDesc',
+      'translated:message.fileManagerSortTypeAsc',
+      'translated:message.fileManagerSortTypeDesc',
+    ])
+  })
+
+  it('点击工具区新建菜单里的文件夹动作后，应走创建文件夹链路', async () => {
     let folderDialogConfig = null
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       directoryPath: 'D:/docs',
@@ -693,9 +732,10 @@ describe('fileManagerPanel 组件', () => {
     mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
 
-    await wrapper.get('[data-testid="file-manager-create-folder"]').trigger('click')
+    const createFolderActionPromise = wrapper.vm.$.setupState.createMenuList[0].action()
     folderDialogConfig.content.props['onUpdate:value']('assets')
     await folderDialogConfig.onOk()
+    await createFolderActionPromise
     await flushFileManagerPanel()
 
     expect(folderDialogConfig.title).toBe('translated:message.fileManagerCreateFolder')
@@ -705,7 +745,7 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('docs')
   })
 
-  it('点击工具区新建 Markdown 按钮后，应展示 .md 后缀输入框并仅刷新列表', async () => {
+  it('点击工具区新建菜单里的 Markdown 动作后，应展示 .md 后缀输入框并仅刷新列表', async () => {
     let markdownDialogConfig = null
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       directoryPath: 'D:/docs',
@@ -731,7 +771,7 @@ describe('fileManagerPanel 组件', () => {
     mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
 
-    await wrapper.get('[data-testid="file-manager-create-markdown"]').trigger('click')
+    const createMarkdownActionPromise = wrapper.vm.$.setupState.createMenuList[1].action()
     const markdownAddonAfterNode = markdownDialogConfig.content.children.addonAfter()
 
     expect(extractVNodeText(markdownAddonAfterNode)).toBe('.md')
@@ -739,6 +779,7 @@ describe('fileManagerPanel 组件', () => {
 
     markdownDialogConfig.content.props['onUpdate:value']('draft-note.md')
     await markdownDialogConfig.onOk()
+    await createMarkdownActionPromise
     await flushFileManagerPanel()
 
     expect(markdownDialogConfig.title).toBe('translated:message.fileManagerCreateMarkdown')
@@ -848,6 +889,14 @@ describe('fileManagerPanel 组件', () => {
     expect(zhCN.message.fileManagerFocusCurrentFileDirectory).toBeTruthy()
     expect(zhCN.message.fileManagerCreateFolder).toBeTruthy()
     expect(zhCN.message.fileManagerCreateMarkdown).toBeTruthy()
+    expect(zhCN.message.fileManagerCreateEntry).toBeTruthy()
+    expect(zhCN.message.fileManagerSort).toBeTruthy()
+    expect(zhCN.message.fileManagerSortNameAsc).toBeTruthy()
+    expect(zhCN.message.fileManagerSortNameDesc).toBeTruthy()
+    expect(zhCN.message.fileManagerSortModifiedTimeAsc).toBeTruthy()
+    expect(zhCN.message.fileManagerSortModifiedTimeDesc).toBeTruthy()
+    expect(zhCN.message.fileManagerSortTypeAsc).toBeTruthy()
+    expect(zhCN.message.fileManagerSortTypeDesc).toBeTruthy()
     expect(zhCN.message.fileManagerFolderNameRequired).toBeTruthy()
     expect(zhCN.message.fileManagerMarkdownNameRequired).toBeTruthy()
     expect(zhCN.message.fileManagerOpenDirectoryFailed).toBeTruthy()
@@ -858,6 +907,14 @@ describe('fileManagerPanel 组件', () => {
     expect(enUS.message.fileManagerFocusCurrentFileDirectory).toBeTruthy()
     expect(enUS.message.fileManagerCreateFolder).toBeTruthy()
     expect(enUS.message.fileManagerCreateMarkdown).toBeTruthy()
+    expect(enUS.message.fileManagerCreateEntry).toBeTruthy()
+    expect(enUS.message.fileManagerSort).toBeTruthy()
+    expect(enUS.message.fileManagerSortNameAsc).toBeTruthy()
+    expect(enUS.message.fileManagerSortNameDesc).toBeTruthy()
+    expect(enUS.message.fileManagerSortModifiedTimeAsc).toBeTruthy()
+    expect(enUS.message.fileManagerSortModifiedTimeDesc).toBeTruthy()
+    expect(enUS.message.fileManagerSortTypeAsc).toBeTruthy()
+    expect(enUS.message.fileManagerSortTypeDesc).toBeTruthy()
     expect(enUS.message.fileManagerFolderNameRequired).toBeTruthy()
     expect(enUS.message.fileManagerMarkdownNameRequired).toBeTruthy()
     expect(enUS.message.fileManagerOpenDirectoryFailed).toBeTruthy()
@@ -1017,6 +1074,54 @@ describe('fileManagerPanelController', () => {
     ])
 
     scope.stop()
+  })
+
+  it('执行 modifiedTime desc 排序菜单动作后，应立即重排当前列表并写入配置', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'assets', path: 'D:/docs/assets', kind: 'directory', modifiedTimeMs: 5 },
+        { name: 'older.md', path: 'D:/docs/older.md', kind: 'file', modifiedTimeMs: 10 },
+        { name: 'cover.png', path: 'D:/docs/cover.png', kind: 'file', modifiedTimeMs: 30 },
+        { name: 'latest.md', path: 'D:/docs/latest.md', kind: 'file', modifiedTimeMs: 50 },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toEqual([
+      'assets',
+      'latest.md',
+      'older.md',
+      'cover.png',
+    ])
+
+    const modifiedTimeDescMenuItem = wrapper.vm.$.setupState.sortMenuList.find(item => item.key === 'modifiedTime-desc')
+    await modifiedTimeDescMenuItem.action()
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.channelSend).toHaveBeenCalledWith({
+      event: 'user-update-config',
+      data: expect.objectContaining({
+        fileManagerSort: {
+          field: 'modifiedTime',
+          direction: 'desc',
+        },
+      }),
+    })
+    expect(fileManagerPanelState.store.config.fileManagerSort).toEqual({
+      field: 'modifiedTime',
+      direction: 'desc',
+    })
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(1)
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toEqual([
+      'assets',
+      'latest.md',
+      'cover.png',
+      'older.md',
+    ])
   })
 
   it('点击新建文件夹或新建 Markdown 时应先弹出单输入框 Modal 收集名称，取消时不发起创建', async () => {

@@ -1,6 +1,8 @@
 import { Input, message, Modal } from 'ant-design-vue'
 import { computed, createVNode, onScopeDispose, ref, watch } from 'vue'
+import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
+import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { requestDocumentOpenPathByInteraction } from '@/util/document-session/documentOpenInteractionService.js'
 import { resolveFileManagerEntryType, sortFileManagerEntryList } from './fileManagerEntryMetaUtil.js'
 import { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } from './fileManagerEventUtil.js'
@@ -16,6 +18,12 @@ import {
 const DRAFT_EMPTY_MESSAGE_KEY = 'message.fileManagerSelectDirectory'
 const DIRECTORY_EMPTY_MESSAGE_KEY = 'message.fileManagerDirectoryEmpty'
 const INVALID_ENTRY_NAME_MESSAGE_KEY = 'message.fileManagerInvalidEntryName'
+const FILE_MANAGER_SORT_FIELD_SET = new Set(['name', 'modifiedTime', 'type'])
+const FILE_MANAGER_SORT_DIRECTION_SET = new Set(['asc', 'desc'])
+const DEFAULT_FILE_MANAGER_SORT_CONFIG = Object.freeze({
+  field: 'type',
+  direction: 'asc',
+})
 
 function isWindowsDriveRootPath(path) {
   return /^[A-Za-z]:\/$/u.test(path)
@@ -130,6 +138,20 @@ function createInvalidFileManagerEntryNameResult() {
   return {
     ok: false,
     reason: 'invalid-file-manager-entry-name',
+  }
+}
+
+function normalizeFileManagerSortConfig(sortConfig) {
+  const field = FILE_MANAGER_SORT_FIELD_SET.has(sortConfig?.field)
+    ? sortConfig.field
+    : DEFAULT_FILE_MANAGER_SORT_CONFIG.field
+  const direction = FILE_MANAGER_SORT_DIRECTION_SET.has(sortConfig?.direction)
+    ? sortConfig.direction
+    : DEFAULT_FILE_MANAGER_SORT_CONFIG.direction
+
+  return {
+    field,
+    direction,
   }
 }
 
@@ -337,6 +359,7 @@ function createDefaultOpenNameInputModal({
 export function createFileManagerPanelController({
   store,
   t = value => value,
+  sendCommand = payload => channelUtil.send(payload),
   requestDirectoryState = requestFileManagerDirectoryState,
   requestOpenDirectory = requestFileManagerOpenDirectory,
   requestCreateFolder = requestFileManagerCreateFolder,
@@ -410,6 +433,40 @@ export function createFileManagerPanelController({
     )
 
     return directoryState.value
+  }
+
+  async function updateFileManagerSortConfig(nextSortConfig) {
+    const normalizedSortConfig = normalizeFileManagerSortConfig(nextSortConfig)
+    const currentConfig = typeof store?.config === 'object' && store.config
+      ? store.config
+      : {}
+    const nextConfig = {
+      ...currentConfig,
+      fileManagerSort: normalizedSortConfig,
+    }
+
+    try {
+      const result = await sendCommand({
+        event: 'user-update-config',
+        data: nextConfig,
+      })
+      const failureMessageKey = getConfigUpdateFailureMessageKey(result)
+      if (failureMessageKey) {
+        showWarningMessage(failureMessageKey)
+        return result
+      }
+
+      store.config = nextConfig
+      recomputeDirectoryStateFromLatestSource()
+      return result
+    } catch {
+      showWarningMessage('message.configWriteFailed')
+      return {
+        ok: false,
+        messageKey: 'message.configWriteFailed',
+        reason: 'config-update-transport-failed',
+      }
+    }
   }
 
   function invalidatePendingDirectoryStateRequest() {
@@ -704,6 +761,7 @@ export function createFileManagerPanelController({
     pickDirectory,
     createFolder,
     createMarkdown,
+    updateFileManagerSortConfig,
     requestCreateFolderFromInput,
     requestCreateMarkdownFromInput,
     openEntry,

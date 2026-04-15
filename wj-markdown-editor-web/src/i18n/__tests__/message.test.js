@@ -126,6 +126,74 @@ test('中英文文案都应提供 source-session-changed 打开重试提示', ()
   )
 })
 
+test('中英文文案都应提供文件管理栏新建与排序菜单文案', () => {
+  assert.equal(
+    zhCN.message.fileManagerCreateEntry,
+    '新建',
+  )
+  assert.equal(
+    zhCN.message.fileManagerSort,
+    '排序',
+  )
+  assert.equal(
+    zhCN.message.fileManagerSortNameAsc,
+    '名称升序',
+  )
+  assert.equal(
+    zhCN.message.fileManagerSortNameDesc,
+    '名称降序',
+  )
+  assert.equal(
+    zhCN.message.fileManagerSortModifiedTimeAsc,
+    '修改时间升序',
+  )
+  assert.equal(
+    zhCN.message.fileManagerSortModifiedTimeDesc,
+    '修改时间降序',
+  )
+  assert.equal(
+    zhCN.message.fileManagerSortTypeAsc,
+    '类型升序',
+  )
+  assert.equal(
+    zhCN.message.fileManagerSortTypeDesc,
+    '类型降序',
+  )
+
+  assert.equal(
+    enUS.message.fileManagerCreateEntry,
+    'Create',
+  )
+  assert.equal(
+    enUS.message.fileManagerSort,
+    'Sort',
+  )
+  assert.equal(
+    enUS.message.fileManagerSortNameAsc,
+    'Name Ascending',
+  )
+  assert.equal(
+    enUS.message.fileManagerSortNameDesc,
+    'Name Descending',
+  )
+  assert.equal(
+    enUS.message.fileManagerSortModifiedTimeAsc,
+    'Modified Time Ascending',
+  )
+  assert.equal(
+    enUS.message.fileManagerSortModifiedTimeDesc,
+    'Modified Time Descending',
+  )
+  assert.equal(
+    enUS.message.fileManagerSortTypeAsc,
+    'Type Ascending',
+  )
+  assert.equal(
+    enUS.message.fileManagerSortTypeDesc,
+    'Type Descending',
+  )
+})
+
 test('中英文文案都应提供复制结果提示', () => {
   assert.equal(
     zhCN.message.noCopyableContent,

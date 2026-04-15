@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import IconButton from '@/components/editor/IconButton.vue'
 import i18n from '@/i18n/index.js'
 import { useCommonStore } from '@/stores/counter.js'
+import { resolveFileManagerEntryIconProfile } from '@/util/file-manager/fileManagerEntryMetaUtil.js'
 import { createFileManagerPanelController } from '@/util/file-manager/fileManagerPanelController.js'
 
 const store = useCommonStore()
@@ -16,8 +17,6 @@ const {
   breadcrumbList,
   canOpenParentDirectory,
   canFocusCurrentDocumentDirectory,
-  createFolder,
-  createMarkdown,
   emptyMessageKey,
   entryList,
   focusCurrentDocumentDirectory,
@@ -25,6 +24,9 @@ const {
   openEntry,
   openParentDirectory,
   pickDirectory,
+  requestCreateFolderFromInput,
+  requestCreateMarkdownFromInput,
+  updateFileManagerSortConfig,
 } = controller
 
 const searchQuery = ref('')
@@ -39,140 +41,76 @@ const filteredEntryList = computed(() => {
   )
 })
 
-const imageExtensionSet = new Set([
-  'png',
-  'jpg',
-  'jpeg',
-  'gif',
-  'bmp',
-  'webp',
-  'svg',
-  'ico',
-  'avif',
-  'tif',
-  'tiff',
-  'heic',
-  'heif',
-])
-const videoExtensionSet = new Set([
-  'mp4',
-  'mov',
-  'm4v',
-  'avi',
-  'mkv',
-  'webm',
-  'wmv',
-  'flv',
-  'mpeg',
-  'mpg',
-])
-const pdfExtensionSet = new Set(['pdf'])
-const wordExtensionSet = new Set(['doc', 'docx', 'odt', 'rtf'])
-const sheetExtensionSet = new Set(['xls', 'xlsx', 'csv', 'ods'])
-const archiveExtensionSet = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'])
-const audioExtensionSet = new Set(['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'wma', 'opus'])
+const createMenuList = [
+  {
+    key: 'create-folder',
+    label: t('message.fileManagerCreateFolder'),
+    action: requestCreateFolderFromInput,
+  },
+  {
+    key: 'create-markdown',
+    label: t('message.fileManagerCreateMarkdown'),
+    action: requestCreateMarkdownFromInput,
+  },
+]
 
-const entryIconProfileMap = {
-  directory: {
-    iconClass: 'i-tabler:folder',
-    testId: 'file-manager-entry-icon-directory',
+const sortMenuList = [
+  {
+    key: 'name-asc',
+    label: t('message.fileManagerSortNameAsc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'name',
+      direction: 'asc',
+    }),
   },
-  markdown: {
-    iconClass: 'i-tabler:markdown',
-    testId: 'file-manager-entry-icon-markdown',
+  {
+    key: 'name-desc',
+    label: t('message.fileManagerSortNameDesc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'name',
+      direction: 'desc',
+    }),
   },
-  image: {
-    iconClass: 'i-tabler:photo',
-    testId: 'file-manager-entry-icon-image',
+  {
+    key: 'modifiedTime-asc',
+    label: t('message.fileManagerSortModifiedTimeAsc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'modifiedTime',
+      direction: 'asc',
+    }),
   },
-  video: {
-    iconClass: 'i-tabler:movie',
-    testId: 'file-manager-entry-icon-video',
+  {
+    key: 'modifiedTime-desc',
+    label: t('message.fileManagerSortModifiedTimeDesc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'modifiedTime',
+      direction: 'desc',
+    }),
   },
-  pdf: {
-    iconClass: 'i-tabler:file-type-pdf',
-    testId: 'file-manager-entry-icon-pdf',
+  {
+    key: 'type-asc',
+    label: t('message.fileManagerSortTypeAsc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'type',
+      direction: 'asc',
+    }),
   },
-  word: {
-    iconClass: 'i-tabler:file-word',
-    testId: 'file-manager-entry-icon-word',
+  {
+    key: 'type-desc',
+    label: t('message.fileManagerSortTypeDesc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'type',
+      direction: 'desc',
+    }),
   },
-  sheet: {
-    iconClass: 'i-tabler:table',
-    testId: 'file-manager-entry-icon-sheet',
-  },
-  archive: {
-    iconClass: 'i-tabler:zip',
-    testId: 'file-manager-entry-icon-archive',
-  },
-  audio: {
-    iconClass: 'i-tabler:music',
-    testId: 'file-manager-entry-icon-audio',
-  },
-  other: {
-    iconClass: 'i-tabler:file',
-    testId: 'file-manager-entry-icon-other',
-  },
-}
-
-function resolveEntryFileExtension(entry) {
-  const targetName = typeof entry?.name === 'string' && entry.name.trim()
-    ? entry.name
-    : entry?.path || ''
-  const normalizedName = String(targetName)
-    .trim()
-    .split(/[\\/]/u)
-    .pop()
-    ?.split(/[?#]/u)[0] || ''
-  const extensionIndex = normalizedName.lastIndexOf('.')
-
-  if (extensionIndex <= 0 || extensionIndex === normalizedName.length - 1) {
-    return ''
-  }
-
-  return normalizedName.slice(extensionIndex + 1).toLowerCase()
-}
-
-function resolveEntryIconProfile(entry) {
-  if (entry?.kind === 'directory') {
-    return entryIconProfileMap.directory
-  }
-
-  const extension = resolveEntryFileExtension(entry)
-  if (entry?.kind === 'markdown' || extension === 'md' || extension === 'markdown') {
-    return entryIconProfileMap.markdown
-  }
-  if (imageExtensionSet.has(extension)) {
-    return entryIconProfileMap.image
-  }
-  if (videoExtensionSet.has(extension)) {
-    return entryIconProfileMap.video
-  }
-  if (pdfExtensionSet.has(extension)) {
-    return entryIconProfileMap.pdf
-  }
-  if (wordExtensionSet.has(extension)) {
-    return entryIconProfileMap.word
-  }
-  if (sheetExtensionSet.has(extension)) {
-    return entryIconProfileMap.sheet
-  }
-  if (archiveExtensionSet.has(extension)) {
-    return entryIconProfileMap.archive
-  }
-  if (audioExtensionSet.has(extension)) {
-    return entryIconProfileMap.audio
-  }
-
-  return entryIconProfileMap.other
-}
+]
 
 function resolveEntryIconTestId(entry) {
-  return resolveEntryIconProfile(entry).testId
+  return resolveFileManagerEntryIconProfile(entry).testId
 }
 
 function resolveEntryIconClass(entry) {
-  return resolveEntryIconProfile(entry).iconClass
+  return resolveFileManagerEntryIconProfile(entry).iconClass
 }
 
 // 公共 IconButton 不处理禁用态时，在当前面板内补充交互限制和视觉弱化。
@@ -224,22 +162,20 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
           :action="pickDirectory"
         />
         <IconButton
-          data-testid="file-manager-create-folder"
-          icon="i-tabler:folder-plus"
-          :label="t('message.fileManagerCreateFolder')"
-          :title="t('message.fileManagerCreateFolder')"
-          :action="hasDirectory ? createFolder : undefined"
+          data-testid="file-manager-create-entry"
+          icon="i-tabler:square-plus"
+          :label="t('message.fileManagerCreateEntry')"
+          :title="t('message.fileManagerCreateEntry')"
+          :menu-list="hasDirectory ? createMenuList : []"
           :disabled="!hasDirectory ? true : undefined"
           :class="!hasDirectory ? disabledToolbarButtonClass : undefined"
         />
         <IconButton
-          data-testid="file-manager-create-markdown"
-          icon="i-tabler:file-plus"
-          :label="t('message.fileManagerCreateMarkdown')"
-          :title="t('message.fileManagerCreateMarkdown')"
-          :action="hasDirectory ? createMarkdown : undefined"
-          :disabled="!hasDirectory ? true : undefined"
-          :class="!hasDirectory ? disabledToolbarButtonClass : undefined"
+          data-testid="file-manager-sort-entry"
+          icon="i-tabler:arrows-sort"
+          :label="t('message.fileManagerSort')"
+          :title="t('message.fileManagerSort')"
+          :menu-list="sortMenuList"
         />
       </div>
     </div>
