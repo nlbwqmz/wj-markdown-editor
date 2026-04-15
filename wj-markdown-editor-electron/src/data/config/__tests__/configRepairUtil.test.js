@@ -15,6 +15,18 @@ describe('configRepairUtil', () => {
     expect(repaired.theme.global).toBe(defaultConfig.theme.global)
   })
 
+  it('缺失 fileManagerSort 时必须从默认配置补齐', () => {
+    const repaired = repairConfig({
+      ...defaultConfig,
+      fileManagerSort: undefined,
+    }, defaultConfig)
+
+    expect(repaired.fileManagerSort).toEqual({
+      field: 'type',
+      direction: 'asc',
+    })
+  })
+
   it('默认配置中不存在的旧字段必须被裁掉', () => {
     const repaired = repairConfig({
       legacyField: 'deprecated',

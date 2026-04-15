@@ -13,6 +13,10 @@ export default {
   autoSave: [],
   menuVisible: true,
   fileManagerVisible: true,
+  fileManagerSort: {
+    field: 'type',
+    direction: 'asc',
+  },
   previewWidth: 80,
   fontSize: 16,
   fontFamily: {

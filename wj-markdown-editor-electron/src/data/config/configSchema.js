@@ -86,6 +86,16 @@ const editorExtensionSchema = {
   },
 }
 
+const fileManagerSortSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['field', 'direction'],
+  properties: {
+    field: { enum: ['name', 'modifiedTime', 'type'] },
+    direction: { enum: ['asc', 'desc'] },
+  },
+}
+
 const watermarkSchema = {
   type: 'object',
   additionalProperties: false,
@@ -196,6 +206,7 @@ export const configSchema = {
     'autoSave',
     'menuVisible',
     'fileManagerVisible',
+    'fileManagerSort',
     'previewWidth',
     'fontSize',
     'fontFamily',
@@ -228,6 +239,7 @@ export const configSchema = {
     },
     menuVisible: { type: 'boolean' },
     fileManagerVisible: { type: 'boolean' },
+    fileManagerSort: fileManagerSortSchema,
     previewWidth: { type: 'number' },
     fontSize: { type: 'number' },
     fontFamily: fontFamilySchema,

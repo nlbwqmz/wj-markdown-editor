@@ -16,6 +16,13 @@ describe('configSchema', () => {
     expect(defaultConfig.fileManagerVisible).toBe(true)
   })
 
+  it('defaultConfig 必须提供 fileManagerSort 默认值', () => {
+    expect(defaultConfig.fileManagerSort).toEqual({
+      field: 'type',
+      direction: 'asc',
+    })
+  })
+
   it('defaultConfig 必须提供全屏切换与文件管理栏切换快捷键配置', () => {
     const toggleFullScreenShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
     const toggleFileManagerPanelShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFileManagerPanel')
@@ -55,6 +62,16 @@ describe('configSchema', () => {
     expect(() => validateConfigShape({
       ...defaultConfig,
       fileManagerVisible: true,
+    })).not.toThrow()
+  })
+
+  it('config schema 必须接纳 fileManagerSort', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerSort: {
+        field: 'modifiedTime',
+        direction: 'desc',
+      },
     })).not.toThrow()
   })
 
