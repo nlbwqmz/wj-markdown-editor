@@ -1,7 +1,7 @@
 <script setup>
 import { message } from 'ant-design-vue'
 import mermaid from 'mermaid'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import { shouldReplaceElementBeforeAttributeSync } from '@/components/editor/markdownPreviewDomPatchUtil.js'
@@ -91,6 +91,13 @@ let previewRefreshRafId = null
 let previewRefreshTimer = null
 let lastPreviewRefreshAt = 0
 let previewRefreshSequence = 0
+// keep-alive 失活时不能再继续对缓存 DOM 做 mermaid 渲染。
+// 否则 mermaid 在读取几何信息时会命中已经脱离当前活动视图的节点。
+let previewViewActive = false
+let pendingActivationRefresh = false
+let pendingActivationForceMermaidRefresh = false
+let pendingActivationMermaidInit = false
+let activationRefreshTaskToken = 0
 
 function createRafTask(callback) {
   if (typeof requestAnimationFrame === 'function') {
@@ -116,6 +123,82 @@ function clearPreviewRefreshScheduler() {
     clearTimeout(previewRefreshTimer)
     previewRefreshTimer = null
   }
+}
+
+/**
+ * 判断当前是否还有尚未执行的预览刷新调度。
+ *
+ * @returns {boolean} 只要 RAF 或节流定时器仍在排队，就视为存在待补做刷新。
+ */
+function hasScheduledPreviewRefresh() {
+  return previewRefreshRafId !== null || previewRefreshTimer !== null
+}
+
+/**
+ * 仅允许当前激活中的预览实例继续执行 DOM 刷新。
+ * keep-alive 失活页即使还保留响应式监听，也必须把刷新延迟到重新激活后。
+ *
+ * @returns {boolean} 当前预览实例是否允许立即刷新 DOM。
+ */
+function canRefreshPreviewNow() {
+  return previewViewActive === true && previewRef.value instanceof HTMLElement
+}
+
+/**
+ * 记录失活期间积压的预览刷新诉求，统一在重新激活后补做一次。
+ *
+ * @param {{ forceRefreshMermaid?: boolean, reinitMermaid?: boolean }} options
+ */
+function markPendingActivationRefresh(options = {}) {
+  pendingActivationRefresh = true
+  pendingActivationForceMermaidRefresh = pendingActivationForceMermaidRefresh || options.forceRefreshMermaid === true
+  pendingActivationMermaidInit = pendingActivationMermaidInit || options.reinitMermaid === true
+}
+
+function consumePendingActivationRefresh() {
+  const activationTask = {
+    needsRefresh: pendingActivationRefresh,
+    forceRefreshMermaid: pendingActivationForceMermaidRefresh,
+    reinitMermaid: pendingActivationMermaidInit,
+  }
+
+  pendingActivationRefresh = false
+  pendingActivationForceMermaidRefresh = false
+  pendingActivationMermaidInit = false
+
+  return activationTask
+}
+
+/**
+ * keep-alive 恢复时需要先让父页面完成 snapshot 重放，
+ * 再决定是否补做预览刷新；否则会先按旧 props.content 闪回一帧。
+ *
+ * @param {{ needsRefresh?: boolean, forceRefreshMermaid?: boolean, reinitMermaid?: boolean }} activationTask
+ */
+function scheduleActivationRefresh(activationTask = {}) {
+  if (activationTask.needsRefresh !== true && activationTask.reinitMermaid !== true) {
+    return
+  }
+
+  const taskToken = ++activationRefreshTaskToken
+  nextTick(() => {
+    if (taskToken !== activationRefreshTaskToken) {
+      return
+    }
+    if (!canRefreshPreviewNow()) {
+      markPendingActivationRefresh({
+        forceRefreshMermaid: activationTask.forceRefreshMermaid,
+        reinitMermaid: activationTask.reinitMermaid,
+      })
+      return
+    }
+    if (activationTask.reinitMermaid === true) {
+      initMermaid()
+    }
+    if (activationTask.needsRefresh === true) {
+      refreshPreviewImmediately(props.content, activationTask.forceRefreshMermaid)
+    }
+  })
 }
 
 /**
@@ -452,6 +535,13 @@ watch(() => store.config.markdown.typographer, (newValue) => {
 })
 
 watch(() => store.config.theme.global, () => {
+  if (!canRefreshPreviewNow()) {
+    markPendingActivationRefresh({
+      forceRefreshMermaid: true,
+      reinitMermaid: true,
+    })
+    return
+  }
   initMermaid()
   refreshPreviewImmediately(props.content, true)
 })
@@ -511,6 +601,12 @@ async function refreshPreview(doc, forceRefreshMermaid = false) {
 function refreshPreviewImmediately(doc, forceRefreshMermaid = false) {
   clearPreviewRefreshScheduler()
   pendingContent.value = doc
+  if (!canRefreshPreviewNow()) {
+    markPendingActivationRefresh({
+      forceRefreshMermaid,
+    })
+    return
+  }
   refreshPreview(doc, forceRefreshMermaid).then(() => {})
   lastPreviewRefreshAt = Date.now()
 }
@@ -537,6 +633,10 @@ function flushScheduledPreviewRefresh() {
 
 function schedulePreviewRefresh(doc) {
   pendingContent.value = doc
+  if (!canRefreshPreviewNow()) {
+    markPendingActivationRefresh()
+    return
+  }
 
   if (previewRefreshRafId !== null || previewRefreshTimer !== null) {
     return
@@ -557,12 +657,29 @@ watch(() => store.externalFileChange.visible, (visible) => {
 })
 
 onMounted(() => {
+  previewViewActive = true
   initMermaid()
   bindPreviewEvents()
   refreshPreviewImmediately(props.content)
 })
 
+onActivated(() => {
+  previewViewActive = true
+  scheduleActivationRefresh(consumePendingActivationRefresh())
+})
+
+onDeactivated(() => {
+  activationRefreshTaskToken += 1
+  if (hasScheduledPreviewRefresh()) {
+    markPendingActivationRefresh()
+  }
+  previewViewActive = false
+  clearPreviewRefreshScheduler()
+})
+
 onBeforeUnmount(() => {
+  activationRefreshTaskToken += 1
+  previewViewActive = false
   clearPreviewRefreshScheduler()
   unbindPreviewEvents()
 })
