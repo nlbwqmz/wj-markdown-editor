@@ -280,6 +280,10 @@ describe('documentFileManagerService', () => {
 
     await fs.ensureDir(nestedDirectoryPath)
     await fs.writeFile(currentFilePath, '# current', 'utf8')
+    const [directoryStat, fileStat] = await Promise.all([
+      fs.stat(nestedDirectoryPath),
+      fs.stat(currentFilePath),
+    ])
 
     const { service } = await createServiceContext({
       session: createBoundFileSession({
@@ -295,15 +299,14 @@ describe('documentFileManagerService', () => {
       expect.objectContaining({
         name: 'assets',
         kind: 'directory',
-        modifiedTimeMs: expect.any(Number),
+        modifiedTimeMs: directoryStat.mtimeMs,
       }),
       expect.objectContaining({
         name: 'current.md',
         kind: 'file',
-        modifiedTimeMs: expect.any(Number),
+        modifiedTimeMs: fileStat.mtimeMs,
       }),
     ])
-    expect(result.entryList.every(item => Number.isFinite(item.modifiedTimeMs))).toBe(true)
   })
 
   it('新建文件夹成功后应返回刷新后的目录列表', async () => {
