@@ -351,6 +351,8 @@ export function createFileManagerPanelController({
   const directoryState = ref(createEmptyDirectoryState())
   const loading = ref(false)
   let latestDirectoryStateRequestId = 0
+  let latestDirectoryStateSource = null
+  let latestDirectoryStateEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY
   const directoryPath = computed(() => directoryState.value.directoryPath)
   const entryList = computed(() => directoryState.value.entryList)
   const emptyMessageKey = computed(() => directoryState.value.emptyMessageKey)
@@ -374,18 +376,39 @@ export function createFileManagerPanelController({
   })
 
   function commitDirectoryState(nextState, options = {}) {
+    latestDirectoryStateSource = nextState
+    latestDirectoryStateEmptyMessageKey = options.emptyMessageKey || emptyMessageKey.value || DIRECTORY_EMPTY_MESSAGE_KEY
     directoryState.value = normalizeDirectoryState(
       nextState,
       store?.documentSessionSnapshot,
       store?.config?.fileManagerSort,
-      options.emptyMessageKey || emptyMessageKey.value || DIRECTORY_EMPTY_MESSAGE_KEY,
+      latestDirectoryStateEmptyMessageKey,
     )
 
     return directoryState.value
   }
 
   function commitEmptyDirectoryState(emptyMessageKey) {
+    latestDirectoryStateSource = null
+    latestDirectoryStateEmptyMessageKey = emptyMessageKey === undefined
+      ? DRAFT_EMPTY_MESSAGE_KEY
+      : emptyMessageKey
     directoryState.value = createEmptyDirectoryState(emptyMessageKey)
+    return directoryState.value
+  }
+
+  function recomputeDirectoryStateFromLatestSource() {
+    if (!latestDirectoryStateSource || !directoryState.value.directoryPath) {
+      return directoryState.value
+    }
+
+    directoryState.value = normalizeDirectoryState(
+      latestDirectoryStateSource,
+      store?.documentSessionSnapshot,
+      store?.config?.fileManagerSort,
+      latestDirectoryStateEmptyMessageKey,
+    )
+
     return directoryState.value
   }
 
@@ -643,6 +666,13 @@ export function createFileManagerPanelController({
     }
   }, {
     immediate: true,
+  })
+
+  watch([
+    () => store?.config?.fileManagerSort?.field,
+    () => store?.config?.fileManagerSort?.direction,
+  ], () => {
+    recomputeDirectoryStateFromLatestSource()
   })
 
   const handleDirectoryChanged = (payload) => {

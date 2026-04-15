@@ -15,6 +15,12 @@ const fileManagerPanelState = vi.hoisted(() => {
     store: {
       fileManagerPanelVisible: true,
       documentSessionSnapshot: null,
+      config: {
+        fileManagerSort: {
+          field: 'type',
+          direction: 'asc',
+        },
+      },
     },
     requestFileManagerDirectoryState: vi.fn(),
     requestFileManagerOpenDirectory: vi.fn(),
@@ -268,6 +274,10 @@ describe('fileManagerPanel 组件', () => {
   beforeEach(() => {
     fileManagerPanelState.store.fileManagerPanelVisible = true
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot()
+    fileManagerPanelState.store.config.fileManagerSort = {
+      field: 'type',
+      direction: 'asc',
+    }
     fileManagerPanelState.requestFileManagerDirectoryState.mockReset()
     fileManagerPanelState.requestFileManagerOpenDirectory.mockReset()
     fileManagerPanelState.requestFileManagerCreateFolder.mockReset()
@@ -911,6 +921,10 @@ describe('fileManagerPanelController', () => {
   beforeEach(() => {
     fileManagerPanelState.store.fileManagerPanelVisible = true
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot()
+    fileManagerPanelState.store.config.fileManagerSort = {
+      field: 'type',
+      direction: 'asc',
+    }
     fileManagerPanelState.requestFileManagerDirectoryState.mockReset()
     fileManagerPanelState.requestFileManagerOpenDirectory.mockReset()
     fileManagerPanelState.requestFileManagerCreateFolder.mockReset()
@@ -957,6 +971,50 @@ describe('fileManagerPanelController', () => {
 
     expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(2)
     expect(controller.entryList.value[0].isActive).toBe(true)
+
+    scope.stop()
+  })
+
+  it('fileManagerSort 变化后应立即重排当前 entryList，且不能重新请求目录', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'voice.mp3', path: 'D:/docs/voice.mp3', kind: 'file' },
+        { name: 'cover.png', path: 'D:/docs/cover.png', kind: 'file' },
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'file' },
+      ],
+    }))
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    await flushFileManagerPanel()
+
+    expect(controller.entryList.value.map(item => item.name)).toEqual([
+      'current.md',
+      'cover.png',
+      'voice.mp3',
+    ])
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(1)
+
+    fileManagerPanelState.store.config.fileManagerSort.field = 'name'
+    fileManagerPanelState.store.config.fileManagerSort.direction = 'desc'
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(1)
+    expect(controller.entryList.value.map(item => item.name)).toEqual([
+      'voice.mp3',
+      'current.md',
+      'cover.png',
+    ])
 
     scope.stop()
   })
