@@ -75,6 +75,37 @@ describe('configSchema', () => {
     })).not.toThrow()
   })
 
+  it('config schema 必须拒绝非法 fileManagerSort.field', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerSort: {
+        field: 'size',
+        direction: 'asc',
+      },
+    })).toThrow()
+  })
+
+  it('config schema 必须拒绝非法 fileManagerSort.direction', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerSort: {
+        field: 'type',
+        direction: 'up',
+      },
+    })).toThrow()
+  })
+
+  it('config schema 必须拒绝 fileManagerSort 额外属性', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerSort: {
+        field: 'name',
+        direction: 'asc',
+        extra: true,
+      },
+    })).toThrow()
+  })
+
   it('顶层缺失必需字段时必须校验失败', () => {
     const brokenConfig = { ...defaultConfig }
     delete brokenConfig.theme

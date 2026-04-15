@@ -16,10 +16,10 @@ describe('configRepairUtil', () => {
   })
 
   it('缺失 fileManagerSort 时必须从默认配置补齐', () => {
-    const repaired = repairConfig({
-      ...defaultConfig,
-      fileManagerSort: undefined,
-    }, defaultConfig)
+    const legacyConfig = { ...defaultConfig }
+    delete legacyConfig.fileManagerSort
+
+    const repaired = repairConfig(legacyConfig, defaultConfig)
 
     expect(repaired.fileManagerSort).toEqual({
       field: 'type',
