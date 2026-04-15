@@ -3,6 +3,7 @@ import { computed, createVNode, onScopeDispose, ref, watch } from 'vue'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
+import { cloneConfigDraft } from '@/util/config/settingConfigDraftUtil.js'
 import { requestDocumentOpenPathByInteraction } from '@/util/document-session/documentOpenInteractionService.js'
 import { resolveFileManagerEntryType, sortFileManagerEntryList } from './fileManagerEntryMetaUtil.js'
 import { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } from './fileManagerEventUtil.js'
@@ -437,10 +438,8 @@ export function createFileManagerPanelController({
     const currentConfig = typeof store?.config === 'object' && store.config
       ? store.config
       : {}
-    const nextConfig = {
-      ...currentConfig,
-      fileManagerSort: normalizedSortConfig,
-    }
+    const nextConfig = cloneConfigDraft(currentConfig)
+    nextConfig.fileManagerSort = normalizedSortConfig
 
     try {
       const result = await sendCommand({

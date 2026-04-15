@@ -74,6 +74,12 @@ function compareEntry(leftEntry, rightEntry) {
   })
 }
 
+const SKIPPABLE_DIRECTORY_ENTRY_STAT_ERROR_CODE_SET = new Set(['ENOENT', 'EPERM', 'EACCES'])
+
+function shouldSkipDirectoryEntryStatError(error) {
+  return SKIPPABLE_DIRECTORY_ENTRY_STAT_ERROR_CODE_SET.has(error?.code)
+}
+
 async function isExistingDirectory(fsModule, directoryPath) {
   if (!isNonEmptyString(directoryPath)) {
     return false
@@ -103,6 +109,19 @@ async function normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry) 
   }
 }
 
+async function safeNormalizeDirectoryEntry(fsModule, directoryPath, directoryEntry) {
+  try {
+    return await normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry)
+  } catch (error) {
+    if (shouldSkipDirectoryEntryStatError(error)) {
+      // 扫描期间条目可能已删除或暂时无权限，跳过单项以避免整次目录刷新失效。
+      return null
+    }
+
+    throw error
+  }
+}
+
 export async function readDirectoryStateAtPath({
   fsModule = fs,
   directoryPath,
@@ -118,7 +137,10 @@ export async function readDirectoryStateAtPath({
   const entryList = []
 
   for (const directoryEntry of rawEntryList) {
-    entryList.push(await normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry))
+    const normalizedEntry = await safeNormalizeDirectoryEntry(fsModule, directoryPath, directoryEntry)
+    if (normalizedEntry) {
+      entryList.push(normalizedEntry)
+    }
   }
 
   entryList.sort(compareEntry)

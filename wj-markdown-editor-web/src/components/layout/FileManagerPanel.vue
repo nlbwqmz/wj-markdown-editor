@@ -111,6 +111,17 @@ const sortMenuList = computed(() => [
   },
 ])
 
+const sortMenuSelectedKeys = computed(() => {
+  const field = ['name', 'modifiedTime', 'type'].includes(store?.config?.fileManagerSort?.field)
+    ? store.config.fileManagerSort.field
+    : 'type'
+  const direction = ['asc', 'desc'].includes(store?.config?.fileManagerSort?.direction)
+    ? store.config.fileManagerSort.direction
+    : 'asc'
+
+  return [`${field}-${direction}`]
+})
+
 function resolveEntryIconTestId(entry) {
   return resolveFileManagerEntryIconProfile(entry).testId
 }
@@ -202,6 +213,7 @@ async function handleFocusCurrentDocumentDirectory() {
           :label="t('message.fileManagerCreateEntry')"
           :title="t('message.fileManagerCreateEntry')"
           :menu-list="hasDirectory ? createMenuList : []"
+          :menu-trigger="['click']"
           :disabled="!hasDirectory ? true : undefined"
           :class="!hasDirectory ? disabledToolbarButtonClass : undefined"
         />
@@ -211,6 +223,8 @@ async function handleFocusCurrentDocumentDirectory() {
           :label="t('message.fileManagerSort')"
           :title="t('message.fileManagerSort')"
           :menu-list="sortMenuList"
+          :menu-trigger="['click']"
+          :menu-selected-keys="sortMenuSelectedKeys"
         />
       </div>
     </div>

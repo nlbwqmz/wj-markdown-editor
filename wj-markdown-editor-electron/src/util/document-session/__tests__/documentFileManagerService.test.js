@@ -309,6 +309,98 @@ describe('documentFileManagerService', () => {
     ])
   })
 
+  it.each(['ENOENT', 'EPERM'])('目录扫描遇到单个条目 stat %s 时应跳过该条目并继续返回其他条目', async (errorCode) => {
+    const { readDirectoryStateAtPath } = await import('../documentFileManagerService.js')
+    const directoryPath = 'D:/docs'
+    const createDirent = (name, isDirectory = false) => ({
+      name,
+      isDirectory: () => isDirectory,
+    })
+    const skippedError = Object.assign(new Error(`mock stat ${errorCode}`), {
+      code: errorCode,
+    })
+    const fsModule = {
+      pathExists: vi.fn(async () => true),
+      readdir: vi.fn(async () => [
+        createDirent('keep.md'),
+        createDirent('vanished.md'),
+        createDirent('assets', true),
+      ]),
+      stat: vi.fn(async (targetPath) => {
+        if (targetPath === directoryPath) {
+          return {
+            isDirectory: () => true,
+          }
+        }
+        if (targetPath.endsWith('vanished.md')) {
+          throw skippedError
+        }
+
+        return {
+          isDirectory: () => targetPath.endsWith('assets'),
+          mtimeMs: targetPath.endsWith('keep.md') ? 20 : 10,
+        }
+      }),
+    }
+
+    await expect(readDirectoryStateAtPath({
+      fsModule,
+      directoryPath,
+      activePath: path.join(directoryPath, 'keep.md'),
+    })).resolves.toEqual({
+      mode: 'directory',
+      directoryPath,
+      activePath: path.join(directoryPath, 'keep.md'),
+      entryList: [
+        {
+          path: path.join(directoryPath, 'assets'),
+          name: 'assets',
+          kind: 'directory',
+          extension: null,
+          modifiedTimeMs: 10,
+        },
+        {
+          path: path.join(directoryPath, 'keep.md'),
+          name: 'keep.md',
+          kind: 'file',
+          extension: '.md',
+          modifiedTimeMs: 20,
+        },
+      ],
+    })
+  })
+
+  it('目录扫描遇到未知 stat 错误时仍应抛出，避免吞掉真实故障', async () => {
+    const { readDirectoryStateAtPath } = await import('../documentFileManagerService.js')
+    const directoryPath = 'D:/docs'
+    const statError = Object.assign(new Error('mock stat failed'), {
+      code: 'EIO',
+    })
+    const fsModule = {
+      pathExists: vi.fn(async () => true),
+      readdir: vi.fn(async () => [
+        {
+          name: 'broken.md',
+          isDirectory: () => false,
+        },
+      ]),
+      stat: vi.fn(async (targetPath) => {
+        if (targetPath === directoryPath) {
+          return {
+            isDirectory: () => true,
+          }
+        }
+
+        throw statError
+      }),
+    }
+
+    await expect(readDirectoryStateAtPath({
+      fsModule,
+      directoryPath,
+    })).rejects.toThrow('mock stat failed')
+  })
+
   it('新建文件夹成功后应返回刷新后的目录列表', async () => {
     const directoryPath = await createTempDirectory()
     const currentFilePath = path.join(directoryPath, 'current.md')

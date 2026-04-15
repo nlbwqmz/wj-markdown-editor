@@ -6,6 +6,7 @@ import { compileString } from 'sass'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, reactive } from 'vue'
 
+import IconButton from '@/components/editor/IconButton.vue'
 import FileManagerPanel from '../FileManagerPanel.vue'
 
 const fileManagerPanelState = vi.hoisted(() => {
@@ -790,6 +791,29 @@ describe('fileManagerPanel 组件', () => {
     ])
   })
 
+  it('文件管理栏的新建和排序下拉应使用 click 触发，且排序下拉应透传当前选中规则', async () => {
+    fileManagerPanelState.store.config.fileManagerSort = {
+      field: 'modifiedTime',
+      direction: 'desc',
+    }
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    const iconButtonList = wrapper.findAllComponents(IconButton)
+    const createEntryButton = iconButtonList.find(component => component.attributes('data-testid') === 'file-manager-create-entry')
+    const sortEntryButton = iconButtonList.find(component => component.attributes('data-testid') === 'file-manager-sort-entry')
+
+    expect(createEntryButton?.props('menuTrigger')).toEqual(['click'])
+    expect(sortEntryButton?.props('menuTrigger')).toEqual(['click'])
+    expect(sortEntryButton?.props('menuSelectedKeys')).toEqual(['modifiedTime-desc'])
+  })
+
   it('点击工具区新建菜单里的文件夹动作后，应走创建文件夹链路', async () => {
     let folderDialogConfig = null
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
@@ -1245,6 +1269,45 @@ describe('fileManagerPanelController', () => {
       'cover.png',
       'older.md',
     ])
+  })
+
+  it('排序配置写入 IPC 前应去掉响应式代理，避免 structured clone 失败', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    const scope = effectScope()
+    let controller = null
+    const sendCommand = vi.fn(async (payload) => {
+      structuredClone(payload.data)
+      return { ok: true }
+    })
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+        sendCommand,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'file', modifiedTimeMs: 10 },
+      ],
+    }))
+
+    await expect(controller.updateFileManagerSortConfig({
+      field: 'name',
+      direction: 'desc',
+    })).resolves.toEqual({ ok: true })
+
+    expect(sendCommand).toHaveBeenCalledTimes(1)
+    expect(fileManagerPanelState.messageWarning).not.toHaveBeenCalled()
+    expect(fileManagerPanelState.store.config.fileManagerSort).toEqual({
+      field: 'name',
+      direction: 'desc',
+    })
+
+    scope.stop()
   })
 
   it('点击新建文件夹或新建 Markdown 时应先弹出单输入框 Modal 收集名称，取消时不发起创建', async () => {
