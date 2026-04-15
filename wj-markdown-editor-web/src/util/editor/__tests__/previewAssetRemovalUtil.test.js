@@ -184,6 +184,319 @@ test('删除本地图片时，应兼容括号形式的 title 写法', () => {
   assert.equal(result.content, '后文')
 })
 
+test('删除 HTML 本地图片时，应命中原始 img 标签并保留其他文本', () => {
+  const content = [
+    '<img src="./assets/target.png" style="width: 120px" class="demo-image" alt="示例" />',
+    '后文',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'image',
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, '后文')
+})
+
+test('删除全部 HTML 本地图片引用时，应删除同一路径的不同样式标签', () => {
+  const content = [
+    '第一段',
+    '<img src="./assets/target.png" style="width: 120px" />',
+    '第二段',
+    '<img src="./assets/target.png" style="width: 240px" class="large-image" />',
+    '第三段',
+  ].join('\n')
+
+  const result = removeAllAssetReferencesFromMarkdown(content, {
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+  }, {
+    resolveComparablePath: value => value,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.removedCount, 2)
+  assert.equal(result.content, [
+    '第一段',
+    '第二段',
+    '第三段',
+  ].join('\n'))
+})
+
+test('统计 HTML 图片引用时，应排除 fenced code、行内代码、转义文本与注释中的 img 字面量', () => {
+  const content = [
+    '```html',
+    '<img src="./assets/target.png" />',
+    '```',
+    '`<img src="./assets/target.png" />`',
+    '\\<img src="./assets/target.png" />',
+    '<!-- <img src="./assets/target.png" /> -->',
+    '<img src="./assets/target.png" style="width: 120px" />',
+  ].join('\n')
+
+  const referenceCount = countRemainingAssetReferences(content, {
+    rawSrc: './assets/target.png',
+  }, {
+    resolveComparablePath: value => value,
+  })
+
+  assert.equal(referenceCount, 1)
+})
+
+test('统计 HTML 图片引用时，应忽略 script 模板字符串里的伪 img 字面量', () => {
+  const content = [
+    '<script>const tpl = "<img src=\'./assets/target.png\' />"</script>',
+    '<img src="./assets/target.png" style="width: 120px" />',
+  ].join('\n')
+
+  const referenceCount = countRemainingAssetReferences(content, {
+    rawSrc: './assets/target.png',
+  }, {
+    resolveComparablePath: value => value,
+  })
+
+  assert.equal(referenceCount, 1)
+})
+
+test('统计 HTML 图片引用时，应忽略 textarea 与 template 容器中的伪 img 字面量', () => {
+  const content = [
+    'foo <textarea><img src="./assets/target.png" /></textarea>',
+    'foo <template><img src="./assets/target.png" /></template>',
+    '<img src="./assets/target.png" style="width: 120px" />',
+  ].join('\n')
+
+  const referenceCount = countRemainingAssetReferences(content, {
+    rawSrc: './assets/target.png',
+  }, {
+    resolveComparablePath: value => value,
+  })
+
+  assert.equal(referenceCount, 1)
+})
+
+test('统计 HTML 图片引用时，应忽略其他标签属性值里的伪 img 字面量', () => {
+  const content = [
+    '<div data-template="<img src=\'./assets/target.png\' />"></div>',
+    '<img src="./assets/target.png" />',
+  ].join('\n')
+
+  const referenceCount = countRemainingAssetReferences(content, {
+    rawSrc: './assets/target.png',
+  }, {
+    resolveComparablePath: value => value,
+  })
+
+  assert.equal(referenceCount, 1)
+})
+
+test('删除 HTML 图片引用时，应跳过不会被渲染的 img 字面量并保留原文本', () => {
+  const content = [
+    '```html',
+    '<img src="./assets/target.png" />',
+    '```',
+    '`<img src="./assets/target.png" />`',
+    '\\<img src="./assets/target.png" />',
+    '<!-- <img src="./assets/target.png" /> -->',
+    '<img src="./assets/target.png" style="width: 120px" />',
+    '后文',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'image',
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, [
+    '```html',
+    '<img src="./assets/target.png" />',
+    '```',
+    '`<img src="./assets/target.png" />`',
+    '\\<img src="./assets/target.png" />',
+    '<!-- <img src="./assets/target.png" /> -->',
+    '后文',
+  ].join('\n'))
+})
+
+test('删除 HTML 图片引用时，应忽略 script 模板字符串里的伪 img 字面量', () => {
+  const content = [
+    '<script>const tpl = "<img src=\'./assets/target.png\' />"</script>',
+    '<img src="./assets/target.png" style="width: 120px" />',
+    '后文',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'image',
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, [
+    '<script>const tpl = "<img src=\'./assets/target.png\' />"</script>',
+    '后文',
+  ].join('\n'))
+})
+
+test('删除 HTML 图片引用时，应忽略 textarea 与 template 容器中的伪 img 字面量', () => {
+  const content = [
+    'foo <textarea><img src="./assets/target.png" /></textarea>',
+    'foo <template><img src="./assets/target.png" /></template>',
+    '<img src="./assets/target.png" style="width: 120px" />',
+    '后文',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'image',
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, [
+    'foo <textarea><img src="./assets/target.png" /></textarea>',
+    'foo <template><img src="./assets/target.png" /></template>',
+    '后文',
+  ].join('\n'))
+})
+
+test('删除 HTML 图片引用时，应忽略其他标签属性值里的伪 img 字面量', () => {
+  const content = [
+    '<div data-template="<img src=\'./assets/target.png\' />"></div>',
+    '<img src="./assets/target.png" />',
+    '后文',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'image',
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, [
+    '<div data-template="<img src=\'./assets/target.png\' />"></div>',
+    '后文',
+  ].join('\n'))
+})
+
+test('删除全部 HTML 图片引用时，应保留代码块与注释中的伪 img 字面量', () => {
+  const content = [
+    '```html',
+    '<img src="./assets/target.png" />',
+    '```',
+    '<!-- <img src="./assets/target.png" /> -->',
+    '第一段',
+    '<img src="./assets/target.png" style="width: 120px" />',
+    '第二段',
+    '<img src="./assets/target.png" style="width: 240px" class="large-image" />',
+    '第三段',
+  ].join('\n')
+
+  const result = removeAllAssetReferencesFromMarkdown(content, {
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+  }, {
+    resolveComparablePath: value => value,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.removedCount, 2)
+  assert.equal(result.content, [
+    '```html',
+    '<img src="./assets/target.png" />',
+    '```',
+    '<!-- <img src="./assets/target.png" /> -->',
+    '第一段',
+    '第二段',
+    '第三段',
+  ].join('\n'))
+})
+
+test('删除全部 HTML 图片引用时，应保留其他标签属性值里的伪 img 字面量', () => {
+  const content = [
+    '<div data-template="<img src=\'./assets/target.png\' />"></div>',
+    '第一段',
+    '<img src="./assets/target.png" style="width: 120px" />',
+    '第二段',
+    '<img src="./assets/target.png" style="width: 240px" class="large-image" />',
+    '第三段',
+  ].join('\n')
+
+  const result = removeAllAssetReferencesFromMarkdown(content, {
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+  }, {
+    resolveComparablePath: value => value,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.removedCount, 2)
+  assert.equal(result.content, [
+    '<div data-template="<img src=\'./assets/target.png\' />"></div>',
+    '第一段',
+    '第二段',
+    '第三段',
+  ].join('\n'))
+})
+
+test('删除全部 HTML 图片引用时，应保留 script 模板字符串里的伪 img 字面量', () => {
+  const content = [
+    '<script>const tpl = "<img src=\'./assets/target.png\' />"</script>',
+    '第一段',
+    '<img src="./assets/target.png" style="width: 120px" />',
+    '第二段',
+    '<img src="./assets/target.png" style="width: 240px" class="large-image" />',
+    '第三段',
+  ].join('\n')
+
+  const result = removeAllAssetReferencesFromMarkdown(content, {
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+  }, {
+    resolveComparablePath: value => value,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.removedCount, 2)
+  assert.equal(result.content, [
+    '<script>const tpl = "<img src=\'./assets/target.png\' />"</script>',
+    '第一段',
+    '第二段',
+    '第三段',
+  ].join('\n'))
+})
+
+test('删除表格单元格里的 HTML 图片引用时，应优先移除当前单元格而不是误删别处同路径图片', () => {
+  const content = [
+    '| <img src="./assets/target.png" /> |',
+    '| --- |',
+    '第一段',
+    '<img src="./assets/target.png" style="width: 120px" />',
+    '后文',
+  ].join('\n')
+
+  const result = removeAssetFromMarkdown(content, {
+    kind: 'image',
+    rawSrc: './assets/target.png',
+    occurrence: 1,
+    lineStart: 1,
+    lineEnd: 1,
+  })
+
+  assert.equal(result.removed, true)
+  assert.equal(result.content, [
+    '|  |',
+    '| --- |',
+    '第一段',
+    '<img src="./assets/target.png" style="width: 120px" />',
+    '后文',
+  ].join('\n'))
+})
+
 test('删除 autolink 远程链接时，应命中真实 Markdown 片段并移除整段', () => {
   const content = [
     '<https://example.com/a.png>',

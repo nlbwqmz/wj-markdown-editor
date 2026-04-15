@@ -89,6 +89,7 @@ onUnmounted(() => {
             <MarkdownPreview
               :content="content"
               :code-theme="commonStore.config.theme.code"
+              :manage-html-image-resources="false"
               :preview-theme="commonStore.config.theme.preview"
               :preview-scroll-container="() => previewContainerRef"
               @refresh-complete="onPreviewRefreshComplete"

@@ -35,6 +35,10 @@ const props = defineProps({
     type: Function,
     default: () => null,
   },
+  manageHtmlImageResources: {
+    type: Boolean,
+    default: () => true,
+  },
 })
 
 const emits = defineEmits(['refreshComplete', 'anchorChange', 'previewContextmenu', 'assetOpen'])
@@ -467,7 +471,9 @@ watch(() => props.codeTheme, async (newTheme) => {
 async function refreshPreview(doc, forceRefreshMermaid = false) {
   const currentRefreshSequence = ++previewRefreshSequence
   let shouldRefreshMermaid = forceRefreshMermaid
-  const rendered = md.render(doc)
+  const rendered = md.render(doc, {
+    manageHtmlImageResources: props.manageHtmlImageResources,
+  })
   const tempElement = document.createElement('div')
   tempElement.innerHTML = rendered
   if (!forceRefreshMermaid) {

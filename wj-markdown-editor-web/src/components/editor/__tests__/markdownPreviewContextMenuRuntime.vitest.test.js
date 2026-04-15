@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import MarkdownIt from 'markdown-it'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick } from 'vue'
+import markdownItHtmlImage from '@/util/markdown-it/markdownItHtmlImage.js'
 import markdownItImage from '@/util/markdown-it/markdownItImage.js'
 import markdownItLineNumber from '@/util/markdown-it/markdownItLineNumber.js'
 import markdownItLink from '@/util/markdown-it/markdownItLink.js'
@@ -180,6 +181,7 @@ function renderPreviewHtml(markdown) {
     xhtmlOut: true,
   })
   markdownItImage(md)
+  markdownItHtmlImage(md)
   markdownItLink(md)
   markdownItLineNumber(md)
   return md.render(markdown)
@@ -375,6 +377,57 @@ describe('markdownPreview runtime contextmenu', () => {
       menuPosition: {
         x: 188,
         y: 288,
+      },
+    })
+  })
+
+  it('真实渲染的 HTML 本地图片右键时，应透传 local 资源上下文并保留原始 HTML 引用', async () => {
+    markdownPreviewRuntimeState.mdRender.mockImplementation(doc => renderPreviewHtml(doc))
+
+    const wrapper = mount(MarkdownPreview, {
+      props: {
+        content: '<img src="../assets/demo.png" style="width: 120px" class="demo-image" alt="示例" />',
+        codeTheme: 'atom-one-dark',
+        previewTheme: 'github',
+      },
+      global: {
+        stubs: {
+          'a-watermark': WatermarkStub,
+          'a-image-preview-group': ImagePreviewGroupStub,
+          'a-image': ImageStub,
+        },
+      },
+    })
+
+    await flushPreviewRender()
+
+    const imageElement = wrapper.get('img[data-wj-resource-src="../assets/demo.png"]')
+    expect(imageElement.attributes('style')).toContain('width: 120px')
+    expect(imageElement.attributes('class')).toContain('demo-image')
+
+    await imageElement.trigger('contextmenu', {
+      clientX: 196,
+      clientY: 286,
+    })
+
+    const previewContextmenuEvents = wrapper.emitted('previewContextmenu') || []
+    expect(previewContextmenuEvents).toHaveLength(1)
+    expect(previewContextmenuEvents[0][0]).toEqual({
+      type: 'resource',
+      asset: {
+        assetType: 'image',
+        sourceType: 'local',
+        rawSrc: '../assets/demo.png',
+        rawPath: '../assets/demo.png',
+        resourceUrl: expect.stringMatching(/^wj:\/\//u),
+        markdownReference: '<img src="../assets/demo.png" style="width: 120px" class="demo-image" alt="示例" />',
+        occurrence: 1,
+        lineStart: undefined,
+        lineEnd: undefined,
+      },
+      menuPosition: {
+        x: 196,
+        y: 286,
       },
     })
   })

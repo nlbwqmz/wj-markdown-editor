@@ -1,7 +1,47 @@
 import MarkdownIt from 'markdown-it'
+import {
+  collectHtmlImageTags,
+  getHtmlImageAttribute,
+} from '../htmlImageTagUtil.js'
 import { shouldContinueMarkdownCleanup } from './previewAssetDeleteDecisionUtil.js'
 
 const SOURCE_RANGE_META_KEY = 'wjSourceRange'
+const HTML_RAW_TEXT_TAG_NAME_SET = new Set(['script', 'style', 'textarea', 'title', 'template', 'noscript'])
+const HTML_RAW_TEXT_OPEN_TAG_REGEXP = /^<([a-z][\w:-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>$/iu
+const HTML_RAW_TEXT_CLOSE_TAG_REGEXP = /^<\/([a-z][\w:-]*)\s*>$/iu
+
+function resolveRawTextBoundaryToken(content) {
+  const normalizedContent = String(content || '').trim()
+  if (!normalizedContent) {
+    return null
+  }
+
+  const closeTagMatch = HTML_RAW_TEXT_CLOSE_TAG_REGEXP.exec(normalizedContent)
+  if (closeTagMatch) {
+    const tagName = closeTagMatch[1].toLowerCase()
+    return HTML_RAW_TEXT_TAG_NAME_SET.has(tagName)
+      ? { type: 'close', tagName }
+      : null
+  }
+
+  const openTagMatch = HTML_RAW_TEXT_OPEN_TAG_REGEXP.exec(normalizedContent)
+  if (!openTagMatch || /\/\s*>$/u.test(normalizedContent)) {
+    return null
+  }
+
+  const tagName = openTagMatch[1].toLowerCase()
+  return HTML_RAW_TEXT_TAG_NAME_SET.has(tagName)
+    ? { type: 'open', tagName }
+    : null
+}
+
+function isHtmlImageToken(token) {
+  return token?.type === 'html_inline'
+}
+
+function isMarkdownAssetToken(token) {
+  return token?.type === 'image' || token?.type === 'link_open'
+}
 
 function createMarkdownItAssetMatcher() {
   const md = new MarkdownIt({
@@ -26,7 +66,7 @@ function createMarkdownItAssetMatcher() {
 
       for (let i = tokenStartIndex; i < state.tokens.length; i++) {
         const token = state.tokens[i]
-        if (token?.type !== 'image' && token?.type !== 'link_open') {
+        if (!isMarkdownAssetToken(token) && !isHtmlImageToken(token)) {
           continue
         }
 
@@ -58,6 +98,7 @@ function createMarkdownItAssetMatcher() {
   md.inline.ruler.at('image', wrapInlineRuleWithSourceRange(getInlineRuleByName('image')))
   md.inline.ruler.at('autolink', wrapInlineRuleWithSourceRange(getInlineRuleByName('autolink')))
   md.inline.ruler.at('linkify', wrapInlineRuleWithSourceRange(getInlineRuleByName('linkify')))
+  md.inline.ruler.at('html_inline', wrapInlineRuleWithSourceRange(getInlineRuleByName('html_inline')))
 
   return md
 }
@@ -269,7 +310,192 @@ function collectMarkdownItMatches(content, lineStartIndexes, kind) {
 }
 
 function collectImageMatches(content, lineStartIndexes) {
-  return collectMarkdownItMatches(content, lineStartIndexes, 'image')
+  return [
+    ...collectMarkdownItMatches(content, lineStartIndexes, 'image'),
+    ...collectHtmlImageMatches(content, lineStartIndexes),
+  ].sort((a, b) => a.from - b.from)
+}
+
+function collectHtmlImageMatches(content, lineStartIndexes) {
+  const matchList = []
+  const tokenList = markdownItAssetMatcher.parse(content, {})
+  const mappedScopeStack = []
+
+  for (const token of tokenList) {
+    if (token?.nesting === -1) {
+      while (
+        mappedScopeStack.length > 0
+        && mappedScopeStack[mappedScopeStack.length - 1].level >= token.level
+      ) {
+        mappedScopeStack.pop()
+      }
+    }
+
+    if (token?.nesting === 1) {
+      const mappedRange = resolveMappedTokenRange(content, lineStartIndexes, token)
+      if (mappedRange) {
+        mappedScopeStack.push({
+          ...mappedRange,
+          cursor: 0,
+          level: token.level,
+        })
+      }
+    }
+
+    if (token?.type === 'html_block' && Array.isArray(token.map)) {
+      matchList.push(...collectHtmlImageMatchesFromHtmlBlockToken(content, lineStartIndexes, token))
+      continue
+    }
+
+    if (token?.type === 'inline' && Array.isArray(token.children)) {
+      matchList.push(...collectHtmlImageMatchesFromInlineToken(content, lineStartIndexes, token, mappedScopeStack))
+    }
+  }
+
+  return matchList
+}
+
+function resolveMappedTokenRange(content, lineStartIndexes, token) {
+  if (!Array.isArray(token?.map)) {
+    return null
+  }
+
+  const start = lineStartIndexes[token.map[0]]
+  if (!Number.isInteger(start)) {
+    return null
+  }
+
+  const end = token.map[1] < lineStartIndexes.length
+    ? lineStartIndexes[token.map[1]]
+    : content.length
+
+  return {
+    start,
+    end,
+    content: content.slice(start, end),
+  }
+}
+
+function collectHtmlImageMatchesFromTokenContent(content, lineStartIndexes, tokenContent, baseStartIndex) {
+  return collectHtmlImageTags(tokenContent)
+    .map((tag) => {
+      const rawPath = normalizeAssetPath(getHtmlImageAttribute(tag.parsedTag, 'src'))
+      if (!rawPath) {
+        return null
+      }
+
+      return createAssetMatch(
+        content,
+        lineStartIndexes,
+        'image',
+        baseStartIndex + tag.start,
+        baseStartIndex + tag.end,
+        rawPath,
+      )
+    })
+    .filter(Boolean)
+}
+
+function collectHtmlImageMatchesFromHtmlBlockToken(content, lineStartIndexes, token) {
+  const mappedRange = resolveMappedTokenRange(content, lineStartIndexes, token)
+  if (!mappedRange) {
+    return []
+  }
+
+  return collectHtmlImageMatchesFromTokenContent(
+    content,
+    lineStartIndexes,
+    mappedRange.content,
+    mappedRange.start,
+  )
+}
+
+function resolveInlineTokenSourceRangeFromMappedScope(scope, tokenContent) {
+  if (!scope || !tokenContent) {
+    return null
+  }
+
+  const relativeStart = scope.content.indexOf(tokenContent, scope.cursor)
+  if (relativeStart === -1) {
+    return null
+  }
+
+  scope.cursor = relativeStart + tokenContent.length
+  return {
+    start: scope.start + relativeStart,
+    end: scope.start + relativeStart + tokenContent.length,
+    content: tokenContent,
+  }
+}
+
+function resolveInlineTokenSourceRange(content, lineStartIndexes, token, mappedScopeStack) {
+  if (!token?.content) {
+    return null
+  }
+
+  const mappedRange = resolveMappedTokenRange(content, lineStartIndexes, token)
+  if (mappedRange) {
+    const relativeStart = mappedRange.content.indexOf(token.content)
+    if (relativeStart !== -1) {
+      return {
+        start: mappedRange.start + relativeStart,
+        end: mappedRange.start + relativeStart + token.content.length,
+        content: token.content,
+      }
+    }
+  }
+
+  for (let i = mappedScopeStack.length - 1; i >= 0; i--) {
+    const sourceRange = resolveInlineTokenSourceRangeFromMappedScope(mappedScopeStack[i], token.content)
+    if (sourceRange) {
+      return sourceRange
+    }
+  }
+
+  return null
+}
+
+function collectHtmlImageMatchesFromInlineToken(content, lineStartIndexes, token, mappedScopeStack) {
+  const inlineSourceRange = resolveInlineTokenSourceRange(content, lineStartIndexes, token, mappedScopeStack)
+  if (!inlineSourceRange) {
+    return []
+  }
+
+  const matchList = []
+  const rawTextStack = []
+  for (const childToken of token.children) {
+    if (childToken?.type !== 'html_inline') {
+      continue
+    }
+
+    const boundaryToken = resolveRawTextBoundaryToken(childToken.content)
+    const insideRawText = rawTextStack.length > 0
+
+    if (!insideRawText) {
+      const childSourceRange = childToken.meta?.[SOURCE_RANGE_META_KEY]
+      if (isValidSourceRange(childSourceRange)) {
+        matchList.push(...collectHtmlImageMatchesFromTokenContent(
+          content,
+          lineStartIndexes,
+          childToken.content,
+          inlineSourceRange.start + childSourceRange.from,
+        ))
+      }
+    }
+
+    if (insideRawText) {
+      if (boundaryToken?.type === 'close' && boundaryToken.tagName === rawTextStack[rawTextStack.length - 1]) {
+        rawTextStack.pop()
+      }
+      continue
+    }
+
+    if (boundaryToken?.type === 'open') {
+      rawTextStack.push(boundaryToken.tagName)
+    }
+  }
+
+  return matchList
 }
 
 function collectVideoMatches(content, lineStartIndexes) {

@@ -15,6 +15,7 @@ import { useCommonStore } from '@/stores/counter.js'
 import markdownItAudio from '@/util/markdown-it/markdownItAudio.js'
 import MarkdownItCodeBlock from '@/util/markdown-it/markdownItCodeBlock.js'
 import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
+import markdownItHtmlImage from '@/util/markdown-it/markdownItHtmlImage.js'
 import markdownItImage from '@/util/markdown-it/markdownItImage.js'
 import markdownItKatexLineNumber from '@/util/markdown-it/markdownItKatexLineNumber.js'
 import markdownItLineNumber from '@/util/markdown-it/markdownItLineNumber.js'
@@ -48,6 +49,7 @@ markdownItTextColor(md)
 
 // 给本地图片加上自定义协议
 markdownItImage(md)
+markdownItHtmlImage(md)
 
 // 给链接加上_blank
 markdownItLink(md)
