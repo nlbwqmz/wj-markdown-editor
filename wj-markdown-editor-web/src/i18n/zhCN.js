@@ -70,6 +70,7 @@ export default {
   top: {
     enterFullScreen: '进入全屏',
     exitFullScreen: '退出全屏',
+    switchView: '切换视图',
     switchTheme: '切换主题',
     openInExplorer: '在资源管理器中打开',
     pinTop: '置顶',

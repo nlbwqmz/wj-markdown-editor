@@ -6,6 +6,8 @@ import LayoutTop from '../LayoutTop.vue'
 
 const mocked = vi.hoisted(() => ({
   channelSend: vi.fn(),
+  getShortcutHandler: vi.fn(),
+  switchViewHandler: vi.fn(),
 }))
 
 const store = reactive({
@@ -36,6 +38,12 @@ vi.mock('@/stores/counter.js', () => ({
 vi.mock('@/util/channel/channelUtil.js', () => ({
   default: {
     send: mocked.channelSend,
+  },
+}))
+
+vi.mock('@/util/shortcutKeyUtil.js', () => ({
+  default: {
+    getWebShortcutKeyHandler: (...args) => mocked.getShortcutHandler(...args),
   },
 }))
 
@@ -126,6 +134,20 @@ describe('layoutTop full screen control', () => {
     store.config.language = 'zh-CN'
     store.config.theme.global = 'light'
     mocked.channelSend.mockReset()
+    mocked.getShortcutHandler.mockReset()
+    mocked.switchViewHandler.mockReset()
+    mocked.getShortcutHandler.mockImplementation((id, execute) => {
+      if (id === 'switchView') {
+        if (execute === true) {
+          mocked.switchViewHandler()
+          return undefined
+        }
+
+        return mocked.switchViewHandler
+      }
+
+      return vi.fn()
+    })
     mocked.channelSend.mockImplementation(async ({ event }) => {
       if (event === 'app-info') {
         return {
@@ -171,5 +193,24 @@ describe('layoutTop full screen control', () => {
 
     expect(html.indexOf('i-tabler:minus')).toBeLessThan(html.indexOf('i-tabler:crop-1-1'))
     expect(html.indexOf('i-tabler:crop-1-1')).toBeLessThan(html.indexOf('i-tabler:x'))
+  })
+
+  it('顶部栏应在右侧操作区最左侧渲染切换视图入口', () => {
+    const wrapper = mountLayoutTop()
+    const html = wrapper.html()
+    const tooltipList = wrapper.findAll('[data-testid="tooltip-stub"]')
+
+    expect(html).toContain('i-tabler:arrows-left-right')
+    expect(tooltipList.some(item => item.attributes('data-tooltip-title') === 'top.switchView')).toBe(true)
+    expect(html.indexOf('i-tabler:arrows-left-right')).toBeLessThan(html.indexOf('i-tabler:moon'))
+  })
+
+  it('点击顶部栏切换视图入口时应调用共享 switchView 动作', async () => {
+    const wrapper = mountLayoutTop()
+
+    await wrapper.get('[data-testid="layout-top-switch-view"]').trigger('click')
+
+    expect(mocked.getShortcutHandler).toHaveBeenCalledWith('switchView', true)
+    expect(mocked.switchViewHandler).toHaveBeenCalledTimes(1)
   })
 })

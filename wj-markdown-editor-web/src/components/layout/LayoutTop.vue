@@ -6,6 +6,7 @@ import log from '@/assets/img/logo.png'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
+import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { createLayoutTopOpenFolderAction } from './layoutTopOpenFolderAction.js'
 
 const store = useCommonStore()
@@ -32,6 +33,10 @@ const openFolder = createLayoutTopOpenFolderAction({
 
 function openAbout() {
   channelUtil.send({ event: 'open-about' })
+}
+
+function switchView() {
+  shortcutKeyUtil.getWebShortcutKeyHandler('switchView', true)
 }
 
 const fileName = computed(() => store.fileName)
@@ -99,6 +104,18 @@ onBeforeMount(async () => {
       <span v-if="!saved" class="color-red">*</span>
     </div>
     <div class="flex items-center">
+      <a-tooltip placement="bottom" color="#1677ff">
+        <template #title>
+          <span>{{ $t('top.switchView') }}</span>
+        </template>
+        <div
+          data-testid="layout-top-switch-view"
+          class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover"
+          @click="switchView"
+        >
+          <div class="i-tabler:arrows-left-right" />
+        </div>
+      </a-tooltip>
       <a-tooltip v-if="hasNewVersion" placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.newVersion') }}</span>

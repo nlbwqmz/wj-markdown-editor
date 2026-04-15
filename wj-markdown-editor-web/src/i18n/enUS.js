@@ -70,6 +70,7 @@ export default {
   top: {
     enterFullScreen: 'Enter full screen',
     exitFullScreen: 'Exit full screen',
+    switchView: 'Switch view',
     switchTheme: 'Switch theme',
     openInExplorer: 'Open in explorer',
     pinTop: 'Pin to top',
