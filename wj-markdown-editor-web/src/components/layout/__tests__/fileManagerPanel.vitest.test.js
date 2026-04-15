@@ -16,6 +16,7 @@ const fileManagerPanelState = vi.hoisted(() => {
       fileManagerPanelVisible: true,
       documentSessionSnapshot: null,
       config: {
+        language: 'zh-CN',
         fileManagerSort: {
           field: 'type',
           direction: 'asc',
@@ -35,11 +36,24 @@ const fileManagerPanelState = vi.hoisted(() => {
   }
 })
 const i18nState = vi.hoisted(() => ({
-  t: vi.fn(value => `translated:${value}`),
+  translationPrefixMap: {
+    'zh-CN': 'translated',
+    'en-US': 'localized',
+  },
+  t: vi.fn(),
 }))
 
 fileManagerPanelState.store = reactive(fileManagerPanelState.store)
+i18nState.t.mockImplementation((value) => {
+  const language = fileManagerPanelState.store.config.language || 'zh-CN'
+  const prefix = i18nState.translationPrefixMap[language] || 'translated'
+  return `${prefix}:${value}`
+})
 const mountedWrapperList = []
+
+function resolveSetupStateBinding(binding) {
+  return binding?.value ?? binding
+}
 
 function createDirectoryState({
   directoryPath = 'D:/docs',
@@ -281,6 +295,7 @@ describe('fileManagerPanel 组件', () => {
   beforeEach(() => {
     fileManagerPanelState.store.fileManagerPanelVisible = true
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot()
+    fileManagerPanelState.store.config.language = 'zh-CN'
     fileManagerPanelState.store.config.fileManagerSort = {
       field: 'type',
       direction: 'asc',
@@ -693,11 +708,11 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.find('[data-testid="file-manager-create-markdown"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="file-manager-create-entry"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="file-manager-sort-entry"]').exists()).toBe(true)
-    expect(wrapper.vm.$.setupState.createMenuList.map(item => item.label)).toEqual([
+    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.createMenuList).map(item => item.label)).toEqual([
       'translated:message.fileManagerCreateFolder',
       'translated:message.fileManagerCreateMarkdown',
     ])
-    expect(wrapper.vm.$.setupState.sortMenuList.map(item => item.label)).toEqual([
+    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).map(item => item.label)).toEqual([
       'translated:message.fileManagerSortNameAsc',
       'translated:message.fileManagerSortNameDesc',
       'translated:message.fileManagerSortModifiedTimeAsc',
@@ -732,7 +747,7 @@ describe('fileManagerPanel 组件', () => {
     mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
 
-    const createFolderActionPromise = wrapper.vm.$.setupState.createMenuList[0].action()
+    const createFolderActionPromise = resolveSetupStateBinding(wrapper.vm.$.setupState.createMenuList)[0].action()
     folderDialogConfig.content.props['onUpdate:value']('assets')
     await folderDialogConfig.onOk()
     await createFolderActionPromise
@@ -771,7 +786,7 @@ describe('fileManagerPanel 组件', () => {
     mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
 
-    const createMarkdownActionPromise = wrapper.vm.$.setupState.createMenuList[1].action()
+    const createMarkdownActionPromise = resolveSetupStateBinding(wrapper.vm.$.setupState.createMenuList)[1].action()
     const markdownAddonAfterNode = markdownDialogConfig.content.children.addonAfter()
 
     expect(extractVNodeText(markdownAddonAfterNode)).toBe('.md')
@@ -788,6 +803,46 @@ describe('fileManagerPanel 组件', () => {
     })
     expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
     expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toContain('draft-note.md')
+  })
+
+  it('切换语言后 createMenuList 和 sortMenuList 标签应立即更新', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.createMenuList).map(item => item.label)).toEqual([
+      'translated:message.fileManagerCreateFolder',
+      'translated:message.fileManagerCreateMarkdown',
+    ])
+    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).map(item => item.label)).toEqual([
+      'translated:message.fileManagerSortNameAsc',
+      'translated:message.fileManagerSortNameDesc',
+      'translated:message.fileManagerSortModifiedTimeAsc',
+      'translated:message.fileManagerSortModifiedTimeDesc',
+      'translated:message.fileManagerSortTypeAsc',
+      'translated:message.fileManagerSortTypeDesc',
+    ])
+
+    fileManagerPanelState.store.config.language = 'en-US'
+    await flushFileManagerPanel()
+
+    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.createMenuList).map(item => item.label)).toEqual([
+      'localized:message.fileManagerCreateFolder',
+      'localized:message.fileManagerCreateMarkdown',
+    ])
+    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).map(item => item.label)).toEqual([
+      'localized:message.fileManagerSortNameAsc',
+      'localized:message.fileManagerSortNameDesc',
+      'localized:message.fileManagerSortModifiedTimeAsc',
+      'localized:message.fileManagerSortModifiedTimeDesc',
+      'localized:message.fileManagerSortTypeAsc',
+      'localized:message.fileManagerSortTypeDesc',
+    ])
   })
 
   it('draft 空状态应通过工具栏选择目录，并在选择成功后切换到该目录', async () => {
@@ -1098,7 +1153,7 @@ describe('fileManagerPanelController', () => {
       'cover.png',
     ])
 
-    const modifiedTimeDescMenuItem = wrapper.vm.$.setupState.sortMenuList.find(item => item.key === 'modifiedTime-desc')
+    const modifiedTimeDescMenuItem = resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).find(item => item.key === 'modifiedTime-desc')
     await modifiedTimeDescMenuItem.action()
     await flushFileManagerPanel()
 

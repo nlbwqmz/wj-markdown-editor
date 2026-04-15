@@ -41,7 +41,7 @@ const filteredEntryList = computed(() => {
   )
 })
 
-const createMenuList = [
+const createMenuList = computed(() => [
   {
     key: 'create-folder',
     label: t('message.fileManagerCreateFolder'),
@@ -52,9 +52,9 @@ const createMenuList = [
     label: t('message.fileManagerCreateMarkdown'),
     action: requestCreateMarkdownFromInput,
   },
-]
+])
 
-const sortMenuList = [
+const sortMenuList = computed(() => [
   {
     key: 'name-asc',
     label: t('message.fileManagerSortNameAsc'),
@@ -103,7 +103,7 @@ const sortMenuList = [
       direction: 'desc',
     }),
   },
-]
+])
 
 function resolveEntryIconTestId(entry) {
   return resolveFileManagerEntryIconProfile(entry).testId
