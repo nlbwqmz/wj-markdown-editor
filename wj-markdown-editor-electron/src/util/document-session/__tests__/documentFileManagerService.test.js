@@ -247,26 +247,63 @@ describe('documentFileManagerService', () => {
         name: 'assets',
         kind: 'directory',
         extension: null,
+        modifiedTimeMs: expect.any(Number),
       },
       {
         path: path.join(directoryPath, 'notes'),
         name: 'notes',
         kind: 'directory',
         extension: null,
+        modifiedTimeMs: expect.any(Number),
       },
       {
         path: path.join(directoryPath, 'a.md'),
         name: 'a.md',
         kind: 'file',
         extension: '.md',
+        modifiedTimeMs: expect.any(Number),
       },
       {
         path: path.join(directoryPath, 'z.txt'),
         name: 'z.txt',
         kind: 'file',
         extension: '.txt',
+        modifiedTimeMs: expect.any(Number),
       },
     ])
+  })
+
+  it('目录项应返回 modifiedTimeMs，且保持目录在前文件在后', async () => {
+    const directoryPath = await createTempDirectory()
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    const nestedDirectoryPath = path.join(directoryPath, 'assets')
+
+    await fs.ensureDir(nestedDirectoryPath)
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'entry-modified-time-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    const result = await service.getDirectoryState({ windowId: 9 })
+
+    expect(result.entryList).toEqual([
+      expect.objectContaining({
+        name: 'assets',
+        kind: 'directory',
+        modifiedTimeMs: expect.any(Number),
+      }),
+      expect.objectContaining({
+        name: 'current.md',
+        kind: 'file',
+        modifiedTimeMs: expect.any(Number),
+      }),
+    ])
+    expect(result.entryList.every(item => Number.isFinite(item.modifiedTimeMs))).toBe(true)
   })
 
   it('新建文件夹成功后应返回刷新后的目录列表', async () => {

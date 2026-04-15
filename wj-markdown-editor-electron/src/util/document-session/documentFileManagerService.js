@@ -89,15 +89,17 @@ async function isExistingDirectory(fsModule, directoryPath) {
 
 async function normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry) {
   const entryPath = path.join(directoryPath, directoryEntry.name)
+  const stat = await fsModule.stat(entryPath)
   const isDirectory = typeof directoryEntry.isDirectory === 'function'
     ? directoryEntry.isDirectory()
-    : (await fsModule.stat(entryPath)).isDirectory()
+    : stat.isDirectory()
 
   return {
     path: entryPath,
     name: directoryEntry.name,
     kind: isDirectory ? 'directory' : 'file',
     extension: getEntryExtension(directoryEntry.name, isDirectory),
+    modifiedTimeMs: Number.isFinite(stat?.mtimeMs) ? stat.mtimeMs : 0,
   }
 }
 
