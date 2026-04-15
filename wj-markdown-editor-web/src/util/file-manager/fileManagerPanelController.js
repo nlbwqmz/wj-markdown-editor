@@ -2,6 +2,7 @@ import { Input, message, Modal } from 'ant-design-vue'
 import { computed, createVNode, onScopeDispose, ref, watch } from 'vue'
 import eventEmit from '@/util/channel/eventEmit.js'
 import { requestDocumentOpenPathByInteraction } from '@/util/document-session/documentOpenInteractionService.js'
+import { resolveFileManagerEntryType, sortFileManagerEntryList } from './fileManagerEntryMetaUtil.js'
 import { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } from './fileManagerEventUtil.js'
 import { resolveDocumentOpenCurrentPath } from './fileManagerOpenDecisionController.js'
 import {
@@ -99,10 +100,6 @@ function getPathBasename(path) {
   return segmentList[segmentList.length - 1] || normalizedPath
 }
 
-function isMarkdownPath(path) {
-  return /\.(?:md|markdown)$/iu.test(path || '')
-}
-
 function normalizeFileManagerEntryName(name) {
   return typeof name === 'string' ? name.trim() : ''
 }
@@ -173,18 +170,6 @@ function resolveSnapshotEmptyMessageKey(snapshot, fallbackEmptyMessageKey = DIRE
   return fallbackEmptyMessageKey
 }
 
-function resolveEntryKind(entry) {
-  if (entry?.kind === 'directory' || entry?.type === 'directory' || entry?.isDirectory === true) {
-    return 'directory'
-  }
-
-  if (entry?.kind === 'markdown' || entry?.type === 'markdown' || isMarkdownPath(entry?.path) || isMarkdownPath(entry?.name)) {
-    return 'markdown'
-  }
-
-  return 'other'
-}
-
 function createEmptyDirectoryState(emptyMessageKey) {
   return {
     directoryPath: null,
@@ -193,27 +178,7 @@ function createEmptyDirectoryState(emptyMessageKey) {
   }
 }
 
-function sortDirectoryEntryList(entryList) {
-  const kindPriorityMap = {
-    directory: 0,
-    markdown: 1,
-    other: 2,
-  }
-
-  return [...entryList].sort((left, right) => {
-    const kindDiff = kindPriorityMap[left.kind] - kindPriorityMap[right.kind]
-    if (kindDiff !== 0) {
-      return kindDiff
-    }
-
-    return left.name.localeCompare(right.name, 'zh-CN', {
-      sensitivity: 'base',
-      numeric: true,
-    })
-  })
-}
-
-function normalizeDirectoryState(nextState, snapshot, fallbackEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY) {
+function normalizeDirectoryState(nextState, snapshot, sortConfig, fallbackEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY) {
   const currentDocumentPath = normalizeComparablePath(resolveDocumentOpenCurrentPath(snapshot))
   const rawDirectoryState = nextState?.directoryState || nextState
   const directoryPath = normalizePath(rawDirectoryState?.directoryPath)
@@ -222,10 +187,13 @@ function normalizeDirectoryState(nextState, snapshot, fallbackEmptyMessageKey = 
     return createEmptyDirectoryState(resolveSnapshotEmptyMessageKey(snapshot, fallbackEmptyMessageKey))
   }
 
-  const entryList = sortDirectoryEntryList((Array.isArray(rawDirectoryState?.entryList) ? rawDirectoryState.entryList : [])
+  const entryList = sortFileManagerEntryList((Array.isArray(rawDirectoryState?.entryList) ? rawDirectoryState.entryList : [])
     .map((entry) => {
       const path = normalizePath(entry?.path)
-      const kind = resolveEntryKind(entry)
+      const kind = resolveFileManagerEntryType({
+        ...entry,
+        path,
+      })
 
       return {
         name: typeof entry?.name === 'string' && entry.name
@@ -233,10 +201,11 @@ function normalizeDirectoryState(nextState, snapshot, fallbackEmptyMessageKey = 
           : getPathBasename(path),
         path,
         kind,
+        modifiedTimeMs: entry?.modifiedTimeMs,
         isActive: kind === 'markdown' && normalizeComparablePath(path) === currentDocumentPath,
       }
     })
-    .filter(entry => Boolean(entry.path)))
+    .filter(entry => Boolean(entry.path)), sortConfig)
 
   return {
     directoryPath,
@@ -408,6 +377,7 @@ export function createFileManagerPanelController({
     directoryState.value = normalizeDirectoryState(
       nextState,
       store?.documentSessionSnapshot,
+      store?.config?.fileManagerSort,
       options.emptyMessageKey || emptyMessageKey.value || DIRECTORY_EMPTY_MESSAGE_KEY,
     )
 
