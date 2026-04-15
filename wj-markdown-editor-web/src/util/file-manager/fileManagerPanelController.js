@@ -391,12 +391,9 @@ export function createFileManagerPanelController({
 
     return Boolean(currentPath && parentPath && currentPath !== parentPath)
   })
-  const canFocusCurrentDocumentDirectory = computed(() => {
-    const currentPath = normalizeComparablePath(directoryPath.value)
-    const targetPath = normalizeComparablePath(currentDocumentDirectoryPath.value)
-
-    return Boolean(targetPath && currentPath !== targetPath)
-  })
+  const canFocusCurrentDocumentDirectory = computed(() => Boolean(
+    normalizeComparablePath(currentDocumentDirectoryPath.value),
+  ))
 
   function commitDirectoryState(nextState, options = {}) {
     latestDirectoryStateSource = nextState
@@ -574,14 +571,26 @@ export function createFileManagerPanelController({
   }
 
   async function focusCurrentDocumentDirectory() {
-    if (canFocusCurrentDocumentDirectory.value !== true || !currentDocumentDirectoryPath.value) {
+    const targetDirectoryPath = currentDocumentDirectoryPath.value
+    const currentPath = normalizeComparablePath(directoryPath.value)
+    const targetPath = normalizeComparablePath(targetDirectoryPath)
+
+    if (!targetDirectoryPath || !targetPath || canFocusCurrentDocumentDirectory.value !== true) {
       return {
         ok: true,
         reason: 'noop-current-document-directory',
       }
     }
 
-    return await openDirectory(currentDocumentDirectoryPath.value)
+    if (currentPath === targetPath) {
+      return {
+        ok: true,
+        reason: 'current-document-directory-ready',
+        directoryPath: targetDirectoryPath,
+      }
+    }
+
+    return await openDirectory(targetDirectoryPath)
   }
 
   async function pickDirectory() {

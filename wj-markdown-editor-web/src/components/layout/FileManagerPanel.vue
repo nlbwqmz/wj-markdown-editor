@@ -1,6 +1,6 @@
 <script setup>
 import { Empty as AEmpty, Input as AInput } from 'ant-design-vue'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import IconButton from '@/components/editor/IconButton.vue'
 import i18n from '@/i18n/index.js'
 import { useCommonStore } from '@/stores/counter.js'
@@ -30,6 +30,12 @@ const {
 } = controller
 
 const searchQuery = ref('')
+const panelRootRef = ref(null)
+const SCROLL_INTO_VIEW_OPTIONS = Object.freeze({
+  behavior: 'smooth',
+  block: 'center',
+  inline: 'nearest',
+})
 
 const filteredEntryList = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -118,10 +124,39 @@ const disabledToolbarButtonClass = 'pointer-events-none cursor-not-allowed opaci
 const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
   ? breadcrumbList.value[breadcrumbList.value.length - 1].path
   : '')
+
+function resolveCurrentEntryElement() {
+  return panelRootRef.value?.querySelector('[data-testid="file-manager-entry-current"]') ?? null
+}
+
+// 定位按钮的最终交互在组件层完成：目录切换结束后，再按当前渲染结果决定是否清空搜索并滚动。
+async function scrollCurrentEntryIntoView() {
+  await nextTick()
+
+  let currentEntryElement = resolveCurrentEntryElement()
+  if (!currentEntryElement && searchQuery.value.trim()) {
+    searchQuery.value = ''
+    await nextTick()
+    currentEntryElement = resolveCurrentEntryElement()
+  }
+
+  currentEntryElement?.scrollIntoView(SCROLL_INTO_VIEW_OPTIONS)
+  return currentEntryElement
+}
+
+async function handleFocusCurrentDocumentDirectory() {
+  const result = await focusCurrentDocumentDirectory()
+  if (result?.ok === false) {
+    return result
+  }
+
+  await scrollCurrentEntryIntoView()
+  return result
+}
 </script>
 
 <template>
-  <div class="file-manager-panel h-full min-w-0 flex flex-col overflow-hidden bg-bg-primary text-text-primary">
+  <div ref="panelRootRef" class="file-manager-panel h-full min-w-0 flex flex-col overflow-hidden bg-bg-primary text-text-primary">
     <div class="file-manager-panel__toolbar flex items-center gap-2 border-b border-b-border-primary border-b-solid p-1 p-l-2">
       <div
         data-testid="file-manager-breadcrumb"
@@ -150,7 +185,7 @@ const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
           icon="i-tabler:focus-2"
           :label="t('message.fileManagerFocusCurrentFileDirectory')"
           :title="t('message.fileManagerFocusCurrentFileDirectory')"
-          :action="canFocusCurrentDocumentDirectory ? focusCurrentDocumentDirectory : undefined"
+          :action="canFocusCurrentDocumentDirectory ? handleFocusCurrentDocumentDirectory : undefined"
           :disabled="!canFocusCurrentDocumentDirectory ? true : undefined"
           :class="!canFocusCurrentDocumentDirectory ? disabledToolbarButtonClass : undefined"
         />

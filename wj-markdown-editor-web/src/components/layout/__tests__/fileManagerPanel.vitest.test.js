@@ -32,6 +32,7 @@ const fileManagerPanelState = vi.hoisted(() => {
     channelSend: vi.fn(),
     modalConfirm: vi.fn(),
     messageWarning: vi.fn(),
+    scrollIntoView: vi.fn(),
     registeredHandlerMap,
   }
 })
@@ -312,14 +313,21 @@ describe('fileManagerPanel 组件', () => {
     })
     fileManagerPanelState.modalConfirm.mockReset()
     fileManagerPanelState.messageWarning.mockReset()
+    fileManagerPanelState.scrollIntoView.mockReset()
     fileManagerPanelState.registeredHandlerMap.clear()
     i18nState.t.mockClear()
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: fileManagerPanelState.scrollIntoView,
+    })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     while (mountedWrapperList.length > 0) {
       mountedWrapperList.pop()?.unmount()
     }
+    await flushFileManagerPanel()
     vi.clearAllMocks()
   })
 
@@ -400,7 +408,7 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-open-parent"]').attributes('disabled')).toBeDefined()
   })
 
-  it('定位当前文件目录按钮在面板已切到其他目录后应可用，并能切回当前文件所在目录', async () => {
+  it('定位当前文件目录按钮在面板已切到其他目录后应可用，并能切回当前文件所在目录后滚动到当前文件', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       path: 'D:/docs/project/current.md',
     })
@@ -424,7 +432,9 @@ describe('fileManagerPanel 组件', () => {
         ],
       }))
 
-    const wrapper = mount(FileManagerPanel)
+    const wrapper = mount(FileManagerPanel, {
+      attachTo: document.body,
+    })
     mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
 
@@ -445,9 +455,15 @@ describe('fileManagerPanel 组件', () => {
       directoryPath: 'D:/docs/project',
     })
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('D:/docs/project')
+    expect(fileManagerPanelState.scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest',
+    })
+    expect(fileManagerPanelState.scrollIntoView.mock.contexts.at(-1)).toBe(wrapper.get('[data-testid="file-manager-entry-current"]').element)
   })
 
-  it('定位当前文件目录按钮在草稿态或当前目录已命中时应禁用', async () => {
+  it('定位当前文件目录按钮在当前目录已命中时仍应可用，并滚动定位到当前文件', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       path: 'D:/docs/current.md',
     })
@@ -458,14 +474,28 @@ describe('fileManagerPanel 组件', () => {
       ],
     }))
 
-    const currentDirectoryWrapper = mount(FileManagerPanel)
-    mountedWrapperList.push(currentDirectoryWrapper)
+    const wrapper = mount(FileManagerPanel, {
+      attachTo: document.body,
+    })
+    mountedWrapperList.push(wrapper)
     await flushFileManagerPanel()
 
-    expect(currentDirectoryWrapper.get('[data-testid="file-manager-focus-current-file-directory"]').attributes('disabled')).toBeDefined()
+    const focusCurrentDirectoryButton = wrapper.get('[data-testid="file-manager-focus-current-file-directory"]')
+    expect(focusCurrentDirectoryButton.attributes('disabled')).toBeUndefined()
 
-    currentDirectoryWrapper.unmount()
+    await focusCurrentDirectoryButton.trigger('click')
+    await flushFileManagerPanel()
 
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).not.toHaveBeenCalled()
+    expect(fileManagerPanelState.scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest',
+    })
+    expect(fileManagerPanelState.scrollIntoView.mock.contexts.at(-1)).toBe(wrapper.get('[data-testid="file-manager-entry-current"]').element)
+  })
+
+  it('定位当前文件目录按钮在草稿态应禁用', async () => {
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
       path: null,
     })
@@ -476,6 +506,44 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     expect(draftWrapper.get('[data-testid="file-manager-focus-current-file-directory"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('搜索过滤掉当前文件后，定位当前文件应先清空搜索再滚动到目标文件', async () => {
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      path: 'D:/docs/current.md',
+    })
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel, {
+      attachTo: document.body,
+    })
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('.file-manager-panel__search-input input').setValue('assets')
+    await flushFileManagerPanel()
+
+    expect(wrapper.find('[data-testid="file-manager-entry-current"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="file-manager-search-clear"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="file-manager-focus-current-file-directory"]').trigger('click')
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('.file-manager-panel__search-input input').element.value).toBe('')
+    expect(wrapper.find('[data-testid="file-manager-search-clear"]').exists()).toBe(false)
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).not.toHaveBeenCalled()
+    expect(fileManagerPanelState.scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest',
+    })
+    expect(fileManagerPanelState.scrollIntoView.mock.contexts.at(-1)).toBe(wrapper.get('[data-testid="file-manager-entry-current"]').element)
   })
 
   it('recent-missing 父目录存在时应展示该目录且无高亮，父目录不存在时应直接空状态', async () => {
@@ -1240,6 +1308,62 @@ describe('fileManagerPanelController', () => {
     scope.stop()
   })
 
+  it('canFocusCurrentDocumentDirectory 只要存在当前文档目录就应启用，已在该目录时也应返回 ready 结果', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    }))
+
+    expect(controller.canFocusCurrentDocumentDirectory.value).toBe(true)
+
+    const readyResult = await controller.focusCurrentDocumentDirectory()
+
+    expect(readyResult).toEqual({
+      ok: true,
+      reason: 'current-document-directory-ready',
+      directoryPath: 'D:/docs',
+    })
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).not.toHaveBeenCalled()
+
+    fileManagerPanelState.requestFileManagerOpenDirectory.mockResolvedValue(createDirectoryState({
+      directoryPath: 'D:/other',
+      entryList: [
+        { name: 'current.md', path: 'D:/other/current.md', kind: 'markdown' },
+      ],
+    }))
+    controller.applyDirectoryState(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    }))
+    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+      path: 'D:/other/current.md',
+    })
+    await flushFileManagerPanel()
+
+    expect(controller.canFocusCurrentDocumentDirectory.value).toBe(true)
+    await controller.focusCurrentDocumentDirectory()
+
+    expect(fileManagerPanelState.requestFileManagerOpenDirectory).toHaveBeenCalledWith({
+      directoryPath: 'D:/other',
+    })
+
+    scope.stop()
+  })
+
   it('openParentDirectory 在普通目录下应打开上一级，其余场景必须返回 noop 且不发起请求', async () => {
     const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
     fileManagerPanelState.requestFileManagerOpenDirectory.mockResolvedValue(createDirectoryState({
@@ -1896,6 +2020,19 @@ describe('fileManagerPanelController', () => {
     const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
     const staleRequest = createDeferred()
     const latestRequest = createDeferred()
+    const localStore = reactive({
+      fileManagerPanelVisible: true,
+      documentSessionSnapshot: createDocumentSnapshot(),
+      config: {
+        fileManagerSort: {
+          field: 'type',
+          direction: 'asc',
+        },
+      },
+    })
+
+    await flushFileManagerPanel()
+    fileManagerPanelState.requestFileManagerDirectoryState.mockReset()
     fileManagerPanelState.requestFileManagerDirectoryState
       .mockImplementationOnce(() => staleRequest.promise)
       .mockImplementationOnce(() => latestRequest.promise)
@@ -1905,14 +2042,14 @@ describe('fileManagerPanelController', () => {
 
     scope.run(() => {
       controller = createFileManagerPanelController({
-        store: fileManagerPanelState.store,
+        store: localStore,
         t: value => value,
       })
     })
 
     await flushFileManagerPanel()
 
-    fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot({
+    localStore.documentSessionSnapshot = createDocumentSnapshot({
       path: 'D:/other/next.md',
     })
     await flushFileManagerPanel()
