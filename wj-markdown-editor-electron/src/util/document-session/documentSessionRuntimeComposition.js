@@ -44,10 +44,11 @@ export function createDocumentSessionRuntimeComposition({
   let fileManagerService = null
   const directoryWatchService = createDocumentDirectoryWatchService({
     fsModule,
-    readDirectoryState: async ({ directoryPath, activePath }) => {
+    readDirectoryState: async ({ directoryPath, activePath, includeModifiedTime }) => {
       return await fileManagerService.readDirectoryState({
         directoryPath,
         activePath,
+        includeModifiedTime,
       })
     },
     publishDirectoryChanged: ({ windowId, directoryState }) => {

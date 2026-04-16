@@ -99,6 +99,10 @@ const DEFAULT_FILE_MANAGER_SORT_CONFIG = Object.freeze({
   field: 'type',
   direction: 'asc',
 })
+const FILE_MANAGER_ENTRY_NAME_COLLATOR = new Intl.Collator('zh-CN', {
+  sensitivity: 'base',
+  numeric: true,
+})
 
 function resolveFileManagerEntryName(entry) {
   const normalizedName = typeof entry?.name === 'string'
@@ -133,13 +137,6 @@ function normalizeFileManagerSortConfig(sortConfig) {
     field,
     direction,
   }
-}
-
-function compareFileManagerEntryName(left, right) {
-  return resolveFileManagerEntryName(left).localeCompare(resolveFileManagerEntryName(right), 'zh-CN', {
-    sensitivity: 'base',
-    numeric: true,
-  })
 }
 
 function resolveFileManagerEntryModifiedTimeMs(entry) {
@@ -227,37 +224,53 @@ export function sortFileManagerEntryList(entryList, sortConfig) {
   const normalizedSortConfig = normalizeFileManagerSortConfig(sortConfig)
   const directionFactor = normalizedSortConfig.direction === 'desc' ? -1 : 1
 
-  return normalizedEntryList.sort((left, right) => {
-    const leftType = resolveFileManagerEntryType(left)
-    const rightType = resolveFileManagerEntryType(right)
+  return normalizedEntryList
+    .map((entry, index) => {
+      const type = resolveFileManagerEntryType(entry)
+
+      return {
+        entry,
+        index,
+        name: resolveFileManagerEntryName(entry),
+        type,
+        isNotDirectory: Number(type !== 'directory'),
+        modifiedTimeMs: resolveFileManagerEntryModifiedTimeMs(entry),
+        typeWeight: resolveFileManagerEntryTypeWeight(type),
+      }
+    })
+    .sort((left, right) => {
     // 目录永远固定在前，其余条目再按配置字段参与排序。
-    const directoryDiff = Number(leftType !== 'directory') - Number(rightType !== 'directory')
+      const directoryDiff = left.isNotDirectory - right.isNotDirectory
 
-    if (directoryDiff !== 0) {
-      return directoryDiff
-    }
-
-    if (normalizedSortConfig.field === 'name') {
-      return compareFileManagerEntryName(left, right) * directionFactor
-    }
-
-    if (normalizedSortConfig.field === 'modifiedTime') {
-      // 时间并列时回退到名称比较，避免渲染层出现不稳定抖动。
-      const modifiedTimeDiff = resolveFileManagerEntryModifiedTimeMs(left) - resolveFileManagerEntryModifiedTimeMs(right)
-      if (modifiedTimeDiff !== 0) {
-        return modifiedTimeDiff * directionFactor
+      if (directoryDiff !== 0) {
+        return directoryDiff
       }
 
-      return compareFileManagerEntryName(left, right)
-    }
+      if (normalizedSortConfig.field === 'name') {
+        return FILE_MANAGER_ENTRY_NAME_COLLATOR.compare(left.name, right.name) * directionFactor
+          || left.index - right.index
+      }
 
-    const typeWeightDiff = resolveFileManagerEntryTypeWeight(left) - resolveFileManagerEntryTypeWeight(right)
-    if (typeWeightDiff !== 0) {
-      return typeWeightDiff * directionFactor
-    }
+      if (normalizedSortConfig.field === 'modifiedTime') {
+      // 时间并列时回退到名称比较，避免渲染层出现不稳定抖动。
+        const modifiedTimeDiff = left.modifiedTimeMs - right.modifiedTimeMs
+        if (modifiedTimeDiff !== 0) {
+          return modifiedTimeDiff * directionFactor
+        }
 
-    return compareFileManagerEntryName(left, right)
-  })
+        return FILE_MANAGER_ENTRY_NAME_COLLATOR.compare(left.name, right.name)
+          || left.index - right.index
+      }
+
+      const typeWeightDiff = left.typeWeight - right.typeWeight
+      if (typeWeightDiff !== 0) {
+        return typeWeightDiff * directionFactor
+      }
+
+      return FILE_MANAGER_ENTRY_NAME_COLLATOR.compare(left.name, right.name)
+        || left.index - right.index
+    })
+    .map(item => item.entry)
 }
 
 export default {

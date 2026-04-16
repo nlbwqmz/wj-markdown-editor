@@ -518,7 +518,6 @@ export function createFileManagerPanelController({
       }
 
       store.config = nextConfig
-      recomputeDirectoryStateFromLatestSource()
       return result
     } catch {
       showWarningMessage('message.configWriteFailed')

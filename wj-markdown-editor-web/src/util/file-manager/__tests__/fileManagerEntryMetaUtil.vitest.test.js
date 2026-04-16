@@ -173,6 +173,32 @@ describe('fileManagerEntryMetaUtil', () => {
     ])
   })
 
+  it('modifiedTime 排序应先为每个条目预计算类型键，不能在比较阶段重复放大 kind 读取次数', () => {
+    const trackedEntryList = Array.from({ length: 8 }, (_, index) => {
+      let kindReadCount = 0
+
+      return {
+        entry: {
+          name: `文档${8 - index}.md`,
+          path: `D:/docs/文档${8 - index}.md`,
+          get kind() {
+            kindReadCount += 1
+            return 'markdown'
+          },
+          modifiedTimeMs: index,
+        },
+        getKindReadCount: () => kindReadCount,
+      }
+    })
+
+    sortFileManagerEntryList(trackedEntryList.map(item => item.entry), {
+      field: 'modifiedTime',
+      direction: 'desc',
+    })
+
+    expect(trackedEntryList.reduce((sum, item) => sum + item.getKindReadCount(), 0)).toBeLessThanOrEqual(48)
+  })
+
   it('缺失排序配置时应回退到默认 type 升序排序', () => {
     const sortedEntryList = sortFileManagerEntryList([
       createEntry({
