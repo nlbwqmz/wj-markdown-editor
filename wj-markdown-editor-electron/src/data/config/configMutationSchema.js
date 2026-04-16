@@ -108,6 +108,12 @@ export function validateConfigMutationRequest(request) {
     throw new TypeError('配置更新请求必须包含非空 operations')
   }
 
+  const resetCount = request.operations.filter(operation => operation?.type === 'reset').length
+
+  if (resetCount > 0 && request.operations.length > 1) {
+    throw new TypeError('reset 操作必须单独提交')
+  }
+
   for (const operation of request.operations) {
     if (!operation || typeof operation !== 'object' || Array.isArray(operation)) {
       throw new TypeError('配置更新操作必须是对象')

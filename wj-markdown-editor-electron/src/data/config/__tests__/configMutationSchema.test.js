@@ -63,4 +63,13 @@ describe('validateConfigMutationRequest', () => {
       ],
     })).toThrow(/未知配置更新操作类型/)
   })
+
+  it('拒绝 reset 与其他操作混用', () => {
+    expect(() => validateConfigMutationRequest({
+      operations: [
+        { type: 'reset' },
+        { type: 'set', path: ['theme', 'global'], value: 'dark' },
+      ],
+    })).toThrow(/reset 操作必须单独提交/)
+  })
 })

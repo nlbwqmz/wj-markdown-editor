@@ -1,5 +1,6 @@
 import defaultConfig from '../defaultConfig.js'
 import { validateConfigMutationRequest } from './configMutationSchema.js'
+import { validateConfigShape } from './configSchema.js'
 
 function cloneValue(value) {
   return JSON.parse(JSON.stringify(value))
@@ -60,9 +61,13 @@ export function applyConfigMutationRequest(currentConfig, request) {
     }
 
     if (operation.type === 'reset') {
-      return cloneValue(defaultConfig)
+      const resetConfig = cloneValue(defaultConfig)
+      validateConfigShape(resetConfig)
+      return resetConfig
     }
   }
 
+  // executor 返回前必须保证结果仍然是完整合法配置。
+  validateConfigShape(nextConfig)
   return nextConfig
 }

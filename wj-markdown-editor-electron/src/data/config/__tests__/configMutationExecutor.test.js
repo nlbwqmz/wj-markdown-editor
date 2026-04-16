@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import defaultConfig from '../../defaultConfig.js'
 import { applyConfigMutationRequest } from '../configMutationExecutor.js'
+import { validateConfigShape } from '../configSchema.js'
 
 function cloneValue(value) {
   return JSON.parse(JSON.stringify(value))
@@ -19,6 +20,7 @@ describe('applyConfigMutationRequest', () => {
     expect(nextConfig.theme.global).toBe('dark')
     expect(nextConfig.theme.code).toBe(defaultConfig.theme.code)
     expect(inputConfig).toEqual(originalConfig)
+    expect(() => validateConfigShape(nextConfig)).not.toThrow()
   })
 
   it('按下标只更新固定长度数组 watermark.gap', () => {
@@ -97,5 +99,21 @@ describe('applyConfigMutationRequest', () => {
 
     expect(nextConfig).toEqual(defaultConfig)
     expect(nextConfig).not.toBe(defaultConfig)
+  })
+
+  it('快捷键字段写入非法值时抛出异常', () => {
+    expect(() => applyConfigMutationRequest(cloneValue(defaultConfig), {
+      operations: [
+        { type: 'setShortcutKeyField', id: 'save', field: 'enabled', value: 'false' },
+      ],
+    })).toThrow(/配置结构不合法/)
+  })
+
+  it('set 写入非法枚举值时抛出异常', () => {
+    expect(() => applyConfigMutationRequest(cloneValue(defaultConfig), {
+      operations: [
+        { type: 'set', path: ['theme', 'global'], value: 'solarized' },
+      ],
+    })).toThrow(/配置结构不合法/)
   })
 })
