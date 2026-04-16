@@ -5,10 +5,7 @@ const {
   browserWindowFromWebContents,
   configGetConfig,
   configGetDefaultConfig,
-  configSetConfig,
-  configSetConfigWithRecentMax,
-  configSetLanguage,
-  configSetThemeGlobal,
+  configUpdateConfig,
   dialogShowOpenDialogSync,
   dialogShowSaveDialogSync,
   executeResourceCommand,
@@ -64,10 +61,7 @@ const {
     browserWindowFromWebContents: vi.fn(),
     configGetConfig: vi.fn(),
     configGetDefaultConfig: vi.fn(() => ({})),
-    configSetConfig: vi.fn(),
-    configSetConfigWithRecentMax: vi.fn(),
-    configSetLanguage: vi.fn(),
-    configSetThemeGlobal: vi.fn(),
+    configUpdateConfig: vi.fn(),
     dialogShowOpenDialogSync: vi.fn(),
     dialogShowSaveDialogSync: vi.fn(),
     executeResourceCommand: vi.fn(),
@@ -178,10 +172,7 @@ vi.mock('../../data/configUtil.js', () => {
     default: {
       getConfig: configGetConfig,
       getDefaultConfig: configGetDefaultConfig,
-      setConfig: configSetConfig,
-      setConfigWithRecentMax: configSetConfigWithRecentMax,
-      setThemeGlobal: configSetThemeGlobal,
-      setLanguage: configSetLanguage,
+      updateConfig: configUpdateConfig,
     },
   }
 })
@@ -2054,10 +2045,7 @@ describe('ipcMainUtil 配置更新契约', () => {
     browserWindowFromWebContents.mockReset()
     configGetConfig.mockReset()
     configGetDefaultConfig.mockReset()
-    configSetConfig.mockReset()
-    configSetConfigWithRecentMax.mockReset()
-    configSetLanguage.mockReset()
-    configSetThemeGlobal.mockReset()
+    configUpdateConfig.mockReset()
     getDocumentSessionRuntime.mockReset()
     getWindowByIdMock.mockClear()
     getWindowIdByWinMock.mockClear()
@@ -2118,117 +2106,83 @@ describe('ipcMainUtil 配置更新契约', () => {
     })
   }
 
-  it('user-update-config 在配置写盘失败时必须返回 messageKey，而不是直接抛出中文提示', async () => {
-    const payload = {
-      recentMax: 7,
-      theme: { global: 'dark' },
+  function createMutationPayload(value = 'dark') {
+    return {
+      operations: [
+        { type: 'set', path: ['theme', 'global'], value },
+      ],
     }
-    configSetConfigWithRecentMax.mockResolvedValueOnce({
+  }
+
+  it('config.update 在配置写盘失败时必须返回 messageKey，而不是直接抛出中文提示', async () => {
+    const payload = createMutationPayload('dark')
+    configUpdateConfig.mockResolvedValueOnce({
       ok: false,
       reason: 'config-write-failed',
       messageKey: 'message.configWriteFailed',
     })
 
-    await expect(dispatch('user-update-config', payload)).resolves.toEqual({
+    await expect(dispatch('config.update', payload)).resolves.toEqual({
       ok: false,
       reason: 'config-write-failed',
       messageKey: 'message.configWriteFailed',
     })
-  })
-
-  it('user-update-config 在配置写盘失败时不得继续触发 recent.setMax', async () => {
-    const payload = {
-      recentMax: 9,
-    }
-    configSetConfigWithRecentMax.mockResolvedValueOnce({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    await dispatch('user-update-config', payload)
-
+    expect(configUpdateConfig).toHaveBeenCalledWith(payload, expect.objectContaining({
+      setMax: recentSetMax,
+    }))
     expect(recentSetMax).not.toHaveBeenCalled()
   })
 
-  it('user-update-config 在配置服务整体成功时必须返回结构化成功结果，且 IPC 不再单独调用 recent.setMax', async () => {
+  it('config.update 在配置服务整体成功时必须返回结构化成功结果，且 IPC 不再单独调用 recent.setMax', async () => {
     const payload = {
-      recentMax: 15,
-      startupPage: 'editor',
+      operations: [
+        { type: 'set', path: ['recentMax'], value: 15 },
+        { type: 'set', path: ['startupPage'], value: 'editor' },
+      ],
     }
-    configSetConfigWithRecentMax.mockResolvedValueOnce({ ok: true })
+    configUpdateConfig.mockResolvedValueOnce({ ok: true })
 
-    await expect(dispatch('user-update-config', payload)).resolves.toEqual({ ok: true })
-    expect(configSetConfigWithRecentMax).toHaveBeenCalledWith(payload, expect.objectContaining({
+    await expect(dispatch('config.update', payload)).resolves.toEqual({ ok: true })
+    expect(configUpdateConfig).toHaveBeenCalledWith(payload, expect.objectContaining({
       setMax: recentSetMax,
     }))
-    expect(configSetConfig).not.toHaveBeenCalled()
     expect(recentSetMax).not.toHaveBeenCalled()
   })
 
-  it('user-update-config 在配置服务返回结构化失败时必须透传整体失败结果，且 IPC 不再吞异常伪造成功', async () => {
-    const payload = {
-      recentMax: 11,
-    }
-    configSetConfigWithRecentMax.mockResolvedValueOnce({
+  it('config.update 在配置服务返回结构化失败时必须透传整体失败结果，且 IPC 不再吞异常伪造成功', async () => {
+    const payload = createMutationPayload('light')
+    configUpdateConfig.mockResolvedValueOnce({
       ok: false,
       reason: 'config-write-failed',
       messageKey: 'message.configWriteFailed',
     })
 
-    await expect(dispatch('user-update-config', payload)).resolves.toEqual({
+    await expect(dispatch('config.update', payload)).resolves.toEqual({
       ok: false,
       reason: 'config-write-failed',
       messageKey: 'message.configWriteFailed',
     })
-    expect(configSetConfigWithRecentMax).toHaveBeenCalledWith(payload, expect.objectContaining({
+    expect(configUpdateConfig).toHaveBeenCalledWith(payload, expect.objectContaining({
       setMax: recentSetMax,
     }))
-    expect(configSetConfig).not.toHaveBeenCalled()
     expect(recentSetMax).not.toHaveBeenCalled()
     expect(consoleErrorSpy).not.toHaveBeenCalled()
   })
 
-  it('user-update-theme-global 在配置写盘失败时必须透传结构化结果', async () => {
-    configSetThemeGlobal.mockResolvedValueOnce({
-      ok: false,
-      reason: 'config-write-failed',
-      messageKey: 'message.configWriteFailed',
-    })
+  it('legacy 配置写事件必须已经删除，避免 IPC 继续调用已移除的 setter', async () => {
+    const { sender, sendToMainHandler } = await setupConfigHandler()
+    const payload = createMutationPayload('dark')
+    const dispatchWithCurrentHandler = async (event, data) => {
+      return await sendToMainHandler({ sender }, {
+        event,
+        data,
+      })
+    }
 
-    await expect(dispatch('user-update-theme-global', 'dark')).resolves.toEqual({
-      ok: false,
-      reason: 'config-write-failed',
-      messageKey: 'message.configWriteFailed',
-    })
-  })
-
-  it('user-update-theme-global 在配置写盘成功时必须返回结构化成功结果', async () => {
-    configSetThemeGlobal.mockResolvedValueOnce({ ok: true })
-
-    await expect(dispatch('user-update-theme-global', 'light')).resolves.toEqual({ ok: true })
-    expect(configSetThemeGlobal).toHaveBeenCalledWith('light')
-  })
-
-  it('user-update-language 在配置写盘失败时必须透传结构化结果', async () => {
-    configSetLanguage.mockResolvedValueOnce({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    await expect(dispatch('user-update-language', 'zh-CN')).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-  })
-
-  it('user-update-language 在配置写盘成功时必须返回结构化成功结果', async () => {
-    configSetLanguage.mockResolvedValueOnce({ ok: true })
-
-    await expect(dispatch('user-update-language', 'en-US')).resolves.toEqual({ ok: true })
-    expect(configSetLanguage).toHaveBeenCalledWith('en-US')
+    await expect(dispatchWithCurrentHandler('user-update-config', payload)).resolves.toBe(false)
+    await expect(dispatchWithCurrentHandler('user-update-theme-global', 'light')).resolves.toBe(false)
+    await expect(dispatchWithCurrentHandler('user-update-language', 'zh-CN')).resolves.toBe(false)
+    expect(configUpdateConfig).not.toHaveBeenCalled()
   })
 
   it('get-config 读取型 IPC 必须继续返回原始 payload，而不是包装成 { ok, data }', async () => {

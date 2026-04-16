@@ -318,14 +318,8 @@ const handlerList = {
       }
     })
   },
-  'user-update-config': async (_windowContext, data) => {
-    return await executeConfigUpdate(async () => await configUtil.setConfigWithRecentMax(data, recent))
-  },
-  'user-update-theme-global': async (_windowContext, data) => {
-    return await executeConfigUpdate(async () => await configUtil.setThemeGlobal(data))
-  },
-  'user-update-language': async (_windowContext, data) => {
-    return await executeConfigUpdate(async () => await configUtil.setLanguage(data))
+  'config.update': async (_windowContext, data) => {
+    return await executeConfigUpdate(async () => await configUtil.updateConfig(data, recent))
   },
   'app-info': () => {
     return { name: 'wj-markdown-editor', version: app.getVersion() }
