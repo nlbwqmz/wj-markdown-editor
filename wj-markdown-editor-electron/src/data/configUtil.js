@@ -4,7 +4,7 @@ import { createConfigService } from './config/configService.js'
 import { cloneConfig } from './config/configSnapshotUtil.js'
 import defaultConfig from './defaultConfig.js'
 
-// 兼容层继续维持既有导出形态，内部统一委托给新的配置服务。
+// 配置工具层只暴露统一更新入口，避免继续扩散 legacy setter。
 const configRepository = createConfigRepository({ app })
 const configService = createConfigService({
   defaultConfig,
@@ -16,10 +16,7 @@ export default {
   getConfig: () => {
     return configService.getConfig()
   },
-  setConfig: data => configService.setConfig(data),
-  setConfigWithRecentMax: (data, recentStore) => configService.setConfigWithRecentMax(data, recentStore),
-  setThemeGlobal: data => configService.setThemeGlobal(data),
-  setLanguage: data => configService.setLanguage(data),
+  updateConfig: (request, recentStore) => configService.updateConfig(request, recentStore),
   getDefaultConfig: () => {
     return cloneConfig(defaultConfig)
   },

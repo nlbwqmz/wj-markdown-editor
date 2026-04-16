@@ -35,6 +35,7 @@ describe('configUtil', () => {
     const { default: configUtil } = await import('./configUtil.js')
 
     const callback = vi.fn()
+    const recentStore = { setMax: vi.fn() }
 
     await configUtil.initConfig(callback)
     expect(init).toHaveBeenCalledWith(callback)
@@ -47,15 +48,16 @@ describe('configUtil', () => {
       operations: [
         { type: 'set', path: ['language'], value: 'en-US' },
       ],
-    })
+    }, recentStore)
     expect(result).toBe(updateConfigResult)
     expect(updateConfig).toHaveBeenCalledWith({
       operations: [
         { type: 'set', path: ['language'], value: 'en-US' },
       ],
-    })
+    }, recentStore)
 
     expect(configUtil.setConfig).toBeUndefined()
+    expect(configUtil.setConfigWithRecentMax).toBeUndefined()
     expect(configUtil.setThemeGlobal).toBeUndefined()
     expect(configUtil.setLanguage).toBeUndefined()
   })

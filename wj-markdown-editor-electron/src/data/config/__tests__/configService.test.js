@@ -6,21 +6,22 @@ function cloneValue(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+function createSetOperation(path, value) {
+  return {
+    type: 'set',
+    path,
+    value,
+  }
+}
+
+function createUpdateRequest(...operations) {
+  return { operations }
+}
+
 function createRecentStoreStub(overrides = {}) {
-  const transactionApi = {
-    createStateSnapshot: vi.fn(() => ({
-      recent: ['D:/docs/original.md'],
-      maxSize: defaultConfig.recentMax,
-    })),
-    notifyCurrentState: vi.fn(),
-    restoreState: vi.fn(async () => undefined),
+  return {
     setMax: vi.fn(async () => undefined),
     ...overrides,
-  }
-
-  return {
-    ...transactionApi,
-    transaction: vi.fn(async task => await task(transactionApi)),
   }
 }
 
@@ -227,7 +228,9 @@ describe('configService', () => {
 
     await service.init(callback)
 
-    await expect(service.setConfig({ language: 'en-US' })).resolves.toEqual({
+    await expect(service.updateConfig(createUpdateRequest(
+      createSetOperation(['language'], 'en-US'),
+    ))).resolves.toEqual({
       ok: false,
       reason: 'config-write-failed',
       messageKey: 'message.configWriteFailed',
@@ -237,7 +240,7 @@ describe('configService', () => {
     expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
   })
 
-  it('updateConfig 允许通过 mutation 请求更新 language', async () => {
+  it('updateConfig 写盘成功后必须返回新配置、推进内存态并触发回调', async () => {
     const repository = createRepositoryStub()
     const callback = vi.fn()
     const service = createConfigService({
@@ -248,11 +251,9 @@ describe('configService', () => {
     await service.init(callback)
     repository.writeConfigText.mockClear()
 
-    const result = await service.updateConfig({
-      operations: [
-        { type: 'set', path: ['language'], value: 'en-US' },
-      ],
-    })
+    const result = await service.updateConfig(createUpdateRequest(
+      createSetOperation(['language'], 'en-US'),
+    ))
 
     expect(result).toEqual({
       ok: true,
@@ -273,7 +274,7 @@ describe('configService', () => {
     }))
   })
 
-  it('setConfig 传入局部 theme 时必须先 repair 成完整合法配置再持久化', async () => {
+  it('非法配置请求不得返回成功或写盘，也不能推进内存态和广播', async () => {
     const repository = createRepositoryStub()
     const callback = vi.fn()
     const service = createConfigService({
@@ -284,47 +285,9 @@ describe('configService', () => {
     await service.init(callback)
     repository.writeConfigText.mockClear()
 
-    const result = await service.setConfig({
-      theme: {
-        global: 'dark',
-      },
-    })
-
-    expect(result.ok).toBe(true)
-
-    const persistedConfig = JSON.parse(repository.writeConfigText.mock.calls[0][0])
-    expect(persistedConfig.theme).toEqual({
-      global: 'dark',
-      code: defaultConfig.theme.code,
-      preview: defaultConfig.theme.preview,
-    })
-    expect(service.getConfig().theme).toEqual({
-      global: 'dark',
-      code: defaultConfig.theme.code,
-      preview: defaultConfig.theme.preview,
-    })
-    expect(callback).toHaveBeenCalledTimes(1)
-    expect(callback).toHaveBeenCalledWith(expect.objectContaining({
-      theme: {
-        global: 'dark',
-        code: defaultConfig.theme.code,
-        preview: defaultConfig.theme.preview,
-      },
-    }))
-  })
-
-  it('非法 language 不得返回成功或写盘，也不能推进内存态和广播', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setLanguage('jp')).resolves.toEqual({
+    await expect(service.updateConfig(createUpdateRequest(
+      createSetOperation(['language'], 'jp'),
+    ))).resolves.toEqual({
       ok: false,
       reason: 'config-invalid',
       messageKey: 'message.configInvalid',
@@ -335,349 +298,7 @@ describe('configService', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
-  it('setConfig 根级 patch 不是 plain object 时必须直接拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig('oops')).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig()).toEqual(defaultConfig)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 根级 patch 为 Date 时必须直接拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig(new Date('2020-01-01T00:00:00Z'))).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig()).toEqual(defaultConfig)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 的嵌套 patch 值为 Date 时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      theme: new Date('2020-01-01T00:00:00Z'),
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().theme).toEqual(defaultConfig.theme)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 的对象字段被 patch 为 null 时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      theme: null,
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().theme).toEqual(defaultConfig.theme)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 的对象字段被 patch 为数组时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      theme: [],
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().theme).toEqual(defaultConfig.theme)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 含未知根字段时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      unknownField: 1,
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig()).toEqual(defaultConfig)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 含未知嵌套字段时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      theme: {
-        unknownNested: true,
-      },
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().theme).toEqual(defaultConfig.theme)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 的 shortcutKeyList 为对象时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      shortcutKeyList: { id: 'save' },
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().shortcutKeyList).toEqual(defaultConfig.shortcutKeyList)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 的 shortcutKeyList 含脏字段项时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      shortcutKeyList: [{ id: 'save', bogus: true }],
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().shortcutKeyList).toEqual(defaultConfig.shortcutKeyList)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 的 recentMax 为 null 时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      recentMax: null,
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().recentMax).toBe(defaultConfig.recentMax)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 的 recentMax 为小数时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      recentMax: 1.5,
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().recentMax).toBe(defaultConfig.recentMax)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 的非法 theme.global 必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      theme: {
-        global: 'solarized',
-      },
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().theme.global).toBe(defaultConfig.theme.global)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfig 的 autoSave 含非法项时必须严格拒绝，且不能写盘或推进状态', async () => {
-    const repository = createRepositoryStub()
-    const callback = vi.fn()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    await expect(service.setConfig({
-      autoSave: ['blur', 'oops'],
-    })).resolves.toEqual({
-      ok: false,
-      reason: 'config-invalid',
-      messageKey: 'message.configInvalid',
-    })
-
-    expect(repository.writeConfigText).not.toHaveBeenCalled()
-    expect(service.getConfig().autoSave).toEqual(defaultConfig.autoSave)
-    expect(callback).not.toHaveBeenCalled()
-  })
-
-  it('setConfigWithRecentMax 在 config 写盘失败时不得推进 recent 上限，且内存态与广播都不能前移', async () => {
-    const repository = createRepositoryStub()
-    repository.writeConfigText.mockRejectedValueOnce(new Error('config-write-failed'))
-    const callback = vi.fn()
-    const recentStore = createRecentStoreStub()
-    const service = createConfigService({
-      defaultConfig,
-      repository,
-    })
-
-    await service.init(callback)
-    repository.writeConfigText.mockClear()
-
-    const previousConfig = service.getConfig()
-    await expect(service.setConfigWithRecentMax({
-      recentMax: 7,
-      language: 'en-US',
-    }, recentStore)).resolves.toEqual({
-      ok: false,
-      reason: 'config-write-failed',
-      messageKey: 'message.configWriteFailed',
-    })
-
-    expect(recentStore.setMax).not.toHaveBeenCalled()
-    expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
-    expect(service.getConfig()).toEqual(previousConfig)
-    expect(callback).not.toHaveBeenCalled()
-    expect(recentStore.notifyCurrentState).not.toHaveBeenCalled()
-  })
-
-  it('setConfigWithRecentMax 成功时只更新配置与 recent 上限，不立即广播 recent 列表', async () => {
+  it('recentMax 变更时才同步 recent 上限', async () => {
     const repository = createRepositoryStub()
     const callback = vi.fn()
     const recentStore = createRecentStoreStub()
@@ -689,10 +310,10 @@ describe('configService', () => {
     await service.init(callback)
     repository.writeConfigText.mockClear()
 
-    await expect(service.setConfigWithRecentMax({
-      recentMax: 6,
-      language: 'en-US',
-    }, recentStore)).resolves.toEqual({
+    await expect(service.updateConfig(createUpdateRequest(
+      createSetOperation(['recentMax'], 6),
+      createSetOperation(['language'], 'en-US'),
+    ), recentStore)).resolves.toEqual({
       ok: true,
       config: expect.objectContaining({
         recentMax: 6,
@@ -700,12 +321,36 @@ describe('configService', () => {
       }),
     })
 
+    expect(recentStore.setMax).toHaveBeenCalledTimes(1)
     expect(recentStore.setMax).toHaveBeenCalledWith(6, { notify: false })
-    expect(recentStore.notifyCurrentState).not.toHaveBeenCalled()
     expect(callback).toHaveBeenCalledTimes(1)
   })
 
-  it('setConfigWithRecentMax 在 recent.setMax 抛错时仍必须保留配置成功结果，只记录错误日志', async () => {
+  it('recentMax 未变更时不得同步 recent 上限', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const recentStore = createRecentStoreStub()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+    repository.writeConfigText.mockClear()
+
+    await expect(service.updateConfig(createUpdateRequest(
+      createSetOperation(['language'], 'en-US'),
+    ), recentStore)).resolves.toEqual({
+      ok: true,
+      config: expect.objectContaining({
+        language: 'en-US',
+      }),
+    })
+
+    expect(recentStore.setMax).not.toHaveBeenCalled()
+  })
+
+  it('recent.setMax 抛错时仍必须保留配置成功结果，只记录错误日志', async () => {
     const repository = createRepositoryStub()
     const callback = vi.fn()
     const recentStore = createRecentStoreStub({
@@ -721,10 +366,10 @@ describe('configService', () => {
     await service.init(callback)
     repository.writeConfigText.mockClear()
 
-    await expect(service.setConfigWithRecentMax({
-      recentMax: 4,
-      language: 'en-US',
-    }, recentStore)).resolves.toEqual({
+    await expect(service.updateConfig(createUpdateRequest(
+      createSetOperation(['recentMax'], 4),
+      createSetOperation(['language'], 'en-US'),
+    ), recentStore)).resolves.toEqual({
       ok: true,
       config: expect.objectContaining({
         recentMax: 4,
@@ -747,7 +392,7 @@ describe('configService', () => {
     )
   })
 
-  it('setConfigWithRecentMax 挂起时并发 setThemeGlobal，较晚成功的主题写入不能被旧配置快照覆盖', async () => {
+  it('并发排队时，后续 mutation 不得被旧快照覆盖', async () => {
     let resolveFirstWrite
     const repository = {
       readParsedConfig: vi.fn(async () => cloneValue(defaultConfig)),
@@ -770,21 +415,22 @@ describe('configService', () => {
 
     await service.init(callback)
 
-    const firstUpdatePromise = service.setConfigWithRecentMax({
-      recentMax: 1,
-      language: 'en-US',
-    }, recentStore)
+    const firstUpdatePromise = service.updateConfig(createUpdateRequest(
+      createSetOperation(['recentMax'], 1),
+      createSetOperation(['language'], 'en-US'),
+    ), recentStore)
 
     await new Promise(resolve => setTimeout(resolve, 0))
 
-    const secondUpdatePromise = service.setConfigWithRecentMax({
-      recentMax: 3,
-      language: 'en-US',
-    }, recentStore)
+    const secondUpdatePromise = service.updateConfig(createUpdateRequest(
+      createSetOperation(['recentMax'], 3),
+    ), recentStore)
 
     await new Promise(resolve => setTimeout(resolve, 0))
 
-    const themeUpdatePromise = service.setThemeGlobal('dark')
+    const thirdUpdatePromise = service.updateConfig(createUpdateRequest(
+      createSetOperation(['theme', 'global'], 'dark'),
+    ))
 
     resolveFirstWrite.resolve()
 
@@ -802,9 +448,11 @@ describe('configService', () => {
         language: 'en-US',
       }),
     })
-    await expect(themeUpdatePromise).resolves.toEqual({
+    await expect(thirdUpdatePromise).resolves.toEqual({
       ok: true,
       config: expect.objectContaining({
+        recentMax: 3,
+        language: 'en-US',
         theme: expect.objectContaining({
           global: 'dark',
         }),

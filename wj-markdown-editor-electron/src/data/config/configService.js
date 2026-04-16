@@ -1,4 +1,6 @@
 import { sanitizeLoadedConfig } from './configLoadSanitizer.js'
+import { applyConfigMutationRequest } from './configMutationExecutor.js'
+import { validateConfigMutationRequest } from './configMutationSchema.js'
 import { repairConfig } from './configRepairUtil.js'
 import { configSchema, validateConfigShape } from './configSchema.js'
 import { cloneConfig } from './configSnapshotUtil.js'
@@ -17,54 +19,6 @@ function createInvalidConfigResult() {
     reason: 'config-invalid',
     messageKey: 'message.configInvalid',
   }
-}
-
-function isPlainObject(value) {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
-}
-
-function assertPatchValueSupported(value) {
-  if (value === null || typeof value !== 'object' || Array.isArray(value) || isPlainObject(value)) {
-    return
-  }
-
-  throw new TypeError('配置 patch 仅支持 plain object、数组、原始值或 null')
-}
-
-function mergeConfigPatch(target, patch) {
-  if (!isPlainObject(target) || !isPlainObject(patch)) {
-    return cloneConfig(patch)
-  }
-
-  const merged = { ...target }
-
-  for (const key in patch) {
-    if (Object.prototype.hasOwnProperty.call(merged, key) === false) {
-      throw new TypeError('配置 patch 包含未知字段')
-    }
-
-    const nextValue = patch[key]
-    const currentValue = merged[key]
-    assertPatchValueSupported(nextValue)
-
-    if (isPlainObject(currentValue)) {
-      if (isPlainObject(nextValue) === false) {
-        throw new TypeError('配置对象字段只接受 plain object patch')
-      }
-
-      merged[key] = mergeConfigPatch(currentValue, nextValue)
-      continue
-    }
-
-    merged[key] = cloneConfig(nextValue)
-  }
-
-  return merged
 }
 
 export function createConfigService(deps) {
@@ -97,33 +51,11 @@ export function createConfigService(deps) {
   function normalizeConfigForWrite(rawConfig) {
     const repairedConfig = repairConfig(rawConfig, defaultConfig)
     if (JSON.stringify(repairedConfig) !== JSON.stringify(rawConfig)) {
-      throw new Error('配置写入 patch 触发了静默修复')
+      throw new Error('配置写入 mutation 触发了静默修复')
     }
 
     validateConfigShape(repairedConfig)
     return repairedConfig
-  }
-
-  function buildNextConfig(nextPartial) {
-    if (!isPlainObject(nextPartial)) {
-      return {
-        ok: false,
-        result: createInvalidConfigResult(),
-      }
-    }
-
-    try {
-      return {
-        ok: true,
-        nextConfig: normalizeConfigForWrite(mergeConfigPatch(getCurrentConfigOrDefault(), nextPartial)),
-      }
-    }
-    catch {
-      return {
-        ok: false,
-        result: createInvalidConfigResult(),
-      }
-    }
   }
 
   async function persistConfig(nextConfig) {
@@ -161,21 +93,30 @@ export function createConfigService(deps) {
     }
   }
 
-  async function setConfigWithRecentMax(nextPartial, recentStore) {
+  async function updateConfig(request, recentStore) {
     return await runConfigUpdate(async () => {
-      const buildResult = buildNextConfig(nextPartial)
-      if (!buildResult.ok) {
-        return buildResult.result
+      const previousConfig = getCurrentConfigOrDefault()
+      let nextConfig = null
+
+      try {
+        validateConfigMutationRequest(request)
+        nextConfig = normalizeConfigForWrite(
+          applyConfigMutationRequest(previousConfig, request),
+        )
+      }
+      catch {
+        return createInvalidConfigResult()
       }
 
-      const nextConfig = buildResult.nextConfig
       const persistResult = await persistConfig(nextConfig)
       if (persistResult.ok === false) {
         return persistResult
       }
 
-      // recentMax 更新后只同步运行期上限，不在这里裁剪 recent 列表或广播 recent 变化。
-      await syncRecentMaxBestEffort(recentStore, nextConfig.recentMax)
+      if (nextConfig.recentMax !== previousConfig.recentMax) {
+        // recentMax 更新后只同步运行期上限，不在这里裁剪 recent 列表或广播 recent 变化。
+        await syncRecentMaxBestEffort(recentStore, nextConfig.recentMax)
+      }
 
       return persistResult
     })
@@ -229,50 +170,6 @@ export function createConfigService(deps) {
     getConfig() {
       return getCurrentConfigOrDefault()
     },
-    async setConfig(nextPartial) {
-      return await runConfigUpdate(async () => {
-        const buildResult = buildNextConfig(nextPartial)
-        if (!buildResult.ok) {
-          return buildResult.result
-        }
-
-        return await persistConfig(buildResult.nextConfig)
-      })
-    },
-    setConfigWithRecentMax,
-    async setThemeGlobal(theme) {
-      return await runConfigUpdate(async () => {
-        let nextConfig = null
-
-        try {
-          nextConfig = normalizeConfigForWrite(mergeConfigPatch(getCurrentConfigOrDefault(), {
-            theme: {
-              global: theme,
-            },
-          }))
-        }
-        catch {
-          return createInvalidConfigResult()
-        }
-
-        return await persistConfig(nextConfig)
-      })
-    },
-    async setLanguage(language) {
-      return await runConfigUpdate(async () => {
-        let nextConfig = null
-
-        try {
-          nextConfig = normalizeConfigForWrite(mergeConfigPatch(getCurrentConfigOrDefault(), {
-            language,
-          }))
-        }
-        catch {
-          return createInvalidConfigResult()
-        }
-
-        return await persistConfig(nextConfig)
-      })
-    },
+    updateConfig,
   }
 }
