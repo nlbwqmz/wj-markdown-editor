@@ -21,8 +21,17 @@ test('设置页中的编辑页预览位置应展示为左右选项并绑定配�
   assert.equal(enUS.config.view.editorPreviewPositionOption.left, 'Left')
   assert.equal(enUS.config.view.editorPreviewPositionOption.right, 'Right')
 
-  assert.match(source, /config\.view\.editorPreviewPosition/u)
-  assert.match(source, /v-model:value="config\.editor\.previewPosition"/u)
-  assert.match(source, /config\.view\.editorPreviewPositionOption\.left/u)
-  assert.match(source, /config\.view\.editorPreviewPositionOption\.right/u)
+  const sectionStart = source.indexOf(`<a-descriptions-item :label="$t('config.view.editorPreviewPosition')">`)
+  assert.notEqual(sectionStart, -1)
+
+  const sectionEnd = source.indexOf('</a-descriptions-item>', sectionStart)
+  assert.notEqual(sectionEnd, -1)
+
+  const sectionSource = source.slice(sectionStart, sectionEnd)
+
+  assert.match(sectionSource, /<a-radio-group[\s\S]*?v-model:value="config\.editor\.previewPosition"/u)
+  assert.match(sectionSource, /@update:value="value => submitSetPathMutation\(\['editor', 'previewPosition'\], value\)"/u)
+  assert.match(sectionSource, /<a-radio-button value="left">[\s\S]*?\$t\('config\.view\.editorPreviewPositionOption\.left'\)/u)
+  assert.match(sectionSource, /<a-radio-button value="right">[\s\S]*?\$t\('config\.view\.editorPreviewPositionOption\.right'\)/u)
+  assert.ok(sectionSource.indexOf(`value="left"`) < sectionSource.indexOf(`value="right"`))
 })

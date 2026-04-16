@@ -9,11 +9,8 @@ import TypographerDescription from '@/components/TypographerDescription.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import {
-  applySelectableStringField,
   cloneConfigDraft,
-  createAutoSaveOptionMutationOperations,
   normalizeRecentMaxInputValue,
-  setConfigDraftValueByPath,
 } from '@/util/config/settingConfigDraftUtil.js'
 import { createSettingConfigMutationController } from '@/util/config/settingConfigMutationController.js'
 import constant from '@/util/constant.js'
@@ -128,17 +125,12 @@ function submitSetPathMutation(path, value) {
   return settingConfigMutationController.submitSetPath(path, value)
 }
 
-function setDraftPathValue(path, value) {
-  setConfigDraftValueByPath(config.value, path, value)
-}
-
 function normalizeOptionalStringValue(value) {
   return value === undefined ? '' : value
 }
 
 async function onNormalizedStringFieldChange(path, value) {
   const normalizedValue = normalizeOptionalStringValue(value)
-  setDraftPathValue(path, normalizedValue)
   await submitSetPathMutation(path, normalizedValue)
 }
 
@@ -149,12 +141,6 @@ async function onAutoSaveUpdate(nextAutoSave) {
 
   const previousAutoSave = Array.isArray(config.value.autoSave) ? [...config.value.autoSave] : []
   const normalizedNextAutoSave = Array.isArray(nextAutoSave) ? [...nextAutoSave] : []
-  config.value.autoSave = normalizedNextAutoSave
-
-  if (createAutoSaveOptionMutationOperations(previousAutoSave, normalizedNextAutoSave).length === 0) {
-    return
-  }
-
   await settingConfigMutationController.submitAutoSaveListChange(previousAutoSave, normalizedNextAutoSave)
 }
 
@@ -168,7 +154,7 @@ const showImgRelativePath = computed(() => {
   return config.value.imgLocal === '4' || config.value.imgNetwork === '4'
 })
 onMounted(async () => {
-  config.value = cloneConfigDraft(await channelUtil.send({ event: 'get-config' }))
+  settingConfigMutationController.syncStoreConfig(await channelUtil.send({ event: 'get-config' }))
   refreshSystemFontList()
   window.addEventListener('visibilitychange', refreshSystemFontList)
   await nextTick()
@@ -195,7 +181,7 @@ watch(() => store.config, (newValue) => {
     return
   }
 
-  config.value = cloneConfigDraft(newValue)
+  settingConfigMutationController.syncStoreConfig(newValue)
 }, { deep: true })
 
 const disallowedShortcutKeys = ['Backspace', 'Alt+ArrowLeft', 'Alt+ArrowRight', 'Alt+ArrowUp', 'Shift+Alt+ArrowUp', 'Alt+ArrowDown', 'Shift+Alt+ArrowDown', 'Escape', 'Ctrl+Enter', 'Alt+l', 'Ctrl+i', 'Ctrl+[', 'Ctrl+]', 'Ctrl+Alt+\\', 'Shift+Ctrl+k', 'Shift+Ctrl+\\', 'Ctrl+/', 'Alt+A', 'Ctrl+m', 'ArrowLeft', 'Ctrl+ArrowLeft', 'ArrowRight', 'Ctrl+ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'Ctrl+Home', 'End', 'Ctrl+End', 'Enter', 'Ctrl+a', 'Backspace', 'Delete', 'Ctrl+Backspace', 'Ctrl+Delete', 'Ctrl+f', 'F3', 'Ctrl+g', 'Escape', 'Ctrl+Shift+l', 'Ctrl+Alt+g', 'Ctrl+d', 'Ctrl+z', 'Ctrl+y', 'Ctrl+u', 'Alt+u', 'Ctrl+Space', 'Escape', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Enter', 'Tab', 'Ctrl+c', 'Ctrl+v']
@@ -241,14 +227,12 @@ function onKeydown(shortcutKey) {
           return
         }
       }
-      shortcutKey.keymap = keymap
       await settingConfigMutationController.submitShortcutKeyField(shortcutKey.id, 'keymap', keymap)
     }
   }
 }
 
 async function onShortcutKeyEnabledUpdate(shortcutKey, enabled) {
-  shortcutKey.enabled = enabled
   await settingConfigMutationController.submitShortcutKeyField(shortcutKey.id, 'enabled', enabled)
 }
 
@@ -268,7 +252,7 @@ function onShortcutKeyFocus(e, shortcutKey) {
  */
 async function openDirSelect() {
   const nextSelectedPath = await channelUtil.send({ event: 'open-dir-select' })
-  if (applySelectableStringField(config.value, 'imgAbsolutePath', nextSelectedPath)) {
+  if (typeof nextSelectedPath === 'string') {
     await submitSetPathMutation(['imgAbsolutePath'], nextSelectedPath)
   }
 }
@@ -276,7 +260,7 @@ async function openDirSelect() {
 // 选择文件绝对路径
 async function openFileDirSelect() {
   const nextSelectedPath = await channelUtil.send({ event: 'open-dir-select' })
-  if (applySelectableStringField(config.value, 'fileAbsolutePath', nextSelectedPath)) {
+  if (typeof nextSelectedPath === 'string') {
     await submitSetPathMutation(['fileAbsolutePath'], nextSelectedPath)
   }
 }
@@ -290,7 +274,6 @@ function onRecentMaxUpdate(nextValue) {
   }
 
   const normalizedValue = normalizeRecentMaxInputValue(nextValue)
-  config.value.recentMax = normalizedValue
   return submitSetPathMutation(['recentMax'], normalizedValue)
 }
 

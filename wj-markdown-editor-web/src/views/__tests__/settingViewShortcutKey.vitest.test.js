@@ -82,6 +82,21 @@ function createKeyboardEvent(code, options = {}) {
   }
 }
 
+function createDeferred() {
+  let resolve = null
+  let reject = null
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
 async function flushPendingUpdates() {
   await Promise.resolve()
   await nextTick()
@@ -183,10 +198,10 @@ describe('settingView shortcut key input', () => {
     const saveOtherShortcutKey = config.shortcutKeyList.find(item => item.id === 'saveOther')
     const event = createKeyboardEvent('F5')
 
-    onKeydown(saveOtherShortcutKey)(event)
+    await onKeydown(saveOtherShortcutKey)(event)
 
     expect(event.preventDefault).toHaveBeenCalledTimes(1)
-    expect(saveOtherShortcutKey.keymap).toBe('F5')
+    expect(getSetupBinding(wrapper, 'config').shortcutKeyList.find(item => item.id === 'saveOther')?.keymap).toBe('F5')
     expect(mocked.messageWarn).not.toHaveBeenCalled()
   })
 
@@ -222,6 +237,66 @@ describe('settingView 配置草稿同步', () => {
       field: 'modifiedTime',
       direction: 'desc',
     })
+  })
+
+  it('同一字段连续提交时，较早的 update-config 广播不得覆盖较新的本地草稿', async () => {
+    const wrapper = await mountSettingView()
+    const onRecentMaxUpdate = getSetupBinding(wrapper, 'onRecentMaxUpdate')
+    const firstDeferred = createDeferred()
+    const secondDeferred = createDeferred()
+
+    mocked.channelSend.mockImplementation(({ event }) => {
+      if (event === 'get-config') {
+        return Promise.resolve(cloneDefaultConfig())
+      }
+
+      if (event === 'config.update') {
+        const nextDeferred = mocked.channelSend.mock.calls.filter(([payload]) => payload?.event === 'config.update').length === 1
+          ? firstDeferred
+          : secondDeferred
+        return nextDeferred.promise
+      }
+
+      return Promise.resolve({ ok: true })
+    })
+
+    const firstSubmitPromise = onRecentMaxUpdate(11)
+    const secondSubmitPromise = onRecentMaxUpdate(12)
+    await flushPendingUpdates()
+
+    expect(getSetupBinding(wrapper, 'config').recentMax).toBe(12)
+
+    mocked.store.config = {
+      ...cloneDefaultConfig(),
+      recentMax: 11,
+    }
+    await flushPendingUpdates()
+
+    expect(getSetupBinding(wrapper, 'config').recentMax).toBe(12)
+
+    firstDeferred.resolve({
+      ok: true,
+      config: {
+        ...cloneDefaultConfig(),
+        recentMax: 11,
+      },
+    })
+    await firstSubmitPromise
+    await flushPendingUpdates()
+
+    expect(getSetupBinding(wrapper, 'config').recentMax).toBe(12)
+
+    secondDeferred.resolve({
+      ok: true,
+      config: {
+        ...cloneDefaultConfig(),
+        recentMax: 12,
+      },
+    })
+    await secondSubmitPromise
+    await flushPendingUpdates()
+
+    expect(getSetupBinding(wrapper, 'config').recentMax).toBe(12)
   })
 })
 

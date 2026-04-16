@@ -6,6 +6,21 @@ function cloneValue(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+function createDeferred() {
+  let resolve = null
+  let reject = null
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
 function createControllerTestContext() {
   let draftConfig = cloneValue(defaultConfig)
   const storeConfig = cloneValue(defaultConfig)
@@ -126,5 +141,152 @@ describe('settingConfigMutationController', () => {
     expect(context.getDraftConfig().language).toBe('en-US')
     expect(context.showWarningMessage).toHaveBeenCalledWith('message.configWriteFailed')
     expect(context.afterMutationSuccess).not.toHaveBeenCalled()
+  })
+
+  it('同一路径连续更新时，旧 store 广播不得覆盖较新的本地草稿', async () => {
+    const context = createControllerTestContext()
+    const firstDeferred = createDeferred()
+    const secondDeferred = createDeferred()
+    context.sendMutationRequest
+      .mockImplementationOnce(() => firstDeferred.promise)
+      .mockImplementationOnce(() => secondDeferred.promise)
+
+    const firstSubmitPromise = context.controller.submitSetPath(['recentMax'], 11)
+    const secondSubmitPromise = context.controller.submitSetPath(['recentMax'], 12)
+
+    expect(context.getDraftConfig().recentMax).toBe(12)
+
+    context.storeConfig.recentMax = 11
+    context.controller.syncStoreConfig(context.storeConfig)
+
+    expect(context.getDraftConfig().recentMax).toBe(12)
+
+    firstDeferred.resolve({
+      ok: true,
+      config: {
+        ...cloneValue(defaultConfig),
+        recentMax: 11,
+      },
+    })
+    await firstSubmitPromise
+
+    expect(context.getDraftConfig().recentMax).toBe(12)
+
+    secondDeferred.resolve({
+      ok: true,
+      config: {
+        ...cloneValue(defaultConfig),
+        recentMax: 12,
+      },
+    })
+    await secondSubmitPromise
+
+    expect(context.getDraftConfig().recentMax).toBe(12)
+  })
+
+  it('同一路径旧失败结果返回时，不得回滚掉更新中的新草稿', async () => {
+    const context = createControllerTestContext()
+    const firstDeferred = createDeferred()
+    const secondDeferred = createDeferred()
+    context.sendMutationRequest
+      .mockImplementationOnce(() => firstDeferred.promise)
+      .mockImplementationOnce(() => secondDeferred.promise)
+
+    const firstSubmitPromise = context.controller.submitSetPath(['recentMax'], 11)
+    const secondSubmitPromise = context.controller.submitSetPath(['recentMax'], 12)
+
+    firstDeferred.resolve({
+      ok: false,
+      messageKey: 'message.configInvalid',
+    })
+    await firstSubmitPromise
+
+    expect(context.getDraftConfig().recentMax).toBe(12)
+    expect(context.showWarningMessage).not.toHaveBeenCalled()
+
+    secondDeferred.resolve({
+      ok: true,
+      config: {
+        ...cloneValue(defaultConfig),
+        recentMax: 12,
+      },
+    })
+    await secondSubmitPromise
+  })
+
+  it('autoSave 连续更新时，旧 store 广播不得覆盖较新的本地集合', async () => {
+    const context = createControllerTestContext()
+    const firstDeferred = createDeferred()
+    const secondDeferred = createDeferred()
+    context.sendMutationRequest
+      .mockImplementationOnce(() => firstDeferred.promise)
+      .mockImplementationOnce(() => secondDeferred.promise)
+
+    const firstSubmitPromise = context.controller.submitAutoSaveListChange([], ['blur'])
+    const secondSubmitPromise = context.controller.submitAutoSaveListChange(['blur'], ['blur', 'close'])
+
+    expect(context.getDraftConfig().autoSave).toEqual(['blur', 'close'])
+
+    context.storeConfig.autoSave = ['blur']
+    context.controller.syncStoreConfig(context.storeConfig)
+
+    expect(context.getDraftConfig().autoSave).toEqual(['blur', 'close'])
+
+    firstDeferred.resolve({
+      ok: true,
+      config: {
+        ...cloneValue(defaultConfig),
+        autoSave: ['blur'],
+      },
+    })
+    await firstSubmitPromise
+
+    expect(context.getDraftConfig().autoSave).toEqual(['blur', 'close'])
+
+    secondDeferred.resolve({
+      ok: true,
+      config: {
+        ...cloneValue(defaultConfig),
+        autoSave: ['blur', 'close'],
+      },
+    })
+    await secondSubmitPromise
+  })
+
+  it('快捷键连续更新时，旧 store 广播不得覆盖较新的本地字段', async () => {
+    const context = createControllerTestContext()
+    const firstDeferred = createDeferred()
+    const secondDeferred = createDeferred()
+    context.sendMutationRequest
+      .mockImplementationOnce(() => firstDeferred.promise)
+      .mockImplementationOnce(() => secondDeferred.promise)
+
+    const firstSubmitPromise = context.controller.submitShortcutKeyField('save', 'keymap', 'F5')
+    const secondSubmitPromise = context.controller.submitShortcutKeyField('save', 'keymap', 'F6')
+
+    expect(context.getDraftConfig().shortcutKeyList.find(item => item.id === 'save')?.keymap).toBe('F6')
+
+    const staleStoreConfig = cloneValue(defaultConfig)
+    staleStoreConfig.shortcutKeyList.find(item => item.id === 'save').keymap = 'F5'
+    context.storeConfig.shortcutKeyList = staleStoreConfig.shortcutKeyList
+    context.controller.syncStoreConfig(context.storeConfig)
+
+    expect(context.getDraftConfig().shortcutKeyList.find(item => item.id === 'save')?.keymap).toBe('F6')
+
+    firstDeferred.resolve({
+      ok: true,
+      config: staleStoreConfig,
+    })
+    await firstSubmitPromise
+
+    expect(context.getDraftConfig().shortcutKeyList.find(item => item.id === 'save')?.keymap).toBe('F6')
+
+    const latestStoreConfig = cloneValue(defaultConfig)
+    latestStoreConfig.shortcutKeyList.find(item => item.id === 'save').keymap = 'F6'
+    secondDeferred.resolve({
+      ok: true,
+      config: latestStoreConfig,
+    })
+    await secondSubmitPromise
   })
 })
