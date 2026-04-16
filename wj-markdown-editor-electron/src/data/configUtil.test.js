@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const init = vi.fn()
 const getConfig = vi.fn(() => ({ language: 'zh-CN' }))
-const updateConfig = vi.fn(async () => ({ ok: true }))
+const updateConfigResult = {
+  ok: true,
+  config: {
+    language: 'en-US',
+  },
+}
+const updateConfig = vi.fn(async () => updateConfigResult)
 
 vi.mock('./config/configService.js', () => ({
   createConfigService: vi.fn(() => ({
@@ -37,11 +43,12 @@ describe('configUtil', () => {
     expect(getConfig).toHaveBeenCalledTimes(1)
 
     expect(configUtil.updateConfig).toBeTypeOf('function')
-    await configUtil.updateConfig({
+    const result = await configUtil.updateConfig({
       operations: [
         { type: 'set', path: ['language'], value: 'en-US' },
       ],
     })
+    expect(result).toBe(updateConfigResult)
     expect(updateConfig).toHaveBeenCalledWith({
       operations: [
         { type: 'set', path: ['language'], value: 'en-US' },

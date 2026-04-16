@@ -246,17 +246,31 @@ describe('configService', () => {
     })
 
     await service.init(callback)
+    repository.writeConfigText.mockClear()
 
-    await expect(service.updateConfig({
+    const result = await service.updateConfig({
       operations: [
         { type: 'set', path: ['language'], value: 'en-US' },
       ],
-    })).resolves.toEqual({
+    })
+
+    expect(result).toEqual({
       ok: true,
       config: expect.objectContaining({
         language: 'en-US',
       }),
     })
+    expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(repository.writeConfigText.mock.calls[0][0])).toEqual(expect.objectContaining({
+      language: 'en-US',
+    }))
+    expect(service.getConfig()).toEqual(expect.objectContaining({
+      language: 'en-US',
+    }))
+    expect(callback).toHaveBeenCalledTimes(1)
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({
+      language: 'en-US',
+    }))
   })
 
   it('setConfig 传入局部 theme 时必须先 repair 成完整合法配置再持久化', async () => {
