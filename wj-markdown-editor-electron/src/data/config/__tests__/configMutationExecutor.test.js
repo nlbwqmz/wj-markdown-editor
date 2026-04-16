@@ -76,4 +76,26 @@ describe('applyConfigMutationRequest', () => {
     expect(new Set(nextConfig.autoSave).size).toBe(nextConfig.autoSave.length)
     expect(inputConfig).toEqual(originalConfig)
   })
+
+  it('未知快捷键 id 时抛出异常', () => {
+    expect(() => applyConfigMutationRequest(cloneValue(defaultConfig), {
+      operations: [
+        { type: 'setShortcutKeyField', id: 'missing', field: 'enabled', value: false },
+      ],
+    })).toThrow(/未找到快捷键/)
+  })
+
+  it('reset 返回默认配置副本', () => {
+    const inputConfig = cloneValue(defaultConfig)
+    inputConfig.theme.global = 'dark'
+
+    const nextConfig = applyConfigMutationRequest(inputConfig, {
+      operations: [
+        { type: 'reset' },
+      ],
+    })
+
+    expect(nextConfig).toEqual(defaultConfig)
+    expect(nextConfig).not.toBe(defaultConfig)
+  })
 })
