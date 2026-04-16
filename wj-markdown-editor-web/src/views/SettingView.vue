@@ -115,6 +115,11 @@ function closePreviewSearchBar() {
   })
 }
 
+function isSameFileManagerSortConfig(leftSortConfig, rightSortConfig) {
+  return leftSortConfig?.field === rightSortConfig?.field
+    && leftSortConfig?.direction === rightSortConfig?.direction
+}
+
 watch(() => config.value, (newValue) => {
   if (!newValue || !configUpdateSubmissionGuard.shouldSubmitConfigUpdate()) {
     return
@@ -196,6 +201,20 @@ watch(() => store.config.language, (newValue) => {
   if (newValue !== config.value.language) {
     configUpdateSubmissionGuard.markNextSyncIgnored()
     config.value.language = newValue
+  }
+})
+
+watch([
+  () => store.config.fileManagerSort?.field,
+  () => store.config.fileManagerSort?.direction,
+], () => {
+  if (!config.value) {
+    return
+  }
+
+  if (!isSameFileManagerSortConfig(store.config.fileManagerSort, config.value.fileManagerSort)) {
+    configUpdateSubmissionGuard.markNextSyncIgnored()
+    config.value.fileManagerSort = cloneConfigDraft(store.config.fileManagerSort)
   }
 })
 

@@ -156,6 +156,10 @@ function normalizeFileManagerSortConfig(sortConfig) {
   }
 }
 
+function shouldIncludeModifiedTime(sortConfig) {
+  return normalizeFileManagerSortConfig(sortConfig).field === 'modifiedTime'
+}
+
 function resolveDirectoryTargetFromSnapshot(snapshot) {
   if (snapshot?.isRecentMissing === true && snapshot?.recentMissingPath) {
     return {
@@ -377,6 +381,7 @@ export function createFileManagerPanelController({
   let latestDirectoryStateRequestId = 0
   let latestDirectoryStateSource = null
   let latestDirectoryStateEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY
+  let latestDirectoryStateIncludeModifiedTime = shouldIncludeModifiedTime(store?.config?.fileManagerSort)
   const directoryPath = computed(() => directoryState.value.directoryPath)
   const entryList = computed(() => directoryState.value.entryList)
   const emptyMessageKey = computed(() => directoryState.value.emptyMessageKey)
@@ -396,9 +401,35 @@ export function createFileManagerPanelController({
     normalizeComparablePath(currentDocumentDirectoryPath.value),
   ))
 
+  function resolveDirectoryRequestIncludeModifiedTime(includeModifiedTime) {
+    if (includeModifiedTime === true) {
+      return true
+    }
+
+    if (includeModifiedTime === false) {
+      return false
+    }
+
+    return shouldIncludeModifiedTime(store?.config?.fileManagerSort)
+  }
+
+  function createDirectoryRequestPayload(targetDirectoryPath, includeModifiedTime = undefined) {
+    const payload = {
+      directoryPath: targetDirectoryPath,
+    }
+    if (includeModifiedTime === true || includeModifiedTime === false) {
+      payload.includeModifiedTime = includeModifiedTime
+    }
+
+    return payload
+  }
+
   function commitDirectoryState(nextState, options = {}) {
     latestDirectoryStateSource = nextState
     latestDirectoryStateEmptyMessageKey = options.emptyMessageKey || emptyMessageKey.value || DIRECTORY_EMPTY_MESSAGE_KEY
+    if (Object.prototype.hasOwnProperty.call(options, 'includeModifiedTime')) {
+      latestDirectoryStateIncludeModifiedTime = options.includeModifiedTime === true
+    }
     directoryState.value = normalizeDirectoryState(
       nextState,
       store?.documentSessionSnapshot,
@@ -414,6 +445,7 @@ export function createFileManagerPanelController({
     latestDirectoryStateEmptyMessageKey = emptyMessageKey === undefined
       ? DRAFT_EMPTY_MESSAGE_KEY
       : emptyMessageKey
+    latestDirectoryStateIncludeModifiedTime = shouldIncludeModifiedTime(store?.config?.fileManagerSort)
     directoryState.value = createEmptyDirectoryState(emptyMessageKey)
     return directoryState.value
   }
@@ -431,6 +463,39 @@ export function createFileManagerPanelController({
     )
 
     return directoryState.value
+  }
+
+  async function reloadCurrentDirectoryState(includeModifiedTime = undefined) {
+    if (!directoryPath.value) {
+      return directoryState.value
+    }
+
+    const nextIncludeModifiedTime = resolveDirectoryRequestIncludeModifiedTime(includeModifiedTime)
+    const nextEmptyMessageKey = latestDirectoryStateEmptyMessageKey || DIRECTORY_EMPTY_MESSAGE_KEY
+
+    return await runLatestDirectoryStateRequest(() => requestDirectoryState(
+      createDirectoryRequestPayload(
+        directoryPath.value,
+        includeModifiedTime === undefined && nextIncludeModifiedTime !== true
+          ? undefined
+          : nextIncludeModifiedTime,
+      ),
+    ), (nextState) => {
+      const failureResult = resolveDirectoryFailureResult(nextState)
+      if (failureResult) {
+        return failureResult
+      }
+
+      const rawDirectoryState = nextState?.directoryState || nextState
+      if (!rawDirectoryState?.directoryPath) {
+        return commitEmptyDirectoryState(nextEmptyMessageKey)
+      }
+
+      return commitDirectoryState(nextState, {
+        emptyMessageKey: nextEmptyMessageKey,
+        includeModifiedTime: nextIncludeModifiedTime,
+      })
+    })
   }
 
   async function updateFileManagerSortConfig(nextSortConfig) {
@@ -516,9 +581,10 @@ export function createFileManagerPanelController({
       return commitEmptyDirectoryState(target.emptyMessageKey)
     }
 
-    return await runLatestDirectoryStateRequest(() => requestDirectoryState({
-      directoryPath: target.directoryPath,
-    }), (nextState) => {
+    const includeModifiedTime = resolveDirectoryRequestIncludeModifiedTime()
+    return await runLatestDirectoryStateRequest(() => requestDirectoryState(
+      createDirectoryRequestPayload(target.directoryPath, includeModifiedTime ? true : undefined),
+    ), (nextState) => {
       const failureResult = resolveDirectoryFailureResult(nextState)
       if (failureResult) {
         return failureResult
@@ -531,6 +597,7 @@ export function createFileManagerPanelController({
 
       return commitDirectoryState(nextState, {
         emptyMessageKey: target.emptyMessageKey,
+        includeModifiedTime,
       })
     })
   }
@@ -540,9 +607,10 @@ export function createFileManagerPanelController({
       return null
     }
 
-    return await runLatestDirectoryStateRequest(() => requestOpenDirectory({
-      directoryPath: targetPath,
-    }), (nextState) => {
+    const includeModifiedTime = resolveDirectoryRequestIncludeModifiedTime()
+    return await runLatestDirectoryStateRequest(() => requestOpenDirectory(
+      createDirectoryRequestPayload(targetPath, includeModifiedTime ? true : undefined),
+    ), (nextState) => {
       const failureResult = resolveDirectoryFailureResult(nextState)
       if (failureResult) {
         return failureResult
@@ -554,6 +622,7 @@ export function createFileManagerPanelController({
 
       return commitDirectoryState(nextState, {
         emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+        includeModifiedTime,
       })
     })
   }
@@ -634,6 +703,7 @@ export function createFileManagerPanelController({
       if (result) {
         commitDirectoryState(result?.directoryState || result, {
           emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+          includeModifiedTime: latestDirectoryStateIncludeModifiedTime,
         })
       }
 
@@ -670,6 +740,7 @@ export function createFileManagerPanelController({
       if (result?.directoryState) {
         commitDirectoryState(result.directoryState, {
           emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+          includeModifiedTime: latestDirectoryStateIncludeModifiedTime,
         })
       }
 
@@ -736,13 +807,36 @@ export function createFileManagerPanelController({
   watch([
     () => store?.config?.fileManagerSort?.field,
     () => store?.config?.fileManagerSort?.direction,
-  ], () => {
+  ], async ([field, direction], [previousField, previousDirection]) => {
     recomputeDirectoryStateFromLatestSource()
+
+    if (!directoryState.value.directoryPath) {
+      return
+    }
+
+    const nextIncludeModifiedTime = shouldIncludeModifiedTime({
+      field,
+      direction,
+    })
+    const previousIncludeModifiedTime = shouldIncludeModifiedTime({
+      field: previousField,
+      direction: previousDirection,
+    })
+
+    if (nextIncludeModifiedTime !== previousIncludeModifiedTime) {
+      await reloadCurrentDirectoryState(nextIncludeModifiedTime)
+      return
+    }
+
+    if (nextIncludeModifiedTime && latestDirectoryStateIncludeModifiedTime !== true) {
+      await reloadCurrentDirectoryState(true)
+    }
   })
 
   const handleDirectoryChanged = (payload) => {
     applyDirectoryState(payload, {
       emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+      includeModifiedTime: latestDirectoryStateIncludeModifiedTime,
     })
   }
 

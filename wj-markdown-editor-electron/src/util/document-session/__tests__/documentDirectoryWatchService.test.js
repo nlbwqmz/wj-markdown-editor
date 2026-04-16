@@ -139,10 +139,36 @@ describe('documentDirectoryWatchService', () => {
     expect(readDirectoryState).toHaveBeenCalledWith({
       directoryPath: 'D:/docs',
       activePath: 'D:/docs/current.md',
+      includeModifiedTime: false,
     })
     expect(publishDirectoryChanged).toHaveBeenCalledWith({
       windowId: '9',
       directoryState,
+    })
+  })
+
+  it('绑定 includeModifiedTime 后，目录 watcher 的防抖重扫也必须沿用该读取选项', async () => {
+    vi.useFakeTimers()
+    const { service, readDirectoryState, watchRecordList } = await createServiceContext()
+    readDirectoryState.mockResolvedValue({
+      mode: 'directory',
+      directoryPath: 'D:/docs',
+      activePath: 'D:/docs/current.md',
+      entryList: [],
+    })
+
+    await service.ensureWindowDirectory(9, 'D:/docs', {
+      activePath: 'D:/docs/current.md',
+      includeModifiedTime: true,
+    })
+
+    watchRecordList[0].listener('change', 'current.md')
+    await vi.advanceTimersByTimeAsync(120)
+
+    expect(readDirectoryState).toHaveBeenCalledWith({
+      directoryPath: 'D:/docs',
+      activePath: 'D:/docs/current.md',
+      includeModifiedTime: true,
     })
   })
 
@@ -299,6 +325,7 @@ describe('documentDirectoryWatchService', () => {
     expect(readDirectoryState).toHaveBeenCalledWith({
       directoryPath: 'D:/docs',
       activePath: 'D:/docs/current.md',
+      includeModifiedTime: false,
     })
     expect(publishDirectoryChanged).not.toHaveBeenCalled()
 

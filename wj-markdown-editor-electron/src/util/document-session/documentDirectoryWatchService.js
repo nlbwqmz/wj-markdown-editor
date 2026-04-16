@@ -14,6 +14,10 @@ function normalizeWindowId(windowId) {
   return null
 }
 
+function normalizeIncludeModifiedTime(value) {
+  return value === true
+}
+
 function clearWindowTimer(windowState) {
   if (windowState?.debounceTimer) {
     clearTimeout(windowState.debounceTimer)
@@ -112,6 +116,24 @@ export function createDocumentDirectoryWatchService({
     }
   }
 
+  function getWindowDirectoryReadContext(windowId) {
+    const normalizedWindowId = normalizeWindowId(windowId)
+    if (!normalizedWindowId) {
+      return null
+    }
+
+    const windowState = windowStateMap.get(normalizedWindowId)
+    if (!windowState) {
+      return null
+    }
+
+    return {
+      directoryPath: windowState.directoryPath,
+      activePath: windowState.activePath,
+      includeModifiedTime: windowState.includeModifiedTime === true,
+    }
+  }
+
   function scheduleWindowRescan(windowId, bindingToken) {
     const normalizedWindowId = normalizeWindowId(windowId)
     const windowState = getBoundWindowState(normalizedWindowId, bindingToken)
@@ -134,6 +156,7 @@ export function createDocumentDirectoryWatchService({
           const directoryState = await readDirectoryState({
             directoryPath: currentWindowState.directoryPath,
             activePath: currentWindowState.activePath,
+            includeModifiedTime: currentWindowState.includeModifiedTime === true,
           })
           if (!getBoundWindowState(normalizedWindowId, bindingToken)) {
             return
@@ -193,6 +216,7 @@ export function createDocumentDirectoryWatchService({
     windowStateMap.set(normalizedWindowId, {
       directoryPath,
       activePath: options.activePath ?? null,
+      includeModifiedTime: normalizeIncludeModifiedTime(options.includeModifiedTime),
       watchHandle,
       debounceTimer: null,
       bindingToken,
@@ -210,6 +234,7 @@ export function createDocumentDirectoryWatchService({
     const currentWindowState = windowStateMap.get(normalizedWindowId)
     if (currentWindowState?.directoryPath === directoryPath) {
       currentWindowState.activePath = options.activePath ?? null
+      currentWindowState.includeModifiedTime = normalizeIncludeModifiedTime(options.includeModifiedTime)
       return createDirectoryRebindSuccessResult(getWindowDirectoryBinding(normalizedWindowId))
     }
 
@@ -217,9 +242,14 @@ export function createDocumentDirectoryWatchService({
   }
 
   async function rebindWindowDirectoryFromSession(windowId, session) {
+    const normalizedWindowId = normalizeWindowId(windowId)
+    const includeModifiedTime = normalizeIncludeModifiedTime(
+      windowStateMap.get(normalizedWindowId)?.includeModifiedTime,
+    )
     const directoryState = await resolveDirectoryStateFromSession({
       fsModule,
       session,
+      includeModifiedTime,
     })
     if (!directoryState.directoryPath) {
       await stopWindowDirectory(windowId)
@@ -233,6 +263,7 @@ export function createDocumentDirectoryWatchService({
 
     const bindingResult = await rebindWindowDirectory(windowId, directoryState.directoryPath, {
       activePath: directoryState.activePath,
+      includeModifiedTime,
     })
     if (!isDirectoryBindingMatched(bindingResult, {
       directoryPath: directoryState.directoryPath,
@@ -260,6 +291,7 @@ export function createDocumentDirectoryWatchService({
     clearWindowDirectory: stopWindowDirectory,
     ensureWindowDirectory,
     getWindowDirectoryBinding,
+    getWindowDirectoryReadContext,
     rebindWindowDirectory,
     rebindWindowDirectoryFromSession,
     stopWindowDirectory,

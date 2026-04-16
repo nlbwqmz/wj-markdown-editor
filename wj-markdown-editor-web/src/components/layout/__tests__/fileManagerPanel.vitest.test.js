@@ -1223,6 +1223,57 @@ describe('fileManagerPanelController', () => {
     scope.stop()
   })
 
+  it('切换到 modifiedTime 排序且当前缓存缺少修改时间时，必须补发当前目录请求', async () => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    fileManagerPanelState.requestFileManagerDirectoryState
+      .mockResolvedValueOnce(createDirectoryState({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'older.md', path: 'D:/docs/older.md', kind: 'file' },
+          { name: 'latest.md', path: 'D:/docs/latest.md', kind: 'file' },
+        ],
+      }))
+      .mockResolvedValueOnce(createDirectoryState({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'older.md', path: 'D:/docs/older.md', kind: 'file', modifiedTimeMs: 10 },
+          { name: 'latest.md', path: 'D:/docs/latest.md', kind: 'file', modifiedTimeMs: 50 },
+        ],
+      }))
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => value,
+      })
+    })
+
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(1)
+
+    fileManagerPanelState.store.config.fileManagerSort = {
+      field: 'modifiedTime',
+      direction: 'desc',
+    }
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(2)
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenNthCalledWith(2, {
+      directoryPath: 'D:/docs',
+      includeModifiedTime: true,
+    })
+    expect(controller.entryList.value.map(item => item.name)).toEqual([
+      'latest.md',
+      'older.md',
+    ])
+
+    scope.stop()
+  })
+
   it('执行 modifiedTime desc 排序菜单动作后，应立即重排当前列表并写入配置', async () => {
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       directoryPath: 'D:/docs',
@@ -1262,7 +1313,11 @@ describe('fileManagerPanelController', () => {
       field: 'modifiedTime',
       direction: 'desc',
     })
-    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(1)
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(2)
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenNthCalledWith(2, {
+      directoryPath: 'D:/docs',
+      includeModifiedTime: true,
+    })
     expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toEqual([
       'assets',
       'latest.md',

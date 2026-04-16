@@ -33,6 +33,7 @@ function createDirectoryWatchServiceStub(windowId) {
       windowBindingMap.set(String(nextWindowId), {
         directoryPath,
         activePath: options.activePath ?? null,
+        includeModifiedTime: options.includeModifiedTime === true,
       })
       return {
         ok: true,
@@ -44,6 +45,7 @@ function createDirectoryWatchServiceStub(windowId) {
       windowBindingMap.set(String(nextWindowId), {
         directoryPath,
         activePath: options.activePath ?? null,
+        includeModifiedTime: options.includeModifiedTime === true,
       })
       return {
         ok: true,
@@ -58,12 +60,24 @@ function createDirectoryWatchServiceStub(windowId) {
       windowBindingMap.delete(String(nextWindowId))
     }),
     getWindowDirectoryBinding: vi.fn((nextWindowId) => {
+      const binding = windowBindingMap.get(String(nextWindowId)) || null
+      if (!binding) {
+        return null
+      }
+
+      return {
+        directoryPath: binding.directoryPath,
+        activePath: binding.activePath,
+      }
+    }),
+    getWindowDirectoryReadContext: vi.fn((nextWindowId) => {
       return windowBindingMap.get(String(nextWindowId)) || null
     }),
-    seedWindowBinding(directoryPath, activePath = null) {
+    seedWindowBinding(directoryPath, activePath = null, includeModifiedTime = false) {
       windowBindingMap.set(String(windowId), {
         directoryPath,
         activePath,
+        includeModifiedTime,
       })
     },
   }
@@ -167,6 +181,7 @@ describe('documentFileManagerService', () => {
     }))
     expect(boundContext.directoryWatchService.ensureWindowDirectory).toHaveBeenCalledWith(9, fileDirectory, {
       activePath: filePath,
+      includeModifiedTime: false,
     })
 
     const draftContext = await createServiceContext({
@@ -220,6 +235,7 @@ describe('documentFileManagerService', () => {
     expect(result.entryList.map(item => item.name)).toEqual(['keep.md'])
     expect(directoryWatchService.ensureWindowDirectory).toHaveBeenCalledWith(9, parentDirectory, {
       activePath: null,
+      includeModifiedTime: false,
     })
   })
 
@@ -247,28 +263,24 @@ describe('documentFileManagerService', () => {
         name: 'assets',
         kind: 'directory',
         extension: null,
-        modifiedTimeMs: expect.any(Number),
       },
       {
         path: path.join(directoryPath, 'notes'),
         name: 'notes',
         kind: 'directory',
         extension: null,
-        modifiedTimeMs: expect.any(Number),
       },
       {
         path: path.join(directoryPath, 'a.md'),
         name: 'a.md',
         kind: 'file',
         extension: '.md',
-        modifiedTimeMs: expect.any(Number),
       },
       {
         path: path.join(directoryPath, 'z.txt'),
         name: 'z.txt',
         kind: 'file',
         extension: '.txt',
-        modifiedTimeMs: expect.any(Number),
       },
     ])
   })
@@ -293,7 +305,10 @@ describe('documentFileManagerService', () => {
       }),
     })
 
-    const result = await service.getDirectoryState({ windowId: 9 })
+    const result = await service.getDirectoryState({
+      windowId: 9,
+      includeModifiedTime: true,
+    })
 
     expect(result.entryList).toEqual([
       expect.objectContaining({
@@ -307,6 +322,89 @@ describe('documentFileManagerService', () => {
         modifiedTimeMs: fileStat.mtimeMs,
       }),
     ])
+  })
+
+  it('默认目录扫描在未请求 modifiedTimeMs 时不得为每个条目逐项 stat', async () => {
+    const { readDirectoryStateAtPath } = await import('../documentFileManagerService.js')
+    const directoryPath = 'D:/docs'
+    const fsModule = {
+      pathExists: vi.fn(async () => true),
+      readdir: vi.fn(async () => [
+        {
+          name: 'assets',
+          isDirectory: () => true,
+        },
+        {
+          name: 'current.md',
+          isDirectory: () => false,
+        },
+      ]),
+      stat: vi.fn(async (targetPath) => {
+        if (targetPath === directoryPath) {
+          return {
+            isDirectory: () => true,
+          }
+        }
+
+        throw new Error(`unexpected stat target: ${targetPath}`)
+      }),
+    }
+
+    await expect(readDirectoryStateAtPath({
+      fsModule,
+      directoryPath,
+      activePath: path.join(directoryPath, 'current.md'),
+    })).resolves.toEqual({
+      mode: 'directory',
+      directoryPath,
+      activePath: path.join(directoryPath, 'current.md'),
+      entryList: [
+        {
+          path: path.join(directoryPath, 'assets'),
+          name: 'assets',
+          kind: 'directory',
+          extension: null,
+        },
+        {
+          path: path.join(directoryPath, 'current.md'),
+          name: 'current.md',
+          kind: 'file',
+          extension: '.md',
+        },
+      ],
+    })
+    expect(fsModule.stat).toHaveBeenCalledTimes(1)
+    expect(fsModule.stat).toHaveBeenCalledWith(directoryPath)
+  })
+
+  it('显式请求 includeModifiedTime 时，getDirectoryState 必须把该选项传给 watcher 绑定', async () => {
+    const directoryPath = await createTempDirectory()
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service, directoryWatchService } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'include-modified-time-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    const result = await service.getDirectoryState({
+      windowId: 9,
+      includeModifiedTime: true,
+    })
+
+    expect(result.entryList).toEqual([
+      expect.objectContaining({
+        name: 'current.md',
+        modifiedTimeMs: expect.any(Number),
+      }),
+    ])
+    expect(directoryWatchService.ensureWindowDirectory).toHaveBeenCalledWith(9, directoryPath, {
+      activePath: currentFilePath,
+      includeModifiedTime: true,
+    })
   })
 
   it.each(['ENOENT', 'EPERM'])('目录扫描遇到单个条目 stat %s 时应跳过该条目并继续返回其他条目', async (errorCode) => {
@@ -347,6 +445,7 @@ describe('documentFileManagerService', () => {
       fsModule,
       directoryPath,
       activePath: path.join(directoryPath, 'keep.md'),
+      includeModifiedTime: true,
     })).resolves.toEqual({
       mode: 'directory',
       directoryPath,
@@ -398,6 +497,7 @@ describe('documentFileManagerService', () => {
     await expect(readDirectoryStateAtPath({
       fsModule,
       directoryPath,
+      includeModifiedTime: true,
     })).rejects.toThrow('mock stat failed')
   })
 
@@ -674,6 +774,7 @@ describe('documentFileManagerService', () => {
 
     expect(directoryWatchService.ensureWindowDirectory).toHaveBeenCalledWith(9, nextDirectory, {
       activePath: null,
+      includeModifiedTime: false,
     })
     expect(directoryWatchService.getWindowDirectoryBinding(9)).toEqual({
       directoryPath: nextDirectory,

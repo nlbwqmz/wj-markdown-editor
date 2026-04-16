@@ -693,12 +693,14 @@ export function createDocumentEffectService({
         return await fileManagerService?.getDirectoryState({
           windowId,
           directoryPath: payload?.directoryPath || null,
+          includeModifiedTime: payload?.includeModifiedTime === true,
         })
 
       case 'file-manager.open-directory':
         return await fileManagerService?.openDirectory({
           windowId,
           directoryPath: payload?.directoryPath || null,
+          includeModifiedTime: payload?.includeModifiedTime === true,
         })
 
       case 'file-manager.create-folder':

@@ -1,6 +1,6 @@
 import { shallowMount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { nextTick, reactive } from 'vue'
 import defaultConfig from '../../../../wj-markdown-editor-electron/src/data/defaultConfig.js'
 
 import SettingView from '../SettingView.vue'
@@ -16,6 +16,8 @@ const mocked = vi.hoisted(() => ({
     editorSearchBarVisible: false,
   },
 }))
+
+mocked.store = reactive(mocked.store)
 
 vi.mock('ant-design-vue', () => ({
   message: {
@@ -195,5 +197,31 @@ describe('settingView shortcut key input', () => {
     expect(event.preventDefault).toHaveBeenCalledTimes(1)
     expect(saveShortcutKey.keymap).toBe('Ctrl+s')
     expect(mocked.messageWarn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('settingView 配置草稿同步', () => {
+  it('外部更新 fileManagerSort 后，设置页后续提交必须沿用最新排序而不是回滚旧草稿', async () => {
+    const wrapper = await mountSettingView()
+    const config = getSetupBinding(wrapper, 'config')
+
+    mocked.store.config.fileManagerSort = {
+      field: 'modifiedTime',
+      direction: 'desc',
+    }
+    await flushPendingUpdates()
+
+    config.fileManagerVisible = !config.fileManagerVisible
+    await flushPendingUpdates()
+
+    const updateConfigCallList = mocked.channelSend.mock.calls
+      .map(([payload]) => payload)
+      .filter(payload => payload?.event === 'user-update-config')
+
+    expect(updateConfigCallList).toHaveLength(1)
+    expect(updateConfigCallList[0].data.fileManagerSort).toEqual({
+      field: 'modifiedTime',
+      direction: 'desc',
+    })
   })
 })

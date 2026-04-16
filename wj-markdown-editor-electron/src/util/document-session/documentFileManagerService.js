@@ -75,9 +75,18 @@ function compareEntry(leftEntry, rightEntry) {
 }
 
 const SKIPPABLE_DIRECTORY_ENTRY_STAT_ERROR_CODE_SET = new Set(['ENOENT', 'EPERM', 'EACCES'])
+const DIRECTORY_ENTRY_STAT_BATCH_SIZE = 32
 
 function shouldSkipDirectoryEntryStatError(error) {
   return SKIPPABLE_DIRECTORY_ENTRY_STAT_ERROR_CODE_SET.has(error?.code)
+}
+
+function normalizeIncludeModifiedTime(value) {
+  return value === true
+}
+
+function isIncludeModifiedTimeOptionSpecified(value) {
+  return value === true || value === false
 }
 
 async function isExistingDirectory(fsModule, directoryPath) {
@@ -93,25 +102,38 @@ async function isExistingDirectory(fsModule, directoryPath) {
   return stat?.isDirectory?.() === true
 }
 
-async function normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry) {
+async function normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry, options = {}) {
   const entryPath = path.join(directoryPath, directoryEntry.name)
-  const stat = await fsModule.stat(entryPath)
+  let stat = null
+  const includeModifiedTime = normalizeIncludeModifiedTime(options.includeModifiedTime)
+  const getStat = async () => {
+    if (!stat) {
+      stat = await fsModule.stat(entryPath)
+    }
+    return stat
+  }
   const isDirectory = typeof directoryEntry.isDirectory === 'function'
     ? directoryEntry.isDirectory()
-    : stat.isDirectory()
+    : (await getStat()).isDirectory()
 
-  return {
+  const normalizedEntry = {
     path: entryPath,
     name: directoryEntry.name,
     kind: isDirectory ? 'directory' : 'file',
     extension: getEntryExtension(directoryEntry.name, isDirectory),
-    modifiedTimeMs: Number.isFinite(stat?.mtimeMs) ? stat.mtimeMs : 0,
   }
+
+  if (includeModifiedTime) {
+    const nextStat = await getStat()
+    normalizedEntry.modifiedTimeMs = Number.isFinite(nextStat?.mtimeMs) ? nextStat.mtimeMs : 0
+  }
+
+  return normalizedEntry
 }
 
-async function safeNormalizeDirectoryEntry(fsModule, directoryPath, directoryEntry) {
+async function safeNormalizeDirectoryEntry(fsModule, directoryPath, directoryEntry, options = {}) {
   try {
-    return await normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry)
+    return await normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry, options)
   } catch (error) {
     if (shouldSkipDirectoryEntryStatError(error)) {
       // 扫描期间条目可能已删除或暂时无权限，跳过单项以避免整次目录刷新失效。
@@ -122,10 +144,29 @@ async function safeNormalizeDirectoryEntry(fsModule, directoryPath, directoryEnt
   }
 }
 
+async function collectDirectoryEntryList(fsModule, directoryPath, rawEntryList, options = {}) {
+  const entryList = []
+
+  for (let index = 0; index < rawEntryList.length; index += DIRECTORY_ENTRY_STAT_BATCH_SIZE) {
+    const normalizedBatch = await Promise.all(rawEntryList
+      .slice(index, index + DIRECTORY_ENTRY_STAT_BATCH_SIZE)
+      .map(directoryEntry => safeNormalizeDirectoryEntry(fsModule, directoryPath, directoryEntry, options)))
+
+    normalizedBatch.forEach((normalizedEntry) => {
+      if (normalizedEntry) {
+        entryList.push(normalizedEntry)
+      }
+    })
+  }
+
+  return entryList
+}
+
 export async function readDirectoryStateAtPath({
   fsModule = fs,
   directoryPath,
   activePath = null,
+  includeModifiedTime = false,
 }) {
   if (!await isExistingDirectory(fsModule, directoryPath)) {
     return createEmptyDirectoryState()
@@ -134,14 +175,9 @@ export async function readDirectoryStateAtPath({
   const rawEntryList = await fsModule.readdir(directoryPath, {
     withFileTypes: true,
   })
-  const entryList = []
-
-  for (const directoryEntry of rawEntryList) {
-    const normalizedEntry = await safeNormalizeDirectoryEntry(fsModule, directoryPath, directoryEntry)
-    if (normalizedEntry) {
-      entryList.push(normalizedEntry)
-    }
-  }
+  const entryList = await collectDirectoryEntryList(fsModule, directoryPath, rawEntryList, {
+    includeModifiedTime,
+  })
 
   entryList.sort(compareEntry)
 
@@ -156,6 +192,7 @@ export async function readDirectoryStateAtPath({
 export async function resolveDirectoryStateFromSession({
   fsModule = fs,
   session,
+  includeModifiedTime = false,
 }) {
   const currentDocumentPath = session?.documentSource?.path || null
   if (isNonEmptyString(currentDocumentPath)) {
@@ -163,6 +200,7 @@ export async function resolveDirectoryStateFromSession({
       fsModule,
       directoryPath: path.dirname(currentDocumentPath),
       activePath: currentDocumentPath,
+      includeModifiedTime,
     })
   }
 
@@ -184,11 +222,17 @@ export async function resolveDirectoryStateFromSession({
     fsModule,
     directoryPath: parentDirectoryPath,
     activePath: null,
+    includeModifiedTime,
   })
 }
 
 function resolveWindowDirectoryBinding(directoryWatchService, windowId) {
   return directoryWatchService?.getWindowDirectoryBinding?.(windowId) || null
+}
+
+function resolveWindowDirectoryReadContext(directoryWatchService, windowId) {
+  return directoryWatchService?.getWindowDirectoryReadContext?.(windowId)
+    || resolveWindowDirectoryBinding(directoryWatchService, windowId)
 }
 
 function resolveDirectoryClearer(directoryWatchService) {
@@ -242,23 +286,28 @@ export function createDocumentFileManagerService({
     return store.getSessionByWindowId(normalizedWindowId)
   }
 
-  async function resolveWindowDirectoryState(windowId) {
-    const currentBinding = resolveWindowDirectoryBinding(directoryWatchService, windowId)
+  async function resolveWindowDirectoryState(windowId, includeModifiedTimeOverride = null) {
+    const currentBinding = resolveWindowDirectoryReadContext(directoryWatchService, windowId)
+    const includeModifiedTime = isIncludeModifiedTimeOptionSpecified(includeModifiedTimeOverride)
+      ? includeModifiedTimeOverride
+      : normalizeIncludeModifiedTime(currentBinding?.includeModifiedTime)
     if (currentBinding?.directoryPath) {
       return await readDirectoryStateAtPath({
         fsModule,
         directoryPath: currentBinding.directoryPath,
         activePath: currentBinding.activePath || null,
+        includeModifiedTime,
       })
     }
 
     return await resolveDirectoryStateFromSession({
       fsModule,
       session: getCurrentSession(windowId),
+      includeModifiedTime,
     })
   }
 
-  async function resolveExplicitDirectoryState(windowId, directoryPath) {
+  async function resolveExplicitDirectoryState(windowId, directoryPath, includeModifiedTime = false) {
     const currentSession = getCurrentSession(windowId)
     const currentDocumentPath = currentSession?.documentSource?.path || null
     const activePath = isNonEmptyString(currentDocumentPath)
@@ -270,17 +319,24 @@ export function createDocumentFileManagerService({
       fsModule,
       directoryPath,
       activePath,
+      includeModifiedTime,
     })
   }
 
   async function getDirectoryState({
     windowId,
     directoryPath = null,
+    includeModifiedTime = undefined,
   }) {
+    const hasRequestedIncludeModifiedTime = isIncludeModifiedTimeOptionSpecified(includeModifiedTime)
+    const requestedIncludeModifiedTime = normalizeIncludeModifiedTime(includeModifiedTime)
     // renderer 显式指定目录时，必须以该目录为准，不能继续沿用旧 binding。
     const directoryState = isNonEmptyString(directoryPath)
-      ? await resolveExplicitDirectoryState(windowId, directoryPath)
-      : await resolveWindowDirectoryState(windowId)
+      ? await resolveExplicitDirectoryState(windowId, directoryPath, requestedIncludeModifiedTime)
+      : await resolveWindowDirectoryState(
+          windowId,
+          hasRequestedIncludeModifiedTime ? requestedIncludeModifiedTime : null,
+        )
 
     if (!directoryState.directoryPath) {
       await clearWindowDirectory?.(windowId)
@@ -291,6 +347,11 @@ export function createDocumentFileManagerService({
     if (typeof ensureWindowDirectory === 'function') {
       const bindingResult = await ensureWindowDirectory(windowId, directoryState.directoryPath, {
         activePath: directoryState.activePath,
+        includeModifiedTime: isNonEmptyString(directoryPath)
+          ? requestedIncludeModifiedTime
+          : hasRequestedIncludeModifiedTime
+            ? requestedIncludeModifiedTime
+            : normalizeIncludeModifiedTime(resolveWindowDirectoryReadContext(directoryWatchService, windowId)?.includeModifiedTime),
       })
       if (!isDirectoryBindingMatched(bindingResult, {
         directoryPath: directoryState.directoryPath,
@@ -315,7 +376,11 @@ export function createDocumentFileManagerService({
     }
   }
 
-  async function openDirectory({ windowId, directoryPath }) {
+  async function openDirectory({
+    windowId,
+    directoryPath,
+    includeModifiedTime = false,
+  }) {
     const currentSession = getCurrentSession(windowId)
     const currentDocumentPath = currentSession?.documentSource?.path || null
     const activePath = isNonEmptyString(currentDocumentPath)
@@ -325,6 +390,7 @@ export function createDocumentFileManagerService({
 
     const bindingResult = await directoryWatchService?.rebindWindowDirectory?.(windowId, directoryPath, {
       activePath,
+      includeModifiedTime,
     })
     if (!isDirectoryBindingMatched(bindingResult, {
       directoryPath,
@@ -333,7 +399,10 @@ export function createDocumentFileManagerService({
       return createOpenDirectoryWatchFailedResult()
     }
 
-    return await getDirectoryState({ windowId })
+    return await getDirectoryState({
+      windowId,
+      includeModifiedTime,
+    })
   }
 
   async function createFolder({ windowId, name }) {
@@ -416,17 +485,23 @@ export function createDocumentFileManagerService({
     createMarkdown,
     getDirectoryState,
     openDirectory,
-    readDirectoryState: async ({ directoryPath, activePath = null }) => {
+    readDirectoryState: async ({
+      directoryPath,
+      activePath = null,
+      includeModifiedTime = false,
+    }) => {
       return await readDirectoryStateAtPath({
         fsModule,
         directoryPath,
         activePath,
+        includeModifiedTime,
       })
     },
-    resolveDirectoryStateFromSession: async (session) => {
+    resolveDirectoryStateFromSession: async (session, options = {}) => {
       return await resolveDirectoryStateFromSession({
         fsModule,
         session,
+        includeModifiedTime: options?.includeModifiedTime === true,
       })
     },
   }
