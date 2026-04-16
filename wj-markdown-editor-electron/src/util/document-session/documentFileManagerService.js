@@ -92,6 +92,27 @@ async function isExistingDirectory(fsModule, directoryPath) {
   return stat?.isDirectory?.() === true
 }
 
+async function resolveDirectoryEntryIsDirectory(directoryEntry, getStat) {
+  if (typeof directoryEntry?.isDirectory === 'function' && directoryEntry.isDirectory() === true) {
+    return true
+  }
+
+  if (typeof directoryEntry?.isFile === 'function' && directoryEntry.isFile() === true) {
+    return false
+  }
+
+  if (typeof directoryEntry?.isSymbolicLink === 'function' && directoryEntry.isSymbolicLink() === true) {
+    // symlink、junction 等条目无法通过 Dirent 直接确认目标类型时，必须回退 stat。
+    return (await getStat()).isDirectory()
+  }
+
+  if (typeof directoryEntry?.isDirectory === 'function') {
+    return false
+  }
+
+  return (await getStat()).isDirectory()
+}
+
 async function normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry, options = {}) {
   const entryPath = path.join(directoryPath, directoryEntry.name)
   let stat = null
@@ -102,9 +123,7 @@ async function normalizeDirectoryEntry(fsModule, directoryPath, directoryEntry, 
     }
     return stat
   }
-  const isDirectory = typeof directoryEntry.isDirectory === 'function'
-    ? directoryEntry.isDirectory()
-    : (await getStat()).isDirectory()
+  const isDirectory = await resolveDirectoryEntryIsDirectory(directoryEntry, getStat)
 
   const normalizedEntry = {
     path: entryPath,

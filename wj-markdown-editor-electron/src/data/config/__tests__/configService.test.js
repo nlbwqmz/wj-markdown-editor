@@ -18,6 +18,21 @@ function createUpdateRequest(...operations) {
   return { operations }
 }
 
+function createDeferred() {
+  let resolve = null
+  let reject = null
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
 function createRecentStoreStub(overrides = {}) {
   return {
     setMax: vi.fn(async () => undefined),
@@ -465,6 +480,57 @@ describe('configService', () => {
       theme: expect.objectContaining({
         global: 'dark',
       }),
+    }))
+  })
+
+  it('init 读盘未完成时收到 updateConfig，最终内存态不得被初始化旧快照回写覆盖', async () => {
+    const readDeferred = createDeferred()
+    const repository = {
+      readParsedConfig: vi.fn(async () => {
+        return await readDeferred.promise
+      }),
+      writeConfigText: vi.fn(async () => undefined),
+    }
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    const initPromise = service.init(callback)
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const updatePromise = service.updateConfig(createUpdateRequest(
+      createSetOperation(['language'], 'en-US'),
+    ))
+    const updateState = {
+      settled: false,
+    }
+    updatePromise.finally(() => {
+      updateState.settled = true
+    })
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(updateState.settled).toBe(false)
+
+    readDeferred.resolve(cloneValue(defaultConfig))
+
+    await initPromise
+    await expect(updatePromise).resolves.toEqual({
+      ok: true,
+      config: expect.objectContaining({
+        language: 'en-US',
+      }),
+    })
+
+    expect(service.getConfig()).toEqual(expect.objectContaining({
+      language: 'en-US',
+    }))
+    expect(callback).toHaveBeenCalledTimes(1)
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({
+      language: 'en-US',
     }))
   })
 })

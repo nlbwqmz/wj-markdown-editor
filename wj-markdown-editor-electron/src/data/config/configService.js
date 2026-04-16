@@ -126,46 +126,49 @@ export function createConfigService(deps) {
     async init(callback) {
       updateCallback = callback ?? null
 
-      let rawConfig = null
-      let shouldRewriteConfig = false
+      return await runConfigUpdate(async () => {
+        let rawConfig = null
+        let shouldRewriteConfig = false
 
-      try {
-        rawConfig = await repository.readParsedConfig()
-      }
-      catch {
-        // 初始化允许读失败降级，直接回退到默认配置继续启动。
-        rawConfig = cloneConfig(defaultConfig)
-        shouldRewriteConfig = true
-      }
-
-      let normalizedConfig = null
-
-      try {
-        normalizedConfig = normalizeConfigForLoad(rawConfig)
-      }
-      catch {
-        // 初始化阶段如果修复后仍不合法，继续回退到默认配置保证 service 内存态始终可用。
-        normalizedConfig = normalizeConfigForLoad(cloneConfig(defaultConfig))
-        shouldRewriteConfig = true
-      }
-
-      const repairedText = JSON.stringify(normalizedConfig)
-
-      if (!shouldRewriteConfig) {
-        // 只有修复结果与原始配置不一致时才执行规范化回写。
-        shouldRewriteConfig = JSON.stringify(rawConfig) !== repairedText
-      }
-
-      currentConfig = cloneConfig(normalizedConfig)
-
-      if (shouldRewriteConfig) {
         try {
-          await repository.writeConfigText(repairedText)
+          rawConfig = await repository.readParsedConfig()
         }
         catch {
-          // 初始化阶段允许降级到内存态继续运行，避免配置损坏时阻断启动。
+          // 初始化允许读失败降级，直接回退到默认配置继续启动。
+          rawConfig = cloneConfig(defaultConfig)
+          shouldRewriteConfig = true
         }
-      }
+
+        let normalizedConfig = null
+
+        try {
+          normalizedConfig = normalizeConfigForLoad(rawConfig)
+        }
+        catch {
+          // 初始化阶段如果修复后仍不合法，继续回退到默认配置保证 service 内存态始终可用。
+          normalizedConfig = normalizeConfigForLoad(cloneConfig(defaultConfig))
+          shouldRewriteConfig = true
+        }
+
+        const repairedText = JSON.stringify(normalizedConfig)
+
+        if (!shouldRewriteConfig) {
+          // 只有修复结果与原始配置不一致时才执行规范化回写。
+          shouldRewriteConfig = JSON.stringify(rawConfig) !== repairedText
+        }
+
+        currentConfig = cloneConfig(normalizedConfig)
+
+        if (shouldRewriteConfig) {
+          try {
+            // 初始化也必须与运行期更新串行，避免晚到的旧读结果覆盖已提交的新配置。
+            await repository.writeConfigText(repairedText)
+          }
+          catch {
+            // 初始化阶段允许降级到内存态继续运行，避免配置损坏时阻断启动。
+          }
+        }
+      })
     },
     getConfig() {
       return getCurrentConfigOrDefault()

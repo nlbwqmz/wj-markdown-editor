@@ -324,6 +324,52 @@ describe('documentFileManagerService', () => {
     ]))
   })
 
+  it('symlink 或 junction 指向目录时，未请求 modifiedTimeMs 也必须回退 stat 识别为目录', async () => {
+    const { readDirectoryStateAtPath } = await import('../documentFileManagerService.js')
+    const directoryPath = 'D:/docs'
+    const linkedDirectoryPath = path.join(directoryPath, 'linked-assets')
+    const fsModule = {
+      pathExists: vi.fn(async () => true),
+      readdir: vi.fn(async () => [
+        {
+          name: 'linked-assets',
+          isDirectory: () => false,
+          isFile: () => false,
+          isSymbolicLink: () => true,
+        },
+      ]),
+      stat: vi.fn(async (targetPath) => {
+        if (targetPath === directoryPath || targetPath === linkedDirectoryPath) {
+          return {
+            isDirectory: () => true,
+          }
+        }
+
+        throw new Error(`unexpected stat target: ${targetPath}`)
+      }),
+    }
+
+    await expect(readDirectoryStateAtPath({
+      fsModule,
+      directoryPath,
+    })).resolves.toEqual({
+      mode: 'directory',
+      directoryPath,
+      activePath: null,
+      entryList: [
+        {
+          path: linkedDirectoryPath,
+          name: 'linked-assets',
+          kind: 'directory',
+          extension: null,
+        },
+      ],
+    })
+    expect(fsModule.stat).toHaveBeenCalledTimes(2)
+    expect(fsModule.stat).toHaveBeenNthCalledWith(1, directoryPath)
+    expect(fsModule.stat).toHaveBeenNthCalledWith(2, linkedDirectoryPath)
+  })
+
   it('默认目录扫描在未请求 modifiedTimeMs 时不得为每个条目逐项 stat', async () => {
     const { readDirectoryStateAtPath } = await import('../documentFileManagerService.js')
     const directoryPath = 'D:/docs'
