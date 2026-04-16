@@ -237,6 +237,28 @@ describe('configService', () => {
     expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
   })
 
+  it('updateConfig 允许通过 mutation 请求更新 language', async () => {
+    const repository = createRepositoryStub()
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+
+    await expect(service.updateConfig({
+      operations: [
+        { type: 'set', path: ['language'], value: 'en-US' },
+      ],
+    })).resolves.toEqual({
+      ok: true,
+      config: expect.objectContaining({
+        language: 'en-US',
+      }),
+    })
+  })
+
   it('setConfig 传入局部 theme 时必须先 repair 成完整合法配置再持久化', async () => {
     const repository = createRepositoryStub()
     const callback = vi.fn()

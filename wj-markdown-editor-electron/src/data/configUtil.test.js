@@ -2,17 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const init = vi.fn()
 const getConfig = vi.fn(() => ({ language: 'zh-CN' }))
-const setConfig = vi.fn(async () => ({ ok: true }))
-const setThemeGlobal = vi.fn(async () => ({ ok: true }))
-const setLanguage = vi.fn(async () => ({ ok: true }))
+const updateConfig = vi.fn(async () => ({ ok: true }))
 
 vi.mock('./config/configService.js', () => ({
   createConfigService: vi.fn(() => ({
     init,
     getConfig,
-    setConfig,
-    setThemeGlobal,
-    setLanguage,
+    updateConfig,
   })),
 }))
 
@@ -29,7 +25,7 @@ describe('configUtil', () => {
     vi.clearAllMocks()
   })
 
-  it('必须把兼容外观方法代理到 config service', async () => {
+  it('必须只暴露 updateConfig 作为统一配置更新入口', async () => {
     const { default: configUtil } = await import('./configUtil.js')
 
     const callback = vi.fn()
@@ -40,13 +36,20 @@ describe('configUtil', () => {
     expect(configUtil.getConfig()).toEqual({ language: 'zh-CN' })
     expect(getConfig).toHaveBeenCalledTimes(1)
 
-    await configUtil.setConfig({ language: 'en-US' })
-    expect(setConfig).toHaveBeenCalledWith({ language: 'en-US' })
+    expect(configUtil.updateConfig).toBeTypeOf('function')
+    await configUtil.updateConfig({
+      operations: [
+        { type: 'set', path: ['language'], value: 'en-US' },
+      ],
+    })
+    expect(updateConfig).toHaveBeenCalledWith({
+      operations: [
+        { type: 'set', path: ['language'], value: 'en-US' },
+      ],
+    })
 
-    await configUtil.setThemeGlobal('dark')
-    expect(setThemeGlobal).toHaveBeenCalledWith('dark')
-
-    await configUtil.setLanguage('en-US')
-    expect(setLanguage).toHaveBeenCalledWith('en-US')
+    expect(configUtil.setConfig).toBeUndefined()
+    expect(configUtil.setThemeGlobal).toBeUndefined()
+    expect(configUtil.setLanguage).toBeUndefined()
   })
 })
