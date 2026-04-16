@@ -1445,14 +1445,23 @@ describe('fileManagerPanelController', () => {
     await flushFileManagerPanel()
 
     expect(fileManagerPanelState.channelSend).toHaveBeenCalledWith({
-      event: 'user-update-config',
-      data: expect.objectContaining({
-        fileManagerSort: {
-          field: 'modifiedTime',
-          direction: 'desc',
-        },
-      }),
+      event: 'config.update',
+      data: {
+        operations: [
+          {
+            type: 'set',
+            path: ['fileManagerSort', 'field'],
+            value: 'modifiedTime',
+          },
+          {
+            type: 'set',
+            path: ['fileManagerSort', 'direction'],
+            value: 'desc',
+          },
+        ],
+      },
     })
+    expect(fileManagerPanelState.channelSend.mock.calls.some(([payload]) => payload?.event === 'user-update-config')).toBe(false)
     expect(fileManagerPanelState.store.config.fileManagerSort).toEqual({
       field: 'modifiedTime',
       direction: 'desc',

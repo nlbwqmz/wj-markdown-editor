@@ -12,6 +12,8 @@ vi.mock('../fileManagerEntryMetaUtil.js', async () => {
   }
 })
 
+const fileManagerPanelControllerModulePromise = import('../fileManagerPanelController.js')
+
 function createStore() {
   return reactive({
     fileManagerPanelVisible: true,
@@ -64,7 +66,7 @@ describe('fileManagerPanelController', () => {
   })
 
   it('updateFileManagerSortConfig 成功后应只重排一次当前目录缓存，不能额外重复重排', async () => {
-    const { createFileManagerPanelController } = await import('../fileManagerPanelController.js')
+    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const requestDirectoryState = vi.fn().mockResolvedValue({
       directoryPath: 'D:/docs',
       entryList: [
@@ -114,10 +116,10 @@ describe('fileManagerPanelController', () => {
     })
 
     scope.stop()
-  })
+  }, 10000)
 
-  it('updateFileManagerSortConfig 提交 IPC 时必须只发送 fileManagerSort patch，避免旧配置覆盖其他字段', async () => {
-    const { createFileManagerPanelController } = await import('../fileManagerPanelController.js')
+  it('updateFileManagerSortConfig 提交 IPC 时必须发送 fileManagerSort batch mutation，避免旧事件与整块 patch', async () => {
+    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const requestDirectoryState = vi.fn().mockResolvedValue({
       directoryPath: 'D:/docs',
       entryList: [
@@ -161,14 +163,23 @@ describe('fileManagerPanelController', () => {
     })
 
     expect(sendCommand).toHaveBeenCalledWith({
-      event: 'user-update-config',
+      event: 'config.update',
       data: {
-        fileManagerSort: {
-          field: 'name',
-          direction: 'desc',
-        },
+        operations: [
+          {
+            type: 'set',
+            path: ['fileManagerSort', 'field'],
+            value: 'name',
+          },
+          {
+            type: 'set',
+            path: ['fileManagerSort', 'direction'],
+            value: 'desc',
+          },
+        ],
       },
     })
+    expect(sendCommand.mock.calls.some(([payload]) => payload?.event === 'user-update-config')).toBe(false)
     expect(store.config.theme).toEqual({
       global: 'light',
     })
@@ -177,7 +188,7 @@ describe('fileManagerPanelController', () => {
   })
 
   it('modifiedTime 排序与非时间排序之间切换时，应复用当前缓存并轻量同步目录读取选项', async () => {
-    const { createFileManagerPanelController } = await import('../fileManagerPanelController.js')
+    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const requestDirectoryState = vi.fn().mockResolvedValue({
       directoryPath: 'D:/docs',
       entryList: [
@@ -244,7 +255,7 @@ describe('fileManagerPanelController', () => {
 
   it('快速切回 modifiedTime 排序时，未返回的旧同步不能阻止补发最新读取选项', async () => {
     const { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } = await import('../fileManagerEventUtil.js')
-    const { createFileManagerPanelController } = await import('../fileManagerPanelController.js')
+    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const disableModifiedTimeRequest = createDeferred()
     const enableModifiedTimeRequest = createDeferred()
     const requestDirectoryState = vi.fn().mockResolvedValue({
@@ -342,7 +353,7 @@ describe('fileManagerPanelController', () => {
 
   it('切到 modifiedTime 排序后的补发请求，不能被缺少 modifiedTimeMs 的目录事件永久作废', async () => {
     const { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } = await import('../fileManagerEventUtil.js')
-    const { createFileManagerPanelController } = await import('../fileManagerPanelController.js')
+    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const staleModifiedTimeReload = createDeferred()
     const latestModifiedTimeReload = createDeferred()
     const requestDirectoryState = vi.fn()

@@ -102,8 +102,11 @@ const MenuStub = {
 
 const MenuItemStub = {
   name: 'AMenuItemStub',
-  setup(_props, { slots }) {
-    return () => h('div', { 'data-testid': 'menu-item-stub' }, slots.default?.())
+  setup(_props, { attrs, slots }) {
+    return () => h('div', {
+      ...attrs,
+      'data-testid': 'menu-item-stub',
+    }, slots.default?.())
   },
 }
 
@@ -212,5 +215,51 @@ describe('layoutTop full screen control', () => {
 
     expect(mocked.getShortcutHandler).toHaveBeenCalledWith('switchView', true)
     expect(mocked.switchViewHandler).toHaveBeenCalledTimes(1)
+  })
+
+  it('切换主题时必须通过 config.update 提交 theme.global mutation', async () => {
+    const wrapper = mountLayoutTop()
+    mocked.channelSend.mockClear()
+
+    await wrapper.get('[data-tooltip-title="top.switchTheme"] > div').trigger('click')
+
+    expect(mocked.channelSend).toHaveBeenCalledWith({
+      event: 'config.update',
+      data: {
+        operations: [
+          {
+            type: 'set',
+            path: ['theme', 'global'],
+            value: 'dark',
+          },
+        ],
+      },
+    })
+    expect(mocked.channelSend.mock.calls.some(([payload]) => payload?.event === 'user-update-theme-global')).toBe(false)
+  })
+
+  it('切换语言时必须通过 config.update 提交 language mutation', async () => {
+    const wrapper = mountLayoutTop()
+    mocked.channelSend.mockClear()
+
+    const englishMenuItem = wrapper.findAll('[data-testid="menu-item-stub"]')
+      .find(item => item.text().includes('English'))
+    expect(englishMenuItem).toBeTruthy()
+
+    await englishMenuItem.trigger('click')
+
+    expect(mocked.channelSend).toHaveBeenCalledWith({
+      event: 'config.update',
+      data: {
+        operations: [
+          {
+            type: 'set',
+            path: ['language'],
+            value: 'en-US',
+          },
+        ],
+      },
+    })
+    expect(mocked.channelSend.mock.calls.some(([payload]) => payload?.event === 'user-update-language')).toBe(false)
   })
 })

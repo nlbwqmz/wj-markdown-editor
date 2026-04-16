@@ -5,6 +5,10 @@ import { useI18n } from 'vue-i18n'
 import log from '@/assets/img/logo.png'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import {
+  createSetConfigPathRequest,
+  sendConfigMutationRequest,
+} from '@/util/config/configMutationCommandUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { createLayoutTopOpenFolderAction } from './layoutTopOpenFolderAction.js'
@@ -51,7 +55,9 @@ function alwaysOnTop(flag) {
 
 async function switchThemes() {
   try {
-    const result = await channelUtil.send({ event: 'user-update-theme-global', data: theme.value === 'light' ? 'dark' : 'light' })
+    const result = await sendConfigMutationRequest(
+      createSetConfigPathRequest(['theme', 'global'], theme.value === 'light' ? 'dark' : 'light'),
+    )
     const messageKey = getConfigUpdateFailureMessageKey(result)
     if (messageKey) {
       message.warning(t(messageKey))
@@ -66,7 +72,9 @@ const language = computed(() => store.config.language)
 
 async function switchLanguage(lang) {
   try {
-    const result = await channelUtil.send({ event: 'user-update-language', data: lang })
+    const result = await sendConfigMutationRequest(
+      createSetConfigPathRequest(['language'], lang),
+    )
     const messageKey = getConfigUpdateFailureMessageKey(result)
     if (messageKey) {
       message.warning(t(messageKey))

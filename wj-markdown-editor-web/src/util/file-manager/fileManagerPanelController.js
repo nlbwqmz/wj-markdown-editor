@@ -2,6 +2,7 @@ import { Input, message, Modal } from 'ant-design-vue'
 import { computed, createVNode, onScopeDispose, ref, watch } from 'vue'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
+import { createBatchSetConfigPathRequest } from '@/util/config/configMutationCommandUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { requestDocumentOpenPathByInteraction } from '@/util/document-session/documentOpenInteractionService.js'
 import { resolveFileManagerEntryType, sortFileManagerEntryList } from './fileManagerEntryMetaUtil.js'
@@ -590,8 +591,11 @@ export function createFileManagerPanelController({
 
     try {
       const result = await sendCommand({
-        event: 'user-update-config',
-        data: nextConfigPatch,
+        event: 'config.update',
+        data: createBatchSetConfigPathRequest([
+          { path: ['fileManagerSort', 'field'], value: normalizedSortConfig.field },
+          { path: ['fileManagerSort', 'direction'], value: normalizedSortConfig.direction },
+        ]),
       })
       const failureMessageKey = getConfigUpdateFailureMessageKey(result)
       if (failureMessageKey) {
