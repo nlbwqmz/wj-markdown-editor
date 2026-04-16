@@ -3,7 +3,6 @@ import { computed, createVNode, onScopeDispose, ref, watch } from 'vue'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
-import { cloneConfigDraft } from '@/util/config/settingConfigDraftUtil.js'
 import { requestDocumentOpenPathByInteraction } from '@/util/document-session/documentOpenInteractionService.js'
 import { resolveFileManagerEntryType, sortFileManagerEntryList } from './fileManagerEntryMetaUtil.js'
 import { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } from './fileManagerEventUtil.js'
@@ -14,6 +13,7 @@ import {
   requestFileManagerDirectoryState,
   requestFileManagerOpenDirectory,
   requestFileManagerPickDirectory,
+  requestFileManagerSyncCurrentDirectoryOptions,
 } from './fileManagerPanelCommandUtil.js'
 
 const DRAFT_EMPTY_MESSAGE_KEY = 'message.fileManagerSelectDirectory'
@@ -369,6 +369,7 @@ export function createFileManagerPanelController({
   requestOpenDirectory = requestFileManagerOpenDirectory,
   requestCreateFolder = requestFileManagerCreateFolder,
   requestCreateMarkdown = requestFileManagerCreateMarkdown,
+  requestSyncCurrentDirectoryOptions = requestFileManagerSyncCurrentDirectoryOptions,
   requestPickDirectory = requestFileManagerPickDirectory,
   requestDocumentOpenPathByInteraction: requestOpenDocumentPath = requestDocumentOpenPathByInteraction,
   openNameInputModal = createDefaultOpenNameInputModal({ t }),
@@ -382,6 +383,10 @@ export function createFileManagerPanelController({
   let latestDirectoryStateSource = null
   let latestDirectoryStateEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY
   let latestDirectoryStateIncludeModifiedTime = shouldIncludeModifiedTime(store?.config?.fileManagerSort)
+  let latestDirectoryBindingIncludeModifiedTime = shouldIncludeModifiedTime(store?.config?.fileManagerSort)
+  // 目录 watcher 选项同步是异步的，这里单独记录“当前希望生效”的目标值，避免快切排序时被旧响应回滚。
+  let latestDirectoryBindingTargetIncludeModifiedTime = shouldIncludeModifiedTime(store?.config?.fileManagerSort)
+  let latestDirectoryBindingRequestId = 0
   const directoryPath = computed(() => directoryState.value.directoryPath)
   const entryList = computed(() => directoryState.value.entryList)
   const emptyMessageKey = computed(() => directoryState.value.emptyMessageKey)
@@ -429,6 +434,8 @@ export function createFileManagerPanelController({
     latestDirectoryStateEmptyMessageKey = options.emptyMessageKey || emptyMessageKey.value || DIRECTORY_EMPTY_MESSAGE_KEY
     if (Object.prototype.hasOwnProperty.call(options, 'includeModifiedTime')) {
       latestDirectoryStateIncludeModifiedTime = options.includeModifiedTime === true
+      latestDirectoryBindingIncludeModifiedTime = options.includeModifiedTime === true
+      latestDirectoryBindingTargetIncludeModifiedTime = options.includeModifiedTime === true
     }
     directoryState.value = normalizeDirectoryState(
       nextState,
@@ -445,7 +452,9 @@ export function createFileManagerPanelController({
     latestDirectoryStateEmptyMessageKey = emptyMessageKey === undefined
       ? DRAFT_EMPTY_MESSAGE_KEY
       : emptyMessageKey
-    latestDirectoryStateIncludeModifiedTime = shouldIncludeModifiedTime(store?.config?.fileManagerSort)
+    latestDirectoryStateIncludeModifiedTime = false
+    latestDirectoryBindingIncludeModifiedTime = false
+    latestDirectoryBindingTargetIncludeModifiedTime = false
     directoryState.value = createEmptyDirectoryState(emptyMessageKey)
     return directoryState.value
   }
@@ -498,18 +507,72 @@ export function createFileManagerPanelController({
     })
   }
 
+  async function syncCurrentDirectoryOptions(includeModifiedTime) {
+    if (!directoryPath.value) {
+      return {
+        ok: true,
+        synced: false,
+        reason: 'noop-current-directory-options',
+      }
+    }
+
+    const nextIncludeModifiedTime = includeModifiedTime === true
+    latestDirectoryBindingTargetIncludeModifiedTime = nextIncludeModifiedTime
+    latestDirectoryBindingRequestId += 1
+    const requestId = latestDirectoryBindingRequestId
+
+    try {
+      const result = await requestSyncCurrentDirectoryOptions({
+        includeModifiedTime: nextIncludeModifiedTime,
+      })
+      if (requestId !== latestDirectoryBindingRequestId) {
+        return {
+          ok: true,
+          synced: false,
+          reason: 'stale-current-directory-options',
+          includeModifiedTime: latestDirectoryBindingTargetIncludeModifiedTime,
+        }
+      }
+
+      const failureResult = resolveDirectoryFailureResult(result)
+      if (failureResult) {
+        return failureResult
+      }
+
+      if (result?.synced !== false) {
+        latestDirectoryBindingIncludeModifiedTime = result?.includeModifiedTime === true
+        latestDirectoryBindingTargetIncludeModifiedTime = latestDirectoryBindingIncludeModifiedTime
+      }
+
+      return result
+    } catch {
+      if (requestId !== latestDirectoryBindingRequestId) {
+        return {
+          ok: true,
+          synced: false,
+          reason: 'stale-current-directory-options',
+          includeModifiedTime: latestDirectoryBindingTargetIncludeModifiedTime,
+        }
+      }
+
+      showWarningMessage('message.fileManagerOpenDirectoryFailed')
+      return {
+        ok: false,
+        reason: 'open-directory-watch-failed',
+      }
+    }
+  }
+
   async function updateFileManagerSortConfig(nextSortConfig) {
     const normalizedSortConfig = normalizeFileManagerSortConfig(nextSortConfig)
-    const currentConfig = typeof store?.config === 'object' && store.config
-      ? store.config
-      : {}
-    const nextConfig = cloneConfigDraft(currentConfig)
-    nextConfig.fileManagerSort = normalizedSortConfig
+    const nextConfigPatch = {
+      fileManagerSort: normalizedSortConfig,
+    }
 
     try {
       const result = await sendCommand({
         event: 'user-update-config',
-        data: nextConfig,
+        data: nextConfigPatch,
       })
       const failureMessageKey = getConfigUpdateFailureMessageKey(result)
       if (failureMessageKey) {
@@ -517,7 +580,11 @@ export function createFileManagerPanelController({
         return result
       }
 
-      store.config = nextConfig
+      if (typeof store?.config === 'object' && store.config) {
+        store.config.fileManagerSort = normalizedSortConfig
+      } else if (store) {
+        store.config = nextConfigPatch
+      }
       return result
     } catch {
       showWarningMessage('message.configWriteFailed')
@@ -702,7 +769,7 @@ export function createFileManagerPanelController({
       if (result) {
         commitDirectoryState(result?.directoryState || result, {
           emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-          includeModifiedTime: latestDirectoryStateIncludeModifiedTime,
+          includeModifiedTime: latestDirectoryBindingIncludeModifiedTime,
         })
       }
 
@@ -739,7 +806,7 @@ export function createFileManagerPanelController({
       if (result?.directoryState) {
         commitDirectoryState(result.directoryState, {
           emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-          includeModifiedTime: latestDirectoryStateIncludeModifiedTime,
+          includeModifiedTime: latestDirectoryBindingIncludeModifiedTime,
         })
       }
 
@@ -806,36 +873,34 @@ export function createFileManagerPanelController({
   watch([
     () => store?.config?.fileManagerSort?.field,
     () => store?.config?.fileManagerSort?.direction,
-  ], async ([field, direction], [previousField, previousDirection]) => {
+  ], async ([field, direction]) => {
+    const nextIncludeModifiedTime = shouldIncludeModifiedTime({
+      field,
+      direction,
+    })
+
+    if (directoryState.value.directoryPath
+      && nextIncludeModifiedTime
+      && latestDirectoryStateIncludeModifiedTime !== true) {
+      await reloadCurrentDirectoryState(true)
+      return
+    }
+
     recomputeDirectoryStateFromLatestSource()
 
     if (!directoryState.value.directoryPath) {
       return
     }
 
-    const nextIncludeModifiedTime = shouldIncludeModifiedTime({
-      field,
-      direction,
-    })
-    const previousIncludeModifiedTime = shouldIncludeModifiedTime({
-      field: previousField,
-      direction: previousDirection,
-    })
-
-    if (nextIncludeModifiedTime !== previousIncludeModifiedTime) {
-      await reloadCurrentDirectoryState(nextIncludeModifiedTime)
-      return
-    }
-
-    if (nextIncludeModifiedTime && latestDirectoryStateIncludeModifiedTime !== true) {
-      await reloadCurrentDirectoryState(true)
+    if (latestDirectoryBindingTargetIncludeModifiedTime !== nextIncludeModifiedTime) {
+      await syncCurrentDirectoryOptions(nextIncludeModifiedTime)
     }
   })
 
   const handleDirectoryChanged = (payload) => {
     applyDirectoryState(payload, {
       emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-      includeModifiedTime: latestDirectoryStateIncludeModifiedTime,
+      includeModifiedTime: latestDirectoryBindingIncludeModifiedTime,
     })
   }
 

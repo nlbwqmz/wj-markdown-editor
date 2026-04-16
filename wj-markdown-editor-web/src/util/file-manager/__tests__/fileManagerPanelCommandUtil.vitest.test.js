@@ -32,12 +32,14 @@ describe('fileManagerPanelCommandUtil', () => {
       requestFileManagerCreateMarkdown,
       requestFileManagerDirectoryState,
       requestFileManagerOpenDirectory,
+      requestFileManagerSyncCurrentDirectoryOptions,
     } = await import('../fileManagerPanelCommandUtil.js')
 
     await requestFileManagerDirectoryState({ directoryPath: 'D:/docs' })
     await requestFileManagerOpenDirectory({ directoryPath: 'D:/docs' })
     await requestFileManagerCreateFolder({ name: 'assets' })
     await requestFileManagerCreateMarkdown({ name: 'draft.md' })
+    await requestFileManagerSyncCurrentDirectoryOptions({ includeModifiedTime: false })
 
     expect(mocked.channelSend.mock.calls.map(([payload]) => payload)).toEqual([
       {
@@ -62,6 +64,12 @@ describe('fileManagerPanelCommandUtil', () => {
         event: 'file-manager.create-markdown',
         data: {
           name: 'draft.md',
+        },
+      },
+      {
+        event: 'file-manager.sync-current-directory-options',
+        data: {
+          includeModifiedTime: false,
         },
       },
     ])

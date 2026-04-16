@@ -28,6 +28,7 @@ const fileManagerPanelState = vi.hoisted(() => {
     requestFileManagerOpenDirectory: vi.fn(),
     requestFileManagerCreateFolder: vi.fn(),
     requestFileManagerCreateMarkdown: vi.fn(),
+    requestFileManagerSyncCurrentDirectoryOptions: vi.fn(),
     requestFileManagerPickDirectory: vi.fn(),
     openDecisionOpenDocument: vi.fn(),
     channelSend: vi.fn(),
@@ -270,6 +271,7 @@ vi.mock('@/util/file-manager/fileManagerPanelCommandUtil.js', () => ({
   requestFileManagerOpenDirectory: fileManagerPanelState.requestFileManagerOpenDirectory,
   requestFileManagerCreateFolder: fileManagerPanelState.requestFileManagerCreateFolder,
   requestFileManagerCreateMarkdown: fileManagerPanelState.requestFileManagerCreateMarkdown,
+  requestFileManagerSyncCurrentDirectoryOptions: fileManagerPanelState.requestFileManagerSyncCurrentDirectoryOptions,
   requestFileManagerPickDirectory: fileManagerPanelState.requestFileManagerPickDirectory,
 }))
 
@@ -306,11 +308,16 @@ describe('fileManagerPanel 组件', () => {
     fileManagerPanelState.requestFileManagerOpenDirectory.mockReset()
     fileManagerPanelState.requestFileManagerCreateFolder.mockReset()
     fileManagerPanelState.requestFileManagerCreateMarkdown.mockReset()
+    fileManagerPanelState.requestFileManagerSyncCurrentDirectoryOptions.mockReset()
     fileManagerPanelState.requestFileManagerPickDirectory.mockReset()
     fileManagerPanelState.openDecisionOpenDocument.mockReset()
     fileManagerPanelState.channelSend.mockReset()
     fileManagerPanelState.channelSend.mockResolvedValue({
       ok: true,
+    })
+    fileManagerPanelState.requestFileManagerSyncCurrentDirectoryOptions.mockResolvedValue({
+      ok: true,
+      synced: true,
     })
     fileManagerPanelState.modalConfirm.mockReset()
     fileManagerPanelState.messageWarning.mockReset()
@@ -1272,6 +1279,64 @@ describe('fileManagerPanelController', () => {
     ])
 
     scope.stop()
+  })
+
+  it('切换到 modifiedTime 排序且当前缓存缺少修改时间时，请求返回前应保留上一版列表顺序，不能先闪到名称排序', async () => {
+    const deferredDirectoryState = createDeferred()
+    fileManagerPanelState.requestFileManagerDirectoryState
+      .mockResolvedValueOnce(createDirectoryState({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'voice.mp3', path: 'D:/docs/voice.mp3', kind: 'file' },
+          { name: 'cover.png', path: 'D:/docs/cover.png', kind: 'file' },
+          { name: 'current.md', path: 'D:/docs/current.md', kind: 'file' },
+        ],
+      }))
+      .mockImplementationOnce(() => deferredDirectoryState.promise)
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toEqual([
+      'current.md',
+      'cover.png',
+      'voice.mp3',
+    ])
+
+    fileManagerPanelState.store.config.fileManagerSort = {
+      field: 'modifiedTime',
+      direction: 'desc',
+    }
+    await Promise.resolve()
+    await nextTick()
+
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(2)
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenNthCalledWith(2, {
+      directoryPath: 'D:/docs',
+      includeModifiedTime: true,
+    })
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toEqual([
+      'current.md',
+      'cover.png',
+      'voice.mp3',
+    ])
+
+    deferredDirectoryState.resolve(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'voice.mp3', path: 'D:/docs/voice.mp3', kind: 'file', modifiedTimeMs: 50 },
+        { name: 'cover.png', path: 'D:/docs/cover.png', kind: 'file', modifiedTimeMs: 30 },
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'file', modifiedTimeMs: 10 },
+      ],
+    }))
+    await flushFileManagerPanel()
+
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toEqual([
+      'voice.mp3',
+      'cover.png',
+      'current.md',
+    ])
   })
 
   it('执行 modifiedTime desc 排序菜单动作后，应立即重排当前列表并写入配置', async () => {

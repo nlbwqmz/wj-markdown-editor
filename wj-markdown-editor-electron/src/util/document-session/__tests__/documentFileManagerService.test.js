@@ -239,10 +239,10 @@ describe('documentFileManagerService', () => {
     })
   })
 
-  it('目录列表应保持目录在前、文件在后、同类按名称排序', async () => {
+  it('目录列表应保留文件系统返回的原始顺序，并只补齐路径、类型和扩展名元数据', async () => {
     const directoryPath = await createTempDirectory()
-    await fs.ensureDir(path.join(directoryPath, 'notes'))
     await fs.ensureDir(path.join(directoryPath, 'assets'))
+    await fs.ensureDir(path.join(directoryPath, 'notes'))
     await fs.writeFile(path.join(directoryPath, 'a.md'), '# a', 'utf8')
     await fs.writeFile(path.join(directoryPath, 'z.txt'), 'z', 'utf8')
 
@@ -256,8 +256,8 @@ describe('documentFileManagerService', () => {
 
     const result = await service.getDirectoryState({ windowId: 9 })
 
-    expect(result.entryList.map(item => item.name)).toEqual(['assets', 'notes', 'a.md', 'z.txt'])
-    expect(result.entryList).toEqual([
+    expect(result.entryList.map(item => item.name).sort()).toEqual(['a.md', 'assets', 'notes', 'z.txt'])
+    expect(result.entryList).toEqual(expect.arrayContaining([
       {
         path: path.join(directoryPath, 'assets'),
         name: 'assets',
@@ -282,10 +282,10 @@ describe('documentFileManagerService', () => {
         kind: 'file',
         extension: '.txt',
       },
-    ])
+    ]))
   })
 
-  it('目录项应返回 modifiedTimeMs，且保持目录在前文件在后', async () => {
+  it('目录项应返回 modifiedTimeMs，且不改变文件系统原始顺序', async () => {
     const directoryPath = await createTempDirectory()
     const currentFilePath = path.join(directoryPath, 'current.md')
     const nestedDirectoryPath = path.join(directoryPath, 'assets')
@@ -310,7 +310,7 @@ describe('documentFileManagerService', () => {
       includeModifiedTime: true,
     })
 
-    expect(result.entryList).toEqual([
+    expect(result.entryList).toEqual(expect.arrayContaining([
       expect.objectContaining({
         name: 'assets',
         kind: 'directory',
@@ -321,7 +321,7 @@ describe('documentFileManagerService', () => {
         kind: 'file',
         modifiedTimeMs: fileStat.mtimeMs,
       }),
-    ])
+    ]))
   })
 
   it('默认目录扫描在未请求 modifiedTimeMs 时不得为每个条目逐项 stat', async () => {
@@ -377,6 +377,48 @@ describe('documentFileManagerService', () => {
     expect(fsModule.stat).toHaveBeenCalledWith(directoryPath)
   })
 
+  it('目录扫描结果必须保留 readdir 原始顺序，不能在主进程额外套用名称排序或目录优先排序', async () => {
+    const { readDirectoryStateAtPath } = await import('../documentFileManagerService.js')
+    const directoryPath = 'D:/docs'
+    const fsModule = {
+      pathExists: vi.fn(async () => true),
+      readdir: vi.fn(async () => [
+        {
+          name: 'z-last.md',
+          isDirectory: () => false,
+        },
+        {
+          name: 'assets',
+          isDirectory: () => true,
+        },
+        {
+          name: 'a-first.md',
+          isDirectory: () => false,
+        },
+      ]),
+      stat: vi.fn(async (targetPath) => {
+        if (targetPath === directoryPath) {
+          return {
+            isDirectory: () => true,
+          }
+        }
+
+        throw new Error(`unexpected stat target: ${targetPath}`)
+      }),
+    }
+
+    const result = await readDirectoryStateAtPath({
+      fsModule,
+      directoryPath,
+    })
+
+    expect(result.entryList.map(item => item.name)).toEqual([
+      'z-last.md',
+      'assets',
+      'a-first.md',
+    ])
+  })
+
   it('显式请求 includeModifiedTime 时，getDirectoryState 必须把该选项传给 watcher 绑定', async () => {
     const directoryPath = await createTempDirectory()
     const currentFilePath = path.join(directoryPath, 'current.md')
@@ -404,6 +446,47 @@ describe('documentFileManagerService', () => {
     expect(directoryWatchService.ensureWindowDirectory).toHaveBeenCalledWith(9, directoryPath, {
       activePath: currentFilePath,
       includeModifiedTime: true,
+    })
+  })
+
+  it('syncCurrentDirectoryOptions 必须在不重扫目录的情况下更新当前 binding 的 includeModifiedTime', async () => {
+    const directoryPath = await createTempDirectory()
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service, directoryWatchService } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'sync-directory-options-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    await service.getDirectoryState({
+      windowId: 9,
+      includeModifiedTime: true,
+    })
+    directoryWatchService.ensureWindowDirectory.mockClear()
+
+    await expect(service.syncCurrentDirectoryOptions({
+      windowId: 9,
+      includeModifiedTime: false,
+    })).resolves.toEqual({
+      ok: true,
+      synced: true,
+      directoryPath,
+      activePath: currentFilePath,
+      includeModifiedTime: false,
+    })
+
+    expect(directoryWatchService.ensureWindowDirectory).toHaveBeenCalledWith(9, directoryPath, {
+      activePath: currentFilePath,
+      includeModifiedTime: false,
+    })
+    expect(directoryWatchService.getWindowDirectoryReadContext(9)).toEqual({
+      directoryPath,
+      activePath: currentFilePath,
+      includeModifiedTime: false,
     })
   })
 
@@ -452,18 +535,18 @@ describe('documentFileManagerService', () => {
       activePath: path.join(directoryPath, 'keep.md'),
       entryList: [
         {
-          path: path.join(directoryPath, 'assets'),
-          name: 'assets',
-          kind: 'directory',
-          extension: null,
-          modifiedTimeMs: 10,
-        },
-        {
           path: path.join(directoryPath, 'keep.md'),
           name: 'keep.md',
           kind: 'file',
           extension: '.md',
           modifiedTimeMs: 20,
+        },
+        {
+          path: path.join(directoryPath, 'assets'),
+          name: 'assets',
+          kind: 'directory',
+          extension: null,
+          modifiedTimeMs: 10,
         },
       ],
     })
@@ -520,7 +603,7 @@ describe('documentFileManagerService', () => {
     })
 
     expect(await fs.pathExists(path.join(directoryPath, 'assets'))).toBe(true)
-    expect(result.entryList.map(item => item.name)).toEqual(['assets', 'current.md'])
+    expect(result.entryList.map(item => item.name).sort()).toEqual(['assets', 'current.md'])
   })
 
   it('createFolder 命中同名目录时，必须显式失败且不能误返回成功目录状态', async () => {
@@ -595,7 +678,7 @@ describe('documentFileManagerService', () => {
 
     expect(result.path).toBe(path.join(directoryPath, 'draft-note.md'))
     expect(await fs.readFile(result.path, 'utf8')).toBe('')
-    expect(result.directoryState.entryList.map(item => item.name)).toEqual(['current.md', 'draft-note.md'])
+    expect(result.directoryState.entryList.map(item => item.name).sort()).toEqual(['current.md', 'draft-note.md'])
   })
 
   it('createMarkdown 命中已存在文件时，必须显式失败且不能覆盖原文件内容', async () => {
@@ -645,7 +728,7 @@ describe('documentFileManagerService', () => {
 
     expect(result.path).toBe(path.join(directoryPath, 'draft-note.markdown'))
     expect(await fs.readFile(result.path, 'utf8')).toBe('')
-    expect(result.directoryState.entryList.map(item => item.name)).toEqual(['current.md', 'draft-note.markdown'])
+    expect(result.directoryState.entryList.map(item => item.name).sort()).toEqual(['current.md', 'draft-note.markdown'])
   })
 
   it.each([

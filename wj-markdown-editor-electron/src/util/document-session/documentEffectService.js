@@ -703,6 +703,12 @@ export function createDocumentEffectService({
           includeModifiedTime: payload?.includeModifiedTime === true,
         })
 
+      case 'file-manager.sync-current-directory-options':
+        return await fileManagerService?.syncCurrentDirectoryOptions({
+          windowId,
+          includeModifiedTime: payload?.includeModifiedTime === true,
+        })
+
       case 'file-manager.create-folder':
         return await fileManagerService?.createFolder({
           windowId,

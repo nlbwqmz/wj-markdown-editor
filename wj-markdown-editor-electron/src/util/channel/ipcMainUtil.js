@@ -249,6 +249,9 @@ const handlerList = {
   'file-manager.open-directory': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'file-manager.open-directory', data)
   },
+  'file-manager.sync-current-directory-options': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'file-manager.sync-current-directory-options', data)
+  },
   'file-manager.create-folder': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'file-manager.create-folder', data)
   },

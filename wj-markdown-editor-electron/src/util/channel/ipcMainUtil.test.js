@@ -1553,6 +1553,21 @@ describe('ipcMainUtil command mapping', () => {
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
+  it('file-manager.sync-current-directory-options 必须把读取选项透传给统一命令流', async () => {
+    const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
+    const payload = {
+      includeModifiedTime: false,
+    }
+
+    await sendToMainHandler({ sender }, {
+      event: 'file-manager.sync-current-directory-options',
+      data: payload,
+    })
+
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'file-manager.sync-current-directory-options', payload)
+    expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
+  })
+
   it('file-manager.create-folder 必须通过统一命令入口返回刷新后的目录状态', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
     const directoryState = {

@@ -44,6 +44,16 @@ export function requestFileManagerCreateMarkdown(payload) {
 }
 
 /**
+ * 轻量同步当前目录 watcher 的读取选项，不触发额外目录重扫。
+ */
+export function requestFileManagerSyncCurrentDirectoryOptions(payload) {
+  return channelUtil.send({
+    event: 'file-manager.sync-current-directory-options',
+    data: payload,
+  })
+}
+
+/**
  * 复用已有的目录选择 IPC，让文件管理栏无需另起一套协议。
  */
 export function requestFileManagerPickDirectory() {
@@ -57,5 +67,6 @@ export default {
   requestFileManagerOpenDirectory,
   requestFileManagerCreateFolder,
   requestFileManagerCreateMarkdown,
+  requestFileManagerSyncCurrentDirectoryOptions,
   requestFileManagerPickDirectory,
 }

@@ -64,16 +64,6 @@ function getEntryExtension(entryName, isDirectory) {
   return extension ? extension.toLowerCase() : null
 }
 
-function compareEntry(leftEntry, rightEntry) {
-  if (leftEntry.kind !== rightEntry.kind) {
-    return leftEntry.kind === 'directory' ? -1 : 1
-  }
-
-  return leftEntry.name.localeCompare(rightEntry.name, 'zh-CN', {
-    sensitivity: 'base',
-  })
-}
-
 const SKIPPABLE_DIRECTORY_ENTRY_STAT_ERROR_CODE_SET = new Set(['ENOENT', 'EPERM', 'EACCES'])
 const DIRECTORY_ENTRY_STAT_BATCH_SIZE = 32
 
@@ -178,8 +168,6 @@ export async function readDirectoryStateAtPath({
   const entryList = await collectDirectoryEntryList(fsModule, directoryPath, rawEntryList, {
     includeModifiedTime,
   })
-
-  entryList.sort(compareEntry)
 
   return {
     mode: 'directory',
@@ -376,6 +364,55 @@ export function createDocumentFileManagerService({
     }
   }
 
+  async function syncCurrentDirectoryOptions({
+    windowId,
+    includeModifiedTime = false,
+  }) {
+    const currentBinding = resolveWindowDirectoryReadContext(directoryWatchService, windowId)
+    if (!currentBinding?.directoryPath) {
+      return {
+        ok: true,
+        synced: false,
+        directoryPath: null,
+        activePath: null,
+        includeModifiedTime: normalizeIncludeModifiedTime(includeModifiedTime),
+      }
+    }
+
+    const ensureWindowDirectory = directoryWatchService?.ensureWindowDirectory
+    if (typeof ensureWindowDirectory !== 'function') {
+      return {
+        ok: true,
+        synced: false,
+        directoryPath: currentBinding.directoryPath,
+        activePath: currentBinding.activePath || null,
+        includeModifiedTime: normalizeIncludeModifiedTime(currentBinding.includeModifiedTime),
+      }
+    }
+
+    const nextIncludeModifiedTime = normalizeIncludeModifiedTime(includeModifiedTime)
+    const activePath = currentBinding.activePath || null
+    const bindingResult = await ensureWindowDirectory(windowId, currentBinding.directoryPath, {
+      activePath,
+      includeModifiedTime: nextIncludeModifiedTime,
+    })
+    if (!isDirectoryBindingMatched(bindingResult, {
+      directoryPath: currentBinding.directoryPath,
+      activePath,
+    })) {
+      return createOpenDirectoryWatchFailedResult()
+    }
+
+    const nextBinding = resolveWindowDirectoryReadContext(directoryWatchService, windowId) || currentBinding
+    return {
+      ok: true,
+      synced: true,
+      directoryPath: nextBinding.directoryPath || currentBinding.directoryPath,
+      activePath: nextBinding.activePath || activePath,
+      includeModifiedTime: normalizeIncludeModifiedTime(nextBinding.includeModifiedTime),
+    }
+  }
+
   async function openDirectory({
     windowId,
     directoryPath,
@@ -485,6 +522,7 @@ export function createDocumentFileManagerService({
     createMarkdown,
     getDirectoryState,
     openDirectory,
+    syncCurrentDirectoryOptions,
     readDirectoryState: async ({
       directoryPath,
       activePath = null,
