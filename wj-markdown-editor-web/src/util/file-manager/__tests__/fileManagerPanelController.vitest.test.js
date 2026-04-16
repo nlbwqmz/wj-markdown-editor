@@ -339,4 +339,115 @@ describe('fileManagerPanelController', () => {
     await flushController()
     scope.stop()
   })
+
+  it('切到 modifiedTime 排序后的补发请求，不能被缺少 modifiedTimeMs 的目录事件永久作废', async () => {
+    const { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } = await import('../fileManagerEventUtil.js')
+    const { createFileManagerPanelController } = await import('../fileManagerPanelController.js')
+    const staleModifiedTimeReload = createDeferred()
+    const latestModifiedTimeReload = createDeferred()
+    const requestDirectoryState = vi.fn()
+      .mockResolvedValueOnce({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'older.md', path: 'D:/docs/older.md', kind: 'file' },
+          { name: 'latest.md', path: 'D:/docs/latest.md', kind: 'file' },
+        ],
+      })
+      .mockImplementationOnce(() => staleModifiedTimeReload.promise)
+      .mockImplementationOnce(() => latestModifiedTimeReload.promise)
+    const registeredHandlerMap = new Map()
+    const store = createStore()
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store,
+        t: value => value,
+        sendCommand: vi.fn(),
+        requestDirectoryState,
+        requestSyncCurrentDirectoryOptions: vi.fn(),
+        requestOpenDirectory: vi.fn(),
+        requestCreateFolder: vi.fn(),
+        requestCreateMarkdown: vi.fn(),
+        requestPickDirectory: vi.fn(),
+        requestDocumentOpenPathByInteraction: vi.fn(),
+        openNameInputModal: vi.fn(),
+        showWarningMessage: vi.fn(),
+        subscribeEvent: (eventName, handler) => {
+          registeredHandlerMap.set(eventName, handler)
+        },
+        unsubscribeEvent: vi.fn(),
+      })
+    })
+
+    await flushController()
+
+    store.config.fileManagerSort = {
+      field: 'modifiedTime',
+      direction: 'desc',
+    }
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenNthCalledWith(2, {
+      directoryPath: 'D:/docs',
+      includeModifiedTime: true,
+    })
+
+    registeredHandlerMap.get(FILE_MANAGER_DIRECTORY_CHANGED_EVENT)?.({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'latest.md', path: 'D:/docs/latest.md', kind: 'file' },
+        { name: 'older.md', path: 'D:/docs/older.md', kind: 'file' },
+      ],
+    })
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenNthCalledWith(3, {
+      directoryPath: 'D:/docs',
+      includeModifiedTime: true,
+    })
+
+    staleModifiedTimeReload.resolve({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'older.md', path: 'D:/docs/older.md', kind: 'file', modifiedTimeMs: 1 },
+        { name: 'latest.md', path: 'D:/docs/latest.md', kind: 'file', modifiedTimeMs: 2 },
+      ],
+    })
+    await flushController()
+
+    expect(controller.entryList.value).toEqual([
+      expect.objectContaining({
+        name: 'latest.md',
+        modifiedTimeMs: undefined,
+      }),
+      expect.objectContaining({
+        name: 'older.md',
+        modifiedTimeMs: undefined,
+      }),
+    ])
+
+    latestModifiedTimeReload.resolve({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'older.md', path: 'D:/docs/older.md', kind: 'file', modifiedTimeMs: 10 },
+        { name: 'latest.md', path: 'D:/docs/latest.md', kind: 'file', modifiedTimeMs: 50 },
+      ],
+    })
+    await flushController()
+
+    expect(controller.entryList.value).toEqual([
+      expect.objectContaining({
+        name: 'older.md',
+        modifiedTimeMs: 10,
+      }),
+      expect.objectContaining({
+        name: 'latest.md',
+        modifiedTimeMs: 50,
+      }),
+    ])
+
+    scope.stop()
+  })
 })

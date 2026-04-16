@@ -352,15 +352,72 @@ export function createDocumentFileManagerService({
     return directoryState
   }
 
+  function resolveCurrentDirectoryReadContextCandidate(windowId) {
+    const currentBinding = resolveWindowDirectoryReadContext(directoryWatchService, windowId)
+    if (isNonEmptyString(currentBinding?.directoryPath)) {
+      return {
+        directoryPath: currentBinding.directoryPath,
+        activePath: currentBinding.activePath || null,
+        includeModifiedTime: normalizeIncludeModifiedTime(currentBinding.includeModifiedTime),
+      }
+    }
+
+    const currentSession = getCurrentSession(windowId)
+    const currentDocumentPath = currentSession?.documentSource?.path || null
+    if (isNonEmptyString(currentDocumentPath)) {
+      return {
+        directoryPath: path.dirname(currentDocumentPath),
+        activePath: currentDocumentPath,
+        includeModifiedTime: false,
+      }
+    }
+
+    if (currentSession?.documentSource?.missingReason === 'recent-missing'
+      && isNonEmptyString(currentSession?.documentSource?.missingPath)) {
+      return {
+        directoryPath: path.dirname(currentSession.documentSource.missingPath),
+        activePath: null,
+        includeModifiedTime: false,
+      }
+    }
+
+    return null
+  }
+
   async function resolveCurrentDirectoryPath(windowId) {
-    const directoryState = await getDirectoryState({ windowId })
-    if (isFileManagerFailureResult(directoryState)) {
-      return directoryState
+    const directoryReadContext = resolveCurrentDirectoryReadContextCandidate(windowId)
+    const directoryPath = directoryReadContext?.directoryPath || null
+    if (!isNonEmptyString(directoryPath)) {
+      return {
+        ok: true,
+        directoryPath: null,
+      }
+    }
+    if (!await isExistingDirectory(fsModule, directoryPath)) {
+      await clearWindowDirectory?.(windowId)
+      return {
+        ok: true,
+        directoryPath: null,
+      }
+    }
+    const ensureWindowDirectory = directoryWatchService?.ensureWindowDirectory
+    if (typeof ensureWindowDirectory === 'function') {
+      const activePath = directoryReadContext?.activePath || null
+      const bindingResult = await ensureWindowDirectory(windowId, directoryPath, {
+        activePath,
+        includeModifiedTime: normalizeIncludeModifiedTime(directoryReadContext?.includeModifiedTime),
+      })
+      if (!isDirectoryBindingMatched(bindingResult, {
+        directoryPath,
+        activePath,
+      })) {
+        return createOpenDirectoryWatchFailedResult()
+      }
     }
 
     return {
       ok: true,
-      directoryPath: directoryState.directoryPath || null,
+      directoryPath,
     }
   }
 

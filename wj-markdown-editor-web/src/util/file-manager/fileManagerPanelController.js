@@ -205,9 +205,26 @@ function createEmptyDirectoryState(emptyMessageKey) {
   }
 }
 
+function resolveRawDirectoryState(nextState) {
+  return nextState?.directoryState || nextState
+}
+
+function resolveDirectoryStatePayloadIncludeModifiedTime(nextState) {
+  const rawDirectoryState = resolveRawDirectoryState(nextState)
+  if (!rawDirectoryState?.directoryPath) {
+    return false
+  }
+
+  const entryList = Array.isArray(rawDirectoryState?.entryList)
+    ? rawDirectoryState.entryList
+    : []
+
+  return entryList.every(entry => Number.isFinite(entry?.modifiedTimeMs))
+}
+
 function normalizeDirectoryState(nextState, snapshot, sortConfig, fallbackEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY) {
   const currentDocumentPath = normalizeComparablePath(resolveDocumentOpenCurrentPath(snapshot))
-  const rawDirectoryState = nextState?.directoryState || nextState
+  const rawDirectoryState = resolveRawDirectoryState(nextState)
   const directoryPath = normalizePath(rawDirectoryState?.directoryPath)
 
   if (!directoryPath) {
@@ -434,8 +451,10 @@ export function createFileManagerPanelController({
     latestDirectoryStateEmptyMessageKey = options.emptyMessageKey || emptyMessageKey.value || DIRECTORY_EMPTY_MESSAGE_KEY
     if (Object.prototype.hasOwnProperty.call(options, 'includeModifiedTime')) {
       latestDirectoryStateIncludeModifiedTime = options.includeModifiedTime === true
-      latestDirectoryBindingIncludeModifiedTime = options.includeModifiedTime === true
-      latestDirectoryBindingTargetIncludeModifiedTime = options.includeModifiedTime === true
+      if (options.updateBindingIncludeModifiedTime !== false) {
+        latestDirectoryBindingIncludeModifiedTime = options.includeModifiedTime === true
+        latestDirectoryBindingTargetIncludeModifiedTime = options.includeModifiedTime === true
+      }
     }
     directoryState.value = normalizeDirectoryState(
       nextState,
@@ -495,7 +514,7 @@ export function createFileManagerPanelController({
         return failureResult
       }
 
-      const rawDirectoryState = nextState?.directoryState || nextState
+      const rawDirectoryState = resolveRawDirectoryState(nextState)
       if (!rawDirectoryState?.directoryPath) {
         return commitEmptyDirectoryState(nextEmptyMessageKey)
       }
@@ -656,7 +675,7 @@ export function createFileManagerPanelController({
         return failureResult
       }
 
-      const rawDirectoryState = nextState?.directoryState || nextState
+      const rawDirectoryState = resolveRawDirectoryState(nextState)
       if (!rawDirectoryState?.directoryPath) {
         return commitEmptyDirectoryState(resolveSnapshotEmptyMessageKey(snapshot, target.emptyMessageKey))
       }
@@ -898,10 +917,18 @@ export function createFileManagerPanelController({
   })
 
   const handleDirectoryChanged = (payload) => {
+    const includeModifiedTime = resolveDirectoryStatePayloadIncludeModifiedTime(payload)
     applyDirectoryState(payload, {
       emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-      includeModifiedTime: latestDirectoryBindingIncludeModifiedTime,
+      includeModifiedTime,
+      updateBindingIncludeModifiedTime: false,
     })
+
+    if (directoryState.value.directoryPath
+      && resolveDirectoryRequestIncludeModifiedTime() === true
+      && includeModifiedTime !== true) {
+      void reloadCurrentDirectoryState(true)
+    }
   }
 
   subscribeEvent(FILE_MANAGER_DIRECTORY_CHANGED_EVENT, handleDirectoryChanged)

@@ -732,6 +732,124 @@ describe('documentFileManagerService', () => {
   })
 
   it.each([
+    {
+      actionName: 'createFolder',
+      createdName: 'assets',
+      createdEntryIsDirectory: true,
+      execute: service => service.createFolder({
+        windowId: 9,
+        name: 'assets',
+      }),
+      resolveDirectoryState: result => result,
+      resolveCreateMockName: () => 'mkdir',
+    },
+    {
+      actionName: 'createMarkdown',
+      createdName: 'draft-note.md',
+      createdEntryIsDirectory: false,
+      execute: service => service.createMarkdown({
+        windowId: 9,
+        name: 'draft-note',
+      }),
+      resolveDirectoryState: result => result.directoryState,
+      resolveCreateMockName: () => 'writeFile',
+    },
+  ])('$actionName 在时间排序 binding 下新建前不应为取当前目录路径额外扫描目录', async ({
+    createdName,
+    createdEntryIsDirectory,
+    execute,
+    resolveDirectoryState,
+    resolveCreateMockName,
+  }) => {
+    const { createDocumentFileManagerService } = await import('../documentFileManagerService.js')
+    const directoryPath = 'D:/docs'
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    const createdPath = path.join(directoryPath, createdName)
+    let entryCreated = false
+    const fsModule = {
+      pathExists: vi.fn(async (targetPath) => {
+        if (targetPath === directoryPath) {
+          return true
+        }
+
+        return targetPath === createdPath && entryCreated
+      }),
+      readdir: vi.fn(async () => [
+        {
+          name: 'current.md',
+          isDirectory: () => false,
+        },
+        ...(entryCreated
+          ? [{
+              name: createdName,
+              isDirectory: () => createdEntryIsDirectory,
+            }]
+          : []),
+      ]),
+      stat: vi.fn(async (targetPath) => {
+        if (targetPath === directoryPath) {
+          return {
+            isDirectory: () => true,
+            mtimeMs: 100,
+          }
+        }
+        if (targetPath === currentFilePath) {
+          return {
+            isDirectory: () => false,
+            mtimeMs: 10,
+          }
+        }
+        if (targetPath === createdPath) {
+          return {
+            isDirectory: () => createdEntryIsDirectory,
+            mtimeMs: 20,
+          }
+        }
+
+        throw new Error(`unexpected stat target: ${targetPath}`)
+      }),
+      mkdir: vi.fn(async (targetPath) => {
+        expect(targetPath).toBe(createdPath)
+        entryCreated = true
+      }),
+      writeFile: vi.fn(async (targetPath) => {
+        expect(targetPath).toBe(createdPath)
+        entryCreated = true
+      }),
+    }
+    const directoryWatchService = {
+      getWindowDirectoryReadContext: vi.fn(() => ({
+        directoryPath,
+        activePath: currentFilePath,
+        includeModifiedTime: true,
+      })),
+      ensureWindowDirectory: vi.fn(async () => ({
+        ok: true,
+        directoryPath,
+        activePath: currentFilePath,
+      })),
+    }
+    const service = createDocumentFileManagerService({
+      store: createDocumentSessionStore(),
+      fsModule,
+      directoryWatchService,
+    })
+
+    const result = await execute(service)
+    const createMock = fsModule[resolveCreateMockName()]
+    const statTargetList = fsModule.stat.mock.calls.map(([targetPath]) => targetPath)
+
+    expect(resolveDirectoryState(result).entryList.map(item => item.name).sort()).toEqual([
+      'current.md',
+      createdName,
+    ].sort())
+    expect(fsModule.readdir).toHaveBeenCalledTimes(1)
+    expect(fsModule.readdir.mock.invocationCallOrder[0]).toBeGreaterThan(createMock.mock.invocationCallOrder[0])
+    expect(statTargetList.filter(targetPath => targetPath === currentFilePath)).toHaveLength(1)
+    expect(statTargetList.filter(targetPath => targetPath === createdPath)).toHaveLength(1)
+  })
+
+  it.each([
     '../escape-dir',
     'nested/dir',
     'nested\\dir',
