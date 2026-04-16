@@ -132,9 +132,7 @@ vi.mock('../../../data/configUtil.js', () => {
     default: {
       getConfig: vi.fn(() => ({ autoSave: [], startPage: 'editor', theme: { global: 'light' } })),
       getDefaultConfig: vi.fn(() => ({})),
-      setConfig: vi.fn(),
-      setThemeGlobal: vi.fn(),
-      setLanguage: vi.fn(),
+      updateConfig: vi.fn(),
     },
   }
 })
