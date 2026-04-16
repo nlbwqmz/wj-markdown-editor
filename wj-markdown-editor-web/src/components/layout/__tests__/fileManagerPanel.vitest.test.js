@@ -139,15 +139,44 @@ function extractCssRuleDeclarations(css, selector) {
     }, new Map())
 }
 
-function extractVNodeText(content) {
+function extractVNodeText(content, visited = new Set()) {
   if (typeof content === 'string') {
     return content
   }
+  if (typeof content === 'number') {
+    return String(content)
+  }
   if (Array.isArray(content)) {
-    return content.map(item => extractVNodeText(item)).join('')
+    return content.map(item => extractVNodeText(item, visited)).join('')
+  }
+  if (!content || typeof content !== 'object') {
+    return ''
+  }
+  if (visited.has(content)) {
+    return ''
+  }
+  visited.add(content)
+
+  return extractVNodeText(content.children, visited)
+}
+
+function containsVNodeClass(content, expectedClass, visited = new Set()) {
+  if (Array.isArray(content)) {
+    return content.some(item => containsVNodeClass(item, expectedClass, visited))
   }
 
-  return extractVNodeText(content?.children)
+  if (!content || typeof content !== 'object') {
+    return false
+  }
+  if (visited.has(content)) {
+    return false
+  }
+  visited.add(content)
+
+  const classValue = content.props?.class ?? ''
+  const classList = Array.isArray(classValue) ? classValue.join(' ') : String(classValue)
+
+  return classList.split(/\s+/u).includes(expectedClass) || containsVNodeClass(content.children, expectedClass, visited)
 }
 
 function createDeferred() {
@@ -788,17 +817,17 @@ describe('fileManagerPanel 组件', () => {
       'translated:message.fileManagerCreateFolder',
       'translated:message.fileManagerCreateMarkdown',
     ])
-    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).map(item => item.label)).toEqual([
+    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).map(item => extractVNodeText(item.label))).toEqual([
+      'translated:message.fileManagerSortTypeAsc',
+      'translated:message.fileManagerSortTypeDesc',
       'translated:message.fileManagerSortNameAsc',
       'translated:message.fileManagerSortNameDesc',
       'translated:message.fileManagerSortModifiedTimeAsc',
       'translated:message.fileManagerSortModifiedTimeDesc',
-      'translated:message.fileManagerSortTypeAsc',
-      'translated:message.fileManagerSortTypeDesc',
     ])
   })
 
-  it('文件管理栏的新建和排序下拉应使用 click 触发，且排序下拉应透传当前选中规则', async () => {
+  it('文件管理栏的新建下拉应使用 click 触发，排序下拉应使用 hover 触发并以打勾形式标记当前规则', async () => {
     fileManagerPanelState.store.config.fileManagerSort = {
       field: 'modifiedTime',
       direction: 'desc',
@@ -817,8 +846,17 @@ describe('fileManagerPanel 组件', () => {
     const sortEntryButton = iconButtonList.find(component => component.attributes('data-testid') === 'file-manager-sort-entry')
 
     expect(createEntryButton?.props('menuTrigger')).toEqual(['click'])
-    expect(sortEntryButton?.props('menuTrigger')).toEqual(['click'])
-    expect(sortEntryButton?.props('menuSelectedKeys')).toEqual(['modifiedTime-desc'])
+    expect(sortEntryButton?.props('menuTrigger')).toEqual(['hover'])
+    expect(sortEntryButton?.props('menuSelectedKeys')).toEqual([])
+
+    const sortMenuList = resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList)
+    const selectedItem = sortMenuList.find(item => item.key === 'modifiedTime-desc')
+    const unselectedItem = sortMenuList.find(item => item.key === 'name-asc')
+
+    expect(containsVNodeClass(selectedItem.label, 'i-tabler:check')).toBe(true)
+    expect(containsVNodeClass(selectedItem.label, 'mr-1')).toBe(true)
+    expect(containsVNodeClass(unselectedItem.label, 'i-tabler:check')).toBe(false)
+    expect(containsVNodeClass(unselectedItem.label, 'mr-4')).toBe(true)
   })
 
   it('点击工具区新建菜单里的文件夹动作后，应走创建文件夹链路', async () => {
@@ -918,13 +956,13 @@ describe('fileManagerPanel 组件', () => {
       'translated:message.fileManagerCreateFolder',
       'translated:message.fileManagerCreateMarkdown',
     ])
-    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).map(item => item.label)).toEqual([
+    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).map(item => extractVNodeText(item.label))).toEqual([
+      'translated:message.fileManagerSortTypeAsc',
+      'translated:message.fileManagerSortTypeDesc',
       'translated:message.fileManagerSortNameAsc',
       'translated:message.fileManagerSortNameDesc',
       'translated:message.fileManagerSortModifiedTimeAsc',
       'translated:message.fileManagerSortModifiedTimeDesc',
-      'translated:message.fileManagerSortTypeAsc',
-      'translated:message.fileManagerSortTypeDesc',
     ])
 
     fileManagerPanelState.store.config.language = 'en-US'
@@ -934,13 +972,13 @@ describe('fileManagerPanel 组件', () => {
       'localized:message.fileManagerCreateFolder',
       'localized:message.fileManagerCreateMarkdown',
     ])
-    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).map(item => item.label)).toEqual([
+    expect(resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList).map(item => extractVNodeText(item.label))).toEqual([
+      'localized:message.fileManagerSortTypeAsc',
+      'localized:message.fileManagerSortTypeDesc',
       'localized:message.fileManagerSortNameAsc',
       'localized:message.fileManagerSortNameDesc',
       'localized:message.fileManagerSortModifiedTimeAsc',
       'localized:message.fileManagerSortModifiedTimeDesc',
-      'localized:message.fileManagerSortTypeAsc',
-      'localized:message.fileManagerSortTypeDesc',
     ])
   })
 

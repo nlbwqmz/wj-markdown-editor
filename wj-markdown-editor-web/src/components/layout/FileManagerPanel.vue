@@ -1,6 +1,6 @@
 <script setup>
 import { Empty as AEmpty, Input as AInput } from 'ant-design-vue'
-import { computed, nextTick, ref } from 'vue'
+import { computed, h, nextTick, ref } from 'vue'
 import IconButton from '@/components/editor/IconButton.vue'
 import i18n from '@/i18n/index.js'
 import { useCommonStore } from '@/stores/counter.js'
@@ -60,58 +60,7 @@ const createMenuList = computed(() => [
   },
 ])
 
-const sortMenuList = computed(() => [
-  {
-    key: 'name-asc',
-    label: t('message.fileManagerSortNameAsc'),
-    action: () => updateFileManagerSortConfig({
-      field: 'name',
-      direction: 'asc',
-    }),
-  },
-  {
-    key: 'name-desc',
-    label: t('message.fileManagerSortNameDesc'),
-    action: () => updateFileManagerSortConfig({
-      field: 'name',
-      direction: 'desc',
-    }),
-  },
-  {
-    key: 'modifiedTime-asc',
-    label: t('message.fileManagerSortModifiedTimeAsc'),
-    action: () => updateFileManagerSortConfig({
-      field: 'modifiedTime',
-      direction: 'asc',
-    }),
-  },
-  {
-    key: 'modifiedTime-desc',
-    label: t('message.fileManagerSortModifiedTimeDesc'),
-    action: () => updateFileManagerSortConfig({
-      field: 'modifiedTime',
-      direction: 'desc',
-    }),
-  },
-  {
-    key: 'type-asc',
-    label: t('message.fileManagerSortTypeAsc'),
-    action: () => updateFileManagerSortConfig({
-      field: 'type',
-      direction: 'asc',
-    }),
-  },
-  {
-    key: 'type-desc',
-    label: t('message.fileManagerSortTypeDesc'),
-    action: () => updateFileManagerSortConfig({
-      field: 'type',
-      direction: 'desc',
-    }),
-  },
-])
-
-const sortMenuSelectedKeys = computed(() => {
+const sortMenuCurrentKey = computed(() => {
   const field = ['name', 'modifiedTime', 'type'].includes(store?.config?.fileManagerSort?.field)
     ? store.config.fileManagerSort.field
     : 'type'
@@ -119,8 +68,69 @@ const sortMenuSelectedKeys = computed(() => {
     ? store.config.fileManagerSort.direction
     : 'asc'
 
-  return [`${field}-${direction}`]
+  return `${field}-${direction}`
 })
+
+function createSortMenuLabel(messageKey, key) {
+  const label = t(messageKey)
+  const indicatorClass = sortMenuCurrentKey.value === key ? 'i-tabler:check mr-1' : 'mr-4'
+
+  return h('span', { class: 'inline-flex items-center' }, [
+    h('span', { class: indicatorClass }),
+    label,
+  ])
+}
+
+const sortMenuList = computed(() => [
+  {
+    key: 'type-asc',
+    label: createSortMenuLabel('message.fileManagerSortTypeAsc', 'type-asc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'type',
+      direction: 'asc',
+    }),
+  },
+  {
+    key: 'type-desc',
+    label: createSortMenuLabel('message.fileManagerSortTypeDesc', 'type-desc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'type',
+      direction: 'desc',
+    }),
+  },
+  {
+    key: 'name-asc',
+    label: createSortMenuLabel('message.fileManagerSortNameAsc', 'name-asc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'name',
+      direction: 'asc',
+    }),
+  },
+  {
+    key: 'name-desc',
+    label: createSortMenuLabel('message.fileManagerSortNameDesc', 'name-desc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'name',
+      direction: 'desc',
+    }),
+  },
+  {
+    key: 'modifiedTime-asc',
+    label: createSortMenuLabel('message.fileManagerSortModifiedTimeAsc', 'modifiedTime-asc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'modifiedTime',
+      direction: 'asc',
+    }),
+  },
+  {
+    key: 'modifiedTime-desc',
+    label: createSortMenuLabel('message.fileManagerSortModifiedTimeDesc', 'modifiedTime-desc'),
+    action: () => updateFileManagerSortConfig({
+      field: 'modifiedTime',
+      direction: 'desc',
+    }),
+  },
+])
 
 function resolveEntryIconTestId(entry) {
   return resolveFileManagerEntryIconProfile(entry).testId
@@ -223,8 +233,7 @@ async function handleFocusCurrentDocumentDirectory() {
           :label="t('message.fileManagerSort')"
           :title="t('message.fileManagerSort')"
           :menu-list="sortMenuList"
-          :menu-trigger="['click']"
-          :menu-selected-keys="sortMenuSelectedKeys"
+          :menu-trigger="['hover']"
         />
       </div>
     </div>
