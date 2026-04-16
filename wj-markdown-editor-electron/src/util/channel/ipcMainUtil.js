@@ -148,7 +148,7 @@ async function executeConfigUpdate(updateAction) {
     return result
   }
 
-  return { ok: true }
+  return result
 }
 
 const handlerList = {

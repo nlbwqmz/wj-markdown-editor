@@ -2136,13 +2136,20 @@ describe('ipcMainUtil 配置更新契约', () => {
   it('config.update 在配置服务整体成功时必须返回结构化成功结果，且 IPC 不再单独调用 recent.setMax', async () => {
     const payload = {
       operations: [
-        { type: 'set', path: ['recentMax'], value: 15 },
-        { type: 'set', path: ['startupPage'], value: 'editor' },
+        { type: 'set', path: ['theme', 'global'], value: 'dark' },
       ],
     }
-    configUpdateConfig.mockResolvedValueOnce({ ok: true })
+    const successResult = {
+      ok: true,
+      config: {
+        theme: {
+          global: 'dark',
+        },
+      },
+    }
+    configUpdateConfig.mockResolvedValueOnce(successResult)
 
-    await expect(dispatch('config.update', payload)).resolves.toEqual({ ok: true })
+    await expect(dispatch('config.update', payload)).resolves.toEqual(successResult)
     expect(configUpdateConfig).toHaveBeenCalledWith(payload, expect.objectContaining({
       setMax: recentSetMax,
     }))
