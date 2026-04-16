@@ -1319,6 +1319,47 @@ describe('fileManagerPanelController', () => {
     scope.stop()
   })
 
+  it('空目录收到目录变更事件后，再切到 modifiedTime 排序时不应额外补发目录请求', async () => {
+    const { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } = await import('@/util/file-manager/fileManagerEventUtil.js')
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValueOnce(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'file' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toEqual([
+      'current.md',
+    ])
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(1)
+
+    const changedHandler = fileManagerPanelState.registeredHandlerMap.get(FILE_MANAGER_DIRECTORY_CHANGED_EVENT)
+    changedHandler(createDirectoryState({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    }))
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').text()).toContain('translated:message.fileManagerDirectoryEmpty')
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(1)
+
+    fileManagerPanelState.store.config.fileManagerSort = {
+      field: 'modifiedTime',
+      direction: 'desc',
+    }
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.requestFileManagerDirectoryState).toHaveBeenCalledTimes(1)
+    expect(fileManagerPanelState.requestFileManagerSyncCurrentDirectoryOptions).toHaveBeenCalledWith({
+      includeModifiedTime: true,
+    })
+    expect(wrapper.get('[data-testid="file-manager-empty-state"]').exists()).toBe(true)
+  })
+
   it('切换到 modifiedTime 排序且当前缓存缺少修改时间时，请求返回前应保留上一版列表顺序，不能先闪到名称排序', async () => {
     const deferredDirectoryState = createDeferred()
     fileManagerPanelState.requestFileManagerDirectoryState
