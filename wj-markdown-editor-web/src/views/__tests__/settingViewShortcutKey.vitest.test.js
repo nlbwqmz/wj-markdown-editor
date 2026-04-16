@@ -93,6 +93,14 @@ function getSetupBinding(wrapper, key) {
   return wrapper.vm[key] ?? wrapper.vm.$.setupState[key]
 }
 
+function getChannelPayloadList() {
+  return mocked.channelSend.mock.calls.map(([payload]) => payload)
+}
+
+function getConfigUpdatePayloadList() {
+  return getChannelPayloadList().filter(payload => payload?.event === 'config.update')
+}
+
 async function mountSettingView() {
   const wrapper = shallowMount(SettingView, {
     global: {
@@ -201,9 +209,8 @@ describe('settingView shortcut key input', () => {
 })
 
 describe('settingView 配置草稿同步', () => {
-  it('外部更新 fileManagerSort 后，设置页后续提交必须沿用最新排序而不是回滚旧草稿', async () => {
+  it('外部更新 fileManagerSort 后，设置页本地草稿必须同步为最新排序', async () => {
     const wrapper = await mountSettingView()
-    const config = getSetupBinding(wrapper, 'config')
 
     mocked.store.config.fileManagerSort = {
       field: 'modifiedTime',
@@ -211,17 +218,145 @@ describe('settingView 配置草稿同步', () => {
     }
     await flushPendingUpdates()
 
-    config.fileManagerVisible = !config.fileManagerVisible
-    await flushPendingUpdates()
-
-    const updateConfigCallList = mocked.channelSend.mock.calls
-      .map(([payload]) => payload)
-      .filter(payload => payload?.event === 'user-update-config')
-
-    expect(updateConfigCallList).toHaveLength(1)
-    expect(updateConfigCallList[0].data.fileManagerSort).toEqual({
+    expect(getSetupBinding(wrapper, 'config').fileManagerSort).toEqual({
       field: 'modifiedTime',
       direction: 'desc',
     })
+  })
+})
+
+describe('settingView mutation 提交流程', () => {
+  it('recentMax 修改必须走 config.update 的 set mutation，且不再发送 user-update-config', async () => {
+    const wrapper = await mountSettingView()
+    const onRecentMaxUpdate = getSetupBinding(wrapper, 'onRecentMaxUpdate')
+
+    mocked.channelSend.mockClear()
+
+    await onRecentMaxUpdate(7.9)
+    await flushPendingUpdates()
+
+    expect(getChannelPayloadList().some(payload => payload?.event === 'user-update-config')).toBe(false)
+    expect(getConfigUpdatePayloadList()).toEqual([
+      {
+        event: 'config.update',
+        data: {
+          operations: [
+            {
+              type: 'set',
+              path: ['recentMax'],
+              value: 7,
+            },
+          ],
+        },
+      },
+    ])
+  })
+
+  it('autoSave 修改必须走 setAutoSaveOption mutation', async () => {
+    const wrapper = await mountSettingView()
+    const onAutoSaveUpdate = getSetupBinding(wrapper, 'onAutoSaveUpdate')
+
+    mocked.channelSend.mockClear()
+
+    await onAutoSaveUpdate(['blur'])
+    await flushPendingUpdates()
+
+    expect(getConfigUpdatePayloadList()).toEqual([
+      {
+        event: 'config.update',
+        data: {
+          operations: [
+            {
+              type: 'setAutoSaveOption',
+              option: 'blur',
+              enabled: true,
+            },
+          ],
+        },
+      },
+    ])
+  })
+
+  it('快捷键启用状态修改必须走 setShortcutKeyField mutation', async () => {
+    const wrapper = await mountSettingView()
+    const config = getSetupBinding(wrapper, 'config')
+    const onShortcutKeyEnabledUpdate = getSetupBinding(wrapper, 'onShortcutKeyEnabledUpdate')
+    const saveShortcutKey = config.shortcutKeyList.find(item => item.id === 'save')
+
+    mocked.channelSend.mockClear()
+
+    await onShortcutKeyEnabledUpdate(saveShortcutKey, false)
+    await flushPendingUpdates()
+
+    expect(getConfigUpdatePayloadList()).toEqual([
+      {
+        event: 'config.update',
+        data: {
+          operations: [
+            {
+              type: 'setShortcutKeyField',
+              id: 'save',
+              field: 'enabled',
+              value: false,
+            },
+          ],
+        },
+      },
+    ])
+  })
+
+  it('录入快捷键后必须走 setShortcutKeyField keymap mutation', async () => {
+    const wrapper = await mountSettingView()
+    const config = getSetupBinding(wrapper, 'config')
+    const onKeydown = getSetupBinding(wrapper, 'onKeydown')
+    const saveOtherShortcutKey = config.shortcutKeyList.find(item => item.id === 'saveOther')
+    const event = createKeyboardEvent('F5')
+
+    mocked.channelSend.mockClear()
+
+    onKeydown(saveOtherShortcutKey)(event)
+    await flushPendingUpdates()
+
+    expect(getConfigUpdatePayloadList()).toEqual([
+      {
+        event: 'config.update',
+        data: {
+          operations: [
+            {
+              type: 'setShortcutKeyField',
+              id: 'saveOther',
+              field: 'keymap',
+              value: 'F5',
+            },
+          ],
+        },
+      },
+    ])
+  })
+
+  it('reset 必须单独发送 reset mutation，且不再先取默认配置后整份提交', async () => {
+    const wrapper = await mountSettingView()
+    const reset = getSetupBinding(wrapper, 'reset')
+
+    mocked.channelSend.mockClear()
+
+    reset()
+    const confirmOptions = mocked.modalConfirm.mock.calls[0][0]
+    await confirmOptions.onOk()
+    await flushPendingUpdates()
+
+    expect(getChannelPayloadList().some(payload => payload?.event === 'get-default-config')).toBe(false)
+    expect(getConfigUpdatePayloadList()).toEqual([
+      {
+        event: 'config.update',
+        data: {
+          operations: [
+            {
+              type: 'reset',
+            },
+          ],
+        },
+      },
+    ])
   })
 })

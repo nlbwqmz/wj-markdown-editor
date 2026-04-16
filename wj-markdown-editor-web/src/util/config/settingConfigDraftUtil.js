@@ -15,6 +15,60 @@ export function cloneConfigDraft(config) {
 }
 
 /**
+ * 按路径覆写本地配置草稿中的目标字段，供设置页显式 mutation 提交前同步本地展示值。
+ *
+ * @param {Record<string, any> | null | undefined} draftConfig
+ * @param {Array<string | number>} path
+ * @param {any} value
+ * @returns {boolean} 返回是否成功写入目标路径。
+ */
+export function setConfigDraftValueByPath(draftConfig, path, value) {
+  if (!draftConfig || !Array.isArray(path) || path.length === 0) {
+    return false
+  }
+
+  let current = draftConfig
+  for (let i = 0; i < path.length - 1; i++) {
+    current = current?.[path[i]]
+    if (current == null) {
+      return false
+    }
+  }
+
+  current[path[path.length - 1]] = cloneConfigDraft(value)
+  return true
+}
+
+/**
+ * 把 autoSave 集合变更收口为逐项 mutation，避免设置页回退到整份数组 set。
+ *
+ * @param {unknown} previousAutoSave
+ * @param {unknown} nextAutoSave
+ * @returns {Array<{ type: 'setAutoSaveOption', option: 'blur' | 'close', enabled: boolean }>} 返回按 blur / close 差异生成的 mutation 列表。
+ */
+export function createAutoSaveOptionMutationOperations(previousAutoSave, nextAutoSave) {
+  const previousSet = new Set(Array.isArray(previousAutoSave) ? previousAutoSave : [])
+  const nextSet = new Set(Array.isArray(nextAutoSave) ? nextAutoSave : [])
+  const optionList = ['blur', 'close']
+
+  return optionList.flatMap((option) => {
+    const previousEnabled = previousSet.has(option)
+    const nextEnabled = nextSet.has(option)
+    if (previousEnabled === nextEnabled) {
+      return []
+    }
+
+    return [
+      {
+        type: 'setAutoSaveOption',
+        option,
+        enabled: nextEnabled,
+      },
+    ]
+  })
+}
+
+/**
  * 仅当目录选择结果仍是字符串时，才允许覆写本地草稿字段。
  * 目录选择取消会返回 undefined，此时必须保持原值不变。
  *

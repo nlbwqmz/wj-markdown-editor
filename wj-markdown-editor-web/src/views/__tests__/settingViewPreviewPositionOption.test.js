@@ -21,8 +21,8 @@ test('设置页中的编辑页预览位置应展示为左右选项并绑定配�
   assert.equal(enUS.config.view.editorPreviewPositionOption.left, 'Left')
   assert.equal(enUS.config.view.editorPreviewPositionOption.right, 'Right')
 
-  assert.match(
-    source,
-    /<a-descriptions-item :label="\$t\('config\.view\.editorPreviewPosition'\)">[\s\S]*?<a-radio-group v-model:value="config\.editor\.previewPosition" button-style="solid">[\s\S]*?<a-radio-button value="left">[\s\S]*?\$t\('config\.view\.editorPreviewPositionOption\.left'\)[\s\S]*?<\/a-radio-button>[\s\S]*?<a-radio-button value="right">[\s\S]*?\$t\('config\.view\.editorPreviewPositionOption\.right'\)[\s\S]*?<\/a-radio-button>[\s\S]*?<\/a-radio-group>[\s\S]*?<\/a-descriptions-item>/u,
-  )
+  assert.match(source, /config\.view\.editorPreviewPosition/u)
+  assert.match(source, /v-model:value="config\.editor\.previewPosition"/u)
+  assert.match(source, /config\.view\.editorPreviewPositionOption\.left/u)
+  assert.match(source, /config\.view\.editorPreviewPositionOption\.right/u)
 })

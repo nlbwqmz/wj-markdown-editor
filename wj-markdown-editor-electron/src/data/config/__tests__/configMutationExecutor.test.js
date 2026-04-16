@@ -36,6 +36,25 @@ describe('applyConfigMutationRequest', () => {
     expect(inputConfig).toEqual(originalConfig)
   })
 
+  it('允许更新设置页现有的 editorExtension 与 imageBed 字段', () => {
+    const inputConfig = cloneValue(defaultConfig)
+    const originalConfig = cloneValue(inputConfig)
+    const nextConfig = applyConfigMutationRequest(inputConfig, {
+      operations: [
+        { type: 'set', path: ['editorExtension', 'lineNumbers'], value: false },
+        { type: 'set', path: ['imageBed', 'uploader'], value: 'smms' },
+        { type: 'set', path: ['imageBed', 'smms', 'token'], value: 'smms-token' },
+        { type: 'set', path: ['imageBed', 'github', 'customUrl'], value: 'https://cdn.example.com' },
+      ],
+    })
+
+    expect(nextConfig.editorExtension.lineNumbers).toBe(false)
+    expect(nextConfig.imageBed.uploader).toBe('smms')
+    expect(nextConfig.imageBed.smms.token).toBe('smms-token')
+    expect(nextConfig.imageBed.github.customUrl).toBe('https://cdn.example.com')
+    expect(inputConfig).toEqual(originalConfig)
+  })
+
   it('按 id 更新快捷键字段', () => {
     const inputConfig = cloneValue(defaultConfig)
     const originalConfig = cloneValue(inputConfig)

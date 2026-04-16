@@ -8,14 +8,14 @@ import OtherLayout from '@/components/layout/OtherLayout.vue'
 import TypographerDescription from '@/components/TypographerDescription.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
-import { createConfigUpdateSubmissionGuard } from '@/util/config/configUpdateResultUtil.js'
 import {
   applySelectableStringField,
   cloneConfigDraft,
-  createTransportConfigUpdateFailureRecovery,
+  createAutoSaveOptionMutationOperations,
   normalizeRecentMaxInputValue,
-  resolveConfigUpdateFailureRecovery,
+  setConfigDraftValueByPath,
 } from '@/util/config/settingConfigDraftUtil.js'
+import { createSettingConfigMutationController } from '@/util/config/settingConfigMutationController.js'
 import constant from '@/util/constant.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
@@ -81,7 +81,16 @@ const externalFileChangeStrategyOptionList = computed(() => [
 
 const codeThemeList = constant.codeThemeList
 const previewThemeList = constant.previewThemeList
-const configUpdateSubmissionGuard = createConfigUpdateSubmissionGuard()
+const settingConfigMutationController = createSettingConfigMutationController({
+  getStoreConfig: () => store.config,
+  setDraftConfig(nextConfig) {
+    config.value = cloneConfigDraft(nextConfig)
+  },
+  showWarningMessage(messageKey) {
+    message.warning(t(messageKey))
+  },
+  afterMutationSuccess: closePreviewSearchBar,
+})
 
 function refreshSystemFontList() {
   if (document.visibilityState === 'visible') {
@@ -115,40 +124,39 @@ function closePreviewSearchBar() {
   })
 }
 
-function isSameFileManagerSortConfig(leftSortConfig, rightSortConfig) {
-  return leftSortConfig?.field === rightSortConfig?.field
-    && leftSortConfig?.direction === rightSortConfig?.direction
+function submitSetPathMutation(path, value) {
+  return settingConfigMutationController.submitSetPath(path, value)
 }
 
-watch(() => config.value, (newValue) => {
-  if (!newValue || !configUpdateSubmissionGuard.shouldSubmitConfigUpdate()) {
+function setDraftPathValue(path, value) {
+  setConfigDraftValueByPath(config.value, path, value)
+}
+
+function normalizeOptionalStringValue(value) {
+  return value === undefined ? '' : value
+}
+
+async function onNormalizedStringFieldChange(path, value) {
+  const normalizedValue = normalizeOptionalStringValue(value)
+  setDraftPathValue(path, normalizedValue)
+  await submitSetPathMutation(path, normalizedValue)
+}
+
+async function onAutoSaveUpdate(nextAutoSave) {
+  if (!config.value) {
     return
   }
 
-  const nextConfig = cloneConfigDraft(newValue)
+  const previousAutoSave = Array.isArray(config.value.autoSave) ? [...config.value.autoSave] : []
+  const normalizedNextAutoSave = Array.isArray(nextAutoSave) ? [...nextAutoSave] : []
+  config.value.autoSave = normalizedNextAutoSave
 
-  channelUtil.send({ event: 'user-update-config', data: nextConfig })
-    .then((result) => {
-      const failureRecovery = resolveConfigUpdateFailureRecovery({
-        result,
-        storeConfig: store.config,
-        submissionGuard: configUpdateSubmissionGuard,
-      })
-      if (failureRecovery) {
-        config.value = failureRecovery.nextConfig
-        message.warning(t(failureRecovery.messageKey))
-      }
-    })
-    .catch(() => {
-      const failureRecovery = createTransportConfigUpdateFailureRecovery({
-        storeConfig: store.config,
-        submissionGuard: configUpdateSubmissionGuard,
-      })
-      config.value = failureRecovery.nextConfig
-      message.warning(t(failureRecovery.messageKey))
-    })
-  closePreviewSearchBar()
-}, { deep: true })
+  if (createAutoSaveOptionMutationOperations(previousAutoSave, normalizedNextAutoSave).length === 0) {
+    return
+  }
+
+  await settingConfigMutationController.submitAutoSaveListChange(previousAutoSave, normalizedNextAutoSave)
+}
 
 // 是否显示图片绝对路径
 const showImgAbsolutePath = computed(() => {
@@ -182,41 +190,13 @@ watch(() => store.config.language, async () => {
   closePreviewSearchBar()
 }, { immediate: true })
 
-watch(() => store.config.theme.global, (newValue) => {
-  if (!config.value) {
+watch(() => store.config, (newValue) => {
+  if (!newValue || !config.value) {
     return
   }
 
-  if (newValue !== config.value.theme.global) {
-    configUpdateSubmissionGuard.markNextSyncIgnored()
-    config.value.theme.global = newValue
-  }
-})
-
-watch(() => store.config.language, (newValue) => {
-  if (!config.value) {
-    return
-  }
-
-  if (newValue !== config.value.language) {
-    configUpdateSubmissionGuard.markNextSyncIgnored()
-    config.value.language = newValue
-  }
-})
-
-watch([
-  () => store.config.fileManagerSort?.field,
-  () => store.config.fileManagerSort?.direction,
-], () => {
-  if (!config.value) {
-    return
-  }
-
-  if (!isSameFileManagerSortConfig(store.config.fileManagerSort, config.value.fileManagerSort)) {
-    configUpdateSubmissionGuard.markNextSyncIgnored()
-    config.value.fileManagerSort = cloneConfigDraft(store.config.fileManagerSort)
-  }
-})
+  config.value = cloneConfigDraft(newValue)
+}, { deep: true })
 
 const disallowedShortcutKeys = ['Backspace', 'Alt+ArrowLeft', 'Alt+ArrowRight', 'Alt+ArrowUp', 'Shift+Alt+ArrowUp', 'Alt+ArrowDown', 'Shift+Alt+ArrowDown', 'Escape', 'Ctrl+Enter', 'Alt+l', 'Ctrl+i', 'Ctrl+[', 'Ctrl+]', 'Ctrl+Alt+\\', 'Shift+Ctrl+k', 'Shift+Ctrl+\\', 'Ctrl+/', 'Alt+A', 'Ctrl+m', 'ArrowLeft', 'Ctrl+ArrowLeft', 'ArrowRight', 'Ctrl+ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'Ctrl+Home', 'End', 'Ctrl+End', 'Enter', 'Ctrl+a', 'Backspace', 'Delete', 'Ctrl+Backspace', 'Ctrl+Delete', 'Ctrl+f', 'F3', 'Ctrl+g', 'Escape', 'Ctrl+Shift+l', 'Ctrl+Alt+g', 'Ctrl+d', 'Ctrl+z', 'Ctrl+y', 'Ctrl+u', 'Alt+u', 'Ctrl+Space', 'Escape', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Enter', 'Tab', 'Ctrl+c', 'Ctrl+v']
 const functionShortcutKeyPattern = /^F(?:[1-9]|1[0-2])$/
@@ -229,7 +209,7 @@ function isProtectedShortcutKey(keymap) {
  * 监听修改快捷键
  */
 function onKeydown(shortcutKey) {
-  return (e) => {
+  return async (e) => {
     if (shortcutKeyUtil.isShortcutKey(e)) {
       const keymap = shortcutKeyUtil.getShortcutKey(e)
       // 录制裸 F1-F12 时先拦截宿主默认行为，避免设置页被刷新或触发系统动作。
@@ -262,8 +242,14 @@ function onKeydown(shortcutKey) {
         }
       }
       shortcutKey.keymap = keymap
+      await settingConfigMutationController.submitShortcutKeyField(shortcutKey.id, 'keymap', keymap)
     }
   }
+}
+
+async function onShortcutKeyEnabledUpdate(shortcutKey, enabled) {
+  shortcutKey.enabled = enabled
+  await settingConfigMutationController.submitShortcutKeyField(shortcutKey.id, 'enabled', enabled)
 }
 
 /**
@@ -282,13 +268,17 @@ function onShortcutKeyFocus(e, shortcutKey) {
  */
 async function openDirSelect() {
   const nextSelectedPath = await channelUtil.send({ event: 'open-dir-select' })
-  applySelectableStringField(config.value, 'imgAbsolutePath', nextSelectedPath)
+  if (applySelectableStringField(config.value, 'imgAbsolutePath', nextSelectedPath)) {
+    await submitSetPathMutation(['imgAbsolutePath'], nextSelectedPath)
+  }
 }
 
 // 选择文件绝对路径
 async function openFileDirSelect() {
   const nextSelectedPath = await channelUtil.send({ event: 'open-dir-select' })
-  applySelectableStringField(config.value, 'fileAbsolutePath', nextSelectedPath)
+  if (applySelectableStringField(config.value, 'fileAbsolutePath', nextSelectedPath)) {
+    await submitSetPathMutation(['fileAbsolutePath'], nextSelectedPath)
+  }
 }
 
 /**
@@ -299,7 +289,9 @@ function onRecentMaxUpdate(nextValue) {
     return
   }
 
-  config.value.recentMax = normalizeRecentMaxInputValue(nextValue)
+  const normalizedValue = normalizeRecentMaxInputValue(nextValue)
+  config.value.recentMax = normalizedValue
+  return submitSetPathMutation(['recentMax'], normalizedValue)
 }
 
 function settingMinimize() {
@@ -317,7 +309,7 @@ function reset() {
     cancelText: t('cancelText'),
     centered: true,
     onOk: async () => {
-      config.value = cloneConfigDraft(await channelUtil.send({ event: 'get-default-config' }))
+      await settingConfigMutationController.submitReset()
       return true
     },
   })
@@ -352,6 +344,7 @@ function reset() {
             <a-select
               v-model:value="config.language"
               class="w-full"
+              @update:value="value => submitSetPathMutation(['language'], value)"
             >
               <a-select-option value="zh-CN">
                 中文
@@ -373,7 +366,7 @@ function reset() {
                 </a-tooltip>
               </div>
             </template>
-            <a-radio-group v-model:value="config.startPage" button-style="solid">
+            <a-radio-group v-model:value="config.startPage" button-style="solid" @update:value="value => submitSetPathMutation(['startPage'], value)">
               <a-radio-button value="editor">
                 {{ $t('config.general.startupViewOption.edit') }}
               </a-radio-button>
@@ -383,7 +376,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.general.openLastRecord')">
-            <a-radio-group v-model:value="config.openRecent" button-style="solid">
+            <a-radio-group v-model:value="config.openRecent" button-style="solid" @update:value="value => submitSetPathMutation(['openRecent'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -416,7 +409,7 @@ function reset() {
                 </a-tooltip>
               </div>
             </template>
-            <a-checkbox-group v-model:value="config.autoSave" :options="autoSaveOptionList" />
+            <a-checkbox-group :value="config.autoSave" :options="autoSaveOptionList" @update:value="onAutoSaveUpdate" />
           </a-descriptions-item>
           <a-descriptions-item>
             <template #label>
@@ -430,7 +423,7 @@ function reset() {
                 </a-tooltip>
               </div>
             </template>
-            <a-radio-group v-model:value="config.externalFileChangeStrategy" button-style="solid">
+            <a-radio-group v-model:value="config.externalFileChangeStrategy" button-style="solid" @update:value="value => submitSetPathMutation(['externalFileChangeStrategy'], value)">
               <a-radio-button v-for="item in externalFileChangeStrategyOptionList" :key="item.value" :value="item.value">
                 {{ item.label }}
               </a-radio-button>
@@ -450,16 +443,16 @@ function reset() {
             </div>
           </template>
           <a-descriptions-item :label="$t('config.fontFamily.editArea')">
-            <a-select v-model:value="config.fontFamily.editArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => config.fontFamily.editArea = value === undefined ? '' : value" />
+            <a-select v-model:value="config.fontFamily.editArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => onNormalizedStringFieldChange(['fontFamily', 'editArea'], value)" />
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.fontFamily.previewArea')">
-            <a-select v-model:value="config.fontFamily.previewArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => config.fontFamily.previewArea = value === undefined ? '' : value" />
+            <a-select v-model:value="config.fontFamily.previewArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => onNormalizedStringFieldChange(['fontFamily', 'previewArea'], value)" />
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.fontFamily.codeArea')">
-            <a-select v-model:value="config.fontFamily.codeArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => config.fontFamily.codeArea = value === undefined ? '' : value" />
+            <a-select v-model:value="config.fontFamily.codeArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => onNormalizedStringFieldChange(['fontFamily', 'codeArea'], value)" />
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.fontFamily.otherArea')">
-            <a-select v-model:value="config.fontFamily.otherArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" show-search allow-clear @change="value => config.fontFamily.otherArea = value === undefined ? '' : value" />
+            <a-select v-model:value="config.fontFamily.otherArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" show-search allow-clear @change="value => onNormalizedStringFieldChange(['fontFamily', 'otherArea'], value)" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
@@ -467,7 +460,7 @@ function reset() {
             <span id="view">{{ $t('config.title.view') }}</span>
           </template>
           <a-descriptions-item :label="$t('config.view.defaultShowOutline')">
-            <a-radio-group v-model:value="config.menuVisible" button-style="solid">
+            <a-radio-group v-model:value="config.menuVisible" button-style="solid" @update:value="value => submitSetPathMutation(['menuVisible'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -477,7 +470,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.view.defaultShowFileManager')">
-            <a-radio-group v-model:value="config.fileManagerVisible" button-style="solid">
+            <a-radio-group v-model:value="config.fileManagerVisible" button-style="solid" @update:value="value => submitSetPathMutation(['fileManagerVisible'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -487,7 +480,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.view.editorPreviewPosition')">
-            <a-radio-group v-model:value="config.editor.previewPosition" button-style="solid">
+            <a-radio-group v-model:value="config.editor.previewPosition" button-style="solid" @update:value="value => submitSetPathMutation(['editor', 'previewPosition'], value)">
               <a-radio-button value="left">
                 {{ $t('config.view.editorPreviewPositionOption.left') }}
               </a-radio-button>
@@ -497,7 +490,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.view.globalTheme')">
-            <a-radio-group v-model:value="config.theme.global" button-style="solid">
+            <a-radio-group v-model:value="config.theme.global" button-style="solid" @update:value="value => submitSetPathMutation(['theme', 'global'], value)">
               <a-radio-button value="light">
                 {{ $t('config.view.globalThemeOption.light') }}
               </a-radio-button>
@@ -510,6 +503,7 @@ function reset() {
             <a-select
               v-model:value="config.theme.code"
               class="w-full"
+              @update:value="value => submitSetPathMutation(['theme', 'code'], value)"
             >
               <a-select-option v-for="item in codeThemeList" :key="item" :value="item">
                 {{ item }}
@@ -520,6 +514,7 @@ function reset() {
             <a-select
               v-model:value="config.theme.preview"
               class="w-full"
+              @update:value="value => submitSetPathMutation(['theme', 'preview'], value)"
             >
               <a-select-option v-for="item in previewThemeList" :key="item" :value="item">
                 {{ item }}
@@ -531,6 +526,7 @@ function reset() {
               v-model:value="config.previewWidth"
               :min="20"
               :max="100"
+              @update:value="value => submitSetPathMutation(['previewWidth'], value)"
             />
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.view.fontSize')">
@@ -538,6 +534,7 @@ function reset() {
               v-model:value="config.fontSize"
               :min="14"
               :max="28"
+              @update:value="value => submitSetPathMutation(['fontSize'], value)"
             />
           </a-descriptions-item>
         </a-descriptions>
@@ -546,7 +543,7 @@ function reset() {
             <span id="editor">{{ $t('config.title.editor') }}</span>
           </template>
           <a-descriptions-item :label="$t('config.editor.lineNumber')">
-            <a-radio-group v-model:value="config.editorExtension.lineNumbers" button-style="solid">
+            <a-radio-group v-model:value="config.editorExtension.lineNumbers" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'lineNumbers'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -556,7 +553,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.editor.lineWrapping')">
-            <a-radio-group v-model:value="config.editorExtension.lineWrapping" button-style="solid">
+            <a-radio-group v-model:value="config.editorExtension.lineWrapping" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'lineWrapping'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -566,7 +563,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.editor.highlightActiveLine')">
-            <a-radio-group v-model:value="config.editorExtension.highlightActiveLine" button-style="solid">
+            <a-radio-group v-model:value="config.editorExtension.highlightActiveLine" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'highlightActiveLine'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -576,7 +573,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.editor.associationHighlight')">
-            <a-radio-group v-model:value="config.editor.associationHighlight" button-style="solid">
+            <a-radio-group v-model:value="config.editor.associationHighlight" button-style="solid" @update:value="value => submitSetPathMutation(['editor', 'associationHighlight'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -586,7 +583,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.editor.inlineCodeClickCopy')">
-            <a-radio-group v-model:value="config.markdown.inlineCodeClickCopy" button-style="solid">
+            <a-radio-group v-model:value="config.markdown.inlineCodeClickCopy" button-style="solid" @update:value="value => submitSetPathMutation(['markdown', 'inlineCodeClickCopy'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.editor.inlineCodeClickCopyOption.copy') }}
               </a-radio-button>
@@ -607,7 +604,7 @@ function reset() {
                 </a-tooltip>
               </div>
             </template>
-            <a-radio-group v-model:value="config.editorExtension.highlightSelectionMatches" button-style="solid">
+            <a-radio-group v-model:value="config.editorExtension.highlightSelectionMatches" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'highlightSelectionMatches'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -617,7 +614,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.editor.highlightMatchingBracket')">
-            <a-radio-group v-model:value="config.editorExtension.bracketMatching" button-style="solid">
+            <a-radio-group v-model:value="config.editorExtension.bracketMatching" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'bracketMatching'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -627,7 +624,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.editor.autoCloseBracket')">
-            <a-radio-group v-model:value="config.editorExtension.closeBrackets" button-style="solid">
+            <a-radio-group v-model:value="config.editorExtension.closeBrackets" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'closeBrackets'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -651,7 +648,7 @@ function reset() {
                 </a-popover>
               </div>
             </template>
-            <a-radio-group v-model:value="config.markdown.typographer" button-style="solid">
+            <a-radio-group v-model:value="config.markdown.typographer" button-style="solid" @update:value="value => submitSetPathMutation(['markdown', 'typographer'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -669,6 +666,7 @@ function reset() {
             <a-select
               v-model:value="config.fileMode"
               class="w-full"
+              @update:value="value => submitSetPathMutation(['fileMode'], value)"
             >
               <a-select-option value="2">
                 {{ $t('config.saveOption.saveToAbsolutePath') }}
@@ -692,7 +690,7 @@ function reset() {
             </a-input>
           </a-descriptions-item>
           <a-descriptions-item v-if="config.fileMode === '4'" :label="$t('config.file.relativePath')">
-            <a-input v-model:value="config.fileRelativePath" />
+            <a-input v-model:value="config.fileRelativePath" @update:value="value => submitSetPathMutation(['fileRelativePath'], value)" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
@@ -703,6 +701,7 @@ function reset() {
             <a-select
               v-model:value="config.imgLocal"
               class="w-full"
+              @update:value="value => submitSetPathMutation(['imgLocal'], value)"
             >
               <a-select-option value="2">
                 {{ $t('config.saveOption.saveToAbsolutePath') }}
@@ -722,6 +721,7 @@ function reset() {
             <a-select
               v-model:value="config.imgNetwork"
               class="w-full"
+              @update:value="value => submitSetPathMutation(['imgNetwork'], value)"
             >
               <a-select-option value="1">
                 {{ $t('config.saveOption.noOperation') }}
@@ -751,7 +751,7 @@ function reset() {
             </a-input>
           </a-descriptions-item>
           <a-descriptions-item v-if="showImgRelativePath" :label="$t('config.picture.relativePath')">
-            <a-input v-model:value="config.imgRelativePath" />
+            <a-input v-model:value="config.imgRelativePath" @update:value="value => submitSetPathMutation(['imgRelativePath'], value)" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
@@ -762,6 +762,7 @@ function reset() {
             <a-select
               v-model:value="config.imageBed.uploader"
               class="w-full"
+              @update:value="value => submitSetPathMutation(['imageBed', 'uploader'], value)"
             >
               <a-select-option v-for="item in imageBedUploaderList" :key="item.value" :value="item.value">
                 {{ item.name }}
@@ -771,27 +772,27 @@ function reset() {
 
           <!-- smms -->
           <a-descriptions-item v-if="config.imageBed.uploader === 'smms'" label="Token">
-            <a-input-password v-model:value="config.imageBed.smms.token" />
+            <a-input-password v-model:value="config.imageBed.smms.token" @update:value="value => submitSetPathMutation(['imageBed', 'smms', 'token'], value)" />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.imageBed.uploader === 'smms'" :label="$t('config.pictureBed.customDomain')">
-            <a-input v-model:value="config.imageBed.smms.backupDomain" />
+            <a-input v-model:value="config.imageBed.smms.backupDomain" @update:value="value => submitSetPathMutation(['imageBed', 'smms', 'backupDomain'], value)" />
           </a-descriptions-item>
 
           <!-- github -->
           <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.repository')">
-            <a-input v-model:value="config.imageBed.github.repo" placeholder="owner/repo" />
+            <a-input v-model:value="config.imageBed.github.repo" placeholder="owner/repo" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'repo'], value)" />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.imageBed.uploader === 'github'" label="Token">
-            <a-input-password v-model:value="config.imageBed.github.token" />
+            <a-input-password v-model:value="config.imageBed.github.token" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'token'], value)" />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.storagePath')">
-            <a-input v-model:value="config.imageBed.github.path" />
+            <a-input v-model:value="config.imageBed.github.path" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'path'], value)" />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.branch')">
-            <a-input v-model:value="config.imageBed.github.branch" placeholder="main" />
+            <a-input v-model:value="config.imageBed.github.branch" placeholder="main" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'branch'], value)" />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.customDomain')">
-            <a-input v-model:value="config.imageBed.github.customUrl" />
+            <a-input v-model:value="config.imageBed.github.customUrl" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'customUrl'], value)" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
@@ -800,13 +801,13 @@ function reset() {
           </template>
           <a-descriptions-item v-for="item in config.shortcutKeyList" :key="item.id" :label="$t(`shortcutKey.${item.id}`)">
             <a-input
-              v-model:value="item.keymap"
+              :value="item.keymap"
               readonly
               class="select-none"
               @focus="onShortcutKeyFocus($event, item)"
             >
               <template #addonAfter>
-                <a-checkbox v-model:checked="item.enabled" />
+                <a-checkbox :checked="item.enabled" @update:checked="checked => onShortcutKeyEnabledUpdate(item, checked)" />
               </template>
             </a-input>
           </a-descriptions-item>
@@ -816,7 +817,7 @@ function reset() {
             <span id="watermark">{{ $t('config.title.watermark') }}</span>
           </template>
           <a-descriptions-item :label="$t('config.watermark.watermark')">
-            <a-radio-group v-model:value="config.watermark.enabled" button-style="solid">
+            <a-radio-group v-model:value="config.watermark.enabled" button-style="solid" @update:value="value => submitSetPathMutation(['watermark', 'enabled'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.enable') }}
               </a-radio-button>
@@ -826,7 +827,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.previewWatermark')">
-            <a-radio-group v-model:value="config.watermark.previewEnabled" button-style="solid">
+            <a-radio-group v-model:value="config.watermark.previewEnabled" button-style="solid" @update:value="value => submitSetPathMutation(['watermark', 'previewEnabled'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.enable') }}
               </a-radio-button>
@@ -836,7 +837,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.watermarkTime')">
-            <a-radio-group v-model:value="config.watermark.dateEnabled" button-style="solid">
+            <a-radio-group v-model:value="config.watermark.dateEnabled" button-style="solid" @update:value="value => submitSetPathMutation(['watermark', 'dateEnabled'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.enable') }}
               </a-radio-button>
@@ -846,7 +847,7 @@ function reset() {
             </a-radio-group>
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.timeFormat')">
-            <a-select v-model:value="config.watermark.datePattern" class="w-full">
+            <a-select v-model:value="config.watermark.datePattern" class="w-full" @update:value="value => submitSetPathMutation(['watermark', 'datePattern'], value)">
               <a-select-option value="YYYY-MM-DD">
                 YYYY-MM-DD
               </a-select-option>
@@ -856,13 +857,14 @@ function reset() {
             </a-select>
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.content')">
-            <a-input v-model:value="config.watermark.content" />
+            <a-input v-model:value="config.watermark.content" @update:value="value => submitSetPathMutation(['watermark', 'content'], value)" />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.angle')">
             <a-slider
               v-model:value="config.watermark.rotate"
               :min="-180"
               :max="180"
+              @update:value="value => submitSetPathMutation(['watermark', 'rotate'], value)"
             />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.intervalWidth')">
@@ -870,6 +872,7 @@ function reset() {
               v-model:value="config.watermark.gap[0]"
               :min="10"
               :max="500"
+              @update:value="value => submitSetPathMutation(['watermark', 'gap', 0], value)"
             />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.intervalHeight')">
@@ -877,6 +880,7 @@ function reset() {
               v-model:value="config.watermark.gap[1]"
               :min="10"
               :max="500"
+              @update:value="value => submitSetPathMutation(['watermark', 'gap', 1], value)"
             />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.fontSize')">
@@ -884,6 +888,7 @@ function reset() {
               v-model:value="config.watermark.font.fontSize"
               :min="12"
               :max="100"
+              @update:value="value => submitSetPathMutation(['watermark', 'font', 'fontSize'], value)"
             />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.fontWeight')">
@@ -891,10 +896,11 @@ function reset() {
               v-model:value="config.watermark.font.fontWeight"
               :min="200"
               :max="1000"
+              @update:value="value => submitSetPathMutation(['watermark', 'font', 'fontWeight'], value)"
             />
           </a-descriptions-item>
           <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.fontColor')">
-            <ColorPicker v-model:pure-color="config.watermark.font.color" format="rgb" shape="square" picker-type="chrome" />
+            <ColorPicker v-model:pure-color="config.watermark.font.color" format="rgb" shape="square" picker-type="chrome" @update:pure-color="value => submitSetPathMutation(['watermark', 'font', 'color'], value)" />
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">
@@ -902,7 +908,7 @@ function reset() {
             <span id="export">{{ $t('config.title.export') }}</span>
           </template>
           <a-descriptions-item :label="$t('config.export.pdfPageNumber')">
-            <a-radio-group v-model:value="config.export.pdf.footer.pageNumber" button-style="solid">
+            <a-radio-group v-model:value="config.export.pdf.footer.pageNumber" button-style="solid" @update:value="value => submitSetPathMutation(['export', 'pdf', 'footer', 'pageNumber'], value)">
               <a-radio-button :value="true">
                 {{ $t('config.yes') }}
               </a-radio-button>
@@ -917,6 +923,7 @@ function reset() {
               spellcheck="false"
               placeholder="Support HTML tags"
               auto-size
+              @update:value="value => submitSetPathMutation(['export', 'pdf', 'footer', 'content'], value)"
             />
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.export.pdfHeader')">
@@ -925,6 +932,7 @@ function reset() {
               spellcheck="false"
               placeholder="Support HTML tags"
               auto-size
+              @update:value="value => submitSetPathMutation(['export', 'pdf', 'header', 'content'], value)"
             />
           </a-descriptions-item>
         </a-descriptions>

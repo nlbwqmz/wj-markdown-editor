@@ -24,6 +24,29 @@ describe('validateConfigMutationRequest', () => {
     })).not.toThrow()
   })
 
+  it.each([
+    [['editorExtension', 'lineNumbers'], false],
+    [['editorExtension', 'lineWrapping'], false],
+    [['editorExtension', 'highlightActiveLine'], false],
+    [['editorExtension', 'highlightSelectionMatches'], false],
+    [['editorExtension', 'bracketMatching'], false],
+    [['editorExtension', 'closeBrackets'], false],
+    [['imageBed', 'uploader'], 'smms'],
+    [['imageBed', 'smms', 'token'], 'token'],
+    [['imageBed', 'smms', 'backupDomain'], 'smms.app'],
+    [['imageBed', 'github', 'repo'], 'owner/repo'],
+    [['imageBed', 'github', 'token'], 'github-token'],
+    [['imageBed', 'github', 'path'], 'img/'],
+    [['imageBed', 'github', 'branch'], 'main'],
+    [['imageBed', 'github', 'customUrl'], 'https://cdn.example.com'],
+  ])('允许设置页现有可写字段 %j 走 set mutation', (path, value) => {
+    expect(() => validateConfigMutationRequest({
+      operations: [
+        { type: 'set', path, value },
+      ],
+    })).not.toThrow()
+  })
+
   it('拒绝未知路径', () => {
     expect(() => validateConfigMutationRequest({
       operations: [
