@@ -248,6 +248,18 @@ export function createSettingConfigMutationController(options = {}) {
     }
   }
 
+  function rollbackResetFailure(messageKey) {
+    latestStoreConfig = resolveCurrentStoreConfig()
+    const nextDraftConfig = composeDraftFromStore(latestStoreConfig)
+    replaceDraftConfig(nextDraftConfig)
+    showWarningMessage(messageKey)
+    return {
+      ok: false,
+      messageKey,
+      nextConfig: nextDraftConfig,
+    }
+  }
+
   async function submitRequest(request, descriptorList = []) {
     const requestId = registerOverlayDescriptorList(descriptorList)
     applyOptimisticOverlay(descriptorList)
@@ -290,10 +302,28 @@ export function createSettingConfigMutationController(options = {}) {
       const descriptor = createShortcutKeyOverlayDescriptor(id, field, value)
       return submitRequest(createShortcutKeyFieldRequest(id, field, value), [descriptor])
     },
-    submitReset() {
+    async submitReset() {
       overlayDescriptorMap.clear()
-      replaceDraftConfig(composeDraftFromStore())
-      return submitRequest(createResetRequest())
+      latestStoreConfig = resolveCurrentStoreConfig()
+      replaceDraftConfig(composeDraftFromStore(latestStoreConfig))
+
+      try {
+        const result = await sendMutationRequest(createResetRequest())
+        const failureMessageKey = getConfigUpdateFailureMessageKey(result)
+        if (failureMessageKey) {
+          return rollbackResetFailure(failureMessageKey)
+        }
+
+        if (result?.config) {
+          syncStoreConfig(result.config)
+        }
+
+        afterMutationSuccess()
+        return result
+      }
+      catch {
+        return rollbackResetFailure('message.configWriteFailed')
+      }
     },
   }
 }

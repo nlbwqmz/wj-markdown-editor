@@ -88,6 +88,7 @@ const settingConfigMutationController = createSettingConfigMutationController({
   },
   afterMutationSuccess: closePreviewSearchBar,
 })
+settingConfigMutationController.syncStoreConfig(store.config)
 
 function refreshSystemFontList() {
   if (document.visibilityState === 'visible') {
@@ -154,7 +155,6 @@ const showImgRelativePath = computed(() => {
   return config.value.imgLocal === '4' || config.value.imgNetwork === '4'
 })
 onMounted(async () => {
-  settingConfigMutationController.syncStoreConfig(await channelUtil.send({ event: 'get-config' }))
   refreshSystemFontList()
   window.addEventListener('visibilitychange', refreshSystemFontList)
   await nextTick()
@@ -177,7 +177,7 @@ watch(() => store.config.language, async () => {
 }, { immediate: true })
 
 watch(() => store.config, (newValue) => {
-  if (!newValue || !config.value) {
+  if (!newValue) {
     return
   }
 

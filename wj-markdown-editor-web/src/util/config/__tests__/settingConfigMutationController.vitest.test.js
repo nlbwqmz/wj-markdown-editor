@@ -114,6 +114,35 @@ describe('settingConfigMutationController', () => {
     })
   })
 
+  it('reset 结构化失败时必须提示消息并回滚到当前 store 快照', async () => {
+    const context = createControllerTestContext()
+    context.storeConfig.theme.global = 'dark'
+    context.controller.syncStoreConfig(context.storeConfig)
+    context.sendMutationRequest.mockResolvedValueOnce({
+      ok: false,
+      messageKey: 'message.configInvalid',
+    })
+
+    await context.controller.submitReset()
+
+    expect(context.getDraftConfig().theme.global).toBe('dark')
+    expect(context.showWarningMessage).toHaveBeenCalledWith('message.configInvalid')
+    expect(context.afterMutationSuccess).not.toHaveBeenCalled()
+  })
+
+  it('reset 通道失败时必须提示消息并回滚到当前 store 快照', async () => {
+    const context = createControllerTestContext()
+    context.storeConfig.language = 'en-US'
+    context.controller.syncStoreConfig(context.storeConfig)
+    context.sendMutationRequest.mockRejectedValueOnce(new Error('network'))
+
+    await context.controller.submitReset()
+
+    expect(context.getDraftConfig().language).toBe('en-US')
+    expect(context.showWarningMessage).toHaveBeenCalledWith('message.configWriteFailed')
+    expect(context.afterMutationSuccess).not.toHaveBeenCalled()
+  })
+
   it('结构化失败结果必须回滚到 store 最新配置并提示消息', async () => {
     const context = createControllerTestContext()
     context.sendMutationRequest.mockResolvedValueOnce({

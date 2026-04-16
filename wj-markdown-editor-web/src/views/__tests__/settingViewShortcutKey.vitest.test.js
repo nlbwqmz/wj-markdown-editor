@@ -153,6 +153,39 @@ async function mountSettingView() {
   return wrapper
 }
 
+function mountSettingViewWithoutFlush() {
+  return shallowMount(SettingView, {
+    global: {
+      mocks: {
+        $t: key => key,
+      },
+      stubs: {
+        'OtherLayout': true,
+        'TypographerDescription': true,
+        'ColorPicker': true,
+        'ExclamationCircleOutlined': true,
+        'a-tooltip': true,
+        'a-select-option': true,
+        'a-select': true,
+        'a-descriptions-item': true,
+        'a-radio-button': true,
+        'a-radio-group': true,
+        'a-input-number': true,
+        'a-checkbox-group': true,
+        'a-descriptions': true,
+        'a-slider': true,
+        'a-popover': true,
+        'a-input': true,
+        'a-input-password': true,
+        'a-checkbox': true,
+        'a-textarea': true,
+        'a-anchor': true,
+        'a-affix': true,
+      },
+    },
+  })
+}
+
 beforeEach(() => {
   mocked.messageWarn.mockReset()
   mocked.messageWarning.mockReset()
@@ -224,6 +257,29 @@ describe('settingView shortcut key input', () => {
 })
 
 describe('settingView 配置草稿同步', () => {
+  it('挂载阶段必须以 store.config 为初始化真相，不能被过期 get-config 结果覆盖', async () => {
+    const initialConfig = cloneDefaultConfig()
+    initialConfig.recentMax = 1
+    const latestConfig = cloneDefaultConfig()
+    latestConfig.recentMax = 9
+
+    mocked.store.config = initialConfig
+    mocked.channelSend.mockImplementation(async ({ event }) => {
+      if (event === 'get-config') {
+        return initialConfig
+      }
+
+      return { ok: true }
+    })
+
+    const wrapper = mountSettingViewWithoutFlush()
+    mocked.store.config = latestConfig
+    await flushPendingUpdates()
+
+    expect(getSetupBinding(wrapper, 'config').recentMax).toBe(9)
+    expect(getChannelPayloadList().some(payload => payload?.event === 'get-config')).toBe(false)
+  })
+
   it('外部更新 fileManagerSort 后，设置页本地草稿必须同步为最新排序', async () => {
     const wrapper = await mountSettingView()
 
