@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   resolveFileManagerEntryExtension,
@@ -68,6 +70,141 @@ describe('fileManagerEntryMetaUtil', () => {
       iconClass: 'i-tabler:file-type-pdf',
       testId: 'file-manager-entry-icon-pdf',
     })
+  })
+
+  it('应为常见开发与办公文件返回更细化的图标 profile，同时不改变原有类型识别', () => {
+    expect(resolveFileManagerEntryType(createEntry({
+      name: 'slides.pptx',
+      kind: 'file',
+    }))).toBe('other')
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'slides.pptx',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-type-ppt',
+      testId: 'file-manager-entry-icon-presentation',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'server.log',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-type-txt',
+      testId: 'file-manager-entry-icon-text',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'config.json',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:braces',
+      testId: 'file-manager-entry-icon-json',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'schema.xml',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-type-xml',
+      testId: 'file-manager-entry-icon-xml',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'main.ts',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-type-ts',
+      testId: 'file-manager-entry-icon-typescript',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'index.html',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-type-html',
+      testId: 'file-manager-entry-icon-html',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'style.scss',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-type-css',
+      testId: 'file-manager-entry-icon-css',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'App.vue',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-type-vue',
+      testId: 'file-manager-entry-icon-vue',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'main.py',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:brand-python',
+      testId: 'file-manager-entry-icon-python',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'Service.java',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-code',
+      testId: 'file-manager-entry-icon-java',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'native.cpp',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:brand-cpp',
+      testId: 'file-manager-entry-icon-cpp',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'server.go',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:brand-golang',
+      testId: 'file-manager-entry-icon-go',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'main.rs',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-type-rs',
+      testId: 'file-manager-entry-icon-rust',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'query.sql',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:file-type-sql',
+      testId: 'file-manager-entry-icon-sql',
+    })
+
+    expect(resolveFileManagerEntryIconProfile(createEntry({
+      name: 'setup.exe',
+      kind: 'file',
+    }))).toEqual({
+      iconClass: 'i-tabler:binary',
+      testId: 'file-manager-entry-icon-executable',
+    })
+  })
+
+  it('文件管理面板动态返回的图标类应通过 @unocss-include 进入 UnoCSS 提取，而不是依赖 safelist', async () => {
+    const unoConfigModule = await import('../../../../uno.config.js')
+    const unoConfig = unoConfigModule.default ?? {}
+    const source = await readFile(path.resolve(process.cwd(), 'src/util/file-manager/fileManagerEntryMetaUtil.js'), 'utf8')
+
+    expect(Array.isArray(unoConfig.safelist) ? unoConfig.safelist : []).toEqual([])
+    expect(source).toContain('// @unocss-include')
   })
 
   it('type 权重应遵循业务类型顺序，并把未知类型归到 other', () => {

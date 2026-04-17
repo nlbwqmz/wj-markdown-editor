@@ -683,7 +683,7 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toBe('D:/docs/project')
   })
 
-  it('目录、Markdown、图片、视频及其他常见文件应显示对应图标，长文件名保持单行省略', async () => {
+  it('目录、Markdown、图片、视频及常见办公与开发文件应显示对应图标，长文件名保持单行省略', async () => {
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       entryList: [
         { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
@@ -695,6 +695,23 @@ describe('fileManagerPanel 组件', () => {
         { name: 'sheet.xlsx', path: 'D:/docs/sheet.xlsx', kind: 'other' },
         { name: 'archive.zip', path: 'D:/docs/archive.zip', kind: 'other' },
         { name: 'audio.mp3', path: 'D:/docs/audio.mp3', kind: 'other' },
+        { name: 'slides.pptx', path: 'D:/docs/slides.pptx', kind: 'other' },
+        { name: 'server.log', path: 'D:/docs/server.log', kind: 'other' },
+        { name: 'config.json', path: 'D:/docs/config.json', kind: 'other' },
+        { name: 'schema.xml', path: 'D:/docs/schema.xml', kind: 'other' },
+        { name: 'main.js', path: 'D:/docs/main.js', kind: 'other' },
+        { name: 'main.ts', path: 'D:/docs/main.ts', kind: 'other' },
+        { name: 'index.html', path: 'D:/docs/index.html', kind: 'other' },
+        { name: 'style.css', path: 'D:/docs/style.css', kind: 'other' },
+        { name: 'App.vue', path: 'D:/docs/App.vue', kind: 'other' },
+        { name: 'main.py', path: 'D:/docs/main.py', kind: 'other' },
+        { name: 'Service.java', path: 'D:/docs/Service.java', kind: 'other' },
+        { name: 'tool.c', path: 'D:/docs/tool.c', kind: 'other' },
+        { name: 'native.cpp', path: 'D:/docs/native.cpp', kind: 'other' },
+        { name: 'server.go', path: 'D:/docs/server.go', kind: 'other' },
+        { name: 'main.rs', path: 'D:/docs/main.rs', kind: 'other' },
+        { name: 'query.sql', path: 'D:/docs/query.sql', kind: 'other' },
+        { name: 'setup.exe', path: 'D:/docs/setup.exe', kind: 'other' },
         { name: 'very-long-attachment-name.unknown', path: 'D:/docs/very-long-attachment-name.unknown', kind: 'other' },
       ],
     }))
@@ -712,6 +729,23 @@ describe('fileManagerPanel 组件', () => {
     expect(findFileManagerEntryByName(wrapper, 'sheet.xlsx').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:table')
     expect(findFileManagerEntryByName(wrapper, 'archive.zip').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:zip')
     expect(findFileManagerEntryByName(wrapper, 'audio.mp3').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:music')
+    expect(findFileManagerEntryByName(wrapper, 'slides.pptx').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-ppt')
+    expect(findFileManagerEntryByName(wrapper, 'server.log').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-txt')
+    expect(findFileManagerEntryByName(wrapper, 'config.json').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:braces')
+    expect(findFileManagerEntryByName(wrapper, 'schema.xml').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-xml')
+    expect(findFileManagerEntryByName(wrapper, 'main.js').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-js')
+    expect(findFileManagerEntryByName(wrapper, 'main.ts').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-ts')
+    expect(findFileManagerEntryByName(wrapper, 'index.html').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-html')
+    expect(findFileManagerEntryByName(wrapper, 'style.css').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-css')
+    expect(findFileManagerEntryByName(wrapper, 'App.vue').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-vue')
+    expect(findFileManagerEntryByName(wrapper, 'main.py').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:brand-python')
+    expect(findFileManagerEntryByName(wrapper, 'Service.java').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-code')
+    expect(findFileManagerEntryByName(wrapper, 'tool.c').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-code')
+    expect(findFileManagerEntryByName(wrapper, 'native.cpp').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:brand-cpp')
+    expect(findFileManagerEntryByName(wrapper, 'server.go').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:brand-golang')
+    expect(findFileManagerEntryByName(wrapper, 'main.rs').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-rs')
+    expect(findFileManagerEntryByName(wrapper, 'query.sql').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file-type-sql')
+    expect(findFileManagerEntryByName(wrapper, 'setup.exe').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:binary')
     expect(findFileManagerEntryByName(wrapper, 'very-long-attachment-name.unknown').get('.file-manager-panel__entry-icon').classes()).toContain('i-tabler:file')
     wrapper.findAll('[data-testid="file-manager-entry-name"]').forEach((node) => {
       expect(node.classes()).toContain('truncate')

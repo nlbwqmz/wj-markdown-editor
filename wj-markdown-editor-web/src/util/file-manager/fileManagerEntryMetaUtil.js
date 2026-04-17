@@ -17,6 +17,7 @@ const FILE_MANAGER_ENTRY_TYPE_WEIGHT_MAP = Object.freeze(FILE_MANAGER_ENTRY_TYPE
   return weightMap
 }, {}))
 
+// @unocss-include
 const FILE_MANAGER_ENTRY_ICON_PROFILE_MAP = Object.freeze({
   directory: Object.freeze({
     iconClass: 'i-tabler:folder',
@@ -54,10 +55,126 @@ const FILE_MANAGER_ENTRY_ICON_PROFILE_MAP = Object.freeze({
     iconClass: 'i-tabler:music',
     testId: 'file-manager-entry-icon-audio',
   }),
+  presentation: Object.freeze({
+    iconClass: 'i-tabler:file-type-ppt',
+    testId: 'file-manager-entry-icon-presentation',
+  }),
+  text: Object.freeze({
+    iconClass: 'i-tabler:file-type-txt',
+    testId: 'file-manager-entry-icon-text',
+  }),
+  json: Object.freeze({
+    iconClass: 'i-tabler:braces',
+    testId: 'file-manager-entry-icon-json',
+  }),
+  xml: Object.freeze({
+    iconClass: 'i-tabler:file-type-xml',
+    testId: 'file-manager-entry-icon-xml',
+  }),
+  javascript: Object.freeze({
+    iconClass: 'i-tabler:file-type-js',
+    testId: 'file-manager-entry-icon-javascript',
+  }),
+  typescript: Object.freeze({
+    iconClass: 'i-tabler:file-type-ts',
+    testId: 'file-manager-entry-icon-typescript',
+  }),
+  html: Object.freeze({
+    iconClass: 'i-tabler:file-type-html',
+    testId: 'file-manager-entry-icon-html',
+  }),
+  css: Object.freeze({
+    iconClass: 'i-tabler:file-type-css',
+    testId: 'file-manager-entry-icon-css',
+  }),
+  vue: Object.freeze({
+    iconClass: 'i-tabler:file-type-vue',
+    testId: 'file-manager-entry-icon-vue',
+  }),
+  python: Object.freeze({
+    iconClass: 'i-tabler:brand-python',
+    testId: 'file-manager-entry-icon-python',
+  }),
+  java: Object.freeze({
+    iconClass: 'i-tabler:file-code',
+    testId: 'file-manager-entry-icon-java',
+  }),
+  c: Object.freeze({
+    iconClass: 'i-tabler:file-code',
+    testId: 'file-manager-entry-icon-c',
+  }),
+  cpp: Object.freeze({
+    iconClass: 'i-tabler:brand-cpp',
+    testId: 'file-manager-entry-icon-cpp',
+  }),
+  go: Object.freeze({
+    iconClass: 'i-tabler:brand-golang',
+    testId: 'file-manager-entry-icon-go',
+  }),
+  rust: Object.freeze({
+    iconClass: 'i-tabler:file-type-rs',
+    testId: 'file-manager-entry-icon-rust',
+  }),
+  sql: Object.freeze({
+    iconClass: 'i-tabler:file-type-sql',
+    testId: 'file-manager-entry-icon-sql',
+  }),
+  executable: Object.freeze({
+    iconClass: 'i-tabler:binary',
+    testId: 'file-manager-entry-icon-executable',
+  }),
   other: Object.freeze({
     iconClass: 'i-tabler:file',
     testId: 'file-manager-entry-icon-other',
   }),
+})
+
+const FILE_MANAGER_ENTRY_EXTENSION_ICON_KEY_MAP = Object.freeze({
+  ppt: 'presentation',
+  pptx: 'presentation',
+  odp: 'presentation',
+  key: 'presentation',
+  txt: 'text',
+  text: 'text',
+  log: 'text',
+  json: 'json',
+  jsonc: 'json',
+  yaml: 'json',
+  yml: 'json',
+  toml: 'json',
+  xml: 'xml',
+  js: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  jsx: 'javascript',
+  ts: 'typescript',
+  mts: 'typescript',
+  cts: 'typescript',
+  tsx: 'typescript',
+  html: 'html',
+  htm: 'html',
+  css: 'css',
+  scss: 'css',
+  sass: 'css',
+  less: 'css',
+  vue: 'vue',
+  py: 'python',
+  java: 'java',
+  c: 'c',
+  h: 'c',
+  cc: 'cpp',
+  cp: 'cpp',
+  cxx: 'cpp',
+  cpp: 'cpp',
+  hh: 'cpp',
+  hpp: 'cpp',
+  hxx: 'cpp',
+  go: 'go',
+  rs: 'rust',
+  sql: 'sql',
+  exe: 'executable',
+  msi: 'executable',
+  apk: 'executable',
 })
 
 const IMAGE_EXTENSION_SET = new Set([
@@ -213,7 +330,23 @@ export function resolveFileManagerEntryTypeWeight(entryOrType) {
   return FILE_MANAGER_ENTRY_TYPE_WEIGHT_MAP[resolvedType] ?? FILE_MANAGER_ENTRY_TYPE_WEIGHT_MAP.other
 }
 
+function resolveFileManagerEntryExtensionIconKey(entry) {
+  const extension = resolveFileManagerEntryExtension(entry)
+
+  if (!extension) {
+    return null
+  }
+
+  return FILE_MANAGER_ENTRY_EXTENSION_ICON_KEY_MAP[extension] || null
+}
+
 export function resolveFileManagerEntryIconProfile(entry) {
+  // 图标细分只影响展示，不改变既有 type 排序与业务判断。
+  const extensionIconKey = resolveFileManagerEntryExtensionIconKey(entry)
+  if (extensionIconKey) {
+    return FILE_MANAGER_ENTRY_ICON_PROFILE_MAP[extensionIconKey] || FILE_MANAGER_ENTRY_ICON_PROFILE_MAP.other
+  }
+
   return FILE_MANAGER_ENTRY_ICON_PROFILE_MAP[resolveFileManagerEntryType(entry)] || FILE_MANAGER_ENTRY_ICON_PROFILE_MAP.other
 }
 
