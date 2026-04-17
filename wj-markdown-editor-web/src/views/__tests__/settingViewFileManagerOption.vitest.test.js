@@ -16,6 +16,6 @@ describe('settingView 文件管理栏默认配置项', () => {
     expect(zhCN.config.view.defaultShowFileManager).toBe('默认显示文件管理栏')
     expect(enUS.config.view.defaultShowFileManager).toBe('Default show file manager')
     expect(source).toMatch(/config\.view\.defaultShowFileManager/u)
-    expect(source).toMatch(/v-model:value="config\.fileManagerVisible"/u)
+    expect(source).toMatch(/:value="config\.fileManagerVisible"/u)
   })
 })
