@@ -298,7 +298,11 @@ function onAnchorClick(event, item) {
 
   setCurrentActiveHref(href)
   startProgrammaticScroll(scrollResult.container, scrollResult.targetTop)
+  const didPreviewScroll = Math.abs(
+    (scrollResult.sourceTop ?? 0) - resolveReachableProgrammaticScrollTarget(scrollResult.container, scrollResult.targetTop),
+  ) >= 1
   emits('anchorNavigate', {
+    didPreviewScroll,
     href,
     lineStart: item?.lineStart,
     lineEnd: item?.lineEnd,

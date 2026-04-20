@@ -461,7 +461,7 @@ const {
   previewSync: {
     jumpToTargetLine,
     jumpEditorToLine,
-    suppressNextLinkedSync,
+    suppressNextPreviewToEditorSync,
     syncEditorToPreview,
     syncPreviewToEditor,
     bindEvents,
@@ -807,8 +807,10 @@ function onOutlineNavigate(payload) {
     return
   }
 
-  suppressNextLinkedSync()
-  jumpEditorToLine(lineStart)
+  if (payload?.didPreviewScroll === true) {
+    suppressNextPreviewToEditorSync()
+  }
+  jumpEditorToLine(lineStart, { suppressEditorToPreviewSync: true })
 }
 
 function onPreviewContextmenu(context) {

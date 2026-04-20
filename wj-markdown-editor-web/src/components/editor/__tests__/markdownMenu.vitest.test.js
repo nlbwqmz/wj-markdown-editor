@@ -329,6 +329,29 @@ describe('markdownMenu', () => {
 
     expect(wrapper.emitted('anchorNavigate')).toEqual([
       [{
+        didPreviewScroll: true,
+        href: '#resource',
+        lineStart: 26,
+        lineEnd: 26,
+      }],
+    ])
+  })
+
+  it('点击目录项若预览本来就已对齐目标，不应把 didPreviewScroll 标记为 true', async () => {
+    installHeadingTargets(container)
+    container.scrollTop = 260
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    await wrapper.find('[data-href="#resource"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('anchorNavigate')).toEqual([
+      [{
+        didPreviewScroll: false,
         href: '#resource',
         lineStart: 26,
         lineEnd: 26,

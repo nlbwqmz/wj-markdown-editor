@@ -117,12 +117,14 @@ export function scrollPreviewToAnchor({
     return null
   }
 
+  const sourceTop = container.scrollTop
   container.scrollTo({
     top: targetTop,
   })
 
   return {
     container,
+    sourceTop,
     targetElement: resolvedTargetElement,
     targetTop,
   }

@@ -78,13 +78,21 @@ export function usePreviewSync({
     activeScrollWatch = undefined
   }
 
+  function resolveNormalizedScrollTop(element, top) {
+    if (!element) {
+      return 0
+    }
+
+    return Math.max(0, Math.min(element.scrollHeight - element.clientHeight, top))
+  }
+
   function checkScrollTop(element, top, callback) {
     if (!element) {
       callback && callback()
       return
     }
 
-    const normalizedTop = Math.max(0, Math.min(element.scrollHeight - element.clientHeight, top))
+    const normalizedTop = resolveNormalizedScrollTop(element, top)
     if (Math.abs(element.scrollTop - normalizedTop) < 1) {
       callback && callback()
       return
@@ -165,9 +173,17 @@ export function usePreviewSync({
    * 这类场景不应再让预览滚动结果反推编辑区，否则自动换行下会先吃到估算高度再二次纠正。
    * 这里用一次性令牌跳过下一轮 editor->preview / preview->editor 联动，避免双方互相回推。
    */
-  function suppressNextLinkedSync() {
+  function suppressNextEditorToPreviewSync() {
     suppressedEditorToPreviewSyncCount += 1
+  }
+
+  function suppressNextPreviewToEditorSync() {
     suppressedPreviewToEditorSyncCount += 1
+  }
+
+  function suppressNextLinkedSync() {
+    suppressNextEditorToPreviewSync()
+    suppressNextPreviewToEditorSync()
   }
 
   function shouldSkipEditorToPreviewSync() {
@@ -271,9 +287,10 @@ export function usePreviewSync({
    * 这里复用编辑器原生 scrollIntoView 效果，能在自动换行场景下吃到更准确的真实测量结果。
    *
    * @param {number} lineNumber
+   * @param {{ suppressEditorToPreviewSync?: boolean }} [options]
    * @returns {boolean} 是否已发起滚动
    */
-  function jumpEditorToLine(lineNumber) {
+  function jumpEditorToLine(lineNumber, options = {}) {
     const view = getEditorView()
     const numericLineNumber = Number(lineNumber)
     if (
@@ -286,6 +303,16 @@ export function usePreviewSync({
     }
 
     const targetLine = view.state.doc.line(numericLineNumber)
+    const targetBlock = view.lineBlockAt(targetLine.from)
+    const normalizedTargetScrollTop = resolveNormalizedScrollTop(view.scrollDOM, targetBlock.top)
+    if (Math.abs(view.scrollDOM.scrollTop - normalizedTargetScrollTop) < 1) {
+      return false
+    }
+
+    if (options?.suppressEditorToPreviewSync === true) {
+      suppressNextEditorToPreviewSync()
+    }
+
     view.dispatch({
       effects: EditorView.scrollIntoView(targetLine.from, { y: 'start' }),
     })
@@ -425,7 +452,9 @@ export function usePreviewSync({
     const { targetScrollTop } = resolvedTarget
 
     scrolling.value.preview = true
+    let didFinishCheckSynchronously = false
     checkScrollTop(view.scrollDOM, targetScrollTop, () => {
+      didFinishCheckSynchronously = true
       if (token !== previewToEditorSyncToken) {
         return
       }
@@ -447,6 +476,14 @@ export function usePreviewSync({
 
       scrolling.value.preview = false
     })
+
+    // checkScrollTop 在“当前已经命中目标”时会同步执行回调。
+    // 此时回调里可能已经递归发起下一轮校正；外层若继续把旧目标写回，
+    // 会立刻覆盖掉校正结果，所以同步收敛场景下必须直接退出。
+    if (didFinishCheckSynchronously === true) {
+      return
+    }
+
     scrollFollowerToTarget(view.scrollDOM, targetScrollTop)
   }
 
@@ -511,6 +548,8 @@ export function usePreviewSync({
     findPreviewElement,
     jumpToTargetLine,
     jumpEditorToLine,
+    suppressNextEditorToPreviewSync,
+    suppressNextPreviewToEditorSync,
     suppressNextLinkedSync,
     syncEditorToPreview,
     syncPreviewToEditor,

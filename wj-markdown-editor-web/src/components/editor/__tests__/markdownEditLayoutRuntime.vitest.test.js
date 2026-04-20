@@ -20,7 +20,7 @@ const previewLayoutWiringState = vi.hoisted(() => ({
   rebuildPreviewLayoutIndex: vi.fn(() => 0),
   jumpToTargetLine: vi.fn(),
   jumpEditorToLine: vi.fn(),
-  suppressNextLinkedSync: vi.fn(),
+  suppressNextPreviewToEditorSync: vi.fn(),
   syncEditorToPreview: vi.fn(),
   syncPreviewToEditor: vi.fn(),
   bindEvents: vi.fn(),
@@ -221,7 +221,7 @@ vi.mock('@/components/editor/markdownEditPreviewLayoutIndexWiring.js', () => ({
       previewSync: {
         jumpToTargetLine: previewLayoutWiringState.jumpToTargetLine,
         jumpEditorToLine: previewLayoutWiringState.jumpEditorToLine,
-        suppressNextLinkedSync: previewLayoutWiringState.suppressNextLinkedSync,
+        suppressNextPreviewToEditorSync: previewLayoutWiringState.suppressNextPreviewToEditorSync,
         syncEditorToPreview: previewLayoutWiringState.syncEditorToPreview,
         syncPreviewToEditor: previewLayoutWiringState.syncPreviewToEditor,
         bindEvents: previewLayoutWiringState.bindEvents,
@@ -356,7 +356,7 @@ describe('markdownEdit 布局运行时接线', () => {
     previewLayoutWiringState.rebuildPreviewLayoutIndex.mockClear()
     previewLayoutWiringState.jumpToTargetLine.mockClear()
     previewLayoutWiringState.jumpEditorToLine.mockClear()
-    previewLayoutWiringState.suppressNextLinkedSync.mockClear()
+    previewLayoutWiringState.suppressNextPreviewToEditorSync.mockClear()
     previewLayoutWiringState.syncEditorToPreview.mockClear()
     previewLayoutWiringState.syncPreviewToEditor.mockClear()
     previewLayoutWiringState.bindEvents.mockClear()
@@ -444,22 +444,47 @@ describe('markdownEdit 布局运行时接线', () => {
     expect(wrapper.get('[data-layout-item="menu"]').attributes('data-show-header')).toBe('false')
   })
 
-  it('目录菜单上抛锚点行号后，编辑页会直接定位编辑区并抑制下一次双向联动回流', async () => {
+  it('目录菜单上抛锚点行号后，编辑页只会按实际发生的预览滚动抑制 preview 到 editor 回流', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
       menuVisible: true,
     })
+    previewLayoutWiringState.jumpEditorToLine.mockReturnValue(true)
 
     wrapper.getComponent({ name: 'MarkdownMenuStub' }).vm.$emit('anchorNavigate', {
+      didPreviewScroll: true,
       href: '#section',
       lineStart: 88,
       lineEnd: 88,
     })
     await nextTick()
 
-    expect(previewLayoutWiringState.suppressNextLinkedSync).toHaveBeenCalledTimes(1)
+    expect(previewLayoutWiringState.suppressNextPreviewToEditorSync).toHaveBeenCalledTimes(1)
     expect(previewLayoutWiringState.jumpEditorToLine).toHaveBeenCalledTimes(1)
-    expect(previewLayoutWiringState.jumpEditorToLine).toHaveBeenCalledWith(88)
+    expect(previewLayoutWiringState.jumpEditorToLine).toHaveBeenCalledWith(88, {
+      suppressEditorToPreviewSync: true,
+    })
+  })
+
+  it('目录菜单点击若未触发预览程序化滚动，不应预支 preview 到 editor 抑制', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: true,
+    })
+    previewLayoutWiringState.jumpEditorToLine.mockReturnValue(false)
+
+    wrapper.getComponent({ name: 'MarkdownMenuStub' }).vm.$emit('anchorNavigate', {
+      didPreviewScroll: false,
+      href: '#section',
+      lineStart: 88,
+      lineEnd: 88,
+    })
+    await nextTick()
+
+    expect(previewLayoutWiringState.suppressNextPreviewToEditorSync).not.toHaveBeenCalled()
+    expect(previewLayoutWiringState.jumpEditorToLine).toHaveBeenCalledWith(88, {
+      suppressEditorToPreviewSync: true,
+    })
   })
 
   it('previewPosition 从 right 切到 left 时，会重建 Split 并同步新的真实 DOM 顺序', async () => {
