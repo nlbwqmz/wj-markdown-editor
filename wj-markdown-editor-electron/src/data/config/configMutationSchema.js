@@ -17,6 +17,7 @@ const SET_PATH_SET = new Set([
   'menuVisible',
   'fileManagerVisible',
   'editor.previewPosition',
+  'fileManagerLeftClickAction.markdown',
   'editor.associationHighlight',
   'editorExtension.lineNumbers',
   'editorExtension.lineWrapping',

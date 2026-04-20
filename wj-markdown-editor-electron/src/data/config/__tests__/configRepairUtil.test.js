@@ -27,6 +27,17 @@ describe('configRepairUtil', () => {
     })
   })
 
+  it('缺失 fileManagerLeftClickAction 时必须从默认配置补齐', () => {
+    const legacyConfig = { ...defaultConfig }
+    delete legacyConfig.fileManagerLeftClickAction
+
+    const repaired = repairConfig(legacyConfig, defaultConfig)
+
+    expect(repaired.fileManagerLeftClickAction).toEqual({
+      markdown: 'prompt',
+    })
+  })
+
   it('默认配置中不存在的旧字段必须被裁掉', () => {
     const repaired = repairConfig({
       legacyField: 'deprecated',

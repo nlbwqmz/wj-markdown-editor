@@ -26,6 +26,7 @@ const DEFAULT_FILE_MANAGER_SORT_CONFIG = Object.freeze({
   field: 'type',
   direction: 'asc',
 })
+const FILE_MANAGER_MARKDOWN_LEFT_CLICK_ACTION_SET = new Set(['prompt', 'new-window', 'current-window'])
 
 function isWindowsDriveRootPath(path) {
   return /^[A-Za-z]:\/$/u.test(path)
@@ -155,6 +156,12 @@ function normalizeFileManagerSortConfig(sortConfig) {
     field,
     direction,
   }
+}
+
+function normalizeFileManagerMarkdownLeftClickAction(action) {
+  return FILE_MANAGER_MARKDOWN_LEFT_CLICK_ACTION_SET.has(action)
+    ? action
+    : 'prompt'
 }
 
 function shouldIncludeModifiedTime(sortConfig) {
@@ -845,7 +852,7 @@ export function createFileManagerPanelController({
     return await createMarkdown()
   }
 
-  async function openEntry(entry) {
+  async function openEntry(entry, options = {}) {
     if (entry?.kind === 'directory') {
       return await openDirectory(entry.path)
     }
@@ -859,9 +866,14 @@ export function createFileManagerPanelController({
         }
       }
 
+      const openMode = typeof options?.openMode === 'string' && options.openMode
+        ? options.openMode
+        : normalizeFileManagerMarkdownLeftClickAction(store?.config?.fileManagerLeftClickAction?.markdown)
+
       return await requestOpenDocumentPath(entry.path, {
         entrySource: 'file-manager',
         trigger: 'user',
+        ...(openMode !== 'prompt' ? { openMode } : {}),
       })
     }
 

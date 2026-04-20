@@ -135,6 +135,7 @@ export default {
     title: {
       general: '常规',
       view: '视图',
+      fileManager: '文件管理栏',
       editor: '编辑器',
       file: '文件',
       picture: '图片',
@@ -190,6 +191,15 @@ export default {
       globalThemeOption: {
         light: '明亮',
         dark: '暗黑',
+      },
+    },
+    fileManager: {
+      defaultShowFileManager: '默认显示文件管理栏',
+      markdownLeftClickAction: 'Markdown 左键逻辑',
+      leftClickActionOption: {
+        prompt: '提示',
+        newWindow: '新窗口打开',
+        currentWindow: '当前窗口打开',
       },
     },
     editor: {

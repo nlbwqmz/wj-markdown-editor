@@ -17,6 +17,9 @@ export default {
     field: 'type',
     direction: 'asc',
   },
+  fileManagerLeftClickAction: {
+    markdown: 'prompt',
+  },
   previewWidth: 80,
   fontSize: 16,
   fontFamily: {

@@ -294,6 +294,34 @@ describe('fileManagerOpenDecisionController', () => {
     })
   })
 
+  it('显式传入 current-window 时应跳过打开方式选择，但保留当前窗口预判与 save-choice', async () => {
+    const controller = createController()
+
+    const result = await controller.openDocument('/tmp/next.md', {
+      openMode: 'current-window',
+      entrySource: 'file-manager',
+      trigger: 'user',
+    })
+
+    expect(result.stageList).toEqual([
+      'target-preflight',
+      'open-choice',
+      'current-window-preflight',
+      'save-choice',
+      'dispatch',
+    ])
+    expect(mocked.promptOpenModeChoice).not.toHaveBeenCalled()
+    expect(mocked.requestCurrentWindowOpenPreparation).toHaveBeenCalledTimes(1)
+    expect(mocked.promptSaveChoice).toHaveBeenCalledTimes(1)
+    expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('/tmp/next.md', {
+      entrySource: 'file-manager',
+      expectedRevision: 7,
+      expectedSessionId: 'session-current',
+      switchPolicy: 'save-before-switch',
+      trigger: 'user',
+    })
+  })
+
   it('新窗口分支底层返回兼容 false 时，应原样保留 false 结果', async () => {
     mocked.requestDocumentOpenPath.mockResolvedValue(false)
     const controller = createController()

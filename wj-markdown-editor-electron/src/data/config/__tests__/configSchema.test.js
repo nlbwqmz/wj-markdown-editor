@@ -23,6 +23,12 @@ describe('configSchema', () => {
     })
   })
 
+  it('defaultConfig 必须提供 fileManagerLeftClickAction.markdown 默认值 prompt', () => {
+    expect(defaultConfig.fileManagerLeftClickAction).toEqual({
+      markdown: 'prompt',
+    })
+  })
+
   it('defaultConfig 必须提供全屏切换与文件管理栏切换快捷键配置', () => {
     const toggleFullScreenShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
     const toggleFileManagerPanelShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFileManagerPanel')
@@ -73,6 +79,24 @@ describe('configSchema', () => {
         direction: 'desc',
       },
     })).not.toThrow()
+  })
+
+  it('config schema 必须接纳 fileManagerLeftClickAction.markdown', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerLeftClickAction: {
+        markdown: 'current-window',
+      },
+    })).not.toThrow()
+  })
+
+  it('config schema 必须拒绝非法 fileManagerLeftClickAction.markdown', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerLeftClickAction: {
+        markdown: 'ask-every-time',
+      },
+    })).toThrow()
   })
 
   it('config schema 必须拒绝非法 fileManagerSort.field', () => {

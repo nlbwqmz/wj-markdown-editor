@@ -1,5 +1,5 @@
 <script setup>
-import { Empty as AEmpty, Input as AInput } from 'ant-design-vue'
+import { Dropdown as ADropdown, Empty as AEmpty, Input as AInput, Menu as AMenu } from 'ant-design-vue'
 import { computed, h, nextTick, ref } from 'vue'
 import IconButton from '@/components/editor/IconButton.vue'
 import i18n from '@/i18n/index.js'
@@ -140,6 +140,32 @@ function resolveEntryIconClass(entry) {
   return resolveFileManagerEntryIconProfile(entry).iconClass
 }
 
+function createMarkdownEntryMenuList(entry) {
+  if (entry?.kind !== 'markdown') {
+    return []
+  }
+
+  return [
+    {
+      key: 'current-window',
+      label: t('message.fileManagerOpenInCurrentWindow'),
+      action: () => openEntry(entry, { openMode: 'current-window' }),
+    },
+    {
+      key: 'new-window',
+      label: t('message.fileManagerOpenInNewWindow'),
+      action: () => openEntry(entry, { openMode: 'new-window' }),
+    },
+  ]
+}
+
+function handleMarkdownEntryMenuClick(entry, menuInfo) {
+  const matchedMenu = createMarkdownEntryMenuList(entry)
+    .find(item => String(item.key) === String(menuInfo?.key))
+
+  matchedMenu?.action?.()
+}
+
 // 公共 IconButton 不处理禁用态时，在当前面板内补充交互限制和视觉弱化。
 const disabledToolbarButtonClass = 'pointer-events-none cursor-not-allowed opacity-45'
 const resolvedDirectoryPath = computed(() => breadcrumbList.value.length
@@ -257,28 +283,62 @@ async function handleFocusCurrentDocumentDirectory() {
         v-else-if="filteredEntryList.length > 0"
         class="wj-scrollbar file-manager-panel__list h-full min-h-0 overflow-y-auto px-2 py-2"
       >
-        <button
-          v-for="entry in filteredEntryList"
-          :key="entry.path"
-          :title="entry.name"
-          type="button"
-          class="file-manager-panel__entry"
-          :class="{ 'is-active': entry.isActive }"
-          :data-testid="entry.isActive ? 'file-manager-entry-current' : null"
-          @click="openEntry(entry)"
-        >
-          <span
-            :data-testid="resolveEntryIconTestId(entry)"
-            class="file-manager-panel__entry-icon"
-            :class="resolveEntryIconClass(entry)"
-          />
-          <span
-            data-testid="file-manager-entry-name"
-            class="file-manager-panel__entry-name truncate"
+        <template v-for="entry in filteredEntryList" :key="entry.path">
+          <ADropdown
+            v-if="entry.kind === 'markdown'"
+            :trigger="['contextmenu']"
+            placement="bottomLeft"
           >
-            {{ entry.name }}
-          </span>
-        </button>
+            <button
+              :title="entry.name"
+              type="button"
+              class="file-manager-panel__entry"
+              :class="{ 'is-active': entry.isActive }"
+              :data-testid="entry.isActive ? 'file-manager-entry-current' : null"
+              @click="openEntry(entry)"
+            >
+              <span
+                :data-testid="resolveEntryIconTestId(entry)"
+                class="file-manager-panel__entry-icon"
+                :class="resolveEntryIconClass(entry)"
+              />
+              <span
+                data-testid="file-manager-entry-name"
+                class="file-manager-panel__entry-name truncate"
+              >
+                {{ entry.name }}
+              </span>
+            </button>
+            <template #overlay>
+              <AMenu
+                mode="vertical"
+                :items="createMarkdownEntryMenuList(entry)"
+                @click="menuInfo => handleMarkdownEntryMenuClick(entry, menuInfo)"
+              />
+            </template>
+          </ADropdown>
+          <button
+            v-else
+            :title="entry.name"
+            type="button"
+            class="file-manager-panel__entry"
+            :class="{ 'is-active': entry.isActive }"
+            :data-testid="entry.isActive ? 'file-manager-entry-current' : null"
+            @click="openEntry(entry)"
+          >
+            <span
+              :data-testid="resolveEntryIconTestId(entry)"
+              class="file-manager-panel__entry-icon"
+              :class="resolveEntryIconClass(entry)"
+            />
+            <span
+              data-testid="file-manager-entry-name"
+              class="file-manager-panel__entry-name truncate"
+            >
+              {{ entry.name }}
+            </span>
+          </button>
+        </template>
       </div>
       <div
         v-else

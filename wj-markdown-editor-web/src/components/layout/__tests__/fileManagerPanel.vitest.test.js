@@ -22,6 +22,9 @@ const fileManagerPanelState = vi.hoisted(() => {
           field: 'type',
           direction: 'asc',
         },
+        fileManagerLeftClickAction: {
+          markdown: 'prompt',
+        },
       },
     },
     requestFileManagerDirectoryState: vi.fn(),
@@ -257,6 +260,51 @@ vi.mock('ant-design-vue', async () => {
         ])
       },
     }),
+    Dropdown: defineComponent({
+      name: 'ADropdownStub',
+      props: {
+        trigger: {
+          type: Array,
+          default: () => ['hover'],
+        },
+        placement: {
+          type: String,
+          default: 'bottom',
+        },
+      },
+      setup(props, { slots }) {
+        return () => h('div', {
+          'data-testid': 'dropdown-stub',
+          'data-trigger': JSON.stringify(props.trigger),
+          'data-placement': props.placement,
+        }, [
+          h('div', { 'data-testid': 'dropdown-default-stub' }, slots.default?.()),
+          h('div', { 'data-testid': 'dropdown-overlay-stub' }, slots.overlay?.()),
+        ])
+      },
+    }),
+    Menu: defineComponent({
+      name: 'AMenuStub',
+      props: {
+        items: {
+          type: Array,
+          default: () => [],
+        },
+      },
+      emits: ['click'],
+      setup(props, { emit }) {
+        return () => h('div', { 'data-testid': 'menu-stub' }, props.items.map(item => h('button', {
+          'type': 'button',
+          'data-testid': `dropdown-menu-item-${item.key}`,
+          'onClick': () => emit('click', {
+            key: item.key,
+            item: {
+              originItemValue: item,
+            },
+          }),
+        }, typeof item.label === 'string' ? item.label : extractVNodeText(item.label))))
+      },
+    }),
     Modal: {
       confirm: fileManagerPanelState.modalConfirm,
     },
@@ -332,6 +380,9 @@ describe('fileManagerPanel 组件', () => {
     fileManagerPanelState.store.config.fileManagerSort = {
       field: 'type',
       direction: 'asc',
+    }
+    fileManagerPanelState.store.config.fileManagerLeftClickAction = {
+      markdown: 'prompt',
     }
     fileManagerPanelState.requestFileManagerDirectoryState.mockReset()
     fileManagerPanelState.requestFileManagerOpenDirectory.mockReset()
@@ -813,6 +864,93 @@ describe('fileManagerPanel 组件', () => {
       entrySource: 'file-manager',
       trigger: 'user',
     })
+  })
+
+  it('markdown 左键在 new-window 配置下应显式传入 openMode', async () => {
+    fileManagerPanelState.store.config.fileManagerLeftClickAction = {
+      markdown: 'new-window',
+    }
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'next.md', path: 'D:/docs/next.md', kind: 'markdown' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('.file-manager-panel__entry').trigger('click')
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith('D:/docs/next.md', {
+      entrySource: 'file-manager',
+      trigger: 'user',
+      openMode: 'new-window',
+    })
+  })
+
+  it('markdown 左键在 current-window 配置下应显式传入 openMode', async () => {
+    fileManagerPanelState.store.config.fileManagerLeftClickAction = {
+      markdown: 'current-window',
+    }
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'next.md', path: 'D:/docs/next.md', kind: 'markdown' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    await wrapper.get('.file-manager-panel__entry').trigger('click')
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith('D:/docs/next.md', {
+      entrySource: 'file-manager',
+      trigger: 'user',
+      openMode: 'current-window',
+    })
+  })
+
+  it('markdown 右键菜单应提供当前窗口打开与新窗口打开', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'next.md', path: 'D:/docs/next.md', kind: 'markdown' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('[data-testid="dropdown-menu-item-current-window"]').text()).toContain('translated:message.fileManagerOpenInCurrentWindow')
+    expect(wrapper.get('[data-testid="dropdown-menu-item-new-window"]').text()).toContain('translated:message.fileManagerOpenInNewWindow')
+
+    await wrapper.get('[data-testid="dropdown-menu-item-new-window"]').trigger('click')
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith('D:/docs/next.md', {
+      entrySource: 'file-manager',
+      trigger: 'user',
+      openMode: 'new-window',
+    })
+  })
+
+  it('目录项不应出现 markdown 右键打开菜单', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.find('[data-testid="dropdown-menu-item-current-window"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="dropdown-menu-item-new-window"]').exists()).toBe(false)
   })
 
   it('点击其他文件类型时应提示当前仅支持 Markdown 打开', async () => {

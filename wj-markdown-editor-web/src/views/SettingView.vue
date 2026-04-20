@@ -40,6 +40,7 @@ const anchorList = computed(() => [
   { key: '-1', href: '#general', title: t('config.title.general') },
   { key: '9', href: '#font', title: t('config.title.fontFamily') },
   { key: '0', href: '#view', title: t('config.title.view') },
+  { key: '10', href: '#fileManager', title: t('config.title.fileManager') },
   { key: '1', href: '#editor', title: t('config.title.editor') },
   { key: '2', href: '#file', title: t('config.title.file') },
   { key: '3', href: '#image', title: t('config.title.picture') },
@@ -452,16 +453,6 @@ function reset() {
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>
-          <a-descriptions-item :label="$t('config.view.defaultShowFileManager')">
-            <a-radio-group :value="config.fileManagerVisible" button-style="solid" @update:value="value => submitSetPathMutation(['fileManagerVisible'], value)">
-              <a-radio-button :value="true">
-                {{ $t('config.yes') }}
-              </a-radio-button>
-              <a-radio-button :value="false">
-                {{ $t('config.no') }}
-              </a-radio-button>
-            </a-radio-group>
-          </a-descriptions-item>
           <a-descriptions-item :label="$t('config.view.editorPreviewPosition')">
             <a-radio-group :value="config.editor.previewPosition" button-style="solid" @update:value="value => submitSetPathMutation(['editor', 'previewPosition'], value)">
               <a-radio-button value="left">
@@ -519,6 +510,38 @@ function reset() {
               :max="28"
               @update:value="value => submitSetPathMutation(['fontSize'], value)"
             />
+          </a-descriptions-item>
+        </a-descriptions>
+        <a-descriptions bordered :column="1" size="small">
+          <template #title>
+            <span id="fileManager">{{ $t('config.title.fileManager') }}</span>
+          </template>
+          <a-descriptions-item :label="$t('config.fileManager.defaultShowFileManager')">
+            <a-radio-group :value="config.fileManagerVisible" button-style="solid" @update:value="value => submitSetPathMutation(['fileManagerVisible'], value)">
+              <a-radio-button :value="true">
+                {{ $t('config.yes') }}
+              </a-radio-button>
+              <a-radio-button :value="false">
+                {{ $t('config.no') }}
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item :label="$t('config.fileManager.markdownLeftClickAction')">
+            <a-radio-group
+              :value="config.fileManagerLeftClickAction.markdown"
+              button-style="solid"
+              @update:value="value => submitSetPathMutation(['fileManagerLeftClickAction', 'markdown'], value)"
+            >
+              <a-radio-button value="prompt">
+                {{ $t('config.fileManager.leftClickActionOption.prompt') }}
+              </a-radio-button>
+              <a-radio-button value="new-window">
+                {{ $t('config.fileManager.leftClickActionOption.newWindow') }}
+              </a-radio-button>
+              <a-radio-button value="current-window">
+                {{ $t('config.fileManager.leftClickActionOption.currentWindow') }}
+              </a-radio-button>
+            </a-radio-group>
           </a-descriptions-item>
         </a-descriptions>
         <a-descriptions bordered :column="1" size="small">

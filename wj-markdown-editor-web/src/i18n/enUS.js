@@ -135,6 +135,7 @@ export default {
     title: {
       general: 'General',
       view: 'View',
+      fileManager: 'File Manager',
       editor: 'Editor',
       file: 'File',
       picture: 'Picture',
@@ -190,6 +191,15 @@ export default {
       globalThemeOption: {
         light: 'Light',
         dark: 'Dark',
+      },
+    },
+    fileManager: {
+      defaultShowFileManager: 'Default show file manager',
+      markdownLeftClickAction: 'Markdown Left Click Action',
+      leftClickActionOption: {
+        prompt: 'Prompt',
+        newWindow: 'Open in new window',
+        currentWindow: 'Open in current window',
       },
     },
     editor: {

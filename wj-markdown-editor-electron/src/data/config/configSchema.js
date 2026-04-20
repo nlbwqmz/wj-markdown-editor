@@ -96,6 +96,15 @@ const fileManagerSortSchema = {
   },
 }
 
+const fileManagerLeftClickActionSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['markdown'],
+  properties: {
+    markdown: { enum: ['prompt', 'new-window', 'current-window'] },
+  },
+}
+
 const watermarkSchema = {
   type: 'object',
   additionalProperties: false,
@@ -207,6 +216,7 @@ export const configSchema = {
     'menuVisible',
     'fileManagerVisible',
     'fileManagerSort',
+    'fileManagerLeftClickAction',
     'previewWidth',
     'fontSize',
     'fontFamily',
@@ -240,6 +250,7 @@ export const configSchema = {
     menuVisible: { type: 'boolean' },
     fileManagerVisible: { type: 'boolean' },
     fileManagerSort: fileManagerSortSchema,
+    fileManagerLeftClickAction: fileManagerLeftClickActionSchema,
     previewWidth: { type: 'number' },
     fontSize: { type: 'number' },
     fontFamily: fontFamilySchema,
