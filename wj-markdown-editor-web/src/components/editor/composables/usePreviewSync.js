@@ -173,6 +173,26 @@ export function usePreviewSync({
     return trRect.top - containerRect.top - containerElement.clientTop + containerElement.scrollTop
   }
 
+  /**
+   * 联动滚动时直接把跟随侧滚动到目标位置。
+   * 这里不能继续叠加第二条 smooth 动画，否则源侧持续滚动时，
+   * 跟随侧会被上一轮动画拖住，只吃到早期目标，长距离跳转时尤其明显。
+   */
+  function scrollFollowerToTarget(scrollElement, targetScrollTop) {
+    if (!scrollElement) {
+      return
+    }
+
+    if (typeof scrollElement.scrollTo === 'function') {
+      scrollElement.scrollTo({
+        top: targetScrollTop,
+      })
+      return
+    }
+
+    scrollElement.scrollTop = targetScrollTop
+  }
+
   function clampScrollRatio(value) {
     if (!Number.isFinite(value)) {
       return 0
@@ -264,10 +284,7 @@ export function usePreviewSync({
       checkScrollTop(previewRef.value, targetScrollTop, () => {
         scrolling.value.editor = false
       })
-      previewRef.value.scrollTo({
-        top: targetScrollTop,
-        behavior: 'smooth',
-      })
+      scrollFollowerToTarget(previewRef.value, targetScrollTop)
     }
   }
 
@@ -312,10 +329,7 @@ export function usePreviewSync({
       checkScrollTop(view.scrollDOM, targetScrollTop, () => {
         scrolling.value.preview = false
       })
-      view.scrollDOM.scrollTo({
-        top: targetScrollTop,
-        behavior: 'smooth',
-      })
+      scrollFollowerToTarget(view.scrollDOM, targetScrollTop)
     }
   }
 

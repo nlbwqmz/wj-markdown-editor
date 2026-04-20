@@ -122,6 +122,51 @@ function createAnimatedScrollElement({ durationMs = 1500, steps = 20 } = {}) {
   }
 }
 
+function createNonRetargetableSmoothScrollElement({ durationMs = 1200, steps = 12 } = {}) {
+  const listeners = new Map()
+  let animationRunning = false
+  return {
+    onscrollend: null,
+    scrollTop: 0,
+    scrollHeight: 20000,
+    clientHeight: 300,
+    addEventListener(event, callback) {
+      listeners.set(event, callback)
+    },
+    removeEventListener(event, callback) {
+      if (listeners.get(event) === callback) {
+        listeners.delete(event)
+      }
+    },
+    scrollTo({ top, behavior } = {}) {
+      if (behavior !== 'smooth') {
+        this.scrollTop = top
+        const handler = listeners.get('scrollend')
+        handler && handler()
+        return
+      }
+
+      if (animationRunning) {
+        return
+      }
+
+      animationRunning = true
+      const startTop = this.scrollTop
+      for (let step = 1; step <= steps; step++) {
+        const progress = step / steps
+        setTimeout(() => {
+          this.scrollTop = startTop + ((top - startTop) * progress)
+          if (step === steps) {
+            animationRunning = false
+            const handler = listeners.get('scrollend')
+            handler && handler()
+          }
+        }, Math.round(durationMs * progress))
+      }
+    },
+  }
+}
+
 function installFakeScheduler() {
   const originalDateNow = Date.now
   const originalSetTimeout = globalThis.setTimeout
@@ -681,4 +726,62 @@ test('预览区滚动到表格中部时，应按预览容器坐标而不是嵌�
   syncPreviewToEditor()
 
   assert.equal(editorView.scrollDOM.scrollTop, 151.2)
+})
+
+test('预览区连续长距离滚动时，编辑区跟随不应被自身 smooth 动画锁在早期目标', () => {
+  const scheduler = installFakeScheduler()
+  previewElement.scrollTop = 0
+  previewElement.scrollToCalls = []
+
+  try {
+    const lineHeights = new Map([
+      [1, 1000],
+      [2, 1000],
+      [3, 1000],
+      [4, 1000],
+    ])
+    const editorView = createEditorView(lineHeights)
+    editorView.scrollDOM = createNonRetargetableSmoothScrollElement({
+      durationMs: 1200,
+      steps: 12,
+    })
+
+    setPreviewElements([
+      createElement({ tagName: 'p', lineStart: 1, lineEnd: 1, offsetTop: 0, actualTop: 0, height: 1000 }),
+      createElement({ tagName: 'p', lineStart: 2, lineEnd: 2, offsetTop: 1000, actualTop: 1000, height: 1000 }),
+      createElement({ tagName: 'p', lineStart: 3, lineEnd: 3, offsetTop: 2000, actualTop: 2000, height: 1000 }),
+      createElement({ tagName: 'p', lineStart: 4, lineEnd: 4, offsetTop: 3000, actualTop: 3000, height: 1000 }),
+    ])
+
+    const { syncPreviewToEditor, clearScrollTimer } = usePreviewSync({
+      editorViewRef: { value: editorView },
+      previewRef: { value: previewElement },
+      scrolling: { value: { editor: false, preview: false } },
+      editorScrollTop: { value: 0 },
+    })
+
+    try {
+      previewElement.scrollTop = 1000
+      syncPreviewToEditor()
+      scheduler.advanceBy(60)
+
+      previewElement.scrollTop = 2000
+      syncPreviewToEditor()
+      scheduler.advanceBy(60)
+
+      previewElement.scrollTop = 3000
+      syncPreviewToEditor()
+      scheduler.advanceBy(120)
+
+      assert.equal(
+        editorView.scrollDOM.scrollTop,
+        3000,
+        '预览已经滚到最终目标后，编辑区应直接跟上最新位置，而不是继续被早期 smooth 动画拖住',
+      )
+    } finally {
+      clearScrollTimer()
+    }
+  } finally {
+    scheduler.restore()
+  }
 })
