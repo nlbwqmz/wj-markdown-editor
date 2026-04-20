@@ -768,6 +768,39 @@ test('预览区普通块元素滚动时可同步到编辑区对应行', () => {
   assert.equal(editorView.scrollDOM.scrollTop, 45)
 })
 
+test('目录跳转后若预览停在标题顶部前极小距离，编辑区仍应按当前标题行对齐', () => {
+  previewElement.scrollTop = 239
+  previewElement.scrollToCalls = []
+
+  const lineHeights = new Map([
+    [1, 30],
+    [2, 30],
+    [3, 30],
+  ])
+  const editorView = createEditorView(lineHeights)
+  const elements = [
+    createElement({ tagName: 'p', lineStart: 1, lineEnd: 1, offsetTop: 0, actualTop: 0, height: 30 }),
+    createElement({ tagName: 'p', lineStart: 2, lineEnd: 2, offsetTop: 40, actualTop: 40, height: 200 }),
+    createElement({ tagName: 'h2', lineStart: 3, lineEnd: 3, offsetTop: 240, actualTop: 240, height: 30 }),
+  ]
+  setPreviewElements(elements)
+
+  const { syncPreviewToEditor } = usePreviewSync({
+    editorViewRef: { value: editorView },
+    previewRef: { value: previewElement },
+    scrolling: { value: { editor: false, preview: false } },
+    editorScrollTop: { value: 0 },
+  })
+
+  syncPreviewToEditor()
+
+  assert.equal(
+    editorView.state.doc.lineAt(editorView.lineBlockAtHeight(editorView.scrollDOM.scrollTop).from).number,
+    3,
+    '标题已经几乎贴到预览顶部时，编辑区不应再落回上一行',
+  )
+})
+
 test('预览区同步到编辑区在自动换行导致离屏行高先估算后纠正时，应在首轮滚动后再校正一次目标位置', () => {
   previewElement.scrollTop = 210
   previewElement.scrollToCalls = []

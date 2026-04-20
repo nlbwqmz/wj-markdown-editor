@@ -18,6 +18,7 @@ export function usePreviewSync({
 }) {
   const SCROLL_IDLE_MS = 160
   const SCROLL_MAX_WAIT_MS = 5000
+  const PREVIEW_TO_EDITOR_ACTIVE_BOUNDS = 5
   const PREVIEW_TO_EDITOR_CORRECTION_EPSILON = 1
   const PREVIEW_TO_EDITOR_MAX_CORRECTIONS = 2
   let activeScrollWatch
@@ -316,7 +317,9 @@ export function usePreviewSync({
       return null
     }
 
-    const element = findElementAtPreviewScroll(previewScrollTop)
+    // 目录高亮使用 5px bounds 容忍“标题已经贴近顶部但 scrollTop 还欠一点点”的情况。
+    // 这里同步到编辑区时也保持同一语义，避免大纲点击后因为 1px 级别欠滚而误命中上一块。
+    const element = findElementAtPreviewScroll(previewScrollTop + PREVIEW_TO_EDITOR_ACTIVE_BOUNDS)
     if (!(element && element.dataset.lineStart)) {
       return null
     }
