@@ -31,6 +31,7 @@ const props = defineProps({
     default: true,
   },
 })
+const emits = defineEmits(['anchorNavigate'])
 
 const menuItemElementMap = Object.create(null)
 let currentContainer = null
@@ -275,8 +276,13 @@ function resolveMenuItemStyle(item) {
   }
 }
 
-function onAnchorClick(event, href) {
+function onAnchorClick(event, item) {
   event.preventDefault()
+
+  const href = item?.href
+  if (!href) {
+    return
+  }
 
   const previewRoot = resolveMenuContainer()
   const targetElement = resolveAnchorTarget(href)
@@ -292,6 +298,11 @@ function onAnchorClick(event, href) {
 
   setCurrentActiveHref(href)
   startProgrammaticScroll(scrollResult.container, scrollResult.targetTop)
+  emits('anchorNavigate', {
+    href,
+    lineStart: item?.lineStart,
+    lineEnd: item?.lineEnd,
+  })
 }
 
 watch(() => props.anchorList, () => {
@@ -357,7 +368,7 @@ onBeforeUnmount(() => {
           :data-level="String(item.level)"
           :data-active="String(isActiveHref(item.href))"
           :title="item.title"
-          @click="event => onAnchorClick(event, item.href)"
+          @click="event => onAnchorClick(event, item)"
         >
           <span class="markdown-menu__item-text">{{ item.title }}</span>
         </button>

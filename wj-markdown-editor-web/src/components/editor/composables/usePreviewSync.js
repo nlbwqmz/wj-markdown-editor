@@ -1,3 +1,4 @@
+import { EditorView } from '@codemirror/view'
 import { message } from 'ant-design-vue'
 import {
   findPreviewElementAtScrollTop,
@@ -23,6 +24,8 @@ export function usePreviewSync({
   const PREVIEW_TO_EDITOR_MAX_CORRECTIONS = 2
   let activeScrollWatch
   let previewToEditorSyncToken = 0
+  let suppressedEditorToPreviewSyncCount = 0
+  let suppressedPreviewToEditorSyncCount = 0
 
   function getEditorView() {
     return editorViewRef.value
@@ -157,6 +160,34 @@ export function usePreviewSync({
     clearActiveScrollWatch()
   }
 
+  /**
+   * 目录/锚点点击属于“目标已知”的显式跳转。
+   * 这类场景不应再让预览滚动结果反推编辑区，否则自动换行下会先吃到估算高度再二次纠正。
+   * 这里用一次性令牌跳过下一轮 editor->preview / preview->editor 联动，避免双方互相回推。
+   */
+  function suppressNextLinkedSync() {
+    suppressedEditorToPreviewSyncCount += 1
+    suppressedPreviewToEditorSyncCount += 1
+  }
+
+  function shouldSkipEditorToPreviewSync() {
+    if (suppressedEditorToPreviewSyncCount <= 0) {
+      return false
+    }
+
+    suppressedEditorToPreviewSyncCount -= 1
+    return true
+  }
+
+  function shouldSkipPreviewToEditorSync() {
+    if (suppressedPreviewToEditorSyncCount <= 0) {
+      return false
+    }
+
+    suppressedPreviewToEditorSyncCount -= 1
+    return true
+  }
+
   function getTotalLineHeight(start, end) {
     const view = getEditorView()
     if (!view) {
@@ -235,6 +266,32 @@ export function usePreviewSync({
     }
   }
 
+  /**
+   * 按给定标题行直接让 CodeMirror 把目标行顶到视口起始位置。
+   * 这里复用编辑器原生 scrollIntoView 效果，能在自动换行场景下吃到更准确的真实测量结果。
+   *
+   * @param {number} lineNumber
+   * @returns {boolean} 是否已发起滚动
+   */
+  function jumpEditorToLine(lineNumber) {
+    const view = getEditorView()
+    const numericLineNumber = Number(lineNumber)
+    if (
+      !view
+      || Number.isInteger(numericLineNumber) !== true
+      || numericLineNumber <= 0
+      || numericLineNumber > view.state.doc.lines
+    ) {
+      return false
+    }
+
+    const targetLine = view.state.doc.line(numericLineNumber)
+    view.dispatch({
+      effects: EditorView.scrollIntoView(targetLine.from, { y: 'start' }),
+    })
+    return true
+  }
+
   function syncEditorToPreview(refresh) {
     const view = getEditorView()
     if (!view || !previewRef.value || scrolling.value.preview) {
@@ -245,6 +302,10 @@ export function usePreviewSync({
     // 但这里仍要把当前编辑区纵向滚动值写回缓存，避免恢复结束后的第一次同步
     // 因为缓存滞后而把“未发生变化的滚动位置”误判成新滚动。
     if (restoreStateRef?.value?.active === true) {
+      editorScrollTop.value = view.scrollDOM.scrollTop
+      return
+    }
+    if (shouldSkipEditorToPreviewSync() === true) {
       editorScrollTop.value = view.scrollDOM.scrollTop
       return
     }
@@ -399,6 +460,9 @@ export function usePreviewSync({
     if (restoreStateRef?.value?.active === true) {
       return
     }
+    if (shouldSkipPreviewToEditorSync() === true) {
+      return
+    }
     const previewScrollTop = previewRef.value.scrollTop
     const token = ++previewToEditorSyncToken
     syncPreviewToEditorWithCorrection({
@@ -446,6 +510,8 @@ export function usePreviewSync({
   return {
     findPreviewElement,
     jumpToTargetLine,
+    jumpEditorToLine,
+    suppressNextLinkedSync,
     syncEditorToPreview,
     syncPreviewToEditor,
     bindEvents,

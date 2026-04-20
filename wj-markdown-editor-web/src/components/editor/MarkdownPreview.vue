@@ -412,11 +412,20 @@ function updatePreviewInlineCodeCopyMetadata() {
 
 const latestAnchorList = ref([])
 
+function parseHeadingLineNumber(value) {
+  const numericValue = Number.parseInt(value || '', 10)
+  if (Number.isInteger(numericValue) !== true || numericValue <= 0) {
+    return undefined
+  }
+
+  return numericValue
+}
+
 /**
  * 解析大纲并推送
  */
 function pushAnchorList() {
-  const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'))
+  const headings = Array.from(previewRef.value?.querySelectorAll?.('h1, h2, h3, h4, h5, h6') || [])
   const tree = []
   const stack = [{ children: tree }] // 根节点栈
 
@@ -426,6 +435,8 @@ function pushAnchorList() {
       href: `#${heading.id}`,
       title: heading.textContent,
       level: Number.parseInt(heading.tagName[1]),
+      lineStart: parseHeadingLineNumber(heading.dataset.lineStart),
+      lineEnd: parseHeadingLineNumber(heading.dataset.lineEnd),
       children: [],
     }
 

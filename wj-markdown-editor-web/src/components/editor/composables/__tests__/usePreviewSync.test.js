@@ -245,6 +245,9 @@ function createEditorView(lineHeights) {
         },
       },
     },
+    dispatch(transaction) {
+      this.lastDispatch = transaction
+    },
     lineBlockAt(from) {
       const lineNumber = Math.floor(from / 10)
       return {
@@ -766,6 +769,84 @@ test('预览区普通块元素滚动时可同步到编辑区对应行', () => {
   syncPreviewToEditor()
 
   assert.equal(editorView.scrollDOM.scrollTop, 45)
+})
+
+test('目录直达编辑区时，应使用 CodeMirror 的 scrollIntoView 效果把目标行顶到可视区起始位置', () => {
+  const lineHeights = new Map([
+    [1, 30],
+    [2, 30],
+    [3, 30],
+  ])
+  const editorView = createEditorView(lineHeights)
+
+  const { jumpEditorToLine } = usePreviewSync({
+    editorViewRef: { value: editorView },
+    previewRef: { value: previewElement },
+    scrolling: { value: { editor: false, preview: false } },
+    editorScrollTop: { value: 0 },
+  })
+
+  jumpEditorToLine(3)
+
+  assert.equal(editorView.lastDispatch.effects.value.range.anchor, 30)
+  assert.equal(editorView.lastDispatch.effects.value.range.head, 30)
+  assert.equal(editorView.lastDispatch.effects.value.y, 'start')
+})
+
+test('目录直达触发的一次性抑制只会跳过下一次双向联动，后续滚动同步仍应恢复', () => {
+  previewElement.scrollTop = 55
+  previewElement.scrollToCalls = []
+
+  const lineHeights = new Map([
+    [1, 30],
+    [2, 30],
+    [3, 30],
+  ])
+  const editorView = createEditorView(lineHeights)
+  const editorScrollTop = { value: 0 }
+  setPreviewElements([
+    createElement({ tagName: 'p', lineStart: 1, lineEnd: 1, offsetTop: 0, actualTop: 0, height: 30 }),
+    createElement({ tagName: 'p', lineStart: 2, lineEnd: 2, offsetTop: 40, actualTop: 40, height: 30 }),
+    createElement({ tagName: 'p', lineStart: 3, lineEnd: 3, offsetTop: 80, actualTop: 80, height: 30 }),
+  ])
+
+  const previewToEditorSync = usePreviewSync({
+    editorViewRef: { value: editorView },
+    previewRef: { value: previewElement },
+    scrolling: { value: { editor: false, preview: false } },
+    editorScrollTop,
+  })
+  let editorToPreviewSync
+
+  try {
+    previewToEditorSync.suppressNextLinkedSync()
+    previewToEditorSync.syncPreviewToEditor()
+    assert.equal(editorView.scrollDOM.scrollTop, 0)
+
+    previewToEditorSync.syncPreviewToEditor()
+    assert.equal(editorView.scrollDOM.scrollTop, 45)
+
+    previewElement.scrollTop = 0
+    previewElement.scrollToCalls = []
+    editorView.scrollDOM.scrollTop = 45
+
+    editorToPreviewSync = usePreviewSync({
+      editorViewRef: { value: editorView },
+      previewRef: { value: previewElement },
+      scrolling: { value: { editor: false, preview: false } },
+      editorScrollTop: { value: 0 },
+    })
+
+    editorToPreviewSync.suppressNextLinkedSync()
+    editorToPreviewSync.syncEditorToPreview(true)
+    assert.deepEqual(previewElement.scrollToCalls, [])
+
+    editorToPreviewSync.syncEditorToPreview(true)
+    assert.deepEqual(previewElement.scrollToCalls, [55])
+  } finally {
+    previewToEditorSync.clearScrollTimer()
+    editorToPreviewSync?.clearScrollTimer()
+  }
 })
 
 test('目录跳转后若预览停在标题顶部前极小距离，编辑区仍应按当前标题行对齐', () => {

@@ -19,6 +19,8 @@ const splitState = vi.hoisted(() => ({
 const previewLayoutWiringState = vi.hoisted(() => ({
   rebuildPreviewLayoutIndex: vi.fn(() => 0),
   jumpToTargetLine: vi.fn(),
+  jumpEditorToLine: vi.fn(),
+  suppressNextLinkedSync: vi.fn(),
   syncEditorToPreview: vi.fn(),
   syncPreviewToEditor: vi.fn(),
   bindEvents: vi.fn(),
@@ -93,6 +95,7 @@ vi.mock('@/components/editor/ImageNetworkModal.vue', () => ({
 vi.mock('@/components/editor/MarkdownMenu.vue', () => ({
   default: defineComponent({
     name: 'MarkdownMenuStub',
+    emits: ['anchorNavigate'],
     props: {
       anchorList: {
         type: Array,
@@ -217,6 +220,8 @@ vi.mock('@/components/editor/markdownEditPreviewLayoutIndexWiring.js', () => ({
       rebuildPreviewLayoutIndex: previewLayoutWiringState.rebuildPreviewLayoutIndex,
       previewSync: {
         jumpToTargetLine: previewLayoutWiringState.jumpToTargetLine,
+        jumpEditorToLine: previewLayoutWiringState.jumpEditorToLine,
+        suppressNextLinkedSync: previewLayoutWiringState.suppressNextLinkedSync,
         syncEditorToPreview: previewLayoutWiringState.syncEditorToPreview,
         syncPreviewToEditor: previewLayoutWiringState.syncPreviewToEditor,
         bindEvents: previewLayoutWiringState.bindEvents,
@@ -350,6 +355,8 @@ describe('markdownEdit 布局运行时接线', () => {
     markdownMenuStubState.latestShowHeader = null
     previewLayoutWiringState.rebuildPreviewLayoutIndex.mockClear()
     previewLayoutWiringState.jumpToTargetLine.mockClear()
+    previewLayoutWiringState.jumpEditorToLine.mockClear()
+    previewLayoutWiringState.suppressNextLinkedSync.mockClear()
     previewLayoutWiringState.syncEditorToPreview.mockClear()
     previewLayoutWiringState.syncPreviewToEditor.mockClear()
     previewLayoutWiringState.bindEvents.mockClear()
@@ -435,6 +442,24 @@ describe('markdownEdit 布局运行时接线', () => {
 
     expect(markdownMenuStubState.latestShowHeader).toBe(false)
     expect(wrapper.get('[data-layout-item="menu"]').attributes('data-show-header')).toBe('false')
+  })
+
+  it('目录菜单上抛锚点行号后，编辑页会直接定位编辑区并抑制下一次双向联动回流', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: true,
+    })
+
+    wrapper.getComponent({ name: 'MarkdownMenuStub' }).vm.$emit('anchorNavigate', {
+      href: '#section',
+      lineStart: 88,
+      lineEnd: 88,
+    })
+    await nextTick()
+
+    expect(previewLayoutWiringState.suppressNextLinkedSync).toHaveBeenCalledTimes(1)
+    expect(previewLayoutWiringState.jumpEditorToLine).toHaveBeenCalledTimes(1)
+    expect(previewLayoutWiringState.jumpEditorToLine).toHaveBeenCalledWith(88)
   })
 
   it('previewPosition 从 right 切到 left 时，会重建 Split 并同步新的真实 DOM 顺序', async () => {

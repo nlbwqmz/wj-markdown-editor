@@ -20,12 +20,16 @@ function createAnchorList() {
       href: '#intro',
       title: '介绍',
       level: 1,
+      lineStart: 1,
+      lineEnd: 1,
       children: [
         {
           key: 'session',
           href: '#session',
           title: '文档会话模型',
           level: 2,
+          lineStart: 12,
+          lineEnd: 12,
           children: [],
         },
       ],
@@ -35,6 +39,8 @@ function createAnchorList() {
       href: '#resource',
       title: '资源策略',
       level: 1,
+      lineStart: 26,
+      lineEnd: 26,
       children: [],
     },
   ]
@@ -308,6 +314,26 @@ describe('markdownMenu', () => {
     expect(container.scrollTo).toHaveBeenLastCalledWith({
       top: 260,
     })
+  })
+
+  it('点击目录项后应把锚点行号信息上抛给父组件，供编辑区直接定位', async () => {
+    installHeadingTargets(container)
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    await wrapper.find('[data-href="#resource"]').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('anchorNavigate')).toEqual([
+      [{
+        href: '#resource',
+        lineStart: 26,
+        lineEnd: 26,
+      }],
+    ])
   })
 
   it('点击目录后滚动停在目标标题上方极小距离时，仍应高亮当前锚点', async () => {

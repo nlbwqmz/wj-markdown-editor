@@ -460,6 +460,8 @@ const {
   rebuildPreviewLayoutIndex,
   previewSync: {
     jumpToTargetLine,
+    jumpEditorToLine,
+    suppressNextLinkedSync,
     syncEditorToPreview,
     syncPreviewToEditor,
     bindEvents,
@@ -797,6 +799,16 @@ function cancelPendingViewScrollRestore() {
 function onAnchorChange(changedAnchorList) {
   anchorList.value = changedAnchorList
   emits('anchorChange', changedAnchorList)
+}
+
+function onOutlineNavigate(payload) {
+  const lineStart = Number(payload?.lineStart)
+  if (!Number.isInteger(lineStart) || lineStart <= 0) {
+    return
+  }
+
+  suppressNextLinkedSync()
+  jumpEditorToLine(lineStart)
 }
 
 function onPreviewContextmenu(context) {
@@ -1206,7 +1218,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full overflow-y-auto p-2"
+          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full overflow-y-auto p-2"
           :style="previewContainerStyle"
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"
@@ -1237,6 +1249,7 @@ defineExpose({
           :show-header="false"
           data-layout-item="menu"
           class="allow-search markdown-edit-layout__menu"
+          @anchor-navigate="onOutlineNavigate"
         />
       </template>
     </div>

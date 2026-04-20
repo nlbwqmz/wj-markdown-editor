@@ -245,6 +245,7 @@ describe('markdownPreview keep-alive 主题刷新', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     markdownPreviewRuntimeState.store = createStore()
+    markdownPreviewRuntimeState.renderedHtml = '<div class="mermaid" data-code="graph TD;A-->B">graph TD;A-->B</div>'
   })
 
   afterEach(() => {
@@ -294,6 +295,41 @@ describe('markdownPreview keep-alive 主题刷新', () => {
       theme: 'dark',
     }))
     expect(markdownPreviewRuntimeState.settleMermaidRender).toHaveBeenCalledTimes(2)
+  })
+
+  it('大纲事件会携带标题行号，供目录点击后直接驱动编辑区定位', async () => {
+    markdownPreviewRuntimeState.renderedHtml = '<h2 id="wrapped-heading" data-line-start="18" data-line-end="18">自动换行标题</h2>'
+
+    const wrapper = mount(MarkdownPreview, {
+      props: {
+        content: '## 自动换行标题',
+        codeTheme: 'atom-one-dark',
+        previewTheme: 'github',
+      },
+      global: {
+        stubs: {
+          'a-watermark': WatermarkStub,
+          'a-image-preview-group': ImagePreviewGroupStub,
+          'a-image': ImageStub,
+        },
+      },
+    })
+
+    await flushRender()
+
+    expect(wrapper.emitted('anchorChange')).toEqual([
+      [[
+        {
+          key: 'wrapped-heading',
+          href: '#wrapped-heading',
+          title: '自动换行标题',
+          level: 2,
+          lineStart: 18,
+          lineEnd: 18,
+          children: [],
+        },
+      ]],
+    ])
   })
 
   it('节流窗口内已排队的内容刷新在 keep-alive 失活后重新激活时必须补做', async () => {

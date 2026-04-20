@@ -38,13 +38,21 @@ export function flattenMarkdownMenuAnchors(anchorList, depth = 0, collection = [
       return
     }
 
-    collection.push({
+    const flattenedItem = {
       key: item.key,
       href: item.href,
       title: item.title,
       level: item.level,
       depth,
-    })
+    }
+    if (item.lineStart !== undefined) {
+      flattenedItem.lineStart = item.lineStart
+    }
+    if (item.lineEnd !== undefined) {
+      flattenedItem.lineEnd = item.lineEnd
+    }
+
+    collection.push(flattenedItem)
 
     flattenMarkdownMenuAnchors(normalizeAnchorChildren(item.children), depth + 1, collection)
   })
