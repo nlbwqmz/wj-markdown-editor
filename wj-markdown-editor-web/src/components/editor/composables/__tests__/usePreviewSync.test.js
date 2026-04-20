@@ -270,6 +270,84 @@ function createEditorView(lineHeights) {
   }
 }
 
+/**
+ * 创建会在首轮滚动后切换到真实行高的编辑器桩。
+ * 该桩用于复现 CodeMirror 在自动换行场景下，对离屏行先给估算高度、
+ * 滚动到附近后再纠正为真实高度的行为。
+ */
+function createAdaptiveMeasuredEditorView({
+  estimatedLineHeights,
+  measuredLineHeights,
+  measuredScrollTopThreshold = 0,
+}) {
+  const scrollDOM = createScrollElement()
+
+  function getActiveLineHeights() {
+    return scrollDOM.scrollTop >= measuredScrollTopThreshold
+      ? measuredLineHeights
+      : estimatedLineHeights
+  }
+
+  function createLineTops(lineHeights) {
+    const lineTops = new Map()
+    let currentTop = 0
+    for (const [lineNumber, height] of lineHeights.entries()) {
+      lineTops.set(lineNumber, currentTop)
+      currentTop += height
+    }
+    return lineTops
+  }
+
+  function getLineMetrics(lineNumber) {
+    const lineHeights = getActiveLineHeights()
+    const lineTops = createLineTops(lineHeights)
+    return {
+      top: lineTops.get(lineNumber),
+      height: lineHeights.get(lineNumber),
+    }
+  }
+
+  return {
+    scrollDOM,
+    state: {
+      doc: {
+        lines: measuredLineHeights.size,
+        line(lineNumber) {
+          return { from: lineNumber * 10 }
+        },
+        lineAt(from) {
+          return { number: Math.floor(from / 10) }
+        },
+      },
+    },
+    lineBlockAt(from) {
+      const lineNumber = Math.floor(from / 10)
+      const metrics = getLineMetrics(lineNumber)
+      return {
+        top: metrics.top,
+        height: metrics.height,
+      }
+    },
+    lineBlockAtHeight(height) {
+      const lineHeights = getActiveLineHeights()
+      const lineTops = createLineTops(lineHeights)
+      let matchedLine = 1
+      for (const [lineNumber, top] of lineTops.entries()) {
+        if (top <= height) {
+          matchedLine = lineNumber
+        } else {
+          break
+        }
+      }
+      return {
+        from: matchedLine * 10,
+        top: lineTops.get(matchedLine),
+        height: lineHeights.get(matchedLine),
+      }
+    },
+  }
+}
+
 test('编辑区同步到预览区在索引可用时，应优先使用索引命中节点', () => {
   previewElement.scrollTop = 0
   previewElement.scrollToCalls = []
@@ -688,6 +766,49 @@ test('预览区普通块元素滚动时可同步到编辑区对应行', () => {
   syncPreviewToEditor()
 
   assert.equal(editorView.scrollDOM.scrollTop, 45)
+})
+
+test('预览区同步到编辑区在自动换行导致离屏行高先估算后纠正时，应在首轮滚动后再校正一次目标位置', () => {
+  previewElement.scrollTop = 210
+  previewElement.scrollToCalls = []
+
+  const editorView = createAdaptiveMeasuredEditorView({
+    estimatedLineHeights: new Map([
+      [1, 30],
+      [2, 30],
+      [3, 30],
+      [4, 30],
+    ]),
+    measuredLineHeights: new Map([
+      [1, 30],
+      [2, 120],
+      [3, 30],
+      [4, 30],
+    ]),
+    measuredScrollTopThreshold: 60,
+  })
+  setPreviewElements([
+    createElement({ tagName: 'p', lineStart: 1, lineEnd: 4, offsetTop: 0, actualTop: 0, height: 280 }),
+  ])
+
+  const { syncPreviewToEditor, clearScrollTimer } = usePreviewSync({
+    editorViewRef: { value: editorView },
+    previewRef: { value: previewElement },
+    scrolling: { value: { editor: false, preview: false } },
+    editorScrollTop: { value: 0 },
+  })
+
+  try {
+    syncPreviewToEditor()
+
+    assert.equal(
+      editorView.scrollDOM.scrollTop,
+      157.5,
+      '首轮近似滚动后，编辑区应基于已测得的真实换行高度再校正到最终位置',
+    )
+  } finally {
+    clearScrollTimer()
+  }
 })
 
 test('预览区滚动到表格中部时，应按预览容器坐标而不是嵌套节点 offsetTop 选择行', () => {

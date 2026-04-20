@@ -293,7 +293,7 @@ describe('markdownMenu', () => {
     expect(scrollIntoViewSpy).toHaveBeenCalled()
   })
 
-  it('点击目录项时应复用预览 hash 锚点的 smooth 滚动语义', async () => {
+  it('点击目录项时应直接跳转到目标标题位置，不使用滚动动画', async () => {
     installHeadingTargets(container)
 
     const wrapper = createWrapper({
@@ -307,7 +307,6 @@ describe('markdownMenu', () => {
     expect(container.scrollTo).toHaveBeenCalled()
     expect(container.scrollTo).toHaveBeenLastCalledWith({
       top: 260,
-      behavior: 'smooth',
     })
   })
 

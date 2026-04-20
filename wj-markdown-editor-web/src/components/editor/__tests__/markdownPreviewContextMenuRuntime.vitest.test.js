@@ -483,4 +483,31 @@ describe('markdownPreview runtime contextmenu', () => {
     })
     expect(assetOpenEvents[0][0].resourceUrl.startsWith('wj://')).toBe(true)
   })
+
+  it('点击脚注链接时应直接跳转到目标，不使用滚动动画', async () => {
+    markdownPreviewRuntimeState.renderedHtml = [
+      '<p><sup class="footnote-ref"><a href="#fn1">1</a></sup></p>',
+      '<section id="fn1">脚注内容</section>',
+    ].join('')
+
+    const wrapper = mountMarkdownPreview()
+
+    await flushPreviewRender()
+
+    const targetElement = document.createElement('section')
+    const scrollIntoViewSpy = vi.fn()
+    targetElement.scrollIntoView = scrollIntoViewSpy
+    const getElementByIdSpy = vi.spyOn(document, 'getElementById').mockReturnValue(targetElement)
+
+    try {
+      await wrapper.get('.footnote-ref a[href="#fn1"]').trigger('click')
+
+      expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1)
+      expect(scrollIntoViewSpy).toHaveBeenCalledWith({
+        block: 'center',
+      })
+    } finally {
+      getElementByIdSpy.mockRestore()
+    }
+  })
 })

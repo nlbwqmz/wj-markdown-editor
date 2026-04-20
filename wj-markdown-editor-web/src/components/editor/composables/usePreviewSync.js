@@ -18,7 +18,10 @@ export function usePreviewSync({
 }) {
   const SCROLL_IDLE_MS = 160
   const SCROLL_MAX_WAIT_MS = 5000
+  const PREVIEW_TO_EDITOR_CORRECTION_EPSILON = 1
+  const PREVIEW_TO_EDITOR_MAX_CORRECTIONS = 2
   let activeScrollWatch
+  let previewToEditorSyncToken = 0
 
   function getEditorView() {
     return editorViewRef.value
@@ -301,6 +304,88 @@ export function usePreviewSync({
     return result.entry?.element ?? null
   }
 
+  /**
+   * 解析“当前预览滚动位置应落到编辑区哪里”。
+   * 这里单独抽成纯计算 helper，便于在首轮近似滚动后再复算一次，
+   * 吃到 CodeMirror 对自动换行离屏行高的延迟测量结果。
+   */
+  function resolvePreviewToEditorTarget(previewScrollTop) {
+    const view = getEditorView()
+    const previewElementRoot = previewRef.value
+    if (!view || !previewElementRoot) {
+      return null
+    }
+
+    const element = findElementAtPreviewScroll(previewScrollTop)
+    if (!(element && element.dataset.lineStart)) {
+      return null
+    }
+
+    const startLineNumber = +element.dataset.lineStart
+    const endLineNumber = +element.dataset.lineEnd
+    const elementTop = getElementToTopDistance(element, previewElementRoot)
+    const elementScrollOffset = previewScrollTop - elementTop
+    const elementHeight = element.getBoundingClientRect().height
+    const scrollRatio = clampScrollRatio(elementHeight > 0 ? elementScrollOffset / elementHeight : 0)
+    const startLine = view.state.doc.line(startLineNumber)
+    const totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
+    const block = view.lineBlockAt(startLine.from)
+
+    return {
+      targetScrollTop: block.top + (totalLineHeight * scrollRatio),
+    }
+  }
+
+  /**
+   * 预览区驱动编辑区时，需要容忍首轮目标只基于离屏估算高度得到。
+   * 自动换行打开后，CodeMirror 往往要等滚动到目标附近，才会把真实行高写回 height map。
+   * 因此这里在滚动稳定后，使用同一份预览滚动锚点再复算一到两次，把编辑区校正到真实位置。
+   */
+  function syncPreviewToEditorWithCorrection({ token, previewScrollTop, correctionCount = 0 }) {
+    const view = getEditorView()
+    if (!view || !previewRef.value) {
+      if (token === previewToEditorSyncToken) {
+        scrolling.value.preview = false
+      }
+      return
+    }
+
+    const resolvedTarget = resolvePreviewToEditorTarget(previewScrollTop)
+    if (!resolvedTarget) {
+      if (token === previewToEditorSyncToken) {
+        scrolling.value.preview = false
+      }
+      return
+    }
+
+    const { targetScrollTop } = resolvedTarget
+
+    scrolling.value.preview = true
+    checkScrollTop(view.scrollDOM, targetScrollTop, () => {
+      if (token !== previewToEditorSyncToken) {
+        return
+      }
+
+      if (correctionCount < PREVIEW_TO_EDITOR_MAX_CORRECTIONS) {
+        const correctedTarget = resolvePreviewToEditorTarget(previewScrollTop)?.targetScrollTop
+        if (
+          Number.isFinite(correctedTarget)
+          && Math.abs(correctedTarget - targetScrollTop) >= PREVIEW_TO_EDITOR_CORRECTION_EPSILON
+        ) {
+          syncPreviewToEditorWithCorrection({
+            token,
+            previewScrollTop,
+            correctionCount: correctionCount + 1,
+          })
+          return
+        }
+      }
+
+      scrolling.value.preview = false
+    })
+    scrollFollowerToTarget(view.scrollDOM, targetScrollTop)
+  }
+
   function syncPreviewToEditor() {
     const view = getEditorView()
     if (!view || !previewRef.value || scrolling.value.editor) {
@@ -312,25 +397,11 @@ export function usePreviewSync({
       return
     }
     const previewScrollTop = previewRef.value.scrollTop
-    const element = findElementAtPreviewScroll(previewScrollTop)
-    if (element && element.dataset.lineStart) {
-      const startLineNumber = +element.dataset.lineStart
-      const endLineNumber = +element.dataset.lineEnd
-      const elementTop = getElementToTopDistance(element, previewRef.value)
-      const elementScrollOffset = previewScrollTop - elementTop
-      const elementHeight = element.getBoundingClientRect().height
-      const scrollRatio = clampScrollRatio(elementHeight > 0 ? elementScrollOffset / elementHeight : 0)
-      const startLine = view.state.doc.line(startLineNumber)
-      const totalLineHeight = getTotalLineHeight(startLineNumber, endLineNumber)
-      const block = view.lineBlockAt(startLine.from)
-      const targetScrollTop = block.top + (totalLineHeight * scrollRatio)
-
-      scrolling.value.preview = true
-      checkScrollTop(view.scrollDOM, targetScrollTop, () => {
-        scrolling.value.preview = false
-      })
-      scrollFollowerToTarget(view.scrollDOM, targetScrollTop)
-    }
+    const token = ++previewToEditorSyncToken
+    syncPreviewToEditorWithCorrection({
+      token,
+      previewScrollTop,
+    })
   }
 
   function onEditorWheel(e) {

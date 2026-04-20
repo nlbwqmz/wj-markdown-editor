@@ -119,7 +119,6 @@ export function scrollPreviewToAnchor({
 
   container.scrollTo({
     top: targetTop,
-    behavior: 'smooth',
   })
 
   return {
