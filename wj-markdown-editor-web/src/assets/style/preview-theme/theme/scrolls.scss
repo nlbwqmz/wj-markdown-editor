@@ -72,7 +72,7 @@
   --wj-preview-inline-code-text-color: #b69454;
 
   --wj-preview-code-line-height: 1.75;
-  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-list-padding-inline-start: var(--wj-preview-list-padding-inline-start);
   --wj-preview-task-list-style: none;
 }
 

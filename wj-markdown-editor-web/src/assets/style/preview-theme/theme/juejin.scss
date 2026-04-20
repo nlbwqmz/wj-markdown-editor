@@ -61,7 +61,7 @@ $line-space: 22px;
   --wj-preview-list-padding-inline-start: 16px;
   --wj-preview-list-item-margin-bottom: 0;
   --wj-preview-list-nested-margin-top: 3px;
-  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-list-padding-inline-start: var(--wj-preview-list-padding-inline-start);
   --wj-preview-task-list-style: none;
 
   --wj-preview-kbd-text-color: #4a4a4a;

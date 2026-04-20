@@ -78,7 +78,7 @@
   --wj-preview-code-line-height: 1.75;
 
   --wj-preview-task-list-style: none;
-  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-list-padding-inline-start: var(--wj-preview-list-padding-inline-start);
 
   --wj-preview-theme-background-image:
     linear-gradient(90deg, rgba(217, 234, 251, 0.25) 3%, rgba(0, 0, 0, 0) 3%),

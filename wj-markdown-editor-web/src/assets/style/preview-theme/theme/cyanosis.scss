@@ -90,7 +90,7 @@
   --wj-preview-list-item-margin-bottom: 0;
   --wj-preview-list-nested-margin-top: 4px;
   --wj-preview-ordered-list-item-padding-inline-start: 6px;
-  --wj-preview-task-list-padding-inline-start: 14px;
+  --wj-preview-task-list-padding-inline-start: var(--wj-preview-list-padding-inline-start);
   --wj-preview-task-list-style: none;
 
   transition: color 0.35s;

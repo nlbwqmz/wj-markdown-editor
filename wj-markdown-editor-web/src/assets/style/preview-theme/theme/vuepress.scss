@@ -72,7 +72,7 @@ $paragraph-space: 22px;
   --wj-preview-list-item-margin-bottom: 0;
   --wj-preview-list-nested-margin-top: 4px;
   --wj-preview-list-nested-margin-bottom: 4px;
-  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-list-padding-inline-start: var(--wj-preview-list-padding-inline-start);
   --wj-preview-task-list-style: none;
 
   --wj-preview-kbd-text-color: #{$color-text};

@@ -136,9 +136,9 @@
   --wj-preview-footnote-text-color: var(--fgColor-muted);
   --wj-preview-footnote-list-padding-inline-start: var(--wj-preview-github-space-16);
 
-  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-list-padding-inline-start: var(--wj-preview-list-padding-inline-start);
   --wj-preview-task-list-style: none;
-  --wj-preview-task-checkbox-margin: 0 0.2em 0.25em -1.4em;
+  --wj-preview-task-checkbox-gap: 0.2em;
   --wj-preview-task-checkbox-vertical-align: middle;
 
   --wj-preview-summary-font-weight: var(--wj-preview-github-font-weight-medium);
@@ -466,6 +466,11 @@
 
   /* 任务列表与 alert 仍是当前渲染链路的真实输出。 */
   .task-list-item {
+    .task-list-item-checkbox {
+      margin: var(--wj-preview-task-checkbox-margin);
+      vertical-align: var(--wj-preview-task-checkbox-vertical-align);
+    }
+
     label {
       font-weight: var(--wj-preview-github-font-weight-normal);
     }

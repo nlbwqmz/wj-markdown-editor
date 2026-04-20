@@ -263,6 +263,8 @@
   }
 
   & :where(.task-list-item-checkbox) {
+    inline-size: var(--wj-preview-task-checkbox-size);
+    block-size: var(--wj-preview-task-checkbox-size);
     margin: var(--wj-preview-task-checkbox-margin);
     vertical-align: var(--wj-preview-task-checkbox-vertical-align);
   }

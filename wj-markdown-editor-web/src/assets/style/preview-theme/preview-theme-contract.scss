@@ -154,9 +154,13 @@
   --wj-preview-footnote-list-item-margin-bottom: 0.5em;
   --wj-preview-footnote-link-font-size: 0.9em;
 
-  --wj-preview-task-list-padding-inline-start: 0;
+  --wj-preview-task-list-padding-inline-start: var(--wj-preview-list-padding-inline-start);
   --wj-preview-task-list-style: none;
-  --wj-preview-task-checkbox-margin: 0 0.4em 0.25em 0;
+  --wj-preview-task-checkbox-size: 1em;
+  --wj-preview-task-checkbox-offset-inline-start: 1.4em;
+  --wj-preview-task-checkbox-gap: 0.4em;
+  --wj-preview-task-checkbox-margin: 0 var(--wj-preview-task-checkbox-gap) 0
+    calc(var(--wj-preview-task-checkbox-offset-inline-start) * -1);
   --wj-preview-task-checkbox-vertical-align: middle;
 
   --wj-preview-details-margin: 1em 0;
