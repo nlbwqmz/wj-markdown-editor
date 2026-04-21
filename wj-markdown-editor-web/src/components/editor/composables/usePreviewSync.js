@@ -251,6 +251,14 @@ export function usePreviewSync({
     return Math.max(0, Math.min(1, value))
   }
 
+  function findMeasuredViewportLineBlock(view, position) {
+    if (!Array.isArray(view?.viewportLineBlocks)) {
+      return null
+    }
+
+    return view.viewportLineBlocks.find(block => block.from <= position && block.to >= position) ?? null
+  }
+
   function jumpToTargetLine() {
     const view = getEditorView()
     if (!previewRef.value || !view) {
@@ -303,9 +311,18 @@ export function usePreviewSync({
     }
 
     const targetLine = view.state.doc.line(numericLineNumber)
-    const targetBlock = view.lineBlockAt(targetLine.from)
-    const normalizedTargetScrollTop = resolveNormalizedScrollTop(view.scrollDOM, targetBlock.top)
-    if (Math.abs(view.scrollDOM.scrollTop - normalizedTargetScrollTop) < 1) {
+    const measuredViewportBlock = findMeasuredViewportLineBlock(view, targetLine.from)
+    const targetBlock = measuredViewportBlock ?? view.lineBlockAt(targetLine.from)
+    // CodeMirror 对离屏自动换行行块可能仍返回估算高度。
+    // 只有当前命中 viewportLineBlocks 的已测量块时，才允许按“已对齐”直接短路。
+    if (measuredViewportBlock) {
+      const normalizedTargetScrollTop = resolveNormalizedScrollTop(view.scrollDOM, targetBlock.top)
+      if (Math.abs(view.scrollDOM.scrollTop - normalizedTargetScrollTop) < 1) {
+        return false
+      }
+    }
+
+    if (!targetBlock) {
       return false
     }
 
