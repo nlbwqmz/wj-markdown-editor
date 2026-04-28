@@ -374,7 +374,8 @@ onBeforeUnmount(() => {
           :title="item.title"
           @click="event => onAnchorClick(event, item)"
         >
-          <span class="markdown-menu__item-text">{{ item.title }}</span>
+          <span v-if="item.titleHtml" class="markdown-menu__item-text" v-html="item.titleHtml" />
+          <span v-else class="markdown-menu__item-text">{{ item.title }}</span>
         </button>
       </div>
     </div>
@@ -427,5 +428,48 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 30px;
+
+  :deep(code) {
+    margin: 0 2px;
+    border-radius: 4px;
+    background: var(--wj-markdown-bg-secondary);
+    padding: 1px 4px;
+    font-size: 0.92em;
+  }
+
+  :deep(strong),
+  :deep(b) {
+    font-weight: 700;
+  }
+
+  :deep(em),
+  :deep(i) {
+    font-style: italic;
+  }
+
+  :deep(s),
+  :deep(del) {
+    text-decoration: line-through;
+  }
+
+  :deep(mark) {
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--wj-markdown-bg-hover) 75%, transparent);
+    padding: 0 2px;
+  }
+
+  :deep(ins) {
+    text-decoration: underline;
+  }
+
+  :deep(u) {
+    text-decoration: underline;
+  }
+
+  :deep(sub),
+  :deep(sup) {
+    font-size: 0.75em;
+    line-height: 0;
+  }
 }
 </style>

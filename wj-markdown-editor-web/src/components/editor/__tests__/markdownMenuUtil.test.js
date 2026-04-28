@@ -69,6 +69,30 @@ test('flattenMarkdownMenuAnchors 在目录项携带标题行号时，应保留 l
   ])
 })
 
+test('flattenMarkdownMenuAnchors 在目录项携带受控标题 HTML 时，应继续保留 titleHtml 元信息', () => {
+  const anchorList = [
+    {
+      key: 'rich-heading',
+      href: '#rich-heading',
+      title: '普通删除加粗',
+      titleHtml: '普通<s>删除</s><strong>加粗</strong>',
+      level: 2,
+      children: [],
+    },
+  ]
+
+  assert.deepEqual(flattenMarkdownMenuAnchors(anchorList), [
+    {
+      key: 'rich-heading',
+      href: '#rich-heading',
+      title: '普通删除加粗',
+      titleHtml: '普通<s>删除</s><strong>加粗</strong>',
+      level: 2,
+      depth: 0,
+    },
+  ])
+})
+
 test('resolveMarkdownMenuActiveHref 应跟随 scrollTop 选择当前阅读位置最近的标题', () => {
   const headingRecords = [
     { href: '#intro', top: 0 },

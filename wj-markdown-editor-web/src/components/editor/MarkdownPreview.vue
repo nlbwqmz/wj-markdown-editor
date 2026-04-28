@@ -412,6 +412,26 @@ function updatePreviewInlineCodeCopyMetadata() {
 
 const latestAnchorList = ref([])
 
+const OUTLINE_INLINE_TAG_NAME_SET = new Set([
+  'b',
+  'code',
+  'del',
+  'em',
+  'i',
+  'ins',
+  'mark',
+  's',
+  'strong',
+  'sub',
+  'sup',
+  'u',
+])
+
+const OUTLINE_TEXT_COLOR_SPAN_CLASS_NAME_SET = new Set([
+  'markdown-it-text-color',
+  'markdown-it-text-color-gradient',
+])
+
 function parseHeadingLineNumber(value) {
   const numericValue = Number.parseInt(value || '', 10)
   if (Number.isInteger(numericValue) !== true || numericValue <= 0) {
@@ -419,6 +439,105 @@ function parseHeadingLineNumber(value) {
   }
 
   return numericValue
+}
+
+/**
+ * 将文本节点转成可安全注入 v-html 的 HTML 片段。
+ * 这里只保留文本内容，不透传任意标签或属性。
+ *
+ * @param {string} value - 原始文本内容
+ * @returns {string} 经过 HTML 转义后的文本
+ */
+function escapeOutlineHeadingHtmlText(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
+
+/**
+ * 将属性值转义为安全的 HTML attribute 文本。
+ * 大纲只会回放项目内置白名单 span 的 class 和颜色变量，不允许直接透传原始属性串。
+ *
+ * @param {string} value - 原始属性值
+ * @returns {string} 转义后的属性值
+ */
+function escapeOutlineHeadingHtmlAttribute(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('\'', '&#39;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
+
+/**
+ * 递归提取标题中的受控行内富文本，仅保留允许进入大纲的语义标签，
+ * 以及项目内置文字颜色扩展生成的白名单 span。
+ * 这样既能复用预览区最终 DOM，又能避免把任意 HTML 原样透传到目录里。
+ *
+ * @param {Node} node - 当前待处理节点
+ * @returns {string} 清洗后的 HTML 片段
+ */
+function buildOutlineHeadingHtmlFromNode(node) {
+  if (!(node instanceof Node)) {
+    return ''
+  }
+
+  if (node.nodeType === Node.TEXT_NODE) {
+    return escapeOutlineHeadingHtmlText(node.textContent)
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return ''
+  }
+
+  const element = /** @type {HTMLElement} */ (node)
+  const tagName = element.tagName.toLowerCase()
+  if (tagName === 'img') {
+    return escapeOutlineHeadingHtmlText(element.getAttribute('alt') || '')
+  }
+  if (tagName === 'br') {
+    return ' '
+  }
+
+  const childHtml = Array.from(element.childNodes)
+    .map(childNode => buildOutlineHeadingHtmlFromNode(childNode))
+    .join('')
+
+  if (tagName === 'span') {
+    const className = Array.from(element.classList)
+      .find(candidateClassName => OUTLINE_TEXT_COLOR_SPAN_CLASS_NAME_SET.has(candidateClassName))
+    const textColorValue = element.style.getPropertyValue('--markdown-it-text-color').trim()
+
+    if (className && textColorValue) {
+      const escapedClassName = escapeOutlineHeadingHtmlAttribute(className)
+      const escapedTextColorValue = escapeOutlineHeadingHtmlAttribute(textColorValue)
+      return `<span class="${escapedClassName}" style="--markdown-it-text-color: ${escapedTextColorValue}">${childHtml}</span>`
+    }
+  }
+
+  if (OUTLINE_INLINE_TAG_NAME_SET.has(tagName)) {
+    return `<${tagName}>${childHtml}</${tagName}>`
+  }
+
+  return childHtml
+}
+
+/**
+ * 提取标题节点在大纲中展示用的受控富文本。
+ *
+ * @param {Element} heading - 预览区标题节点
+ * @returns {string} 清洗后的标题 HTML
+ */
+function buildOutlineHeadingHtml(heading) {
+  if (!(heading instanceof Element)) {
+    return ''
+  }
+
+  return Array.from(heading.childNodes)
+    .map(node => buildOutlineHeadingHtmlFromNode(node))
+    .join('')
 }
 
 /**
@@ -434,6 +553,7 @@ function pushAnchorList() {
       key: heading.id,
       href: `#${heading.id}`,
       title: heading.textContent,
+      titleHtml: buildOutlineHeadingHtml(heading),
       level: Number.parseInt(heading.tagName[1]),
       lineStart: parseHeadingLineNumber(heading.dataset.lineStart),
       lineEnd: parseHeadingLineNumber(heading.dataset.lineEnd),

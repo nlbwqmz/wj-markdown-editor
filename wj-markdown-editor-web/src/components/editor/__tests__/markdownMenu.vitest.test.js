@@ -207,6 +207,60 @@ describe('markdownMenu', () => {
     expect(wrapper.find('[data-href="#session"]').attributes('title')).toBe('文档会话模型')
   })
 
+  it('目录项应保留标题中的删除线与常见行内样式', async () => {
+    container.querySelectorAll = vi.fn(() => [
+      createHeading({ container, top: 0, id: 'rich' }),
+    ])
+
+    const wrapper = createWrapper({
+      anchorList: [
+        {
+          key: 'rich',
+          href: '#rich',
+          title: '普通红色删除加粗斜体code下划线',
+          titleHtml: '普通<span class="markdown-it-text-color" style="--markdown-it-text-color: red">红色</span><s>删除</s><strong>加粗</strong><em>斜体</em><code>code</code><u>下划线</u>',
+          level: 1,
+          children: [],
+        },
+      ],
+      getContainer: () => container,
+    })
+
+    const itemText = wrapper.find('[data-href="#rich"] .markdown-menu__item-text')
+    expect(itemText.html()).toContain('<s>删除</s>')
+    expect(itemText.html()).toContain('<strong>加粗</strong>')
+    expect(itemText.html()).toContain('<em>斜体</em>')
+    expect(itemText.html()).toContain('<code>code</code>')
+    expect(itemText.html()).toContain('<u>下划线</u>')
+    const colorSpan = itemText.find('.markdown-it-text-color')
+    expect(colorSpan.exists()).toBe(true)
+    expect(colorSpan.attributes('style')).toContain('--markdown-it-text-color: red')
+    expect(wrapper.find('[data-href="#rich"]').attributes('title')).toBe('普通红色删除加粗斜体code下划线')
+  })
+
+  it('仅提供纯文本 title 时，不应把尖括号内容当作 HTML 解析', async () => {
+    container.querySelectorAll = vi.fn(() => [
+      createHeading({ container, top: 0, id: 'literal' }),
+    ])
+
+    const wrapper = createWrapper({
+      anchorList: [
+        {
+          key: 'literal',
+          href: '#literal',
+          title: '<code>纯文本</code>',
+          level: 1,
+          children: [],
+        },
+      ],
+      getContainer: () => container,
+    })
+
+    const itemText = wrapper.find('[data-href="#literal"] .markdown-menu__item-text')
+    expect(itemText.find('code').exists()).toBe(false)
+    expect(itemText.text()).toBe('<code>纯文本</code>')
+  })
+
   it('目录映射刷新遇到未命中的非法 CSS 锚点时，不应因选择器回退而抛异常', () => {
     container.querySelectorAll = vi.fn(() => [])
 

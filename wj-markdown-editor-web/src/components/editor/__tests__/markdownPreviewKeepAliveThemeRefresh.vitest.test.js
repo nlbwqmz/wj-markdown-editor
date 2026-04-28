@@ -323,9 +323,46 @@ describe('markdownPreview keep-alive 主题刷新', () => {
           key: 'wrapped-heading',
           href: '#wrapped-heading',
           title: '自动换行标题',
+          titleHtml: '自动换行标题',
           level: 2,
           lineStart: 18,
           lineEnd: 18,
+          children: [],
+        },
+      ]],
+    ])
+  })
+
+  it('大纲事件会同时携带标题纯文本与受控富文本，供目录保留行内样式', async () => {
+    markdownPreviewRuntimeState.renderedHtml = '<h2 id="rich-heading" data-line-start="24" data-line-end="24">普通<span class="markdown-it-text-color" style="--markdown-it-text-color: red">红色</span><s>删除</s><strong>加粗</strong><em>斜体</em><code>code</code><u>下划线</u></h2>'
+
+    const wrapper = mount(MarkdownPreview, {
+      props: {
+        content: '## 普通{red}(红色)~~删除~~**加粗***斜体*`code`<u>下划线</u>',
+        codeTheme: 'atom-one-dark',
+        previewTheme: 'github',
+      },
+      global: {
+        stubs: {
+          'a-watermark': WatermarkStub,
+          'a-image-preview-group': ImagePreviewGroupStub,
+          'a-image': ImageStub,
+        },
+      },
+    })
+
+    await flushRender()
+
+    expect(wrapper.emitted('anchorChange')).toEqual([
+      [[
+        {
+          key: 'rich-heading',
+          href: '#rich-heading',
+          title: '普通红色删除加粗斜体code下划线',
+          titleHtml: '普通<span class="markdown-it-text-color" style="--markdown-it-text-color: red">红色</span><s>删除</s><strong>加粗</strong><em>斜体</em><code>code</code><u>下划线</u>',
+          level: 2,
+          lineStart: 24,
+          lineEnd: 24,
           children: [],
         },
       ]],

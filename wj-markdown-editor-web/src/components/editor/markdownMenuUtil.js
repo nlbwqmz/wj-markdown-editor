@@ -45,6 +45,9 @@ export function flattenMarkdownMenuAnchors(anchorList, depth = 0, collection = [
       level: item.level,
       depth,
     }
+    if (item.titleHtml !== undefined) {
+      flattenedItem.titleHtml = item.titleHtml
+    }
     if (item.lineStart !== undefined) {
       flattenedItem.lineStart = item.lineStart
     }
