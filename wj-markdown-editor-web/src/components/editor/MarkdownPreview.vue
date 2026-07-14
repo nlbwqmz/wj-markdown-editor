@@ -1,7 +1,7 @@
 <script setup>
 import { message } from 'ant-design-vue'
 import mermaid from 'mermaid'
-import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import { shouldReplaceElementBeforeAttributeSync } from '@/components/editor/markdownPreviewDomPatchUtil.js'
@@ -70,7 +70,7 @@ function initMermaid() {
 
 const previewRef = ref()
 
-const previewShellStyle = {
+const previewShellStyle = computed(() => ({
   'fontFamily': 'var(--preview-area-font)',
   // 在样式层完成新旧变量名桥接，避免把兼容逻辑扩散到 helper 内部。
   '--wj-code-block-action-color': 'var(--wj-code-block-action-fg-muted)',
@@ -79,7 +79,8 @@ const previewShellStyle = {
   '--wj-code-block-action-focus-border-color': 'var(--wj-code-block-action-border)',
   '--wj-code-block-action-background': 'var(--wj-code-block-action-bg)',
   '--wj-code-block-action-focus-background': 'var(--wj-code-block-action-bg)',
-}
+  '--wj-preview-image-box-shadow': store.config.markdown?.imageShadow === false ? 'none' : 'var(--img-box-shadow)',
+}))
 
 const imageSrcList = ref([])
 const imagePreviewVisible = ref(false)

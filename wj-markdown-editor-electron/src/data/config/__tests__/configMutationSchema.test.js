@@ -31,6 +31,7 @@ describe('validateConfigMutationRequest', () => {
     [['editorExtension', 'highlightSelectionMatches'], false],
     [['editorExtension', 'bracketMatching'], false],
     [['editorExtension', 'closeBrackets'], false],
+    [['markdown', 'imageShadow'], false],
     [['imageBed', 'uploader'], 'smms'],
     [['imageBed', 'smms', 'token'], 'token'],
     [['imageBed', 'smms', 'backupDomain'], 'smms.app'],

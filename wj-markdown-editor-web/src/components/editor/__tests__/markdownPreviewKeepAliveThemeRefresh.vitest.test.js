@@ -224,6 +224,7 @@ function createStore() {
       },
       markdown: {
         inlineCodeClickCopy: false,
+        imageShadow: true,
         typographer: false,
       },
     },

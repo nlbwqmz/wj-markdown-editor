@@ -12,6 +12,10 @@ describe('configSchema', () => {
     expect(defaultConfig.markdown.inlineCodeClickCopy).toBe(false)
   })
 
+  it('defaultConfig 必须提供 markdown.imageShadow 默认值 true', () => {
+    expect(defaultConfig.markdown.imageShadow).toBe(true)
+  })
+
   it('defaultConfig 必须提供 fileManagerVisible 默认值 true', () => {
     expect(defaultConfig.fileManagerVisible).toBe(true)
   })
@@ -175,6 +179,18 @@ describe('configSchema', () => {
       markdown: {
         ...defaultConfig.markdown,
         inlineCodeClickCopy: true,
+      },
+    }
+
+    expect(() => validateConfigShape(validConfig)).not.toThrow()
+  })
+
+  it('markdown.imageShadow 接纳布尔值 false', () => {
+    const validConfig = {
+      ...defaultConfig,
+      markdown: {
+        ...defaultConfig.markdown,
+        imageShadow: false,
       },
     }
 

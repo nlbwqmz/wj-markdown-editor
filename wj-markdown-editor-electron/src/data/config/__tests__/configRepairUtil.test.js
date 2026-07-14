@@ -38,6 +38,17 @@ describe('configRepairUtil', () => {
     })
   })
 
+  it('缺失 markdown.imageShadow 时必须从默认配置补齐', () => {
+    const legacyConfig = JSON.parse(JSON.stringify(defaultConfig))
+    delete legacyConfig.markdown.imageShadow
+    legacyConfig.markdown.typographer = false
+
+    const repaired = repairConfig(legacyConfig, defaultConfig)
+
+    expect(repaired.markdown.imageShadow).toBe(true)
+    expect(repaired.markdown.typographer).toBe(false)
+  })
+
   it('默认配置中不存在的旧字段必须被裁掉', () => {
     const repaired = repairConfig({
       legacyField: 'deprecated',
