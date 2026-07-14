@@ -36,6 +36,7 @@ export default {
   markdown: {
     typographer: true,
     inlineCodeClickCopy: false,
+    imageShadow: true,
   },
   export: {
     pdf: {

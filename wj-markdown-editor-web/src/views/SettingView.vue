@@ -495,6 +495,27 @@ function reset() {
               </a-select-option>
             </a-select>
           </a-descriptions-item>
+          <a-descriptions-item>
+            <template #label>
+              <div class="flex items-center gap-1">
+                <span>{{ $t('config.view.previewImageShadow') }}</span>
+                <a-tooltip placement="topRight" color="#1677ff" class="flex-shrink-0">
+                  <template #title>
+                    {{ $t('config.view.previewImageShadowTip') }}
+                  </template>
+                  <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
+                </a-tooltip>
+              </div>
+            </template>
+            <a-radio-group :value="config.markdown.imageShadow" button-style="solid" @update:value="value => submitSetPathMutation(['markdown', 'imageShadow'], value)">
+              <a-radio-button :value="true">
+                {{ $t('config.yes') }}
+              </a-radio-button>
+              <a-radio-button :value="false">
+                {{ $t('config.no') }}
+              </a-radio-button>
+            </a-radio-group>
+          </a-descriptions-item>
           <a-descriptions-item :label="$t('config.view.previewWidth')">
             <a-slider
               :value="config.previewWidth"

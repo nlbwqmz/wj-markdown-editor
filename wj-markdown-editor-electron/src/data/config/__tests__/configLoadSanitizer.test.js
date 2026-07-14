@@ -165,11 +165,13 @@ describe('configLoadSanitizer', () => {
     const loadedConfig = cloneConfig(defaultConfig)
     delete loadedConfig.markdown.inlineCodeClickCopy
     loadedConfig.markdown.typographer = false
+    loadedConfig.markdown.imageShadow = false
 
     const sanitized = sanitizeLoadedConfig(loadedConfig, defaultConfig, configSchema)
 
     expect(sanitized.markdown.inlineCodeClickCopy).toBe(false)
     expect(sanitized.markdown.typographer).toBe(false)
+    expect(sanitized.markdown.imageShadow).toBe(false)
   })
 
   it('markdown.inlineCodeClickCopy 非法时必须仅回退该字段', () => {
@@ -179,10 +181,37 @@ describe('configLoadSanitizer', () => {
         ...cloneConfig(defaultConfig.markdown),
         inlineCodeClickCopy: 'invalid',
         typographer: false,
+        imageShadow: false,
       },
     }, defaultConfig, configSchema)
 
     expect(sanitized.markdown.inlineCodeClickCopy).toBe(false)
+    expect(sanitized.markdown.typographer).toBe(false)
+    expect(sanitized.markdown.imageShadow).toBe(false)
+  })
+
+  it('markdown.imageShadow 缺失时必须补默认值，且同层其他合法字段保持原值', () => {
+    const loadedConfig = cloneConfig(defaultConfig)
+    delete loadedConfig.markdown.imageShadow
+    loadedConfig.markdown.typographer = false
+
+    const sanitized = sanitizeLoadedConfig(loadedConfig, defaultConfig, configSchema)
+
+    expect(sanitized.markdown.imageShadow).toBe(true)
+    expect(sanitized.markdown.typographer).toBe(false)
+  })
+
+  it('markdown.imageShadow 非法时必须仅回退该字段', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      markdown: {
+        ...cloneConfig(defaultConfig.markdown),
+        imageShadow: 'invalid',
+        typographer: false,
+      },
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.markdown.imageShadow).toBe(true)
     expect(sanitized.markdown.typographer).toBe(false)
   })
 

@@ -182,6 +182,8 @@ export default {
       globalTheme: 'Global theme',
       codeTheme: 'Code theme',
       previewTheme: 'Preview theme',
+      previewImageShadow: 'Preview image shadow',
+      previewImageShadowTip: 'Controls image shadows in Markdown preview. PDF, PNG, and JPEG exports use the same effect.',
       previewWidth: 'Preview width',
       fontSize: 'Font size',
       editorPreviewPositionOption: {

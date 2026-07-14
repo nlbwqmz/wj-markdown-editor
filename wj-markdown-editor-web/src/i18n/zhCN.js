@@ -182,6 +182,8 @@ export default {
       globalTheme: '全局主题',
       codeTheme: '代码主题',
       previewTheme: '预览主题',
+      previewImageShadow: '预览图片阴影',
+      previewImageShadowTip: '控制 Markdown 预览中的图片阴影，导出 PDF、PNG、JPEG 时也会沿用该效果。',
       previewWidth: '预览宽度',
       fontSize: '字体大小',
       editorPreviewPositionOption: {

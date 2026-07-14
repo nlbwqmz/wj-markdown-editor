@@ -15,6 +15,7 @@ const markdownPreviewRuntimeState = vi.hoisted(() => ({
       },
       markdown: {
         inlineCodeClickCopy: false,
+        imageShadow: true,
         typographer: false,
       },
     },
@@ -196,6 +197,7 @@ async function flushPreviewRender() {
 
 describe('markdownPreview runtime contextmenu', () => {
   beforeEach(() => {
+    markdownPreviewRuntimeState.store.config.markdown.imageShadow = true
     markdownPreviewRuntimeState.mdRender.mockImplementation(() => markdownPreviewRuntimeState.renderedHtml)
     markdownPreviewRuntimeState.renderedHtml = [
       '<p data-line-start="3" data-line-end="3">',
@@ -245,6 +247,26 @@ describe('markdownPreview runtime contextmenu', () => {
         y: 260,
       },
     })
+  })
+
+  it('图片阴影开启时预览根节点应沿用主题阴影变量', async () => {
+    markdownPreviewRuntimeState.store.config.markdown.imageShadow = true
+
+    const wrapper = mountMarkdownPreview()
+
+    await flushPreviewRender()
+
+    expect(wrapper.get('.wj-preview-theme').attributes('style')).toContain('--wj-preview-image-box-shadow: var(--img-box-shadow);')
+  })
+
+  it('图片阴影关闭时预览根节点应覆盖图片阴影变量为 none', async () => {
+    markdownPreviewRuntimeState.store.config.markdown.imageShadow = false
+
+    const wrapper = mountMarkdownPreview()
+
+    await flushPreviewRender()
+
+    expect(wrapper.get('.wj-preview-theme').attributes('style')).toContain('--wj-preview-image-box-shadow: none;')
   })
 
   it('右键预览资源时会兼容 data-wj-resource-markdown-reference 并透传到 previewContextmenu 上下文', async () => {

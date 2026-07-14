@@ -27,6 +27,7 @@ const SET_PATH_SET = new Set([
   'editorExtension.closeBrackets',
   'markdown.typographer',
   'markdown.inlineCodeClickCopy',
+  'markdown.imageShadow',
   'externalFileChangeStrategy',
   'startPage',
   'openRecent',
