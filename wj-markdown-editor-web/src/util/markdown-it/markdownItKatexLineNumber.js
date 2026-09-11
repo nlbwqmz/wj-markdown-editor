@@ -25,7 +25,7 @@ function injectAttrsIntoRootTag(renderedHtml, attrsText) {
 }
 
 export default function (md) {
-  ;['math_block', 'math_inline_block', 'math_inline_bare_block'].forEach((ruleName) => {
+  ;['math_block'].forEach((ruleName) => {
     const originalRenderer = md.renderer.rules[ruleName]
     if (typeof originalRenderer !== 'function') {
       return

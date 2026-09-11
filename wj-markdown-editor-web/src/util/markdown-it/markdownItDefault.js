@@ -1,6 +1,6 @@
 import { footnote } from '@mdit/plugin-footnote'
 import { imgSize } from '@mdit/plugin-img-size'
-import MarkdownItKatex from '@vscode/markdown-it-katex'
+import { katex as MarkdownItKatex } from '@mdit/plugin-katex'
 import MarkdownIt from 'markdown-it'
 import MarkdownItAnchor from 'markdown-it-anchor'
 import MarkdownItContainer from 'markdown-it-container'
@@ -38,7 +38,7 @@ md.use(MarkdownItSup)
   .use(MarkdownItMark)
   .use(MarkdownItTaskLists)
   .use(MarkdownItGitHubAlerts)
-  .use(MarkdownItKatex, { throwOnError: false })
+  .use(MarkdownItKatex, { delimiters: 'all', throwOnError: false })
   .use(MarkdownItCodeBlock)
   .use(MarkdownItAnchor)
   .use(imgSize)

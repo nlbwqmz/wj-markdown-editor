@@ -241,6 +241,64 @@ Container.
 
 <img src="${tableGuideImg}" alt="Table"/>
 
+## Math Formulas
+
+Use \`$...$\` or \`\\(...\\)\` for inline math, and \`$$...$$\` or \`\\[...\\]\` for display math.
+
+### Inline Math
+
+Inline formulas can appear in regular text, such as the mass-energy equivalence $E = mc^2$ and the area of a circle \\(S = \\pi r^2\\).
+
+::: Details Syntax
+  \`\`\`markdown
+  The mass-energy equivalence is $E = mc^2$, and the area of a circle is \\(S = \\pi r^2\\).
+  \`\`\`
+:::
+
+### Display Math
+
+$$
+\\int_{-\\infty}^{\\infty} e^{-x^2} \\, dx = \\sqrt{\\pi}
+$$
+
+\\[
+\\frac{d}{dx} x^n = n x^{n - 1}
+\\]
+
+::: Details Syntax
+  \`\`\`markdown
+  $$
+  \\int_{-\\infty}^{\\infty} e^{-x^2} \\, dx = \\sqrt{\\pi}
+  $$
+
+  \\[
+  \\frac{d}{dx} x^n = n x^{n - 1}
+  \\]
+  \`\`\`
+:::
+
+### Math in Lists
+
+- Inline math: \\( E = mc^2 \\)
+
+- Display math:
+
+  \\[
+  \\sum_{i=1}^{n} i = \\frac{n(n + 1)}{2}
+  \\]
+
+::: Details Syntax
+  \`\`\`markdown
+  - Inline math: \\( E = mc^2 \\)
+
+  - Display math:
+
+    \\[
+    \\sum_{i=1}^{n} i = \\frac{n(n + 1)}{2}
+    \\]
+  \`\`\`
+:::
+
 ## Video
 
 \`!video(link)\`
