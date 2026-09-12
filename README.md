@@ -188,7 +188,13 @@ npm run make
 构建产物：
 
 - Windows: `NSIS` 安装包 + `ZIP` 便携版
-- Linux: `DEB` + `RPM`
+- Linux: `DEB` + `RPM` + `AppImage`
+
+AppImage 运行说明（`wj-markdown-editor-linux-x86_64-<version>.AppImage`）：
+
+- 免安装的单文件可执行程序，需先赋予可执行权限：`chmod +x wj-markdown-editor-linux-x86_64-*.AppImage`，之后直接运行即可
+- 不会自动集成桌面项，因此不会写入应用菜单或安装图标；如需集成可配合 AppImageLauncher 之类的工具
+- 部分发行版默认不再提供 FUSE2：Ubuntu 24.04+ 需安装 `libfuse2t64`，较旧发行版需安装 `libfuse2`；缺失时会提示 `AppImages require FUSE to run` / `dlopen(): error loading libfuse.so.2`，也可改用 `--appimage-extract-and-run` 参数运行
 
 ## 📌 注意事项
 

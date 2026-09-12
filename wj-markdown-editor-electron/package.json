@@ -79,6 +79,9 @@
         },
         {
           "target": "rpm"
+        },
+        {
+          "target": "AppImage"
         }
       ],
       "fileAssociations": [

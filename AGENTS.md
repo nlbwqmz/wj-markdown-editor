@@ -237,7 +237,7 @@ npm run test:run
 - Web 构建输出到 `wj-markdown-editor-electron/web-dist`
 - Electron 构建输出目录为 `wj-markdown-editor-electron/electron-build`
 - Windows：`nsis` 安装包 + `zip`
-- Linux：`deb` + `rpm`
+- Linux：`deb` + `rpm` + `AppImage`
 
 ## 开发规范
 
