@@ -198,6 +198,10 @@
     box-shadow: var(--wj-preview-image-box-shadow);
   }
 
+  & :where(img + br + img) {
+    margin-top: var(--wj-preview-adjacent-image-margin-top);
+  }
+
   & :where(audio) {
     color-scheme: var(--wj-preview-audio-color-scheme);
   }

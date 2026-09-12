@@ -32,6 +32,7 @@ $paragraph-space: 22px;
   --wj-preview-h6-font-size: 12px;
 
   --wj-preview-paragraph-margin: #{$paragraph-space} 0;
+  --wj-preview-adjacent-image-margin-top: #{$paragraph-space};
 
   --wj-preview-hr-margin: 36px 0;
   --wj-preview-hr-border-top: 1px solid #{$color-border};
