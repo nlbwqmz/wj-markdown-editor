@@ -86,9 +86,7 @@
       ],
       "fileAssociations": [
         {
-          "ext": [
-            "md"
-          ],
+          "ext": "md",
           "mimeType": "text/markdown",
           "name": "Markdown File"
         }
