@@ -168,6 +168,45 @@ export function createDocumentCommandService({
         }
         break
 
+      case 'document.save-and-close':
+        {
+          // 保存并退出必须把“保存”与“关闭意图”绑定在同一条状态机里，
+          // 不能由 renderer 先保存、再单独发送 close，否则保存期间取消会留下迟到关窗竞态。
+          if (!session.saveRuntime.inFlightJobId && !isDirty(session)) {
+            resetCloseRuntime(session)
+            effects.push({
+              type: 'close-window',
+            })
+            break
+          }
+
+          session.closeRuntime.intent = 'close'
+          session.closeRuntime.promptReason = 'unsaved-changes'
+          session.closeRuntime.forceClose = false
+          session.closeRuntime.awaitingPathSelection = false
+          session.closeRuntime.waitingSaveJobId = null
+
+          const saveRequested = saveCoordinator.requestSave(session, {
+            trigger: 'save-and-close',
+          })
+          if (session.saveRuntime.status === 'awaiting-path-selection'
+            && !session.documentSource.path) {
+            session.closeRuntime.awaitingPathSelection = true
+          }
+          if (session.saveRuntime.inFlightJobId) {
+            session.closeRuntime.awaitingPathSelection = false
+            session.closeRuntime.waitingSaveJobId = session.saveRuntime.inFlightJobId
+          }
+
+          effects.push(
+            {
+              type: 'hold-window-close',
+            },
+            ...saveRequested.effects,
+          )
+        }
+        break
+
       case 'document.save-copy':
         {
           // “另存副本”与常规保存分离处理：

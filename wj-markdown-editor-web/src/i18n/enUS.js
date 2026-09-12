@@ -28,9 +28,10 @@ export default {
     prettier: 'Prettier',
   },
   closeModal: {
-    closePrompt: ' exists unsaved changes, are you sure you want to exit? It is recommended to enable automatic saving to avoid data loss.',
+    closePrompt: ' has unsaved changes. Please choose how to exit. Automatic saving is recommended to avoid data loss.',
     openSetting: 'Open settings',
-    confirmExit: 'Confirm exit',
+    saveAndExit: 'Save and exit',
+    directExit: 'Exit directly',
   },
   previewAssetMenu: {
     copyAbsolutePath: 'Copy absolute path',

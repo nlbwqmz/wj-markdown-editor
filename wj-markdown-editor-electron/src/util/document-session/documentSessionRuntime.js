@@ -102,6 +102,7 @@ export async function openDocumentWindowWithRuntimePolicy({
 const DOCUMENT_STATE_COMMAND_SET = new Set([
   'document.edit',
   'document.save',
+  'document.save-and-close',
   'document.save-copy',
   'document.request-close',
   'document.cancel-close',

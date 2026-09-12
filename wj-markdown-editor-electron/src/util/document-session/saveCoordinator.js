@@ -481,6 +481,8 @@ function normalizeComparablePath(targetPath) {
 // 当多个请求在同一轮 in-flight/awaiting-path-selection 阶段合并时，需要保留语义更强的触发源。
 function getTriggerPriority(trigger) {
   switch (trigger) {
+    case 'save-and-close':
+      return 4
     case 'close-auto-save':
       return 3
     case 'manual-save':
@@ -1088,9 +1090,12 @@ export function createSaveCoordinator() {
       settledManualRequestIds.push(...completedManualRequestIds)
 
       if (session.editorSnapshot.revision > payload.revision) {
+        const closeFollowUpTrigger = session.saveRuntime.trigger === 'save-and-close'
+          ? 'save-and-close'
+          : 'close-auto-save'
         const nextResult = continueQueuedSaveIfNeeded(session, {
           preferredTrigger: closeWaitingCurrentJob
-            ? 'close-auto-save'
+            ? closeFollowUpTrigger
             : mergeSaveTrigger(session.saveRuntime.trigger, payload.trigger),
         })
 

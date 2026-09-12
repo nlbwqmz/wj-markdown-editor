@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { effectScope, nextTick, reactive } from 'vue'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { effectScope as createVueEffectScope, nextTick, reactive } from 'vue'
+import { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } from '../fileManagerEventUtil.js'
 
 const { sortFileManagerEntryListMock } = vi.hoisted(() => ({
   sortFileManagerEntryListMock: vi.fn((entryList = []) => [...entryList]),
@@ -12,7 +13,29 @@ vi.mock('../fileManagerEntryMetaUtil.js', async () => {
   }
 })
 
+// 冷启动加载 fileManagerPanelController 会连带拉入 ant-design-vue 等重依赖，
+// 该耗时必须落在模块阶段与 beforeAll 内，不能计进单个 it 的 5000ms 预算。
+const FILE_MANAGER_PANEL_CONTROLLER_LOAD_TIMEOUT_MS = 60000
 const fileManagerPanelControllerModulePromise = import('../fileManagerPanelController.js')
+
+let createFileManagerPanelController = null
+
+// 用例中途断言失败时不会执行测试体末尾的 scope.stop()，这里把所有 effectScope 统一登记，
+// 由 afterEach 兜底停止（EffectScope.stop 幂等），避免 watch / onScopeDispose 泄漏到后续用例。
+const trackedEffectScopeSet = new Set()
+
+function effectScope() {
+  const scope = createVueEffectScope()
+  trackedEffectScopeSet.add(scope)
+  return scope
+}
+
+function stopTrackedEffectScopes() {
+  for (const scope of trackedEffectScopeSet) {
+    scope.stop()
+  }
+  trackedEffectScopeSet.clear()
+}
 
 function createStore() {
   return reactive({
@@ -60,13 +83,19 @@ function createDeferred() {
 }
 
 describe('fileManagerPanelController', () => {
+  // 控制器模块在 beforeAll 内一次加载完成，测试体只做断言，不再承担冷 import 成本。
+  beforeAll(async () => {
+    const controllerModule = await fileManagerPanelControllerModulePromise
+    createFileManagerPanelController = controllerModule.createFileManagerPanelController
+  }, FILE_MANAGER_PANEL_CONTROLLER_LOAD_TIMEOUT_MS)
+
   afterEach(() => {
+    stopTrackedEffectScopes()
     vi.restoreAllMocks()
     sortFileManagerEntryListMock.mockClear()
   })
 
   it('updateFileManagerSortConfig 成功后应只重排一次当前目录缓存，不能额外重复重排', async () => {
-    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const requestDirectoryState = vi.fn().mockResolvedValue({
       directoryPath: 'D:/docs',
       entryList: [
@@ -116,10 +145,9 @@ describe('fileManagerPanelController', () => {
     })
 
     scope.stop()
-  }, 10000)
+  })
 
   it('updateFileManagerSortConfig 提交 IPC 时必须发送 fileManagerSort batch mutation，避免旧事件与整块 patch', async () => {
-    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const requestDirectoryState = vi.fn().mockResolvedValue({
       directoryPath: 'D:/docs',
       entryList: [
@@ -188,7 +216,6 @@ describe('fileManagerPanelController', () => {
   })
 
   it('modifiedTime 排序与非时间排序之间切换时，应复用当前缓存并轻量同步目录读取选项', async () => {
-    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const requestDirectoryState = vi.fn().mockResolvedValue({
       directoryPath: 'D:/docs',
       entryList: [
@@ -254,8 +281,6 @@ describe('fileManagerPanelController', () => {
   })
 
   it('快速切回 modifiedTime 排序时，未返回的旧同步不能阻止补发最新读取选项', async () => {
-    const { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } = await import('../fileManagerEventUtil.js')
-    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const disableModifiedTimeRequest = createDeferred()
     const enableModifiedTimeRequest = createDeferred()
     const requestDirectoryState = vi.fn().mockResolvedValue({
@@ -352,8 +377,6 @@ describe('fileManagerPanelController', () => {
   })
 
   it('切到 modifiedTime 排序后的补发请求，不能被缺少 modifiedTimeMs 的目录事件永久作废', async () => {
-    const { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } = await import('../fileManagerEventUtil.js')
-    const { createFileManagerPanelController } = await fileManagerPanelControllerModulePromise
     const staleModifiedTimeReload = createDeferred()
     const latestModifiedTimeReload = createDeferred()
     const requestDirectoryState = vi.fn()

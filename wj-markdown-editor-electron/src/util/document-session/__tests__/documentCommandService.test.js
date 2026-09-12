@@ -440,6 +440,429 @@ describe('documentCommandService', () => {
     expect(closeRequested.session.closeRuntime.waitingSaveJobId).toBe('job-1')
   })
 
+  it('document.save-and-close 必须复用保存状态机，并在重复点击时只等待同一个 job', () => {
+    const { store, service } = createTestContext([])
+    const session = createBoundFileSession({
+      sessionId: 'save-and-close-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002035,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 保存并退出内容',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.request-close',
+    })
+
+    const firstRequested = service.dispatch({
+      windowId,
+      command: 'document.save-and-close',
+    })
+    const repeatedRequested = service.dispatch({
+      windowId,
+      command: 'document.save-and-close',
+    })
+
+    expect(firstRequested.effects).toEqual([
+      {
+        type: 'hold-window-close',
+      },
+      {
+        type: 'execute-save',
+        job: expect.objectContaining({
+          jobId: 'job-1',
+          trigger: 'save-and-close',
+          content: '# 保存并退出内容',
+        }),
+      },
+    ])
+    expect(repeatedRequested.effects).toEqual([
+      {
+        type: 'hold-window-close',
+      },
+    ])
+    expect(repeatedRequested.session.closeRuntime.waitingSaveJobId).toBe('job-1')
+
+    const saved = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-1',
+        revision: 1,
+        content: '# 保存并退出内容',
+        path: 'C:/docs/demo.md',
+        trigger: 'save-and-close',
+        savedAt: 1700000002036,
+        stat: null,
+      },
+    })
+
+    expect(saved.effects).toEqual([
+      {
+        type: 'close-window',
+      },
+    ])
+    expect(saved.session.closeRuntime).toEqual({
+      intent: null,
+      promptReason: null,
+      waitingSaveJobId: null,
+      awaitingPathSelection: false,
+      forceClose: false,
+    })
+  })
+
+  it('save-and-close 写盘期间产生新编辑时，必须先补写最新 revision 再关闭', () => {
+    const { store, service } = createTestContext([])
+    const session = createBoundFileSession({
+      sessionId: 'save-and-close-follow-up-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002036,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 第一版内容',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.save-and-close',
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 第二版内容',
+      },
+    })
+
+    const firstSaved = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-1',
+        revision: 1,
+        content: '# 第一版内容',
+        path: 'C:/docs/demo.md',
+        trigger: 'save-and-close',
+        savedAt: 1700000002037,
+        stat: null,
+      },
+    })
+
+    expect(firstSaved.effects).toEqual([
+      {
+        type: 'execute-save',
+        job: expect.objectContaining({
+          jobId: 'job-2',
+          revision: 2,
+          content: '# 第二版内容',
+          trigger: 'save-and-close',
+        }),
+      },
+    ])
+    expect(firstSaved.session.closeRuntime.waitingSaveJobId).toBe('job-2')
+
+    const secondSaved = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-2',
+        revision: 2,
+        content: '# 第二版内容',
+        path: 'C:/docs/demo.md',
+        trigger: 'save-and-close',
+        savedAt: 1700000002038,
+        stat: null,
+      },
+    })
+
+    expect(secondSaved.effects).toEqual([
+      {
+        type: 'close-window',
+      },
+    ])
+  })
+
+  it('document.save-and-close 写盘失败时必须保留关闭提示，不能产出 close-window', () => {
+    const { store, service } = createTestContext([])
+    const session = createBoundFileSession({
+      sessionId: 'save-and-close-failed-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002037,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 保存失败内容',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.request-close',
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.save-and-close',
+    })
+
+    const failed = service.dispatch({
+      windowId,
+      command: 'save.failed',
+      payload: {
+        jobId: 'job-1',
+        trigger: 'save-and-close',
+        error: new Error('磁盘已满'),
+      },
+    })
+
+    expect(failed.effects).toContainEqual({
+      type: 'notify-save-failed',
+      trigger: 'save-and-close',
+      error: {
+        name: 'Error',
+        message: '磁盘已满',
+      },
+    })
+    expect(failed.effects).toContainEqual({
+      type: 'show-unsaved-prompt',
+    })
+    expect(failed.effects.some(effect => effect.type === 'close-window')).toBe(false)
+    expect(failed.session.closeRuntime.promptReason).toBe('unsaved-changes')
+    expect(failed.session.closeRuntime.waitingSaveJobId).toBeNull()
+  })
+
+  it('用户在 save-and-close 写盘期间取消关闭后，迟到的保存成功也不能再次关闭窗口', () => {
+    const { store, service } = createTestContext([])
+    const session = createBoundFileSession({
+      sessionId: 'save-and-close-cancel-race-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002038,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 取消关闭内容',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.request-close',
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.save-and-close',
+    })
+    const cancelled = service.dispatch({
+      windowId,
+      command: 'document.cancel-close',
+    })
+
+    const lateSaved = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-1',
+        revision: 1,
+        content: '# 取消关闭内容',
+        path: 'C:/docs/demo.md',
+        trigger: 'save-and-close',
+        savedAt: 1700000002039,
+        stat: null,
+      },
+    })
+
+    expect(cancelled.session.closeRuntime.intent).toBeNull()
+    expect(lateSaved.effects).toEqual([])
+    expect(lateSaved.session.closeRuntime.intent).toBeNull()
+    expect(lateSaved.snapshot.saved).toBe(true)
+  })
+
+  it('document.save-and-close 的草稿首存必须先选路径，成功后才允许关闭', () => {
+    const { store, service } = createTestContext([])
+    const session = createDraftSession({
+      sessionId: 'draft-save-and-close-session',
+      now: 1700000002041,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 草稿保存并退出',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.request-close',
+    })
+
+    const saveRequested = service.dispatch({
+      windowId,
+      command: 'document.save-and-close',
+    })
+    expect(saveRequested.effects).toEqual([
+      {
+        type: 'hold-window-close',
+      },
+      {
+        type: 'open-save-dialog',
+        trigger: 'save-and-close',
+      },
+    ])
+    expect(saveRequested.session.closeRuntime.awaitingPathSelection).toBe(true)
+
+    const targetSelected = service.dispatch({
+      windowId,
+      command: 'dialog.save-target-selected',
+      payload: {
+        path: 'C:/docs/draft.md',
+      },
+    })
+    expect(targetSelected.effects).toEqual([
+      {
+        type: 'execute-save',
+        job: expect.objectContaining({
+          path: 'C:/docs/draft.md',
+          trigger: 'save-and-close',
+        }),
+      },
+    ])
+    expect(targetSelected.session.closeRuntime.waitingSaveJobId).toBe('job-1')
+
+    const saved = service.dispatch({
+      windowId,
+      command: 'save.succeeded',
+      payload: {
+        jobId: 'job-1',
+        revision: 1,
+        content: '# 草稿保存并退出',
+        path: 'C:/docs/draft.md',
+        trigger: 'save-and-close',
+        savedAt: 1700000002042,
+        stat: null,
+      },
+    })
+    expect(saved.effects).toEqual([
+      {
+        type: 'close-window',
+      },
+    ])
+  })
+
+  it('document.cancel-close 在 save-and-close 等待首存路径时，取消回流不能触发关闭', () => {
+    const { store, service } = createTestContext([])
+    const session = createDraftSession({
+      sessionId: 'draft-save-and-close-cancel-session',
+      now: 1700000002043,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 取消首存',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.request-close',
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.save-and-close',
+    })
+
+    const cancelled = service.dispatch({
+      windowId,
+      command: 'dialog.save-target-cancelled',
+    })
+
+    expect(cancelled.effects).toEqual([])
+    expect(cancelled.session.closeRuntime.intent).toBeNull()
+    expect(cancelled.session.documentSource.path).toBeNull()
+  })
+
+  it('document.cancel-close 在 save-and-close 写盘期间回退后，迟到的 save.failed 也不能重新弹关闭提示', () => {
+    const { store, service } = createTestContext([])
+    const session = createBoundFileSession({
+      sessionId: 'save-and-close-failed-cancel-race-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000002044,
+    })
+    const windowId = bindSession(store, session)
+
+    service.dispatch({
+      windowId,
+      command: 'document.edit',
+      payload: {
+        content: '# 取消后失败',
+      },
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.request-close',
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.save-and-close',
+    })
+    service.dispatch({
+      windowId,
+      command: 'document.cancel-close',
+    })
+
+    const lateFailed = service.dispatch({
+      windowId,
+      command: 'save.failed',
+      payload: {
+        jobId: 'job-1',
+        trigger: 'save-and-close',
+        error: new Error('用户中止'),
+      },
+    })
+
+    expect(lateFailed.effects).toContainEqual({
+      type: 'notify-save-failed',
+      trigger: 'save-and-close',
+      error: {
+        name: 'Error',
+        message: '用户中止',
+      },
+    })
+    expect(lateFailed.effects.some(effect => effect.type === 'show-unsaved-prompt')).toBe(false)
+    expect(lateFailed.effects.some(effect => effect.type === 'close-window')).toBe(false)
+    expect(lateFailed.session.closeRuntime.intent).toBeNull()
+  })
+
   it('document.cancel-close 会清空 closeRuntime 并回到继续编辑态', () => {
     const { store, service } = createTestContext([])
     const session = createBoundFileSession({

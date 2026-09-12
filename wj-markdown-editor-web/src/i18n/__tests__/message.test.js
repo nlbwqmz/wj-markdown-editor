@@ -16,6 +16,16 @@ test('中英文文案都应提供缺失锚点提示', () => {
   )
 })
 
+test('关闭确认弹窗必须提供保存并退出和直接退出文案，并移除旧确认退出文案', () => {
+  assert.equal(zhCN.closeModal.saveAndExit, '保存并退出')
+  assert.equal(zhCN.closeModal.directExit, '直接退出')
+  assert.equal(enUS.closeModal.saveAndExit, 'Save and exit')
+  assert.equal(enUS.closeModal.directExit, 'Exit directly')
+  assert.equal('confirmExit' in zhCN.closeModal, false)
+  assert.equal('confirmExit' in enUS.closeModal, false)
+  assert.equal(zhCN.closeModal.closePrompt.includes('确认退出'), false)
+})
+
 test('中英文文案都应提供全屏相关文案', () => {
   assert.equal(
     zhCN.top.enterFullScreen,

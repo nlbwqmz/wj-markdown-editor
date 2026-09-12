@@ -29,6 +29,7 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
     requestDocumentOpenPath,
     requestDocumentOpenPathInCurrentWindow,
     requestDocumentSave,
+    requestDocumentSaveAndClose,
     requestDocumentSaveCopy,
     requestDocumentSessionSnapshot,
     requestRecentClear,
@@ -42,6 +43,7 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
   })
 
   await requestDocumentSave()
+  await requestDocumentSaveAndClose()
   await requestDocumentSaveCopy()
   await requestDocumentEdit('# 新内容')
   await requestDocumentOpenDialog()
@@ -72,6 +74,7 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
 
   assert.deepEqual(sentPayloadList, [
     { event: 'document.save' },
+    { event: 'document.save-and-close' },
     { event: 'document.save-copy' },
     {
       event: 'document.edit',

@@ -240,6 +240,7 @@ const handlerList = {
   // renderer 已经切到新的 session 命令名，这里只保留直连入口。
   'document.save-copy': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save-copy', null),
   'document.save': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save', null),
+  'document.save-and-close': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save-and-close', null),
   'document.get-session-snapshot': async (windowContext) => {
     return await executeRuntimeUiCommand(windowContext, 'document.get-session-snapshot', null)
   },

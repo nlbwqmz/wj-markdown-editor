@@ -1856,11 +1856,15 @@ describe('ipcMainUtil command mapping', () => {
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
-  it('document.cancel-close / document.confirm-force-close 必须暴露为新的关闭确认命令', async () => {
+  it('document.cancel-close / document.save-and-close / document.confirm-force-close 必须暴露为新的关闭确认命令', async () => {
     const { sender, sendToMainHandler, winInfoUtil } = await setupCommandHandler()
 
     await sendToMainHandler({ sender }, {
       event: 'document.cancel-close',
+      data: null,
+    })
+    await sendToMainHandler({ sender }, {
+      event: 'document.save-and-close',
       data: null,
     })
     await sendToMainHandler({ sender }, {
@@ -1869,7 +1873,8 @@ describe('ipcMainUtil command mapping', () => {
     })
 
     expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(1, 1, 'document.cancel-close', null)
-    expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(2, 1, 'document.confirm-force-close', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(2, 1, 'document.save-and-close', null)
+    expect(runtimeExecuteUiCommand).toHaveBeenNthCalledWith(3, 1, 'document.confirm-force-close', null)
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 

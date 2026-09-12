@@ -28,9 +28,10 @@ export default {
     prettier: '美化',
   },
   closeModal: {
-    closePrompt: '存在未保存的修改，是否确认退出？建议启用自动保存功能以避免数据丢失。',
+    closePrompt: '存在未保存的修改，请选择退出方式。建议启用自动保存功能以避免数据丢失。',
     openSetting: '打开设置',
-    confirmExit: '确认退出',
+    saveAndExit: '保存并退出',
+    directExit: '直接退出',
   },
   previewAssetMenu: {
     copyAbsolutePath: '复制绝对路径',

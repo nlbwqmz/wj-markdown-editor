@@ -26,6 +26,7 @@ function createDeferred() {
 const DOCUMENT_STATE_COMMAND_SET = new Set([
   'document.edit',
   'document.save',
+  'document.save-and-close',
   'document.save-copy',
   'document.request-close',
   'document.cancel-close',
@@ -818,11 +819,12 @@ describe('documentSessionRuntime', () => {
     }))
   })
 
-  it('document.cancel-close / confirm-force-close / external.apply / external.ignore 也必须经 runtime 进入统一命令链路', async () => {
+  it('document.cancel-close / confirm-force-close / save-and-close / external.apply / external.ignore 也必须经 runtime 进入统一命令链路', async () => {
     const { runtime, executeDocumentCommand } = createRuntimeContext()
 
     await runtime.executeUiCommand(5, 'document.cancel-close', null)
     await runtime.executeUiCommand(5, 'document.confirm-force-close', null)
+    await runtime.executeUiCommand(5, 'document.save-and-close', null)
     await runtime.executeUiCommand(5, 'document.external.apply', {
       version: 2,
     })
@@ -842,12 +844,17 @@ describe('documentSessionRuntime', () => {
     }))
     expect(executeDocumentCommand).toHaveBeenNthCalledWith(3, expect.objectContaining({
       windowId: 5,
+      command: 'document.save-and-close',
+      payload: null,
+    }))
+    expect(executeDocumentCommand).toHaveBeenNthCalledWith(4, expect.objectContaining({
+      windowId: 5,
       command: 'document.external.apply',
       payload: {
         version: 2,
       },
     }))
-    expect(executeDocumentCommand).toHaveBeenNthCalledWith(4, expect.objectContaining({
+    expect(executeDocumentCommand).toHaveBeenNthCalledWith(5, expect.objectContaining({
       windowId: 5,
       command: 'document.external.ignore',
       payload: {

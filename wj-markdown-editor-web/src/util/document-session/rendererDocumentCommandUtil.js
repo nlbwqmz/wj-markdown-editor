@@ -22,6 +22,18 @@ export function requestDocumentSave() {
 }
 
 /**
+ * 请求主进程保存当前文档，并在保存状态机确认成功后关闭当前窗口。
+ *
+ * 保存与关闭由主进程作为一个文档会话命令裁决，
+ * 避免 renderer 在保存期间被取消后仍发送迟到的 close 请求。
+ */
+export function requestDocumentSaveAndClose() {
+  return channelUtil.send({
+    event: 'document.save-and-close',
+  })
+}
+
+/**
  * 发送“另存为/保存副本”命令。
  *
  * 对应新的统一命令名 `document.save-copy`，
@@ -228,6 +240,7 @@ export function isDocumentOpenMissingResult(result) {
 
 export default {
   requestDocumentSave,
+  requestDocumentSaveAndClose,
   requestDocumentSaveCopy,
   requestDocumentEdit,
   requestDocumentOpenDialog,

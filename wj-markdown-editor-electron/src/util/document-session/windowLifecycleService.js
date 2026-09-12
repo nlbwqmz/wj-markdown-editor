@@ -243,6 +243,9 @@ function buildRuntimeHostDeps() {
         case 'document.save':
           return executeDocumentSaveCommandWithDispatcher(windowId, dispatch)
 
+        case 'document.save-and-close':
+          return dispatch(command, payload)
+
         case 'document.save-copy':
           return executeDocumentCopySaveCommandWithDispatcher(windowId, dispatch)
 

@@ -990,6 +990,153 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'unsaved')).toBe(false)
   })
 
+  it('document.save-and-close 写盘成功后才关闭窗口，且重复点击不会重复写盘', async () => {
+    const saveDeferred = createDeferred()
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    writeFileMock.mockReturnValueOnce(saveDeferred.promise)
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 保存并退出内容')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 保存并退出内容')
+    })
+
+    const firstSaveAndClose = executeTestCommand(winInfo, 'document.save-and-close')
+    await vi.waitFor(() => {
+      expect(writeFileMock).toHaveBeenCalledTimes(1)
+      expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 保存并退出内容')
+    })
+    expect(listWindowRefs()).toHaveLength(1)
+
+    const repeatedSaveAndClose = await executeTestCommand(winInfo, 'document.save-and-close')
+    expect(repeatedSaveAndClose.effects).toEqual([
+      {
+        type: 'hold-window-close',
+      },
+    ])
+    expect(writeFileMock).toHaveBeenCalledTimes(1)
+    expect(listWindowRefs()).toHaveLength(1)
+
+    saveDeferred.resolve()
+    await saveDeferred.promise
+    await firstSaveAndClose
+    await vi.waitFor(() => {
+      expect(winInfo.win.closeEvents).toHaveLength(1)
+      expect(listWindowRefs()).toHaveLength(0)
+    })
+  })
+
+  it('document.save-and-close 写盘失败时必须保持窗口打开并保留未保存提示', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    writeFileMock.mockRejectedValueOnce(new Error('磁盘已满'))
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 保存失败内容')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 保存失败内容')
+    })
+
+    await executeTestCommand(winInfo, 'document.save-and-close')
+
+    expect(writeFileMock).toHaveBeenCalledWith('D:/demo.md', '# 保存失败内容')
+    expect(winInfo.win.closeEvents).toHaveLength(0)
+    expect(listWindowRefs()).toHaveLength(1)
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.closePrompt).toEqual(expect.objectContaining({
+      visible: true,
+      reason: 'unsaved-changes',
+    }))
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'error',
+        content: '保存失败。 磁盘已满',
+      },
+    })
+  })
+
+  it('document.save-and-close 的草稿首存选择路径后，必须写盘成功再关闭窗口', async () => {
+    showSaveDialogSyncMock.mockReturnValueOnce('D:/draft-save-and-close.md')
+
+    await winInfoUtil.createNew(null)
+
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 草稿保存并退出')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 草稿保存并退出')
+    })
+
+    await executeTestCommand(winInfo, 'document.save-and-close')
+
+    expect(showSaveDialogSyncMock).toHaveBeenCalledTimes(1)
+    expect(writeFileMock).toHaveBeenCalledWith('D:/draft-save-and-close.md', '# 草稿保存并退出')
+    await vi.waitFor(() => {
+      expect(winInfo.win.closeEvents).toHaveLength(1)
+      expect(listWindowRefs()).toHaveLength(0)
+    })
+  })
+
+  it('document.save-and-close 的草稿首存取消时不能关闭窗口', async () => {
+    showSaveDialogSyncMock.mockReturnValueOnce(undefined)
+
+    await winInfoUtil.createNew(null)
+
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 取消首存')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 取消首存')
+    })
+
+    await executeTestCommand(winInfo, 'document.save-and-close')
+
+    expect(showSaveDialogSyncMock).toHaveBeenCalledTimes(1)
+    expect(writeFileMock).not.toHaveBeenCalled()
+    expect(winInfo.win.closeEvents).toHaveLength(0)
+    expect(listWindowRefs()).toHaveLength(1)
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.closePrompt).toBeNull()
+  })
+
+  it('用户在 document.save-and-close 写盘期间取消关闭后，迟到的保存成功不能关闭窗口', async () => {
+    const saveDeferred = createDeferred()
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    writeFileMock.mockReturnValueOnce(saveDeferred.promise)
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    winInfoUtil.updateTempContent(winInfo.id, '# 取消关闭')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 取消关闭')
+    })
+
+    const saveAndClosePromise = executeTestCommand(winInfo, 'document.save-and-close')
+    await vi.waitFor(() => {
+      expect(writeFileMock).toHaveBeenCalledTimes(1)
+    })
+
+    await executeTestCommand(winInfo, 'document.cancel-close')
+    expect(listWindowRefs()).toHaveLength(1)
+
+    saveDeferred.resolve()
+    await saveDeferred.promise
+    await saveAndClosePromise
+    await Promise.resolve()
+
+    expect(winInfo.win.closeEvents).toHaveLength(0)
+    expect(listWindowRefs()).toHaveLength(1)
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.saved).toBe(true)
+    expect(snapshot.closePrompt).toBeNull()
+  })
+
   it('关闭链路命中未保存变更时，必须只通过 snapshot.closePrompt 推送关闭确认，不能再发送 unsaved 事件', async () => {
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startPage: 'editor' })
     pathExistsMock.mockResolvedValue(true)
