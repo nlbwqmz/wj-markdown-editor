@@ -18,6 +18,7 @@ test('publish 后 consume 命中时应返回记录副本并清空待消费状态
     sessionId: 'session-1',
     revision: 3,
     lineNumber: 42,
+    lineOffsetRatio: 0,
     sourceAreaKey: 'editor-code',
   })
 
@@ -30,8 +31,47 @@ test('publish 后 consume 命中时应返回记录副本并清空待消费状态
     sessionId: 'session-1',
     revision: 3,
     lineNumber: 42,
+    lineOffsetRatio: 0,
     sourceAreaKey: 'editor-code',
   })
+})
+
+test('publish 应保存并钳制行内像素比例，供跨视图换算复用', () => {
+  const store = createViewScrollHandoffStore()
+
+  assert.deepEqual(store.publish({
+    sessionId: 'session-1',
+    revision: 1,
+    lineNumber: 20,
+    lineOffsetRatio: 0.35,
+  }), {
+    sessionId: 'session-1',
+    revision: 1,
+    lineNumber: 20,
+    lineOffsetRatio: 0.35,
+    sourceAreaKey: '',
+  })
+
+  assert.equal(store.publish({
+    sessionId: 'session-1',
+    revision: 1,
+    lineNumber: 20,
+    lineOffsetRatio: 9,
+  }).lineOffsetRatio, 1)
+
+  assert.equal(store.publish({
+    sessionId: 'session-1',
+    revision: 1,
+    lineNumber: 20,
+    lineOffsetRatio: -3,
+  }).lineOffsetRatio, 0)
+
+  assert.equal(store.publish({
+    sessionId: 'session-1',
+    revision: 1,
+    lineNumber: 20,
+    lineOffsetRatio: 'invalid',
+  }).lineOffsetRatio, 0)
 })
 
 test('consume 返回的记录副本不应暴露内部引用', () => {
@@ -151,6 +191,7 @@ test('非法发布参数应被忽略且不得覆盖已有记录', () => {
     sessionId: 'session-1',
     revision: 3,
     lineNumber: 42,
+    lineOffsetRatio: 0,
     sourceAreaKey: '',
   })
 })

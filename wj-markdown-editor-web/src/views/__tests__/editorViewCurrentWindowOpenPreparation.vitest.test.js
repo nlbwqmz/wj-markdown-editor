@@ -349,6 +349,7 @@ describe('editorView 当前窗口切换前准备', () => {
       sessionId: 'session-editor',
       revision: 5,
       lineNumber: 42,
+      lineOffsetRatio: 0.5,
       sourceAreaKey: 'editor-code',
     })
   })

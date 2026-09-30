@@ -62,6 +62,11 @@ export function createMarkdownEditScrollAnchorCapture(options = {}) {
  *     element: any,
  *     scrollTop: number,
  *   }) => any,
+ *   resolvePreviewLineNumberOffsetRatio?: (payload: {
+ *     lineNumber: number,
+ *     lineStart: number,
+ *     lineEnd: number,
+ *   }) => number,
  *   resolvePreviewLineAnchorScrollTop?: (payload: {
  *     container: any,
  *     element: any,
@@ -80,6 +85,7 @@ export function createMarkdownEditPreviewScrollAnchorRestore(options = {}) {
     findPreviewElementByAnchor,
     findPreviewElementByLineNumber,
     capturePreviewLineAnchor,
+    resolvePreviewLineNumberOffsetRatio,
     resolvePreviewLineAnchorScrollTop,
     setScrollElementScrollTop,
   } = options
@@ -118,7 +124,19 @@ export function createMarkdownEditPreviewScrollAnchorRestore(options = {}) {
 
     return {
       element,
-      anchor: previewLineAnchor,
+      anchor: {
+        ...previewLineAnchor,
+        // 交接只带行号；按行在块内的相对位置换算偏移比例，
+        // 与反向换算保持对称，避免往返吸附到块首行。
+        elementOffsetRatio: typeof resolvePreviewLineNumberOffsetRatio === 'function'
+          ? resolvePreviewLineNumberOffsetRatio({
+              lineNumber: anchor?.lineNumber,
+              lineOffsetRatio: anchor?.lineOffsetRatio,
+              lineStart: previewLineAnchor.lineStart,
+              lineEnd: previewLineAnchor.lineEnd,
+            })
+          : previewLineAnchor.elementOffsetRatio,
+      },
     }
   }
 

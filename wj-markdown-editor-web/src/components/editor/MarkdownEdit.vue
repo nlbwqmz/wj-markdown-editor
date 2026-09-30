@@ -42,6 +42,7 @@ import {
   resolveEditorLineAnchorScrollTop,
   resolvePreviewLineAnchorScrollTop,
   resolvePreviewLineElement,
+  resolvePreviewLineNumberOffsetRatio,
 } from '@/util/editor/viewScrollAnchorMathUtil.js'
 import {
   createViewScrollAnchorSessionStore,
@@ -213,6 +214,7 @@ function applyHandoffAnchorToStore() {
   const anchor = {
     type: 'line-handoff',
     lineNumber: handoffRecord.lineNumber,
+    lineOffsetRatio: handoffRecord.lineOffsetRatio,
   }
 
   saveAnchorRecord(viewScrollAnchorStore, {
@@ -441,6 +443,87 @@ function findPreviewElementByAnchor(container, anchor) {
   return waiting[0]?.element ?? null
 }
 
+/**
+ * 调度恢复后的编辑区位置校正。
+ * CodeMirror 对离屏或刚挂载的行块可能仍返回估算高度，
+ * 首轮恢复写入的位置需要等真实测量完成后反复复算，
+ * 直到位置稳定或达到最大尝试次数。
+ * 只有滚动位置仍停留在上一轮写入结果上时才校正，避免覆盖用户操作。
+ *
+ * @param {{ view: any, anchor: any, scrollElement: any, expectedScrollTop: number }} options
+ */
+function scheduleEditorRestoreCorrection(options) {
+  const { view, anchor, scrollElement, expectedScrollTop } = options
+  const MAX_CORRECTION_ATTEMPTS = 3
+  let lastExpectedScrollTop = expectedScrollTop
+
+  const runCorrection = (remainingAttempts) => {
+    if (editorView.value !== view) {
+      return
+    }
+    if (Math.abs(scrollElement.scrollTop - lastExpectedScrollTop) >= 1) {
+      return
+    }
+
+    const correctedScrollTop = resolveEditorLineAnchorScrollTop({
+      view,
+      anchor,
+      fallbackScrollTop: lastExpectedScrollTop,
+    })
+
+    if (Number.isFinite(correctedScrollTop) && Math.abs(correctedScrollTop - lastExpectedScrollTop) >= 1) {
+      setScrollElementScrollTop(scrollElement, correctedScrollTop)
+      lastExpectedScrollTop = scrollElement.scrollTop
+    }
+
+    if (remainingAttempts > 1) {
+      scheduleNextAnimationFrame(() => runCorrection(remainingAttempts - 1))
+    }
+  }
+
+  scheduleNextAnimationFrame(() => runCorrection(MAX_CORRECTION_ATTEMPTS))
+}
+
+/**
+ * 调度下一帧回调，并在非浏览器环境回退到定时器。
+ *
+ * @param {() => void} callback
+ */
+function scheduleNextAnimationFrame(callback) {
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(callback)
+    return
+  }
+
+  setTimeout(callback, 16)
+}
+
+/**
+ * 延迟解除恢复保护。
+ * 恢复与校正写入 scrollTop 后，浏览器派发的 scroll 事件可能晚于本轮恢复结束；
+ * 立即解除保护会让预览区同步逻辑（按行高比例）反向改写编辑区位置，
+ * 因此这里等到第二帧再解除，把恢复期间派发的滚动事件全部吸收掉。
+ *
+ * @param {number} requestToken
+ */
+function scheduleRestoreStateReset(requestToken) {
+  const runReset = () => {
+    if (requestToken !== viewRestoreRequestToken) {
+      return
+    }
+    resetRestoreState()
+  }
+
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(runReset)
+    })
+    return
+  }
+
+  setTimeout(runReset, 32)
+}
+
 const editorCodeScrollAnchor = useViewScrollAnchor({
   store: viewScrollAnchorStore,
   sessionIdGetter: () => currentScrollSnapshot.value.sessionId,
@@ -462,12 +545,12 @@ const editorCodeScrollAnchor = useViewScrollAnchor({
     if (!view || !scrollElement) {
       return false
     }
-    // 交接锚点只带公共行号，这里换算成本区域的 editor-line 锚点后再复用现有几何工具。
+    // 交接锚点带公共行号与行内像素比例，这里换算成本区域的 editor-line 锚点后再复用现有几何工具。
     const anchor = record?.anchor?.type === 'line-handoff'
       ? {
           type: 'editor-line',
           lineNumber: record.anchor.lineNumber,
-          lineOffsetRatio: 0,
+          lineOffsetRatio: record.anchor.lineOffsetRatio ?? 0,
         }
       : record?.anchor
     const targetScrollTop = resolveEditorLineAnchorScrollTop({
@@ -476,6 +559,12 @@ const editorCodeScrollAnchor = useViewScrollAnchor({
       fallbackScrollTop: record?.fallbackScrollTop,
     })
     setScrollElementScrollTop(scrollElement, targetScrollTop)
+    scheduleEditorRestoreCorrection({
+      view,
+      anchor,
+      scrollElement,
+      expectedScrollTop: scrollElement.scrollTop,
+    })
     return true
   },
 })
@@ -505,6 +594,7 @@ const editorPreviewScrollAnchor = useViewScrollAnchor({
     findPreviewElementByLineNumber,
     capturePreviewLineAnchor,
     resolvePreviewLineAnchorScrollTop,
+    resolvePreviewLineNumberOffsetRatio,
     setScrollElementScrollTop,
   }),
 })
@@ -852,7 +942,9 @@ async function scheduleRestoreForCurrentSnapshot(snapshot) {
     return restoreResult
   } finally {
     if (requestToken === viewRestoreRequestToken) {
-      resetRestoreState()
+      // 恢复与后续校正可能派发延迟 scroll 事件，
+      // 因此延迟两帧再解除保护，避免预览区同步逻辑覆盖恢复结果。
+      scheduleRestoreStateReset(requestToken)
     }
   }
 }
@@ -1285,7 +1377,7 @@ defineExpose({
           v-else-if="item.type === 'gutter-preview'"
           :ref="setPreviewGutterElement"
           data-layout-item="gutter-preview"
-          class="markdown-edit-layout__gutter markdown-edit-layout__gutter--preview wj-sash wj-sash--vertical h-full"
+          class="wj-sash wj-sash--vertical markdown-edit-layout__gutter markdown-edit-layout__gutter--preview h-full"
         />
         <div
           v-else-if="item.type === 'preview'"

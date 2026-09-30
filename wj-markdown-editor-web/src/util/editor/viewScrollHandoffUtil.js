@@ -19,13 +19,14 @@ export function createViewScrollHandoffStore() {
    * 发布一条待消费的阅读位置。
    * 参数不合法时直接忽略，不覆盖已有记录。
    *
-   * @param {{ sessionId?: string, revision?: number, lineNumber?: number, sourceAreaKey?: string }} record
+   * @param {{ sessionId?: string, revision?: number, lineNumber?: number, lineOffsetRatio?: number, sourceAreaKey?: string }} record
    * @returns {object | null} 返回写入后的记录副本；参数不合法时返回 null。
    */
   function publish(record) {
     const sessionId = typeof record?.sessionId === 'string' ? record.sessionId : ''
     const revision = record?.revision
     const lineNumber = record?.lineNumber
+    const lineOffsetRatio = record?.lineOffsetRatio
 
     if (sessionId === '' || Number.isInteger(revision) === false || Number.isInteger(lineNumber) === false || lineNumber <= 0) {
       return null
@@ -35,6 +36,10 @@ export function createViewScrollHandoffStore() {
       sessionId,
       revision,
       lineNumber,
+      // 行内像素比例参与跨视图换算；缺失或非法时退回 0（行首），保持旧行为。
+      lineOffsetRatio: typeof lineOffsetRatio === 'number' && Number.isFinite(lineOffsetRatio)
+        ? Math.min(Math.max(lineOffsetRatio, 0), 1)
+        : 0,
       sourceAreaKey: typeof record?.sourceAreaKey === 'string' ? record.sourceAreaKey : '',
     }
 

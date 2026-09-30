@@ -6,6 +6,8 @@ import {
   resolveEditorLineAnchorScrollTop,
   resolvePreviewLineAnchorScrollTop,
   resolvePreviewLineElement,
+  resolvePreviewLineNumberFromAnchor,
+  resolvePreviewLineNumberOffsetRatio,
 } from '../viewScrollAnchorMathUtil.js'
 
 const { test } = await import('node:test')
@@ -288,4 +290,45 @@ test('resolvePreviewLineElement 应跳过缺少行号映射的元素', () => {
   const mappedElement = createLineMappedElement({ lineStart: 3, lineEnd: 4 })
 
   assert.equal(resolvePreviewLineElement([plainElement, mappedElement], 3), mappedElement)
+})
+
+test('resolvePreviewLineNumberOffsetRatio 与 resolvePreviewLineNumberFromAnchor 应保持行号与行内比例往返对称', () => {
+  const lineStart = 10
+  const lineEnd = 15
+
+  for (let lineNumber = lineStart; lineNumber <= lineEnd; lineNumber++) {
+    for (const lineOffsetRatio of [0, 0.25, 0.5, 0.75, 0.99]) {
+      const elementOffsetRatio = resolvePreviewLineNumberOffsetRatio({
+        lineNumber,
+        lineOffsetRatio,
+        lineStart,
+        lineEnd,
+      })
+      const resolvedPosition = resolvePreviewLineNumberFromAnchor({
+        type: 'preview-line',
+        lineStart,
+        lineEnd,
+        elementOffsetRatio,
+      })
+
+      assert.equal(resolvedPosition.lineNumber, lineNumber, `行号 ${lineNumber} 往返后不应漂移`)
+      assert.ok(
+        Math.abs(resolvedPosition.lineOffsetRatio - lineOffsetRatio) < 1e-6,
+        `行内比例 ${lineOffsetRatio} 往返后不应漂移`,
+      )
+    }
+  }
+})
+
+test('resolvePreviewLineNumberOffsetRatio 对单行块与非法输入应返回稳定结果', () => {
+  assert.equal(resolvePreviewLineNumberOffsetRatio({ lineNumber: 7, lineOffsetRatio: 0.5, lineStart: 7, lineEnd: 7 }), 0.5)
+  assert.equal(resolvePreviewLineNumberOffsetRatio({ lineNumber: 7, lineStart: 7, lineEnd: 7 }), 0)
+  assert.equal(resolvePreviewLineNumberOffsetRatio({ lineNumber: null, lineStart: 7, lineEnd: 7 }), 0)
+  assert.equal(resolvePreviewLineNumberOffsetRatio(null), 0)
+})
+
+test('resolvePreviewLineNumberFromAnchor 对非法锚点应返回 null', () => {
+  assert.equal(resolvePreviewLineNumberFromAnchor(null), null)
+  assert.equal(resolvePreviewLineNumberFromAnchor({ type: 'editor-line', lineNumber: 3 }), null)
+  assert.equal(resolvePreviewLineNumberFromAnchor({ type: 'preview-line', lineStart: null }), null)
 })

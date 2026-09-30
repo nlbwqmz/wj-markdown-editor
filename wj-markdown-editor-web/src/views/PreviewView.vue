@@ -37,6 +37,8 @@ import {
   capturePreviewLineAnchor,
   resolvePreviewLineAnchorScrollTop,
   resolvePreviewLineElement,
+  resolvePreviewLineNumberFromAnchor,
+  resolvePreviewLineNumberOffsetRatio,
 } from '@/util/editor/viewScrollAnchorMathUtil.js'
 import { createViewScrollAnchorSessionStore, saveAnchorRecord } from '@/util/editor/viewScrollAnchorSessionUtil.js'
 import { viewScrollHandoff } from '@/util/editor/viewScrollHandoffUtil.js'
@@ -511,7 +513,17 @@ const previewPageScrollAnchor = useViewScrollAnchor({
       const targetScrollTop = resolvePreviewLineAnchorScrollTop({
         container: scrollElement,
         element: targetElement,
-        anchor: convertedAnchor,
+        anchor: {
+          ...convertedAnchor,
+          // 交接只带行号；这里按行在块内的相对位置换算偏移比例，
+          // 与反向的 resolvePreviewLineNumberFromAnchor 保持对称，避免往返吸附到块首行。
+          elementOffsetRatio: resolvePreviewLineNumberOffsetRatio({
+            lineNumber: anchor.lineNumber,
+            lineOffsetRatio: anchor.lineOffsetRatio,
+            lineStart: convertedAnchor.lineStart,
+            lineEnd: convertedAnchor.lineEnd,
+          }),
+        },
         fallbackScrollTop: record?.fallbackScrollTop,
       })
 
@@ -697,14 +709,17 @@ onBeforeRouteLeave(() => {
   updateCurrentScrollSnapshot(store.documentSessionSnapshot)
   const record = previewPageScrollAnchor.captureCurrentAnchor()
 
-  // 把当前预览页阅读行号发布给下一条路由（例如编辑页）。
+  // 把当前预览页阅读位置发布给下一条路由（例如编辑页）。
+  // 位置按“行号 + 行内像素比例”反算，保证与交接恢复共用同一套比例语义；
+  // 只取 lineStart 会把位置吸附到块首行，来回切换时持续向上漂移。
   // sessionId/revision 直接取当前滚动恢复绑定的快照身份，供目标视图严格校验。
-  const lineNumber = record?.anchor?.lineStart
-  if (Number.isInteger(lineNumber) && lineNumber > 0) {
+  const resolvedPosition = resolvePreviewLineNumberFromAnchor(record?.anchor)
+  if (resolvedPosition && resolvedPosition.lineNumber > 0) {
     viewScrollHandoff.publish({
       sessionId: currentScrollSnapshot.value.sessionId,
       revision: currentScrollSnapshot.value.revision,
-      lineNumber,
+      lineNumber: resolvedPosition.lineNumber,
+      lineOffsetRatio: resolvedPosition.lineOffsetRatio,
       sourceAreaKey: 'preview-page',
     })
   }

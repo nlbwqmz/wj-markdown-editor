@@ -302,15 +302,17 @@ onBeforeRouteLeave(async () => {
     revision,
   })
 
-  // 把编辑区当前阅读行号发布给下一条路由（例如预览页），
-  // 让目标视图能在自己的滚动区域内按行号换算锚点。
+  // 把编辑区当前阅读位置（行号 + 行内像素比例）发布给下一条路由（例如预览页），
+  // 让目标视图能在自己的滚动区域内按同一套比例语义换算锚点。
   const lineNumber = capturedAnchors?.editorCode?.anchor?.lineNumber
+  const lineOffsetRatio = capturedAnchors?.editorCode?.anchor?.lineOffsetRatio
   const sessionId = latestSnapshot?.sessionId
   if (typeof sessionId === 'string' && sessionId !== '' && Number.isInteger(latestSnapshot?.revision) && Number.isInteger(lineNumber) && lineNumber > 0) {
     viewScrollHandoff.publish({
       sessionId,
       revision,
       lineNumber,
+      lineOffsetRatio,
       sourceAreaKey: 'editor-code',
     })
   }

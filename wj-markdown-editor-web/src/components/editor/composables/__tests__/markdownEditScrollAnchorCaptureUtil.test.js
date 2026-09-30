@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { ref } from 'vue'
 
-import { capturePreviewLineAnchor, resolvePreviewLineAnchorScrollTop, resolvePreviewLineElement } from '../../../../util/editor/viewScrollAnchorMathUtil.js'
+import { capturePreviewLineAnchor, resolvePreviewLineAnchorScrollTop, resolvePreviewLineElement, resolvePreviewLineNumberOffsetRatio } from '../../../../util/editor/viewScrollAnchorMathUtil.js'
 import {
   createViewScrollAnchorSessionStore,
   getAnchorRecord,
@@ -219,6 +219,7 @@ function createHandoffPreviewScrollAnchor(options) {
       findPreviewElementByAnchor: () => null,
       findPreviewElementByLineNumber: options.findPreviewElementByLineNumber,
       capturePreviewLineAnchor,
+      resolvePreviewLineNumberOffsetRatio,
       resolvePreviewLineAnchorScrollTop,
       setScrollElementScrollTop: (targetScrollElement, targetScrollTop) => {
         targetScrollElement.scrollTo({ top: targetScrollTop })
@@ -360,6 +361,7 @@ test('预览恢复遇到 line-handoff 锚点且命中元素时，会换算成精
     anchor: {
       type: 'line-handoff',
       lineNumber: 21,
+      lineOffsetRatio: 0.5,
     },
     fallbackScrollTop: 0,
     savedAt: 1,
@@ -375,8 +377,9 @@ test('预览恢复遇到 line-handoff 锚点且命中元素时，会换算成精
   const restoreResult = await editorPreviewScrollAnchor.scheduleRestoreForCurrentSnapshot()
 
   assert.equal(restoreResult, true)
-  assert.deepEqual(scrollElement.scrollToCalls, [100])
-  assert.equal(scrollElement.scrollTop, 100)
+  // 行号 21 落在块 20-22 的中间：按行中心比例换算后，目标位置应为元素顶部 + 半高。
+  assert.deepEqual(scrollElement.scrollToCalls, [125])
+  assert.equal(scrollElement.scrollTop, 125)
 })
 
 test('预览恢复遇到 line-handoff 锚点但找不到元素时，不得回退到 fallbackScrollTop 直接跳到顶部', async () => {

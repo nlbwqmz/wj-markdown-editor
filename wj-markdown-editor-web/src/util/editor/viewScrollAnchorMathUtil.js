@@ -320,3 +320,58 @@ function pickNearestCandidate(candidateList, compareDistance) {
 
   return sortedList[0]
 }
+
+/**
+ * 把源码行号与行内像素比例换算成它在预览块内的相对位置比例。
+ * 跨视图交接必须与 resolvePreviewLineNumberFromAnchor 共用同一套“行号偏移 + 行内比例”语义，
+ * 否则每次往返都会向块起始行漂移。
+ *
+ * @param {{ lineNumber?: number, lineOffsetRatio?: number, lineStart?: number, lineEnd?: number }} options
+ * @returns {number} 返回 0 到 1 之间的行内相对位置比例。
+ */
+export function resolvePreviewLineNumberOffsetRatio(options) {
+  const parsedLineNumber = parseLineNumber(options?.lineNumber)
+  const parsedLineStart = parseLineNumber(options?.lineStart)
+
+  if (parsedLineNumber === null || parsedLineStart === null) {
+    return 0
+  }
+
+  const parsedLineEnd = parseLineNumber(options?.lineEnd) ?? parsedLineStart
+  const lineSpan = Math.max(0, parsedLineEnd - parsedLineStart)
+  const relativeLineIndex = Math.min(Math.max(parsedLineNumber - parsedLineStart, 0), lineSpan)
+
+  // 以“行号偏移 + 行内像素比例”共同换算，保证与反向函数严格互逆。
+  return (relativeLineIndex + clampRatio(options?.lineOffsetRatio)) / (lineSpan + 1)
+}
+
+/**
+ * 把预览锚点换算回源码行号与行内像素比例。
+ * 与 resolvePreviewLineNumberOffsetRatio 共用同一套行内比例语义，
+ * 返回结构可直接用于构造 editor-line 锚点。
+ *
+ * @param {{ type?: string, lineStart?: number, lineEnd?: number, elementOffsetRatio?: number } | null | undefined} anchor
+ * @returns {{ lineNumber: number, lineOffsetRatio: number } | null} 返回换算后的行号与行内比例；锚点非法时返回 null。
+ */
+export function resolvePreviewLineNumberFromAnchor(anchor) {
+  if (anchor?.type !== 'preview-line') {
+    return null
+  }
+
+  const lineStart = parseLineNumber(anchor.lineStart)
+  if (lineStart === null) {
+    return null
+  }
+
+  const lineEnd = parseLineNumber(anchor.lineEnd) ?? lineStart
+  const lineSpan = Math.max(0, lineEnd - lineStart)
+  const position = clampRatio(anchor.elementOffsetRatio) * (lineSpan + 1)
+  // 消除浮点乘法误差，避免 floor 落到相邻行造成往返漂移。
+  const normalizedPosition = Math.round(position * 1e6) / 1e6
+  const lineIndex = Math.min(Math.floor(normalizedPosition), lineSpan)
+
+  return {
+    lineNumber: lineStart + lineIndex,
+    lineOffsetRatio: clampRatio(normalizedPosition - lineIndex),
+  }
+}

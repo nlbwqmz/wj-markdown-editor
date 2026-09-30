@@ -280,6 +280,9 @@ vi.mock('@/util/document-session/rendererSessionSnapshotController.js', () => ({
 vi.mock('@/util/editor/viewScrollAnchorMathUtil.js', () => ({
   capturePreviewLineAnchor: vi.fn(() => null),
   resolvePreviewLineAnchorScrollTop: vi.fn(() => 0),
+  resolvePreviewLineElement: vi.fn(() => null),
+  resolvePreviewLineNumberFromAnchor: vi.fn(() => null),
+  resolvePreviewLineNumberOffsetRatio: vi.fn(() => 0),
 }))
 
 vi.mock('@/util/editor/viewScrollAnchorSessionUtil.js', () => ({

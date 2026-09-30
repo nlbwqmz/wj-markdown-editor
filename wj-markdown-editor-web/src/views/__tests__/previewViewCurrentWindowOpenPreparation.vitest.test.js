@@ -13,6 +13,8 @@ const previewPreparationState = vi.hoisted(() => ({
   capturePreviewLineAnchor: vi.fn(),
   resolvePreviewLineAnchorScrollTop: vi.fn(),
   resolvePreviewLineElement: vi.fn(),
+  resolvePreviewLineNumberFromAnchor: vi.fn(),
+  resolvePreviewLineNumberOffsetRatio: vi.fn(),
   saveAnchorRecord: vi.fn(),
   publishHandoff: vi.fn(),
   consumeHandoff: vi.fn(),
@@ -186,6 +188,8 @@ vi.mock('@/util/editor/viewScrollAnchorMathUtil.js', () => ({
   capturePreviewLineAnchor: previewPreparationState.capturePreviewLineAnchor,
   resolvePreviewLineAnchorScrollTop: previewPreparationState.resolvePreviewLineAnchorScrollTop,
   resolvePreviewLineElement: previewPreparationState.resolvePreviewLineElement,
+  resolvePreviewLineNumberFromAnchor: previewPreparationState.resolvePreviewLineNumberFromAnchor,
+  resolvePreviewLineNumberOffsetRatio: previewPreparationState.resolvePreviewLineNumberOffsetRatio,
 }))
 
 vi.mock('@/util/editor/viewScrollAnchorSessionUtil.js', () => ({
@@ -353,6 +357,10 @@ describe('previewView 当前窗口切换前准备降级', () => {
     previewPreparationState.resolvePreviewLineAnchorScrollTop.mockReturnValue(0)
     previewPreparationState.resolvePreviewLineElement.mockReset()
     previewPreparationState.resolvePreviewLineElement.mockReturnValue(null)
+    previewPreparationState.resolvePreviewLineNumberFromAnchor.mockReset()
+    previewPreparationState.resolvePreviewLineNumberFromAnchor.mockReturnValue(null)
+    previewPreparationState.resolvePreviewLineNumberOffsetRatio.mockReset()
+    previewPreparationState.resolvePreviewLineNumberOffsetRatio.mockReturnValue(0)
     previewPreparationState.saveAnchorRecord.mockReset()
     previewPreparationState.publishHandoff.mockReset()
     previewPreparationState.consumeHandoff.mockReset()
@@ -442,6 +450,7 @@ describe('previewView 当前窗口切换前准备降级', () => {
     }
     previewPreparationState.resolvePreviewLineElement.mockReturnValue(fakeElement)
     previewPreparationState.capturePreviewLineAnchor.mockReturnValue(convertedAnchor)
+    previewPreparationState.resolvePreviewLineNumberOffsetRatio.mockReturnValue(0.5)
     previewPreparationState.resolvePreviewLineAnchorScrollTop.mockReturnValue(240)
 
     const scrollElement = {
@@ -455,6 +464,7 @@ describe('previewView 当前窗口切换前准备降级', () => {
         anchor: {
           type: 'line-handoff',
           lineNumber: 11,
+          lineOffsetRatio: 0.5,
         },
         fallbackScrollTop: 0,
       },
@@ -468,10 +478,19 @@ describe('previewView 当前窗口切换前准备降级', () => {
       element: fakeElement,
       scrollTop: 0,
     })
+    expect(previewPreparationState.resolvePreviewLineNumberOffsetRatio).toHaveBeenCalledWith({
+      lineNumber: 11,
+      lineOffsetRatio: 0.5,
+      lineStart: 10,
+      lineEnd: 12,
+    })
     expect(previewPreparationState.resolvePreviewLineAnchorScrollTop).toHaveBeenCalledWith({
       container: scrollElement,
       element: fakeElement,
-      anchor: convertedAnchor,
+      anchor: {
+        ...convertedAnchor,
+        elementOffsetRatio: 0.5,
+      },
       fallbackScrollTop: 0,
     })
     expect(scrollElement.scrollTo).toHaveBeenCalledWith({
@@ -525,6 +544,11 @@ describe('previewView 当前窗口切换前准备降级', () => {
       fallbackScrollTop: 320,
     })
 
+    previewPreparationState.resolvePreviewLineNumberFromAnchor.mockReturnValue({
+      lineNumber: 13,
+      lineOffsetRatio: 0.25,
+    })
+
     await mountPreviewView()
 
     const routeLeaveCallback = previewPreparationState.registerRouteLeave.mock.calls.at(-1)?.[0]
@@ -532,10 +556,17 @@ describe('previewView 当前窗口切换前准备降级', () => {
 
     await routeLeaveCallback()
 
+    expect(previewPreparationState.resolvePreviewLineNumberFromAnchor).toHaveBeenCalledWith({
+      type: 'preview-line',
+      lineStart: 12,
+      lineEnd: 14,
+      elementOffsetRatio: 0.25,
+    })
     expect(previewPreparationState.publishHandoff).toHaveBeenCalledWith({
       sessionId: 'session-preview',
       revision: 5,
-      lineNumber: 12,
+      lineNumber: 13,
+      lineOffsetRatio: 0.25,
       sourceAreaKey: 'preview-page',
     })
   })
