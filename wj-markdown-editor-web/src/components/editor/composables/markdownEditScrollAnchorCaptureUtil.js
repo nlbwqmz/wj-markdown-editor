@@ -51,9 +51,17 @@ export function createMarkdownEditScrollAnchorCapture(options = {}) {
  * 创建 MarkdownEdit 组件侧的预览区滚动恢复入口。
  * 这一层负责把“锚点元素查找”“fallbackScrollTop 兜底”“最终写回滚动容器”串起来，
  * 从而让组件 wiring 不会因为找不到精确 DOM 元素而直接放弃恢复。
+ * 除常规 preview-line 锚点外，这里还负责把跨视图交接的 line-handoff 锚点
+ * 换算成当前预览区域的精确 preview-line 锚点，再交给同一套几何工具。
  *
  * @param {{
  *   findPreviewElementByAnchor?: (scrollElement: any, anchor: any) => any,
+ *   findPreviewElementByLineNumber?: (scrollElement: any, lineNumber: number) => any,
+ *   capturePreviewLineAnchor?: (payload: {
+ *     container: any,
+ *     element: any,
+ *     scrollTop: number,
+ *   }) => any,
  *   resolvePreviewLineAnchorScrollTop?: (payload: {
  *     container: any,
  *     element: any,
@@ -70,14 +78,54 @@ export function createMarkdownEditScrollAnchorCapture(options = {}) {
 export function createMarkdownEditPreviewScrollAnchorRestore(options = {}) {
   const {
     findPreviewElementByAnchor,
+    findPreviewElementByLineNumber,
+    capturePreviewLineAnchor,
     resolvePreviewLineAnchorScrollTop,
     setScrollElementScrollTop,
   } = options
 
   /**
+   * 把交接锚点换算成当前预览区域的精确锚点。
+   * 只有同时命中元素且成功采集到 preview-line 锚点时，才返回可用目标；
+   * 任一环节缺失都返回 null，由调用方决定重试，而不是误用 fallbackScrollTop 回到顶部。
+   *
+   * @param {any} scrollElement
+   * @param {any} anchor
+   * @returns {{ element: any, anchor: any } | null} 返回本轮可用于几何恢复的元素与锚点；无法换算时返回 null。
+   */
+  function resolveHandoffTarget(scrollElement, anchor) {
+    if (typeof capturePreviewLineAnchor !== 'function') {
+      return null
+    }
+
+    const element = typeof findPreviewElementByLineNumber === 'function'
+      ? findPreviewElementByLineNumber(scrollElement, anchor?.lineNumber)
+      : null
+
+    if (!element) {
+      return null
+    }
+
+    const previewLineAnchor = capturePreviewLineAnchor({
+      container: scrollElement,
+      element,
+      scrollTop: 0,
+    })
+
+    if (!previewLineAnchor) {
+      return null
+    }
+
+    return {
+      element,
+      anchor: previewLineAnchor,
+    }
+  }
+
+  /**
    * 恢复右侧预览区滚动位置。
-   * 即使找不到精确锚点元素，也必须让 resolvePreviewLineAnchorScrollTop 接管兜底逻辑，
-   * 从而把已保存的 fallbackScrollTop 应用回滚动容器，而不是直接返回 false。
+   * 常规 preview-line 锚点继续允许 fallbackScrollTop 兜底；
+   * 跨视图交接锚点必须先完成精确换算，布局未就绪时返回 false 交给上层重试。
    *
    * @param {{
    *   record?: { anchor?: any, fallbackScrollTop?: number } | null,
@@ -91,14 +139,33 @@ export function createMarkdownEditPreviewScrollAnchorRestore(options = {}) {
       return false
     }
 
+    const anchor = record?.anchor
+
+    if (anchor?.type === 'line-handoff') {
+      const target = resolveHandoffTarget(scrollElement, anchor)
+      if (!target || typeof setScrollElementScrollTop !== 'function') {
+        return false
+      }
+
+      const targetScrollTop = resolvePreviewLineAnchorScrollTop({
+        container: scrollElement,
+        element: target.element,
+        anchor: target.anchor,
+        fallbackScrollTop: record?.fallbackScrollTop,
+      })
+
+      setScrollElementScrollTop(scrollElement, targetScrollTop)
+      return true
+    }
+
     const targetElement = typeof findPreviewElementByAnchor === 'function'
-      ? findPreviewElementByAnchor(scrollElement, record?.anchor)
+      ? findPreviewElementByAnchor(scrollElement, anchor)
       : null
 
     const targetScrollTop = resolvePreviewLineAnchorScrollTop({
       container: scrollElement,
       element: targetElement,
-      anchor: record?.anchor,
+      anchor,
       fallbackScrollTop: record?.fallbackScrollTop,
     })
 

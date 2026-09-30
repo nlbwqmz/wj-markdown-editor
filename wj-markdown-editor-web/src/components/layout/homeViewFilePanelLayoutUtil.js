@@ -35,6 +35,7 @@ export function resolveHomeViewFilePanelGridTemplateColumns(width) {
  *   gutterRef: { value?: HTMLElement | null },
  *   panelWidthRef: { value: number },
  *   nextTick: () => Promise<void>,
+ *   onPanelWidthCommit?: (width: number) => void,
  *   createSplitInstance?: (options: object) => { destroy?: (preserveStyles?: boolean) => void } | null,
  *   readComputedStyle?: (element: HTMLElement) => CSSStyleDeclaration | { gridTemplateColumns?: string },
  * }} options
@@ -44,6 +45,7 @@ export function createHomeViewFilePanelLayoutController({
   gutterRef,
   panelWidthRef,
   nextTick,
+  onPanelWidthCommit,
   createSplitInstance = options => Split(options),
   readComputedStyle = element => window.getComputedStyle(element),
 }) {
@@ -90,6 +92,10 @@ export function createHomeViewFilePanelLayoutController({
       onDrag() {
         panelWidthRef.value = readCurrentPanelWidth()
         applyPanelWidth()
+      },
+      onDragEnd() {
+        // 仅在拖动结束后回写配置，避免拖动过程中频繁落盘。
+        onPanelWidthCommit?.(readCurrentPanelWidth())
       },
     })
 

@@ -1,10 +1,12 @@
 <script setup>
+import { message } from 'ant-design-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import ExternalFileChangeModal from '@/components/ExternalFileChangeModal.vue'
 import FileManagerPanel from '@/components/layout/FileManagerPanel.vue'
 import {
+  clampFileManagerPanelWidth,
   createHomeViewFilePanelLayoutController,
   FILE_MANAGER_PANEL_DEFAULT_WIDTH,
   resolveHomeViewFilePanelGridTemplateColumns,
@@ -13,6 +15,8 @@ import LayoutContainer from '@/components/layout/LayoutContainer.vue'
 import LayoutMenu from '@/components/layout/LayoutMenu.vue'
 import LayoutTop from '@/components/layout/LayoutTop.vue'
 import { useCommonStore } from '@/stores/counter.js'
+import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUtil.js'
+import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { registerCurrentWindowOpenPreparation } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
   createDocumentOpenInteractionService,
@@ -20,6 +24,7 @@ import {
 } from '@/util/document-session/documentOpenInteractionService.js'
 import { requestDocumentOpenDialog } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import { createFileManagerOpenDecisionController } from '@/util/file-manager/fileManagerOpenDecisionController.js'
+import { createFileManagerPanelWidthPersistenceController } from '@/util/file-manager/fileManagerPanelWidthPersistenceController.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const functionShortcutKeyPattern = /^F(?:[1-9]|1[0-2])$/
@@ -28,7 +33,16 @@ const store = useCommonStore()
 const route = useRoute()
 const fileManagerHostRef = ref()
 const fileManagerGutterRef = ref()
-const fileManagerPanelWidth = ref(FILE_MANAGER_PANEL_DEFAULT_WIDTH)
+const fileManagerPanelWidth = ref(clampFileManagerPanelWidth(store.config.fileManagerWidth ?? FILE_MANAGER_PANEL_DEFAULT_WIDTH))
+const fileManagerPanelWidthPersistenceController = createFileManagerPanelWidthPersistenceController({
+  sendConfigMutationRequest,
+  getConfigUpdateFailureMessageKey,
+  getPersistedWidth: () => store.config.fileManagerWidth,
+  showWarningMessage: messageKey => message.warning(t(messageKey)),
+  applyPersistedWidth: (width) => {
+    store.config.fileManagerWidth = width
+  },
+})
 const documentOpenInteractionService = createDocumentOpenInteractionService({
   requestDocumentOpenDialog,
 })
@@ -58,6 +72,7 @@ const homeViewFilePanelLayoutController = createHomeViewFilePanelLayoutControlle
   gutterRef: fileManagerGutterRef,
   panelWidthRef: fileManagerPanelWidth,
   nextTick,
+  onPanelWidthCommit: width => fileManagerPanelWidthPersistenceController.persistFileManagerPanelWidth(width),
 })
 const unregisterCurrentWindowOpenPreparation = registerCurrentWindowOpenPreparation(async ({ provider }) => {
   if (typeof provider !== 'function') {

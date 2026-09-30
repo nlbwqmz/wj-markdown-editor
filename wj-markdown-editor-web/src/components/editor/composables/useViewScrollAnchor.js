@@ -110,6 +110,13 @@ export function useViewScrollAnchor(options = {}) {
   let restoreToken = 0
 
   /**
+   * 标记当前是否有一轮恢复正在执行。
+   * 恢复期间 DOM 位置可能仍是恢复前的旧值，
+   * 此时采集必须被抑制，否则会把过期位置覆盖进缓存。
+   */
+  let restoreInFlight = false
+
+  /**
    * 统一构造当前快照下的缓存读取结果。
    * 读取逻辑集中在这里，避免多个导出 API 对 sessionId / scrollAreaKey 拼装方式不一致。
    *
@@ -156,6 +163,16 @@ export function useViewScrollAnchor(options = {}) {
    */
   function captureCurrentAnchor() {
     const { sessionId, revision } = getCurrentSnapshot(sessionIdGetter, revisionGetter)
+
+    if (restoreInFlight === true) {
+      // 恢复进行中：DOM 位置可能仍是恢复前的旧值，
+      // 此时采集会把过期位置覆盖进缓存，因此直接返回已有记录维持逻辑位置。
+      return getAnchorRecord(store, {
+        sessionId,
+        scrollAreaKey,
+      })
+    }
+
     const scrollElement = typeof getScrollElement === 'function' ? getScrollElement() : null
 
     if (!scrollElement) {
@@ -187,6 +204,7 @@ export function useViewScrollAnchor(options = {}) {
    */
   function cancelPendingRestore() {
     restoreToken++
+    restoreInFlight = false
   }
 
   /**
@@ -223,6 +241,8 @@ export function useViewScrollAnchor(options = {}) {
     })) {
       return false
     }
+
+    restoreInFlight = true
 
     const restoreContext = {
       token,
@@ -322,6 +342,10 @@ export function useViewScrollAnchor(options = {}) {
 
       return false
     } finally {
+      if (token === restoreToken) {
+        restoreInFlight = false
+      }
+
       onRestoreFinish?.({
         ...restoreContext,
         attempts,

@@ -17,6 +17,8 @@ const editorPreparationState = vi.hoisted(() => ({
   removeEventListener: vi.fn(),
   syncClosePromptSnapshot: vi.fn(),
   registerRouteLeave: vi.fn(),
+  publishHandoff: vi.fn(),
+  consumeHandoff: vi.fn(),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -176,6 +178,13 @@ vi.mock('@/util/editor/contentUpdateMetaUtil.js', () => ({
   },
 }))
 
+vi.mock('@/util/editor/viewScrollHandoffUtil.js', () => ({
+  viewScrollHandoff: {
+    publish: editorPreparationState.publishHandoff,
+    consume: editorPreparationState.consumeHandoff,
+  },
+}))
+
 vi.mock('@/views/editorViewActivationRestoreScheduler.js', () => ({
   createEditorViewActivationRestoreScheduler() {
     return {
@@ -272,6 +281,8 @@ describe('editorView 当前窗口切换前准备', () => {
     editorPreparationState.removeEventListener.mockReset()
     editorPreparationState.syncClosePromptSnapshot.mockReset()
     editorPreparationState.registerRouteLeave.mockReset()
+    editorPreparationState.publishHandoff.mockReset()
+    editorPreparationState.consumeHandoff.mockReset()
 
     editorPreparationState.requestDocumentSessionSnapshot.mockResolvedValue(createSnapshot())
     editorPreparationState.requestDocumentEdit.mockResolvedValue({
@@ -310,5 +321,54 @@ describe('editorView 当前窗口切换前准备', () => {
     expect(editorPreparationState.requestDocumentSessionSnapshot).toHaveBeenCalledTimes(1)
     expect(editorPreparationState.requestDocumentEdit).not.toHaveBeenCalled()
     expect(result.snapshot.revision).toBe(5)
+  })
+
+  it('路由离开时，应把编辑区阅读行号发布给跨视图交接容器', async () => {
+    await mountEditorView()
+    editorPreparationState.markdownEditExpose.captureViewScrollAnchors.mockReturnValue({
+      editorCode: {
+        anchor: {
+          type: 'editor-line',
+          lineNumber: 42,
+          lineOffsetRatio: 0.5,
+        },
+      },
+      editorPreview: null,
+    })
+
+    const routeLeaveCallback = editorPreparationState.registerRouteLeave.mock.calls.at(-1)?.[0]
+    expect(typeof routeLeaveCallback).toBe('function')
+
+    await routeLeaveCallback()
+
+    expect(editorPreparationState.markdownEditExpose.captureViewScrollAnchors).toHaveBeenCalledWith({
+      sessionId: 'session-editor',
+      revision: 5,
+    })
+    expect(editorPreparationState.publishHandoff).toHaveBeenCalledWith({
+      sessionId: 'session-editor',
+      revision: 5,
+      lineNumber: 42,
+      sourceAreaKey: 'editor-code',
+    })
+  })
+
+  it('路由离开时若编辑区没有合法行号，不得发布交接记录', async () => {
+    await mountEditorView()
+    editorPreparationState.markdownEditExpose.captureViewScrollAnchors.mockReturnValue({
+      editorCode: {
+        anchor: {
+          type: 'editor-line',
+          lineNumber: 0,
+          lineOffsetRatio: 0,
+        },
+      },
+      editorPreview: null,
+    })
+
+    const routeLeaveCallback = editorPreparationState.registerRouteLeave.mock.calls.at(-1)?.[0]
+    await routeLeaveCallback()
+
+    expect(editorPreparationState.publishHandoff).not.toHaveBeenCalled()
   })
 })

@@ -15,6 +15,15 @@ describe('configRepairUtil', () => {
     expect(repaired.theme.global).toBe(defaultConfig.theme.global)
   })
 
+  it('缺失 fileManagerWidth 时必须从默认配置补齐', () => {
+    const legacyConfig = { ...defaultConfig }
+    delete legacyConfig.fileManagerWidth
+
+    const repaired = repairConfig(legacyConfig, defaultConfig)
+
+    expect(repaired.fileManagerWidth).toBe(280)
+  })
+
   it('缺失 fileManagerSort 时必须从默认配置补齐', () => {
     const legacyConfig = { ...defaultConfig }
     delete legacyConfig.fileManagerSort

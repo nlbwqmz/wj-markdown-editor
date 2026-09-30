@@ -18,6 +18,9 @@ let homeViewStyleElement = null
 const homeViewFileManagerHostState = vi.hoisted(() => ({
   route: null,
   splitDestroy: vi.fn(),
+  splitOptionsList: [],
+  createFileManagerPanelWidthPersistenceController: vi.fn(),
+  persistFileManagerPanelWidth: vi.fn(),
   openPreparationHandlers: [],
   openInteractionHandlers: [],
   openInteractionServiceCreateOptionsList: [],
@@ -35,10 +38,17 @@ const homeViewFileManagerHostState = vi.hoisted(() => ({
 }))
 
 vi.mock('split-grid', () => ({
-  default() {
+  default(options) {
+    homeViewFileManagerHostState.splitOptionsList.push(options)
     return {
       destroy: homeViewFileManagerHostState.splitDestroy,
     }
+  },
+}))
+
+vi.mock('ant-design-vue', () => ({
+  message: {
+    warning: vi.fn(),
   },
 }))
 
@@ -131,6 +141,10 @@ vi.mock('@/util/document-session/documentOpenInteractionService.js', () => ({
 
 vi.mock('@/util/file-manager/fileManagerOpenDecisionController.js', () => ({
   createFileManagerOpenDecisionController: homeViewFileManagerHostState.openDecisionFactory,
+}))
+
+vi.mock('@/util/file-manager/fileManagerPanelWidthPersistenceController.js', () => ({
+  createFileManagerPanelWidthPersistenceController: homeViewFileManagerHostState.createFileManagerPanelWidthPersistenceController,
 }))
 
 vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
@@ -236,12 +250,19 @@ describe('homeView 文件管理栏宿主壳层', () => {
     homeViewFileManagerHostState.store = reactive({
       config: {
         shortcutKeyList: [],
+        fileManagerWidth: 280,
       },
       fileManagerPanelVisible: true,
       documentSessionSnapshot: null,
       setFileManagerPanelVisible: vi.fn(),
     })
     homeViewFileManagerHostState.splitDestroy.mockReset()
+    homeViewFileManagerHostState.splitOptionsList.splice(0)
+    homeViewFileManagerHostState.createFileManagerPanelWidthPersistenceController.mockReset()
+    homeViewFileManagerHostState.persistFileManagerPanelWidth.mockReset()
+    homeViewFileManagerHostState.createFileManagerPanelWidthPersistenceController.mockReturnValue({
+      persistFileManagerPanelWidth: homeViewFileManagerHostState.persistFileManagerPanelWidth,
+    })
     homeViewFileManagerHostState.openPreparationHandlers.splice(0)
     homeViewFileManagerHostState.openInteractionHandlers.splice(0)
     homeViewFileManagerHostState.openInteractionServiceCreateOptionsList.splice(0)
@@ -340,6 +361,27 @@ describe('homeView 文件管理栏宿主壳层', () => {
     expect(wrapper.get('[data-testid="home-file-manager-host"]').attributes('style')).toContain('grid-template-columns: 1fr;')
 
     wrapper.unmount()
+  })
+
+  it('store.config.fileManagerWidth 存在时，宿主初始 grid 列宽应使用配置值', async () => {
+    homeViewFileManagerHostState.store.config.fileManagerWidth = 320
+    const wrapper = await mountHomeView()
+
+    expect(wrapper.get('[data-testid="home-file-manager-host"]').attributes('style')).toContain('grid-template-columns: 320px 1px 1fr;')
+  })
+
+  it('文件管理栏拖动结束后应把最终宽度交给持久化控制器', async () => {
+    await mountHomeView()
+
+    expect(homeViewFileManagerHostState.splitOptionsList).toHaveLength(1)
+    homeViewFileManagerHostState.splitOptionsList[0].onDragEnd()
+
+    expect(homeViewFileManagerHostState.persistFileManagerPanelWidth).toHaveBeenCalledTimes(1)
+    expect(homeViewFileManagerHostState.persistFileManagerPanelWidth).toHaveBeenCalledWith(280)
+
+    const controllerOptions = homeViewFileManagerHostState.createFileManagerPanelWidthPersistenceController.mock.calls[0][0]
+    controllerOptions.applyPersistedWidth(360)
+    expect(homeViewFileManagerHostState.store.config.fileManagerWidth).toBe(360)
   })
 
   it('homeView 作为宿主时，应注册统一打开交互处理器和当前窗口准备器', async () => {

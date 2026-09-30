@@ -1,11 +1,21 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, KeepAlive, nextTick } from 'vue'
 
 import PreviewView from '../PreviewView.vue'
 
 const previewPreparationState = vi.hoisted(() => ({
   store: null,
+  anchorStore: {},
+  viewScrollAnchorOptions: null,
+  captureCurrentAnchor: vi.fn(),
+  scheduleRestoreForCurrentSnapshot: vi.fn(),
+  capturePreviewLineAnchor: vi.fn(),
+  resolvePreviewLineAnchorScrollTop: vi.fn(),
+  resolvePreviewLineElement: vi.fn(),
+  saveAnchorRecord: vi.fn(),
+  publishHandoff: vi.fn(),
+  consumeHandoff: vi.fn(),
   requestDocumentEdit: vi.fn(),
   requestDocumentSessionSnapshot: vi.fn(),
   addEventListener: vi.fn(),
@@ -52,11 +62,12 @@ vi.mock('ant-design-vue', () => ({
 }))
 
 vi.mock('@/components/editor/composables/useViewScrollAnchor.js', () => ({
-  useViewScrollAnchor() {
+  useViewScrollAnchor(options = {}) {
+    previewPreparationState.viewScrollAnchorOptions = options
     return {
-      captureCurrentAnchor: vi.fn(),
+      captureCurrentAnchor: previewPreparationState.captureCurrentAnchor,
       cancelPendingRestore: vi.fn(),
-      scheduleRestoreForCurrentSnapshot: vi.fn(async () => true),
+      scheduleRestoreForCurrentSnapshot: previewPreparationState.scheduleRestoreForCurrentSnapshot,
     }
   },
 }))
@@ -172,13 +183,22 @@ vi.mock('@/util/document-session/rendererSessionSnapshotController.js', () => ({
 }))
 
 vi.mock('@/util/editor/viewScrollAnchorMathUtil.js', () => ({
-  capturePreviewLineAnchor: vi.fn(() => null),
-  resolvePreviewLineAnchorScrollTop: vi.fn(() => 0),
+  capturePreviewLineAnchor: previewPreparationState.capturePreviewLineAnchor,
+  resolvePreviewLineAnchorScrollTop: previewPreparationState.resolvePreviewLineAnchorScrollTop,
+  resolvePreviewLineElement: previewPreparationState.resolvePreviewLineElement,
 }))
 
 vi.mock('@/util/editor/viewScrollAnchorSessionUtil.js', () => ({
   createViewScrollAnchorSessionStore() {
-    return {}
+    return previewPreparationState.anchorStore
+  },
+  saveAnchorRecord: previewPreparationState.saveAnchorRecord,
+}))
+
+vi.mock('@/util/editor/viewScrollHandoffUtil.js', () => ({
+  viewScrollHandoff: {
+    publish: previewPreparationState.publishHandoff,
+    consume: previewPreparationState.consumeHandoff,
   },
 }))
 
@@ -256,32 +276,63 @@ async function flushPreviewView() {
   await nextTick()
 }
 
-async function mountPreviewView() {
-  const wrapper = mount(PreviewView, {
-    global: {
-      mocks: {
-        $t(key) {
-          return key
-        },
-      },
-      stubs: {
-        'a-tooltip': defineComponent({
-          setup(_props, { slots }) {
-            return () => h('div', slots.default?.())
-          },
-        }),
-        'a-empty': defineComponent({
-          setup(_props, { slots }) {
-            return () => h('div', slots.default?.())
-          },
-        }),
-        'a-button': defineComponent({
-          setup() {
-            return () => h('button')
-          },
-        }),
+const TooltipStub = defineComponent({
+  name: 'ATooltipStub',
+  setup(_props, { slots }) {
+    return () => h('div', slots.default?.())
+  },
+})
+
+const EmptyStub = defineComponent({
+  name: 'AEmptyStub',
+  setup(_props, { slots }) {
+    return () => h('div', slots.default?.())
+  },
+})
+
+const ButtonStub = defineComponent({
+  name: 'AButtonStub',
+  setup() {
+    return () => h('button')
+  },
+})
+
+const PreviewViewKeepAliveHost = defineComponent({
+  name: 'PreviewViewKeepAliveHost',
+  setup() {
+    return () => h(KeepAlive, null, {
+      default: () => h(PreviewView),
+    })
+  },
+})
+
+function createPreviewViewMountOptions() {
+  return {
+    mocks: {
+      $t(key) {
+        return key
       },
     },
+    stubs: {
+      'a-tooltip': TooltipStub,
+      'a-empty': EmptyStub,
+      'a-button': ButtonStub,
+    },
+  }
+}
+
+async function mountPreviewView() {
+  const wrapper = mount(PreviewView, {
+    global: createPreviewViewMountOptions(),
+  })
+
+  await flushPreviewView()
+  return wrapper
+}
+
+async function mountPreviewViewInKeepAlive() {
+  const wrapper = mount(PreviewViewKeepAliveHost, {
+    global: createPreviewViewMountOptions(),
   })
 
   await flushPreviewView()
@@ -291,6 +342,20 @@ async function mountPreviewView() {
 describe('previewView 当前窗口切换前准备降级', () => {
   beforeEach(() => {
     previewPreparationState.store = createStore()
+    previewPreparationState.anchorStore = {}
+    previewPreparationState.viewScrollAnchorOptions = null
+    previewPreparationState.captureCurrentAnchor.mockReset()
+    previewPreparationState.scheduleRestoreForCurrentSnapshot.mockReset()
+    previewPreparationState.scheduleRestoreForCurrentSnapshot.mockResolvedValue(true)
+    previewPreparationState.capturePreviewLineAnchor.mockReset()
+    previewPreparationState.capturePreviewLineAnchor.mockReturnValue(null)
+    previewPreparationState.resolvePreviewLineAnchorScrollTop.mockReset()
+    previewPreparationState.resolvePreviewLineAnchorScrollTop.mockReturnValue(0)
+    previewPreparationState.resolvePreviewLineElement.mockReset()
+    previewPreparationState.resolvePreviewLineElement.mockReturnValue(null)
+    previewPreparationState.saveAnchorRecord.mockReset()
+    previewPreparationState.publishHandoff.mockReset()
+    previewPreparationState.consumeHandoff.mockReset()
     previewPreparationState.requestDocumentEdit.mockReset()
     previewPreparationState.requestDocumentSessionSnapshot.mockReset()
     previewPreparationState.addEventListener.mockReset()
@@ -314,5 +379,189 @@ describe('previewView 当前窗口切换前准备降级', () => {
 
     expect(result.snapshot.revision).toBe(5)
     expect(previewPreparationState.requestDocumentEdit).not.toHaveBeenCalled()
+  })
+
+  it('预览页激活恢复前消费到跨视图交接记录时，应写入 preview-page 的 line-handoff 记录', async () => {
+    previewPreparationState.consumeHandoff.mockReturnValue({
+      sessionId: 'session-preview',
+      revision: 5,
+      lineNumber: 12,
+      sourceAreaKey: 'editor-code',
+    })
+
+    await mountPreviewViewInKeepAlive()
+
+    expect(previewPreparationState.consumeHandoff).toHaveBeenCalledWith({
+      sessionId: 'session-preview',
+      revision: 5,
+    })
+    expect(previewPreparationState.saveAnchorRecord).toHaveBeenCalledWith(
+      previewPreparationState.anchorStore,
+      expect.objectContaining({
+        sessionId: 'session-preview',
+        scrollAreaKey: 'preview-page',
+        revision: 5,
+        anchor: {
+          type: 'line-handoff',
+          lineNumber: 12,
+        },
+        fallbackScrollTop: 0,
+        savedAt: expect.any(Number),
+      }),
+    )
+    expect(previewPreparationState.scheduleRestoreForCurrentSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('预览页激活恢复前未消费到跨视图交接记录时，不得覆盖 preview-page 记录', async () => {
+    previewPreparationState.consumeHandoff.mockReturnValue(null)
+
+    await mountPreviewViewInKeepAlive()
+
+    expect(previewPreparationState.consumeHandoff).toHaveBeenCalledWith({
+      sessionId: 'session-preview',
+      revision: 5,
+    })
+    expect(previewPreparationState.saveAnchorRecord).not.toHaveBeenCalled()
+    expect(previewPreparationState.scheduleRestoreForCurrentSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('预览页恢复 line-handoff 锚点时，应先用行号换算预览元素锚点再解析 scrollTop', async () => {
+    await mountPreviewView()
+
+    const fakeElement = {
+      dataset: {
+        lineStart: '10',
+        lineEnd: '12',
+      },
+    }
+    const convertedAnchor = {
+      type: 'preview-line',
+      lineStart: 10,
+      lineEnd: 12,
+      elementOffsetRatio: 0,
+    }
+    previewPreparationState.resolvePreviewLineElement.mockReturnValue(fakeElement)
+    previewPreparationState.capturePreviewLineAnchor.mockReturnValue(convertedAnchor)
+    previewPreparationState.resolvePreviewLineAnchorScrollTop.mockReturnValue(240)
+
+    const scrollElement = {
+      scrollTop: 0,
+      scrollTo: vi.fn(),
+    }
+    const restored = previewPreparationState.viewScrollAnchorOptions.restoreAnchor({
+      record: {
+        sessionId: 'session-preview',
+        revision: 5,
+        anchor: {
+          type: 'line-handoff',
+          lineNumber: 11,
+        },
+        fallbackScrollTop: 0,
+      },
+      scrollElement,
+    })
+
+    expect(restored).toBe(true)
+    expect(previewPreparationState.resolvePreviewLineElement).toHaveBeenCalled()
+    expect(previewPreparationState.capturePreviewLineAnchor).toHaveBeenCalledWith({
+      container: scrollElement,
+      element: fakeElement,
+      scrollTop: 0,
+    })
+    expect(previewPreparationState.resolvePreviewLineAnchorScrollTop).toHaveBeenCalledWith({
+      container: scrollElement,
+      element: fakeElement,
+      anchor: convertedAnchor,
+      fallbackScrollTop: 0,
+    })
+    expect(scrollElement.scrollTo).toHaveBeenCalledWith({
+      top: 240,
+    })
+  })
+
+  it('预览页恢复 line-handoff 锚点找不到对应元素时，应返回 false 交由上层重试且不得写到顶部', async () => {
+    await mountPreviewView()
+
+    previewPreparationState.resolvePreviewLineElement.mockReturnValue(null)
+
+    const scrollElement = {
+      scrollTop: 40,
+      scrollTo: vi.fn(),
+    }
+    const restored = previewPreparationState.viewScrollAnchorOptions.restoreAnchor({
+      record: {
+        sessionId: 'session-preview',
+        revision: 5,
+        anchor: {
+          type: 'line-handoff',
+          lineNumber: 11,
+        },
+        fallbackScrollTop: 0,
+      },
+      scrollElement,
+    })
+
+    expect(restored).toBe(false)
+    expect(previewPreparationState.capturePreviewLineAnchor).not.toHaveBeenCalled()
+    expect(previewPreparationState.resolvePreviewLineAnchorScrollTop).not.toHaveBeenCalled()
+    expect(scrollElement.scrollTo).not.toHaveBeenCalled()
+    expect(scrollElement.scrollTop).toBe(40)
+  })
+
+  it('预览页路由离开时，应把当前阅读行号发布给跨视图交接容器', async () => {
+    previewPreparationState.store.documentSessionSnapshot = {
+      sessionId: 'session-preview',
+      revision: 5,
+    }
+    previewPreparationState.captureCurrentAnchor.mockReturnValue({
+      sessionId: 'session-preview',
+      revision: 5,
+      anchor: {
+        type: 'preview-line',
+        lineStart: 12,
+        lineEnd: 14,
+        elementOffsetRatio: 0.25,
+      },
+      fallbackScrollTop: 320,
+    })
+
+    await mountPreviewView()
+
+    const routeLeaveCallback = previewPreparationState.registerRouteLeave.mock.calls.at(-1)?.[0]
+    expect(typeof routeLeaveCallback).toBe('function')
+
+    await routeLeaveCallback()
+
+    expect(previewPreparationState.publishHandoff).toHaveBeenCalledWith({
+      sessionId: 'session-preview',
+      revision: 5,
+      lineNumber: 12,
+      sourceAreaKey: 'preview-page',
+    })
+  })
+
+  it('预览页路由离开时若当前锚点没有合法行号，不得发布交接记录', async () => {
+    previewPreparationState.store.documentSessionSnapshot = {
+      sessionId: 'session-preview',
+      revision: 5,
+    }
+    previewPreparationState.captureCurrentAnchor.mockReturnValue({
+      sessionId: 'session-preview',
+      revision: 5,
+      anchor: {
+        type: 'preview-line',
+        lineStart: null,
+        lineEnd: null,
+        elementOffsetRatio: 0,
+      },
+      fallbackScrollTop: 320,
+    })
+
+    await mountPreviewView()
+
+    const routeLeaveCallback = previewPreparationState.registerRouteLeave.mock.calls.at(-1)?.[0]
+    await routeLeaveCallback()
+
+    expect(previewPreparationState.publishHandoff).not.toHaveBeenCalled()
   })
 })

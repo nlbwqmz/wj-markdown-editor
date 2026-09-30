@@ -524,3 +524,61 @@ test('未注入 waitLayoutStable 时默认会执行 nextTick 与两次 requestAn
     globalThis.cancelAnimationFrame = originalCancelAnimationFrame
   }
 })
+
+test('恢复进行中采集锚点不得覆盖已有记录，避免把未恢复的 DOM 位置写回缓存', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const deferred = createDeferred()
+
+  seedAnchorRecord(store)
+
+  const { api, scrollElement } = createHarness({
+    store,
+    waitLayoutStable: async () => {
+      await deferred.promise
+    },
+    restoreAnchor: () => true,
+  })
+
+  // 恢复被挂在布局等待阶段，此时 DOM 仍可能停留在恢复前的旧位置。
+  const restorePromise = api.scheduleRestoreForCurrentSnapshot()
+  scrollElement.scrollTop = 0
+
+  const capturedRecord = api.captureCurrentAnchor()
+
+  assert.equal(capturedRecord.anchor.lineStart, 7)
+  assert.equal(capturedRecord.fallbackScrollTop, 120)
+
+  deferred.resolve()
+  await restorePromise
+
+  // 恢复结束后采集应恢复正常，允许按当前 DOM 覆盖记录。
+  const nextCapturedRecord = api.captureCurrentAnchor()
+
+  assert.equal(nextCapturedRecord.fallbackScrollTop, 0)
+})
+
+test('取消挂起恢复后采集锚点应恢复为按当前 DOM 采集', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const deferred = createDeferred()
+
+  seedAnchorRecord(store)
+
+  const { api, scrollElement } = createHarness({
+    store,
+    waitLayoutStable: async () => {
+      await deferred.promise
+    },
+    restoreAnchor: () => true,
+  })
+
+  const restorePromise = api.scheduleRestoreForCurrentSnapshot()
+  api.cancelPendingRestore()
+  scrollElement.scrollTop = 66
+
+  const capturedRecord = api.captureCurrentAnchor()
+
+  assert.equal(capturedRecord.fallbackScrollTop, 66)
+
+  deferred.resolve()
+  await restorePromise
+})

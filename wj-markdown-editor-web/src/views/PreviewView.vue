@@ -36,8 +36,10 @@ import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuAc
 import {
   capturePreviewLineAnchor,
   resolvePreviewLineAnchorScrollTop,
+  resolvePreviewLineElement,
 } from '@/util/editor/viewScrollAnchorMathUtil.js'
-import { createViewScrollAnchorSessionStore } from '@/util/editor/viewScrollAnchorSessionUtil.js'
+import { createViewScrollAnchorSessionStore, saveAnchorRecord } from '@/util/editor/viewScrollAnchorSessionUtil.js'
+import { viewScrollHandoff } from '@/util/editor/viewScrollHandoffUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
@@ -443,6 +445,22 @@ function findPreviewElementByAnchor(container, anchor) {
   return waiting[0]?.element ?? null
 }
 
+/**
+ * 按跨视图交接记录中的 Markdown 行号反查当前预览节点。
+ * 交接记录只携带源码行号，这里复用统一的元素解析工具完成行号到节点的映射。
+ *
+ * @param {HTMLElement} container
+ * @param {number} lineNumber
+ * @returns {HTMLElement | null} 返回命中的预览节点；找不到时返回 null。
+ */
+function findPreviewElementByLineNumber(container, lineNumber) {
+  if (!container) {
+    return null
+  }
+
+  return resolvePreviewLineElement(getPreviewAnchorElements(), lineNumber)
+}
+
 const previewPageScrollAnchor = useViewScrollAnchor({
   store: previewPageAnchorStore,
   sessionIdGetter: () => currentScrollSnapshot.value.sessionId,
@@ -468,6 +486,37 @@ const previewPageScrollAnchor = useViewScrollAnchor({
   restoreAnchor: ({ record, scrollElement }) => {
     if (!scrollElement) {
       return false
+    }
+
+    const anchor = record?.anchor
+    if (anchor?.type === 'line-handoff') {
+      // 跨视图交接只携带源码行号，必须换算成本区域的精确锚点后才允许写回；
+      // 当前布局还找不到对应元素时直接返回 false，让上层在下一轮布局稳定后重试，
+      // 避免把 fallbackScrollTop（通常为 0）当成真实位置直接写到顶部。
+      const targetElement = findPreviewElementByLineNumber(scrollElement, anchor.lineNumber)
+      if (!targetElement) {
+        return false
+      }
+
+      const convertedAnchor = capturePreviewLineAnchor({
+        container: scrollElement,
+        element: targetElement,
+        scrollTop: 0,
+      })
+
+      if (!convertedAnchor) {
+        return false
+      }
+
+      const targetScrollTop = resolvePreviewLineAnchorScrollTop({
+        container: scrollElement,
+        element: targetElement,
+        anchor: convertedAnchor,
+        fallbackScrollTop: record?.fallbackScrollTop,
+      })
+
+      setScrollElementScrollTop(scrollElement, targetScrollTop)
+      return true
     }
 
     const targetElement = findPreviewElementByAnchor(scrollElement, record?.anchor)
@@ -504,6 +553,27 @@ function applyDocumentSessionSnapshot(snapshot) {
   }
 
   pendingRestoreOnActivation = false
+
+  // 消费跨视图交接记录：源视图离开时发布的阅读行号会在本次激活恢复前
+  // 换算成预览页自己的 line-handoff 锚点，再交给统一的恢复调度器处理。
+  const handoffRecord = viewScrollHandoff.consume({
+    sessionId: currentScrollSnapshot.value.sessionId,
+    revision: currentScrollSnapshot.value.revision,
+  })
+  if (handoffRecord) {
+    saveAnchorRecord(previewPageAnchorStore, {
+      sessionId: currentScrollSnapshot.value.sessionId,
+      scrollAreaKey: 'preview-page',
+      revision: currentScrollSnapshot.value.revision,
+      anchor: {
+        type: 'line-handoff',
+        lineNumber: handoffRecord.lineNumber,
+      },
+      fallbackScrollTop: 0,
+      savedAt: Date.now(),
+    })
+  }
+
   nextTick(() => {
     previewPageScrollAnchor.scheduleRestoreForCurrentSnapshot().then(() => {})
   })
@@ -625,7 +695,19 @@ onDeactivated(() => {
 
 onBeforeRouteLeave(() => {
   updateCurrentScrollSnapshot(store.documentSessionSnapshot)
-  previewPageScrollAnchor.captureCurrentAnchor()
+  const record = previewPageScrollAnchor.captureCurrentAnchor()
+
+  // 把当前预览页阅读行号发布给下一条路由（例如编辑页）。
+  // sessionId/revision 直接取当前滚动恢复绑定的快照身份，供目标视图严格校验。
+  const lineNumber = record?.anchor?.lineStart
+  if (Number.isInteger(lineNumber) && lineNumber > 0) {
+    viewScrollHandoff.publish({
+      sessionId: currentScrollSnapshot.value.sessionId,
+      revision: currentScrollSnapshot.value.revision,
+      lineNumber,
+      sourceAreaKey: 'preview-page',
+    })
+  }
 })
 
 function toEdit() {

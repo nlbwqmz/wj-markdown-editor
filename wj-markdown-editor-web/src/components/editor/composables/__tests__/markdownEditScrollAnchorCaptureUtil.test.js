@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { ref } from 'vue'
 
-import { resolvePreviewLineAnchorScrollTop } from '../../../../util/editor/viewScrollAnchorMathUtil.js'
+import { capturePreviewLineAnchor, resolvePreviewLineAnchorScrollTop, resolvePreviewLineElement } from '../../../../util/editor/viewScrollAnchorMathUtil.js'
 import {
   createViewScrollAnchorSessionStore,
   getAnchorRecord,
@@ -147,6 +147,87 @@ function createPreviewScrollElement() {
   }
 }
 
+/**
+ * 创建带行号映射的预览元素桩。
+ * 这里只保留锚点查找与几何换算需要的最小字段。
+ *
+ * @param {{
+ *   lineStart: number,
+ *   lineEnd?: number,
+ *   top: number,
+ *   height: number,
+ *   parentElement?: any,
+ * }} options
+ * @returns {any} 返回模拟预览锚点元素。
+ */
+function createPreviewElementStub(options) {
+  return {
+    dataset: {
+      lineStart: String(options.lineStart),
+      lineEnd: options.lineEnd == null ? undefined : String(options.lineEnd),
+    },
+    parentElement: options.parentElement ?? null,
+    getBoundingClientRect: () => ({
+      top: options.top,
+      height: options.height,
+    }),
+  }
+}
+
+/**
+ * 创建带真实几何接口的预览滚动容器桩。
+ * 这里保留 getBoundingClientRect / clientTop / scrollTo，便于验证恢复目标值。
+ *
+ * @param {{ top?: number, clientTop?: number, scrollTop?: number }} [options]
+ * @returns {any} 返回模拟预览滚动容器。
+ */
+function createPreviewGeometryContainer(options = {}) {
+  return {
+    scrollTop: options.scrollTop ?? 0,
+    clientTop: options.clientTop ?? 0,
+    scrollToCalls: [],
+    getBoundingClientRect: () => ({
+      top: options.top ?? 0,
+    }),
+    scrollTo({ top }) {
+      this.scrollTop = top
+      this.scrollToCalls.push(top)
+    },
+  }
+}
+
+/**
+ * 组装一个绑定 line-handoff 锚点记录的预览恢复控制器。
+ * 测试可以按需注入元素查找与回退滚动值，验证交接换算与兜底两条路径。
+ *
+ * @param {{
+ *   store: Record<string, Record<string, any>>,
+ *   snapshotRef: import('vue').Ref<{ sessionId: string, revision: number }>,
+ *   scrollElement: any,
+ *   findPreviewElementByLineNumber: (scrollElement: any, lineNumber: number) => any,
+ * }} options
+ * @returns {ReturnType<typeof useViewScrollAnchor>} 返回预览区滚动锚点控制器。
+ */
+function createHandoffPreviewScrollAnchor(options) {
+  return useViewScrollAnchor({
+    store: options.store,
+    sessionIdGetter: () => options.snapshotRef.value.sessionId,
+    revisionGetter: () => options.snapshotRef.value.revision,
+    scrollAreaKey: 'editor-preview',
+    getScrollElement: () => options.scrollElement,
+    restoreAnchor: requireCreateMarkdownEditPreviewScrollAnchorRestore()({
+      findPreviewElementByAnchor: () => null,
+      findPreviewElementByLineNumber: options.findPreviewElementByLineNumber,
+      capturePreviewLineAnchor,
+      resolvePreviewLineAnchorScrollTop,
+      setScrollElementScrollTop: (targetScrollElement, targetScrollTop) => {
+        targetScrollElement.scrollTo({ top: targetScrollTop })
+      },
+    }),
+    waitLayoutStable: async () => {},
+  })
+}
+
 test('组件侧 captureViewScrollAnchors 在右侧预览隐藏时只更新 editor-code，并保留已有 editor-preview 记录', () => {
   const createMarkdownEditScrollAnchorCapture = requireCreateMarkdownEditScrollAnchorCapture()
   const store = createViewScrollAnchorSessionStore()
@@ -259,4 +340,72 @@ test('组件侧预览恢复在找不到精确锚点元素时，会回退到 fall
   assert.equal(restoreResult, true)
   assert.deepEqual(scrollElement.scrollToCalls, [188])
   assert.equal(scrollElement.scrollTop, 188)
+})
+
+test('预览恢复遇到 line-handoff 锚点且命中元素时，会换算成精确 preview-line 锚点再恢复', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const snapshotRef = createSnapshotRef()
+  const scrollElement = createPreviewGeometryContainer()
+  const previewElement = createPreviewElementStub({
+    lineStart: 20,
+    lineEnd: 22,
+    top: 100,
+    height: 50,
+  })
+
+  saveAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-preview',
+    revision: 7,
+    anchor: {
+      type: 'line-handoff',
+      lineNumber: 21,
+    },
+    fallbackScrollTop: 0,
+    savedAt: 1,
+  })
+
+  const editorPreviewScrollAnchor = createHandoffPreviewScrollAnchor({
+    store,
+    snapshotRef,
+    scrollElement,
+    findPreviewElementByLineNumber: (container, lineNumber) => resolvePreviewLineElement([previewElement], lineNumber),
+  })
+
+  const restoreResult = await editorPreviewScrollAnchor.scheduleRestoreForCurrentSnapshot()
+
+  assert.equal(restoreResult, true)
+  assert.deepEqual(scrollElement.scrollToCalls, [100])
+  assert.equal(scrollElement.scrollTop, 100)
+})
+
+test('预览恢复遇到 line-handoff 锚点但找不到元素时，不得回退到 fallbackScrollTop 直接跳到顶部', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const snapshotRef = createSnapshotRef()
+  const scrollElement = createPreviewGeometryContainer({ scrollTop: 60 })
+
+  saveAnchorRecord(store, {
+    sessionId: 'session-1',
+    scrollAreaKey: 'editor-preview',
+    revision: 7,
+    anchor: {
+      type: 'line-handoff',
+      lineNumber: 99,
+    },
+    fallbackScrollTop: 0,
+    savedAt: 1,
+  })
+
+  const editorPreviewScrollAnchor = createHandoffPreviewScrollAnchor({
+    store,
+    snapshotRef,
+    scrollElement,
+    findPreviewElementByLineNumber: () => null,
+  })
+
+  const restoreResult = await editorPreviewScrollAnchor.scheduleRestoreForCurrentSnapshot()
+
+  assert.equal(restoreResult, false)
+  assert.deepEqual(scrollElement.scrollToCalls, [])
+  assert.equal(scrollElement.scrollTop, 60)
 })

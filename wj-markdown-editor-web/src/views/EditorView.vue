@@ -42,6 +42,7 @@ import {
 } from '@/util/editor/previewAssetRemovalUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
 import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
+import { viewScrollHandoff } from '@/util/editor/viewScrollHandoffUtil.js'
 import { createEditorViewActivationRestoreScheduler } from '@/views/editorViewActivationRestoreScheduler.js'
 
 // 预览资源右键菜单的基础状态工厂。
@@ -295,10 +296,24 @@ onBeforeRouteLeave(async () => {
     ? (await requestDocumentEdit(content.value))?.snapshot || await requestDocumentSessionSnapshot()
     : await requestDocumentSessionSnapshot()
 
-  markdownEditRef.value?.captureViewScrollAnchors?.({
+  const revision = Number.isInteger(latestSnapshot?.revision) ? latestSnapshot.revision : 0
+  const capturedAnchors = markdownEditRef.value?.captureViewScrollAnchors?.({
     sessionId: latestSnapshot?.sessionId ?? null,
-    revision: Number.isInteger(latestSnapshot?.revision) ? latestSnapshot.revision : 0,
+    revision,
   })
+
+  // 把编辑区当前阅读行号发布给下一条路由（例如预览页），
+  // 让目标视图能在自己的滚动区域内按行号换算锚点。
+  const lineNumber = capturedAnchors?.editorCode?.anchor?.lineNumber
+  const sessionId = latestSnapshot?.sessionId
+  if (typeof sessionId === 'string' && sessionId !== '' && Number.isInteger(latestSnapshot?.revision) && Number.isInteger(lineNumber) && lineNumber > 0) {
+    viewScrollHandoff.publish({
+      sessionId,
+      revision,
+      lineNumber,
+      sourceAreaKey: 'editor-code',
+    })
+  }
 })
 
 watch(() => content.value, (newValue, oldValue) => {

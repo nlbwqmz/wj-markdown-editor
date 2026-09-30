@@ -41,10 +41,13 @@ import {
   capturePreviewLineAnchor,
   resolveEditorLineAnchorScrollTop,
   resolvePreviewLineAnchorScrollTop,
+  resolvePreviewLineElement,
 } from '@/util/editor/viewScrollAnchorMathUtil.js'
 import {
   createViewScrollAnchorSessionStore,
+  saveAnchorRecord,
 } from '@/util/editor/viewScrollAnchorSessionUtil.js'
+import { viewScrollHandoff } from '@/util/editor/viewScrollHandoffUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
@@ -190,6 +193,46 @@ function updateCurrentScrollSnapshot(snapshot) {
   currentScrollSnapshot.value = {
     sessionId: typeof snapshot?.sessionId === 'string' ? snapshot.sessionId : '',
     revision: Number.isInteger(snapshot?.revision) ? snapshot.revision : 0,
+  }
+}
+
+/**
+ * 消费跨视图交接记录，并把公共源码行号换算成本区域的交接锚点写回缓存。
+ * 命中交接记录时，编辑区始终写入一条 line-handoff 锚点；
+ * 若当前预览可见，则同时为预览区写入同一条锚点，保证双栏按同一行号恢复。
+ * 真正的几何换算延后到各自恢复入口执行。
+ */
+function applyHandoffAnchorToStore() {
+  const { sessionId, revision } = currentScrollSnapshot.value
+  const handoffRecord = viewScrollHandoff.consume({ sessionId, revision })
+
+  if (!handoffRecord) {
+    return
+  }
+
+  const anchor = {
+    type: 'line-handoff',
+    lineNumber: handoffRecord.lineNumber,
+  }
+
+  saveAnchorRecord(viewScrollAnchorStore, {
+    sessionId,
+    scrollAreaKey: 'editor-code',
+    revision,
+    anchor,
+    fallbackScrollTop: 0,
+    savedAt: Date.now(),
+  })
+
+  if (previewController.value === true) {
+    saveAnchorRecord(viewScrollAnchorStore, {
+      sessionId,
+      scrollAreaKey: 'editor-preview',
+      revision,
+      anchor,
+      fallbackScrollTop: 0,
+      savedAt: Date.now(),
+    })
   }
 }
 
@@ -340,6 +383,23 @@ function findPreviewElementAtScrollTop(container, scrollTop) {
 }
 
 /**
+ * 根据源码行号反查预览元素。
+ * 交接记录只携带公共行号，因此这里先把它落到当前预览的锚点元素上，
+ * 后续再由恢复入口复用既有几何工具完成精确换算。
+ *
+ * @param {HTMLElement} container
+ * @param {number} lineNumber
+ * @returns {HTMLElement | null} 返回包含该行号的预览元素；找不到时返回 null。
+ */
+function findPreviewElementByLineNumber(container, lineNumber) {
+  if (!container) {
+    return null
+  }
+
+  return resolvePreviewLineElement(getPreviewAnchorElements(), lineNumber)
+}
+
+/**
  * 根据锚点里的行范围反查预览元素。
  * 若存在多个候选节点，则优先选择范围最精确、嵌套更深的那个节点。
  *
@@ -402,9 +462,17 @@ const editorCodeScrollAnchor = useViewScrollAnchor({
     if (!view || !scrollElement) {
       return false
     }
+    // 交接锚点只带公共行号，这里换算成本区域的 editor-line 锚点后再复用现有几何工具。
+    const anchor = record?.anchor?.type === 'line-handoff'
+      ? {
+          type: 'editor-line',
+          lineNumber: record.anchor.lineNumber,
+          lineOffsetRatio: 0,
+        }
+      : record?.anchor
     const targetScrollTop = resolveEditorLineAnchorScrollTop({
       view,
-      anchor: record?.anchor,
+      anchor,
       fallbackScrollTop: record?.fallbackScrollTop,
     })
     setScrollElementScrollTop(scrollElement, targetScrollTop)
@@ -434,6 +502,8 @@ const editorPreviewScrollAnchor = useViewScrollAnchor({
   },
   restoreAnchor: createMarkdownEditPreviewScrollAnchorRestore({
     findPreviewElementByAnchor,
+    findPreviewElementByLineNumber,
+    capturePreviewLineAnchor,
     resolvePreviewLineAnchorScrollTop,
     setScrollElementScrollTop,
   }),
@@ -744,6 +814,7 @@ function resetSplitLayout() {
  */
 async function scheduleRestoreForCurrentSnapshot(snapshot) {
   updateCurrentScrollSnapshot(snapshot)
+  applyHandoffAnchorToStore()
   const requestToken = ++viewRestoreRequestToken
 
   editorCodeScrollAnchor.cancelPendingRestore()
@@ -1220,7 +1291,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full overflow-y-auto p-2"
+          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full overflow-y-auto p-2"
           :style="previewContainerStyle"
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"

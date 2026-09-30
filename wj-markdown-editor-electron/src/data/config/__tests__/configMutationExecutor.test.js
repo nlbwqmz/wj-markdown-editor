@@ -23,6 +23,20 @@ describe('applyConfigMutationRequest', () => {
     expect(() => validateConfigShape(nextConfig)).not.toThrow()
   })
 
+  it('set 写入合法 fileManagerWidth 后结果合法且值正确', () => {
+    const inputConfig = cloneValue(defaultConfig)
+    const originalConfig = cloneValue(inputConfig)
+    const nextConfig = applyConfigMutationRequest(inputConfig, {
+      operations: [
+        { type: 'set', path: ['fileManagerWidth'], value: 320 },
+      ],
+    })
+
+    expect(nextConfig.fileManagerWidth).toBe(320)
+    expect(inputConfig).toEqual(originalConfig)
+    expect(() => validateConfigShape(nextConfig)).not.toThrow()
+  })
+
   it('按下标只更新固定长度数组 watermark.gap', () => {
     const inputConfig = cloneValue(defaultConfig)
     const originalConfig = cloneValue(inputConfig)

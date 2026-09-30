@@ -149,6 +149,33 @@ describe('configLoadSanitizer', () => {
     expect(() => validateConfigShape(sanitized)).not.toThrow()
   })
 
+  it('fileManagerWidth 小于最小值时必须裁剪到 220', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      fileManagerWidth: 100,
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.fileManagerWidth).toBe(220)
+  })
+
+  it('fileManagerWidth 大于最大值时必须裁剪到 420', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      fileManagerWidth: 500,
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.fileManagerWidth).toBe(420)
+  })
+
+  it('fileManagerWidth 非数字时必须回退默认值 280', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      fileManagerWidth: 'invalid',
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.fileManagerWidth).toBe(280)
+  })
+
   it('非法主题枚举值必须回退到默认值', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),

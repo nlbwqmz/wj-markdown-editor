@@ -2,6 +2,8 @@ import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick, onBeforeUnmount } from 'vue'
 
+import { viewScrollHandoff } from '../../../util/editor/viewScrollHandoffUtil.js'
+
 import MarkdownEdit from '../MarkdownEdit.vue'
 
 function createFakeRef(value) {
@@ -41,6 +43,10 @@ const markdownPreviewStubState = vi.hoisted(() => ({
 
 const markdownMenuStubState = vi.hoisted(() => ({
   latestShowHeader: null,
+}))
+
+const scrollAnchorSessionState = vi.hoisted(() => ({
+  store: null,
 }))
 
 vi.mock('split-grid', () => ({
@@ -273,7 +279,27 @@ vi.mock('@/util/editor/keymap/keymapUtil.js', () => ({
 
 vi.mock('@/util/editor/viewScrollAnchorSessionUtil.js', () => ({
   createViewScrollAnchorSessionStore() {
-    return {}
+    scrollAnchorSessionState.store = Object.create(null)
+    return scrollAnchorSessionState.store
+  },
+  saveAnchorRecord(store, record) {
+    if (store == null || typeof record?.sessionId !== 'string' || typeof record?.scrollAreaKey !== 'string') {
+      return null
+    }
+
+    if (store[record.sessionId] == null) {
+      store[record.sessionId] = Object.create(null)
+    }
+
+    const nextRecord = {
+      ...record,
+      anchor: record.anchor != null && typeof record.anchor === 'object'
+        ? { ...record.anchor }
+        : record.anchor ?? null,
+    }
+    store[record.sessionId][record.scrollAreaKey] = nextRecord
+
+    return { ...nextRecord }
   },
 }))
 
@@ -353,6 +379,8 @@ describe('markdownEdit 布局运行时接线', () => {
     markdownPreviewStubState.instances.length = 0
     markdownPreviewStubState.nextId = 0
     markdownMenuStubState.latestShowHeader = null
+    scrollAnchorSessionState.store = null
+    viewScrollHandoff.clear()
     previewLayoutWiringState.rebuildPreviewLayoutIndex.mockClear()
     previewLayoutWiringState.jumpToTargetLine.mockClear()
     previewLayoutWiringState.jumpEditorToLine.mockClear()
@@ -658,5 +686,66 @@ describe('markdownEdit 布局运行时接线', () => {
     expect(previewLayoutWiringState.syncEditorToPreview).toHaveBeenCalledTimes(1)
     expect(previewLayoutWiringState.syncEditorToPreview).toHaveBeenCalledWith(true)
     expect(previewLayoutWiringState.restorePreviewLinkedHighlight).toHaveBeenCalledTimes(1)
+  })
+
+  it('恢复快照前会消费跨视图交接记录，并把同一行号写入编辑区与预览区锚点', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: false,
+    })
+
+    viewScrollHandoff.publish({
+      sessionId: 'session-1',
+      revision: 3,
+      lineNumber: 12,
+      sourceAreaKey: 'preview-page',
+    })
+
+    await wrapper.vm.scheduleRestoreForCurrentSnapshot({
+      sessionId: 'session-1',
+      revision: 3,
+    })
+
+    const store = scrollAnchorSessionState.store
+    expect(store['session-1']['editor-code']).toMatchObject({
+      sessionId: 'session-1',
+      scrollAreaKey: 'editor-code',
+      revision: 3,
+      anchor: {
+        type: 'line-handoff',
+        lineNumber: 12,
+      },
+      fallbackScrollTop: 0,
+    })
+    expect(store['session-1']['editor-preview']).toMatchObject({
+      sessionId: 'session-1',
+      scrollAreaKey: 'editor-preview',
+      revision: 3,
+      anchor: {
+        type: 'line-handoff',
+        lineNumber: 12,
+      },
+      fallbackScrollTop: 0,
+    })
+  })
+
+  it('跨视图交接记录身份不匹配时，不应写入编辑区锚点缓存', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: false,
+    })
+
+    viewScrollHandoff.publish({
+      sessionId: 'session-1',
+      revision: 2,
+      lineNumber: 12,
+    })
+
+    await wrapper.vm.scheduleRestoreForCurrentSnapshot({
+      sessionId: 'session-1',
+      revision: 3,
+    })
+
+    expect(scrollAnchorSessionState.store['session-1']).toBeUndefined()
   })
 })

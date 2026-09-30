@@ -194,3 +194,129 @@ export function resolvePreviewLineAnchorScrollTop({ container, element, anchor, 
 
   return elementTop + (elementHeight * clampRatio(anchor.elementOffsetRatio))
 }
+
+/**
+ * 计算元素相对文档根的嵌套深度。
+ * 交接恢复时用于在行范围相同的候选节点中优先选择更内层的真实内容节点，
+ * 该排序语义与组件内按锚点精确查找的策略保持一致。
+ *
+ * @param {any} element
+ * @returns {number} 返回元素嵌套深度。
+ */
+function getElementDepth(element) {
+  let depth = 0
+  let current = element?.parentElement ?? null
+
+  while (current) {
+    depth++
+    current = current.parentElement
+  }
+
+  return depth
+}
+
+/**
+ * 在预览锚点元素集合中查找包含指定行号的元素。
+ * 若存在多个候选节点，则优先选择行范围最精确（span 最小）的节点；
+ * span 相同时再优先选择嵌套更深的真实内容节点。
+ *
+ * @param {Iterable<any> | null | undefined} elements
+ * @param {number} lineNumber
+ * @returns {any | null} 返回命中的预览元素；找不到时返回 null。
+ */
+export function resolvePreviewLineElement(elements, lineNumber) {
+  const parsedLineNumber = parseLineNumber(lineNumber)
+
+  if (parsedLineNumber === null || elements == null) {
+    return null
+  }
+
+  const containingCandidateList = []
+  const previousCandidateList = []
+  const nextCandidateList = []
+
+  for (const element of elements) {
+    const lineRange = getPreviewElementLineRange(element)
+    if (!lineRange) {
+      continue
+    }
+
+    const candidate = {
+      element,
+      lineStart: lineRange.lineStart,
+      lineEnd: lineRange.lineEnd,
+      span: lineRange.lineEnd - lineRange.lineStart,
+      depth: getElementDepth(element),
+    }
+
+    if (lineRange.lineStart <= parsedLineNumber && parsedLineNumber <= lineRange.lineEnd) {
+      containingCandidateList.push(candidate)
+      continue
+    }
+
+    if (lineRange.lineEnd < parsedLineNumber) {
+      previousCandidateList.push(candidate)
+      continue
+    }
+
+    nextCandidateList.push(candidate)
+  }
+
+  if (containingCandidateList.length > 0) {
+    containingCandidateList.sort(compareCandidatePrecision)
+    return containingCandidateList[0].element
+  }
+
+  // 行号落在块间隙（空行、注释等没有行号映射的内容）时，
+  // 退化为选择距离最近的块，避免恢复因“精确命中失败”直接回退到顶部。
+  const previousCandidate = pickNearestCandidate(previousCandidateList, (left, right) => right.lineEnd - left.lineEnd)
+  const nextCandidate = pickNearestCandidate(nextCandidateList, (left, right) => left.lineStart - right.lineStart)
+
+  if (previousCandidate && nextCandidate) {
+    const previousDistance = parsedLineNumber - previousCandidate.lineEnd
+    const nextDistance = nextCandidate.lineStart - parsedLineNumber
+
+    if (previousDistance !== nextDistance) {
+      return previousDistance < nextDistance ? previousCandidate.element : nextCandidate.element
+    }
+
+    return compareCandidatePrecision(previousCandidate, nextCandidate) <= 0
+      ? previousCandidate.element
+      : nextCandidate.element
+  }
+
+  return (previousCandidate ?? nextCandidate)?.element ?? null
+}
+
+/**
+ * 比较两个候选元素的定位精度：行范围越窄、嵌套越深，优先级越高。
+ *
+ * @param {{ span: number, depth: number }} left
+ * @param {{ span: number, depth: number }} right
+ * @returns {number} 返回排序差值。
+ */
+function compareCandidatePrecision(left, right) {
+  const spanCompare = left.span - right.span
+  if (spanCompare !== 0) {
+    return spanCompare
+  }
+  return right.depth - left.depth
+}
+
+/**
+ * 在候选列表中挑选最贴近目标行号的元素。
+ * 主排序由调用方给出的距离比较函数决定，距离相同时再按定位精度决胜。
+ *
+ * @param {Array<{ element: any, span: number, depth: number }>} candidateList
+ * @param {(left: any, right: any) => number} compareDistance
+ * @returns {{ element: any } | null} 返回命中候选；列表为空时返回 null。
+ */
+function pickNearestCandidate(candidateList, compareDistance) {
+  if (candidateList.length === 0) {
+    return null
+  }
+
+  const sortedList = [...candidateList].sort((left, right) => compareDistance(left, right) || compareCandidatePrecision(left, right))
+
+  return sortedList[0]
+}

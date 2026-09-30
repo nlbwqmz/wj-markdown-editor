@@ -5,6 +5,7 @@ import {
   capturePreviewLineAnchor,
   resolveEditorLineAnchorScrollTop,
   resolvePreviewLineAnchorScrollTop,
+  resolvePreviewLineElement,
 } from '../viewScrollAnchorMathUtil.js'
 
 const { test } = await import('node:test')
@@ -211,4 +212,80 @@ test('resolvePreviewLineAnchorScrollTop 找不到块时会回退 fallbackScrollT
   })
 
   assert.equal(targetScrollTop, 88)
+})
+
+/**
+ * 创建带行号映射的最小预览元素桩对象。
+ * parentElement 用于验证嵌套深度排序。
+ */
+function createLineMappedElement({ lineStart, lineEnd, parentElement = null }) {
+  return {
+    dataset: {
+      lineStart: String(lineStart),
+      lineEnd: String(lineEnd),
+    },
+    parentElement,
+  }
+}
+
+test('resolvePreviewLineElement 能命中包含目标行号且行范围最精确的元素', () => {
+  const outerElement = createLineMappedElement({ lineStart: 10, lineEnd: 20 })
+  const innerElement = createLineMappedElement({ lineStart: 12, lineEnd: 14 })
+
+  assert.equal(resolvePreviewLineElement([outerElement, innerElement], 13), innerElement)
+})
+
+test('resolvePreviewLineElement 在行范围相同时应优先选择嵌套更深的元素', () => {
+  const parentElement = createLineMappedElement({ lineStart: 5, lineEnd: 6 })
+  const childElement = createLineMappedElement({ lineStart: 5, lineEnd: 6, parentElement })
+
+  assert.equal(resolvePreviewLineElement([parentElement, childElement], 5), childElement)
+})
+
+test('resolvePreviewLineElement 在目标行号落在行范围边界时应命中', () => {
+  const element = createLineMappedElement({ lineStart: 7, lineEnd: 9 })
+
+  assert.equal(resolvePreviewLineElement([element], 7), element)
+  assert.equal(resolvePreviewLineElement([element], 9), element)
+})
+
+test('resolvePreviewLineElement 在行号落在块间隙时应选择距离最近的块', () => {
+  const previousElement = createLineMappedElement({ lineStart: 3, lineEnd: 4 })
+  const nextElement = createLineMappedElement({ lineStart: 8, lineEnd: 9 })
+
+  // 行号 6 距离上一块（lineEnd 4）为 2，距离下一块（lineStart 8）也为 2，
+  // 此时按定位精度（span 更小、嵌套更深）决胜；两者精度相同则保留上一块。
+  assert.equal(resolvePreviewLineElement([previousElement, nextElement], 6), previousElement)
+
+  // 行号 7 距离下一块更近，应选择下一块。
+  assert.equal(resolvePreviewLineElement([previousElement, nextElement], 7), nextElement)
+})
+
+test('resolvePreviewLineElement 在行号小于所有块时应选择首个块', () => {
+  const firstElement = createLineMappedElement({ lineStart: 5, lineEnd: 6 })
+  const secondElement = createLineMappedElement({ lineStart: 9, lineEnd: 10 })
+
+  assert.equal(resolvePreviewLineElement([firstElement, secondElement], 2), firstElement)
+})
+
+test('resolvePreviewLineElement 在行号大于所有块时应选择末个块', () => {
+  const firstElement = createLineMappedElement({ lineStart: 5, lineEnd: 6 })
+  const secondElement = createLineMappedElement({ lineStart: 9, lineEnd: 10 })
+
+  assert.equal(resolvePreviewLineElement([firstElement, secondElement], 42), secondElement)
+})
+
+test('resolvePreviewLineElement 遇到非法行号或空集合时应返回 null', () => {
+  const element = createLineMappedElement({ lineStart: 7, lineEnd: 9 })
+
+  assert.equal(resolvePreviewLineElement([element], 0), null)
+  assert.equal(resolvePreviewLineElement([element], Number.NaN), null)
+  assert.equal(resolvePreviewLineElement(null, 7), null)
+})
+
+test('resolvePreviewLineElement 应跳过缺少行号映射的元素', () => {
+  const plainElement = { dataset: {}, parentElement: null }
+  const mappedElement = createLineMappedElement({ lineStart: 3, lineEnd: 4 })
+
+  assert.equal(resolvePreviewLineElement([plainElement, mappedElement], 3), mappedElement)
 })

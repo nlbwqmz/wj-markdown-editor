@@ -20,6 +20,10 @@ describe('configSchema', () => {
     expect(defaultConfig.fileManagerVisible).toBe(true)
   })
 
+  it('defaultConfig 必须提供 fileManagerWidth 默认值 280', () => {
+    expect(defaultConfig.fileManagerWidth).toBe(280)
+  })
+
   it('defaultConfig 必须提供 fileManagerSort 默认值', () => {
     expect(defaultConfig.fileManagerSort).toEqual({
       field: 'type',
@@ -73,6 +77,24 @@ describe('configSchema', () => {
       ...defaultConfig,
       fileManagerVisible: true,
     })).not.toThrow()
+  })
+
+  it('config schema 必须接纳 fileManagerWidth', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerWidth: 300,
+    })).not.toThrow()
+  })
+
+  it('config schema 必须拒绝越界 fileManagerWidth', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerWidth: 100,
+    })).toThrow()
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerWidth: 500,
+    })).toThrow()
   })
 
   it('config schema 必须接纳 fileManagerSort', () => {
