@@ -266,6 +266,14 @@ async function openFileDirSelect() {
   }
 }
 
+// 选择文件管理栏默认目录
+async function openFileDefaultDirSelect() {
+  const nextSelectedPath = await channelUtil.send({ event: 'open-dir-select' })
+  if (typeof nextSelectedPath === 'string') {
+    await submitSetPathMutation(['fileDefaultDirectory'], nextSelectedPath)
+  }
+}
+
 /**
  * recentMax 输入框使用受控更新，避免把清空产生的 null 写进配置草稿。
  */
@@ -546,6 +554,17 @@ function reset() {
                 {{ $t('config.no') }}
               </a-radio-button>
             </a-radio-group>
+          </a-descriptions-item>
+          <a-descriptions-item :label="$t('config.fileManager.defaultDirectory')">
+            <a-input
+              :value="config.fileDefaultDirectory"
+              allow-clear
+              @update:value="value => onNormalizedStringFieldChange(['fileDefaultDirectory'], value)"
+            >
+              <template #addonAfter>
+                <div class="i-tabler:folder cursor-pointer" style="color: var(--wj-markdown-text-primary)" @click="openFileDefaultDirSelect" />
+              </template>
+            </a-input>
           </a-descriptions-item>
           <a-descriptions-item :label="$t('config.fileManager.markdownLeftClickAction')">
             <a-radio-group

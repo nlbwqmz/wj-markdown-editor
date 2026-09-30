@@ -213,6 +213,7 @@ export const configSchema = {
     'fileMode',
     'fileAbsolutePath',
     'fileRelativePath',
+    'fileDefaultDirectory',
     'autoSave',
     'menuVisible',
     'fileManagerVisible',
@@ -245,6 +246,7 @@ export const configSchema = {
     fileMode: { enum: ['2', '3', '4'] },
     fileAbsolutePath: { type: 'string' },
     fileRelativePath: { type: 'string' },
+    fileDefaultDirectory: { type: 'string' },
     autoSave: {
       type: 'array',
       items: { enum: ['blur', 'close'] },

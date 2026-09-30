@@ -82,6 +82,48 @@ function createDeferred() {
   }
 }
 
+function createDraftSnapshot() {
+  return {
+    sessionId: 'session-draft',
+    displayPath: null,
+    recentMissingPath: null,
+    isRecentMissing: false,
+    dirty: false,
+    resourceContext: {
+      documentPath: null,
+    },
+  }
+}
+
+function createPanelController(store, overrides = {}) {
+  const scope = effectScope()
+  let controller = null
+
+  scope.run(() => {
+    controller = createFileManagerPanelController({
+      store,
+      t: value => value,
+      sendCommand: vi.fn(),
+      requestDirectoryState: vi.fn(),
+      requestOpenDirectory: vi.fn(),
+      requestCreateFolder: vi.fn(),
+      requestCreateMarkdown: vi.fn(),
+      requestPickDirectory: vi.fn(),
+      requestDocumentOpenPathByInteraction: vi.fn(),
+      openNameInputModal: vi.fn(),
+      showWarningMessage: vi.fn(),
+      subscribeEvent: vi.fn(),
+      unsubscribeEvent: vi.fn(),
+      ...overrides,
+    })
+  })
+
+  return {
+    controller,
+    scope,
+  }
+}
+
 describe('fileManagerPanelController', () => {
   // 控制器模块在 beforeAll 内一次加载完成，测试体只做断言，不再承担冷 import 成本。
   beforeAll(async () => {
@@ -481,6 +523,440 @@ describe('fileManagerPanelController', () => {
         modifiedTimeMs: 50,
       }),
     ])
+
+    scope.stop()
+  })
+
+  it('未配置 fileDefaultDirectory 时，草稿快照应保持既有空态且不请求目录', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = createDraftSnapshot()
+    const requestDirectoryState = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+    })
+
+    await flushController()
+
+    expect(requestDirectoryState).not.toHaveBeenCalled()
+    expect(controller.directoryPath.value).toBeNull()
+    expect(controller.entryList.value).toEqual([])
+    expect(controller.emptyMessageKey.value).toBe('message.fileManagerSelectDirectory')
+
+    scope.stop()
+  })
+
+  it('配置有效 fileDefaultDirectory 时，草稿快照应请求归一化后的默认目录并展示目录态', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = createDraftSnapshot()
+    store.config.fileDefaultDirectory = 'D:\\workspace\\notes\\'
+    const requestDirectoryState = vi.fn().mockResolvedValue({
+      directoryPath: 'D:/workspace/notes',
+      entryList: [
+        { name: 'note.md', path: 'D:/workspace/notes/note.md', kind: 'markdown' },
+      ],
+    })
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+    })
+
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenCalledTimes(1)
+    expect(requestDirectoryState).toHaveBeenCalledWith({
+      directoryPath: 'D:/workspace/notes',
+    })
+    expect(controller.directoryPath.value).toBe('D:/workspace/notes')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['note.md'])
+
+    scope.stop()
+  })
+
+  it('isRecentMissing 为 true 但 recentMissingPath 缺失的退化快照不得套用默认目录', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = {
+      sessionId: 'session-recent-missing-degraded',
+      displayPath: null,
+      recentMissingPath: null,
+      isRecentMissing: true,
+      dirty: false,
+      resourceContext: {
+        documentPath: null,
+      },
+    }
+    store.config.fileDefaultDirectory = 'D:/workspace/notes'
+    const requestDirectoryState = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+    })
+
+    await flushController()
+
+    expect(requestDirectoryState).not.toHaveBeenCalled()
+    expect(controller.directoryPath.value).toBeNull()
+    expect(controller.emptyMessageKey.value).toBe('message.fileManagerSelectDirectory')
+
+    scope.stop()
+  })
+
+  it('fileDefaultDirectory 为空白字符串时应视为未配置，草稿快照保持既有空态', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = createDraftSnapshot()
+    store.config.fileDefaultDirectory = '   '
+    const requestDirectoryState = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+    })
+
+    await flushController()
+
+    expect(requestDirectoryState).not.toHaveBeenCalled()
+    expect(controller.directoryPath.value).toBeNull()
+    expect(controller.emptyMessageKey.value).toBe('message.fileManagerSelectDirectory')
+
+    scope.stop()
+  })
+
+  it('已有当前文档路径或 recent-missing 有效路径时，默认目录不得覆盖原有优先级', async () => {
+    const documentStore = createStore()
+    documentStore.config.fileDefaultDirectory = 'D:/workspace/notes'
+    const documentRequestDirectoryState = vi.fn().mockResolvedValue({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    })
+    const documentPanel = createPanelController(documentStore, {
+      requestDirectoryState: documentRequestDirectoryState,
+    })
+
+    await flushController()
+
+    expect(documentRequestDirectoryState).toHaveBeenCalledWith({
+      directoryPath: 'D:/docs',
+    })
+    documentPanel.scope.stop()
+
+    const recentMissingStore = createStore()
+    recentMissingStore.documentSessionSnapshot = {
+      sessionId: 'session-recent-missing',
+      displayPath: 'D:/docs/missing.md',
+      recentMissingPath: 'D:/docs/missing.md',
+      isRecentMissing: true,
+      dirty: false,
+      resourceContext: {
+        documentPath: null,
+      },
+    }
+    recentMissingStore.config.fileDefaultDirectory = 'D:/workspace/notes'
+    const recentMissingRequestDirectoryState = vi.fn().mockResolvedValue({
+      directoryPath: 'D:/docs',
+      entryList: [],
+    })
+    const recentMissingPanel = createPanelController(recentMissingStore, {
+      requestDirectoryState: recentMissingRequestDirectoryState,
+    })
+
+    await flushController()
+
+    expect(recentMissingRequestDirectoryState).toHaveBeenCalledWith({
+      directoryPath: 'D:/docs',
+    })
+    recentMissingPanel.scope.stop()
+  })
+
+  it('fileDefaultDirectory 变化后应实时重算目录目标，相同值不重复请求，清空后回到草稿空态', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = createDraftSnapshot()
+    const requestDirectoryState = vi.fn().mockImplementation(async ({ directoryPath }) => ({
+      directoryPath,
+      entryList: [],
+    }))
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+    })
+
+    await flushController()
+
+    expect(requestDirectoryState).not.toHaveBeenCalled()
+    expect(controller.directoryPath.value).toBeNull()
+
+    store.config.fileDefaultDirectory = 'D:/workspace/notes'
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenCalledTimes(1)
+    expect(requestDirectoryState).toHaveBeenNthCalledWith(1, {
+      directoryPath: 'D:/workspace/notes',
+    })
+    expect(controller.directoryPath.value).toBe('D:/workspace/notes')
+
+    store.config.fileDefaultDirectory = 'D:/workspace/notes'
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenCalledTimes(1)
+
+    store.config.fileDefaultDirectory = ''
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenCalledTimes(1)
+    expect(controller.directoryPath.value).toBeNull()
+    expect(controller.emptyMessageKey.value).toBe('message.fileManagerSelectDirectory')
+
+    scope.stop()
+  })
+
+  it('配置的默认目录不存在时，应静默回退草稿空态且不提示错误', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = createDraftSnapshot()
+    store.config.fileDefaultDirectory = 'D:/workspace/missing'
+    const requestDirectoryState = vi.fn().mockResolvedValue({
+      mode: 'empty',
+      directoryPath: null,
+      activePath: null,
+      entryList: [],
+    })
+    const showWarningMessage = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+      showWarningMessage,
+    })
+
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenCalledTimes(1)
+    expect(requestDirectoryState).toHaveBeenCalledWith({
+      directoryPath: 'D:/workspace/missing',
+    })
+    expect(controller.directoryPath.value).toBeNull()
+    expect(controller.entryList.value).toEqual([])
+    expect(controller.emptyMessageKey.value).toBe('message.fileManagerSelectDirectory')
+    expect(showWarningMessage).not.toHaveBeenCalled()
+
+    scope.stop()
+  })
+
+  it('默认目录先存在后消失时，再次刷新应静默回退草稿空态且不提示错误', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = createDraftSnapshot()
+    store.config.fileDefaultDirectory = 'D:/workspace/notes'
+    const requestDirectoryState = vi.fn()
+      .mockResolvedValueOnce({
+        directoryPath: 'D:/workspace/notes',
+        entryList: [
+          { name: 'note.md', path: 'D:/workspace/notes/note.md', kind: 'markdown' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        mode: 'empty',
+        directoryPath: null,
+        activePath: null,
+        entryList: [],
+      })
+    const showWarningMessage = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+      showWarningMessage,
+    })
+
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/workspace/notes')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['note.md'])
+
+    await controller.reloadDirectoryStateFromSnapshot(store.documentSessionSnapshot)
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenCalledTimes(2)
+    expect(controller.directoryPath.value).toBeNull()
+    expect(controller.entryList.value).toEqual([])
+    expect(controller.emptyMessageKey.value).toBe('message.fileManagerSelectDirectory')
+    expect(showWarningMessage).not.toHaveBeenCalled()
+
+    scope.stop()
+  })
+
+  it('默认目录打开失败返回 open-directory-watch-failed 时，应静默回退草稿空态而不是保留旧目录状态', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = createDraftSnapshot()
+    store.config.fileDefaultDirectory = 'D:/workspace/notes'
+    const requestDirectoryState = vi.fn()
+      .mockResolvedValueOnce({
+        directoryPath: 'D:/workspace/notes',
+        entryList: [
+          { name: 'note.md', path: 'D:/workspace/notes/note.md', kind: 'markdown' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: 'open-directory-watch-failed',
+      })
+    const showWarningMessage = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+      showWarningMessage,
+    })
+
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/workspace/notes')
+
+    await controller.reloadDirectoryStateFromSnapshot(store.documentSessionSnapshot)
+    await flushController()
+
+    expect(controller.directoryPath.value).toBeNull()
+    expect(controller.entryList.value).toEqual([])
+    expect(controller.emptyMessageKey.value).toBe('message.fileManagerSelectDirectory')
+    expect(showWarningMessage).not.toHaveBeenCalled()
+
+    scope.stop()
+  })
+
+  it('默认目录被删除后收到目录变更空态推送时，应静默回退草稿空态', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = createDraftSnapshot()
+    store.config.fileDefaultDirectory = 'D:/workspace/notes'
+    const registeredHandlerMap = new Map()
+    const requestDirectoryState = vi.fn().mockResolvedValue({
+      directoryPath: 'D:/workspace/notes',
+      entryList: [
+        { name: 'note.md', path: 'D:/workspace/notes/note.md', kind: 'markdown' },
+      ],
+    })
+    const showWarningMessage = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+      showWarningMessage,
+      subscribeEvent: (eventName, handler) => {
+        registeredHandlerMap.set(eventName, handler)
+      },
+    })
+
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/workspace/notes')
+
+    registeredHandlerMap.get(FILE_MANAGER_DIRECTORY_CHANGED_EVENT)?.({
+      mode: 'empty',
+      directoryPath: null,
+      activePath: null,
+      entryList: [],
+    })
+    await flushController()
+
+    expect(controller.directoryPath.value).toBeNull()
+    expect(controller.entryList.value).toEqual([])
+    expect(controller.emptyMessageKey.value).toBe('message.fileManagerSelectDirectory')
+    expect(showWarningMessage).not.toHaveBeenCalled()
+
+    scope.stop()
+  })
+
+  it('当前文档目录刷新失败时，应继续提示失败并保留旧目录状态', async () => {
+    const store = createStore()
+    const requestDirectoryState = vi.fn()
+      .mockResolvedValueOnce({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: 'open-directory-watch-failed',
+      })
+    const showWarningMessage = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+      showWarningMessage,
+    })
+
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/docs')
+
+    await controller.reloadDirectoryStateFromSnapshot(store.documentSessionSnapshot)
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+    expect(showWarningMessage).toHaveBeenCalledWith('message.fileManagerOpenDirectoryFailed')
+
+    scope.stop()
+  })
+
+  it('recent-missing 父目录刷新失败时，应继续提示失败并保留旧目录状态', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = {
+      sessionId: 'session-recent-missing',
+      displayPath: 'D:/docs/missing.md',
+      recentMissingPath: 'D:/docs/missing.md',
+      isRecentMissing: true,
+      dirty: false,
+      resourceContext: {
+        documentPath: null,
+      },
+    }
+    const requestDirectoryState = vi.fn()
+      .mockResolvedValueOnce({
+        directoryPath: 'D:/docs',
+        entryList: [
+          { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: 'open-directory-watch-failed',
+      })
+    const showWarningMessage = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+      showWarningMessage,
+    })
+
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/docs')
+
+    await controller.reloadDirectoryStateFromSnapshot(store.documentSessionSnapshot)
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+    expect(showWarningMessage).toHaveBeenCalledWith('message.fileManagerOpenDirectoryFailed')
+
+    scope.stop()
+  })
+
+  it('手动切换目录失败时，应继续提示失败并保留旧目录状态', async () => {
+    const store = createStore()
+    const requestDirectoryState = vi.fn().mockResolvedValue({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    })
+    const requestOpenDirectory = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+    const showWarningMessage = vi.fn()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+      requestOpenDirectory,
+      showWarningMessage,
+    })
+
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/docs')
+
+    const result = await controller.openDirectory('D:/other')
+    await flushController()
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'open-directory-watch-failed',
+    })
+    expect(controller.directoryPath.value).toBe('D:/docs')
+    expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
+    expect(showWarningMessage).toHaveBeenCalledWith('message.fileManagerOpenDirectoryFailed')
 
     scope.stop()
   })

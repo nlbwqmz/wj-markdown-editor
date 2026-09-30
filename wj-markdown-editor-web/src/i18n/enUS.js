@@ -198,6 +198,7 @@ export default {
     },
     fileManager: {
       defaultShowFileManager: 'Default show file manager',
+      defaultDirectory: 'Default directory',
       markdownLeftClickAction: 'Markdown Left Click Action',
       leftClickActionOption: {
         prompt: 'Prompt',

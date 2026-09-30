@@ -168,7 +168,7 @@ function shouldIncludeModifiedTime(sortConfig) {
   return normalizeFileManagerSortConfig(sortConfig).field === 'modifiedTime'
 }
 
-function resolveDirectoryTargetFromSnapshot(snapshot) {
+function resolveDirectoryTargetFromSnapshot(snapshot, fileDefaultDirectory = undefined) {
   if (snapshot?.isRecentMissing === true && snapshot?.recentMissingPath) {
     return {
       directoryPath: getPathDirname(snapshot.recentMissingPath),
@@ -179,6 +179,19 @@ function resolveDirectoryTargetFromSnapshot(snapshot) {
 
   const currentDocumentPath = resolveDocumentOpenCurrentPath(snapshot)
   if (!currentDocumentPath) {
+    // recent-missing 但 recentMissingPath 缺失的退化快照不得套用默认目录。
+    if (snapshot?.isRecentMissing !== true) {
+      const defaultDirectoryPath = normalizePath(fileDefaultDirectory)
+      if (defaultDirectoryPath) {
+        return {
+          directoryPath: defaultDirectoryPath,
+          emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+          // 标记默认目录来源，失败/消失时据此静默回退空态，不套用其他来源的提示与状态保持逻辑。
+          isDefaultDirectory: true,
+        }
+      }
+    }
+
     return {
       directoryPath: null,
       emptyMessageKey: DRAFT_EMPTY_MESSAGE_KEY,
@@ -230,13 +243,22 @@ function resolveDirectoryStatePayloadIncludeModifiedTime(nextState) {
   return entryList.every(entry => Number.isFinite(entry?.modifiedTimeMs))
 }
 
-function normalizeDirectoryState(nextState, snapshot, sortConfig, fallbackEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY) {
+function normalizeDirectoryState(
+  nextState,
+  snapshot,
+  sortConfig,
+  fallbackEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY,
+  isDefaultDirectory = false,
+) {
   const currentDocumentPath = normalizeComparablePath(resolveDocumentOpenCurrentPath(snapshot))
   const rawDirectoryState = resolveRawDirectoryState(nextState)
   const directoryPath = normalizePath(rawDirectoryState?.directoryPath)
 
   if (!directoryPath) {
-    return createEmptyDirectoryState(resolveSnapshotEmptyMessageKey(snapshot, fallbackEmptyMessageKey))
+    // 默认目录来源回退空态时固定沿用草稿空态文案，避免展示「目录为空」等与事实不符的提示。
+    return createEmptyDirectoryState(isDefaultDirectory
+      ? DRAFT_EMPTY_MESSAGE_KEY
+      : resolveSnapshotEmptyMessageKey(snapshot, fallbackEmptyMessageKey))
   }
 
   const entryList = sortFileManagerEntryList((Array.isArray(rawDirectoryState?.entryList) ? rawDirectoryState.entryList : [])
@@ -407,6 +429,8 @@ export function createFileManagerPanelController({
   let latestDirectoryStateRequestId = 0
   let latestDirectoryStateSource = null
   let latestDirectoryStateEmptyMessageKey = DIRECTORY_EMPTY_MESSAGE_KEY
+  // 记录当前展示目录是否来自 fileDefaultDirectory，默认目录失败或消失时据此静默回退空态。
+  let latestDirectoryStateIsDefaultDirectory = false
   let latestDirectoryStateIncludeModifiedTime = shouldIncludeModifiedTime(store?.config?.fileManagerSort)
   let latestDirectoryBindingIncludeModifiedTime = shouldIncludeModifiedTime(store?.config?.fileManagerSort)
   // 目录 watcher 选项同步是异步的，这里单独记录“当前希望生效”的目标值，避免快切排序时被旧响应回滚。
@@ -457,6 +481,9 @@ export function createFileManagerPanelController({
   function commitDirectoryState(nextState, options = {}) {
     latestDirectoryStateSource = nextState
     latestDirectoryStateEmptyMessageKey = options.emptyMessageKey || emptyMessageKey.value || DIRECTORY_EMPTY_MESSAGE_KEY
+    if (Object.prototype.hasOwnProperty.call(options, 'isDefaultDirectory')) {
+      latestDirectoryStateIsDefaultDirectory = options.isDefaultDirectory === true
+    }
     if (Object.prototype.hasOwnProperty.call(options, 'includeModifiedTime')) {
       latestDirectoryStateIncludeModifiedTime = options.includeModifiedTime === true
       if (options.updateBindingIncludeModifiedTime !== false) {
@@ -469,6 +496,7 @@ export function createFileManagerPanelController({
       store?.documentSessionSnapshot,
       store?.config?.fileManagerSort,
       latestDirectoryStateEmptyMessageKey,
+      latestDirectoryStateIsDefaultDirectory,
     )
 
     return directoryState.value
@@ -479,6 +507,7 @@ export function createFileManagerPanelController({
     latestDirectoryStateEmptyMessageKey = emptyMessageKey === undefined
       ? DRAFT_EMPTY_MESSAGE_KEY
       : emptyMessageKey
+    latestDirectoryStateIsDefaultDirectory = false
     latestDirectoryStateIncludeModifiedTime = false
     latestDirectoryBindingIncludeModifiedTime = false
     latestDirectoryBindingTargetIncludeModifiedTime = false
@@ -496,6 +525,7 @@ export function createFileManagerPanelController({
       store?.documentSessionSnapshot,
       store?.config?.fileManagerSort,
       latestDirectoryStateEmptyMessageKey,
+      latestDirectoryStateIsDefaultDirectory,
     )
 
     return directoryState.value
@@ -524,7 +554,9 @@ export function createFileManagerPanelController({
 
       const rawDirectoryState = resolveRawDirectoryState(nextState)
       if (!rawDirectoryState?.directoryPath) {
-        return commitEmptyDirectoryState(nextEmptyMessageKey)
+        return commitEmptyDirectoryState(latestDirectoryStateIsDefaultDirectory
+          ? DRAFT_EMPTY_MESSAGE_KEY
+          : nextEmptyMessageKey)
       }
 
       return commitDirectoryState(nextState, {
@@ -671,16 +703,30 @@ export function createFileManagerPanelController({
   }
 
   async function reloadDirectoryStateFromSnapshot(snapshot = store?.documentSessionSnapshot) {
-    const target = resolveDirectoryTargetFromSnapshot(snapshot)
+    const target = resolveDirectoryTargetFromSnapshot(snapshot, store?.config?.fileDefaultDirectory)
     if (!target.directoryPath) {
       invalidatePendingDirectoryStateRequest()
       return commitEmptyDirectoryState(target.emptyMessageKey)
     }
 
+    const isDefaultDirectory = target.isDefaultDirectory === true
     const includeModifiedTime = resolveDirectoryRequestIncludeModifiedTime()
     return await runLatestDirectoryStateRequest(() => requestDirectoryState(
       createDirectoryRequestPayload(target.directoryPath, includeModifiedTime ? true : undefined),
     ), (nextState) => {
+      if (isDefaultDirectory) {
+        // 默认目录不存在、被删除或打开失败时静默回退草稿空态，既不提示也不保留旧目录状态。
+        if (nextState?.ok === false || !resolveRawDirectoryState(nextState)?.directoryPath) {
+          return commitEmptyDirectoryState(DRAFT_EMPTY_MESSAGE_KEY)
+        }
+
+        return commitDirectoryState(nextState, {
+          emptyMessageKey: target.emptyMessageKey,
+          includeModifiedTime,
+          isDefaultDirectory: true,
+        })
+      }
+
       const failureResult = resolveDirectoryFailureResult(nextState)
       if (failureResult) {
         return failureResult
@@ -694,6 +740,7 @@ export function createFileManagerPanelController({
       return commitDirectoryState(nextState, {
         emptyMessageKey: target.emptyMessageKey,
         includeModifiedTime,
+        isDefaultDirectory: false,
       })
     })
   }
@@ -719,6 +766,7 @@ export function createFileManagerPanelController({
       return commitDirectoryState(nextState, {
         emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
         includeModifiedTime,
+        isDefaultDirectory: false,
       })
     })
   }
@@ -897,6 +945,8 @@ export function createFileManagerPanelController({
   watch([
     documentDirectoryIdentity,
     () => store?.fileManagerPanelVisible,
+    // 默认目录配置变化后同样需要重算目录目标，保证配置调整能实时生效。
+    () => store?.config?.fileDefaultDirectory,
   ], async ([, visible]) => {
     if (visible) {
       await reloadDirectoryStateFromSnapshot(store?.documentSessionSnapshot)

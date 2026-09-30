@@ -33,6 +33,7 @@ describe('validateConfigMutationRequest', () => {
     [['editorExtension', 'closeBrackets'], false],
     [['markdown', 'imageShadow'], false],
     [['fileManagerWidth'], 300],
+    [['fileDefaultDirectory'], 'D:/notes'],
     [['imageBed', 'uploader'], 'smms'],
     [['imageBed', 'smms', 'token'], 'token'],
     [['imageBed', 'smms', 'backupDomain'], 'smms.app'],
@@ -45,6 +46,14 @@ describe('validateConfigMutationRequest', () => {
     expect(() => validateConfigMutationRequest({
       operations: [
         { type: 'set', path, value },
+      ],
+    })).not.toThrow()
+  })
+
+  it('允许把 fileDefaultDirectory 清空为空字符串', () => {
+    expect(() => validateConfigMutationRequest({
+      operations: [
+        { type: 'set', path: ['fileDefaultDirectory'], value: '' },
       ],
     })).not.toThrow()
   })

@@ -40,6 +40,7 @@ const SET_PATH_SET = new Set([
   'fileMode',
   'fileAbsolutePath',
   'fileRelativePath',
+  'fileDefaultDirectory',
   'imageBed.uploader',
   'imageBed.smms.token',
   'imageBed.smms.backupDomain',

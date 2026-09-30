@@ -198,6 +198,7 @@ export default {
     },
     fileManager: {
       defaultShowFileManager: '默认显示文件管理栏',
+      defaultDirectory: '默认目录',
       markdownLeftClickAction: 'Markdown 左键逻辑',
       leftClickActionOption: {
         prompt: '提示',

@@ -9,6 +9,8 @@ export default {
   fileMode: '4',
   fileAbsolutePath: '',
   fileRelativePath: 'assets',
+  // 文件管理栏默认目录：当文件管理栏没有可跟随的当前文档目录时作为兜底目录，留空表示不启用
+  fileDefaultDirectory: '',
   // 可选值 blur(窗口失焦) close(窗口关闭)
   autoSave: [],
   menuVisible: true,

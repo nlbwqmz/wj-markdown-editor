@@ -37,6 +37,31 @@ describe('configSchema', () => {
     })
   })
 
+  it('defaultConfig 必须提供 fileDefaultDirectory 默认值空字符串', () => {
+    expect(defaultConfig.fileDefaultDirectory).toBe('')
+  })
+
+  it('config schema 必须接纳 fileDefaultDirectory 字符串', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileDefaultDirectory: 'D:/notes',
+    })).not.toThrow()
+  })
+
+  it('config schema 必须拒绝非字符串 fileDefaultDirectory', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileDefaultDirectory: 123,
+    })).toThrow()
+  })
+
+  it('fileDefaultDirectory 缺失时必须校验失败', () => {
+    const brokenConfig = { ...defaultConfig }
+    delete brokenConfig.fileDefaultDirectory
+
+    expect(() => validateConfigShape(brokenConfig)).toThrow()
+  })
+
   it('defaultConfig 必须提供全屏切换与文件管理栏切换快捷键配置', () => {
     const toggleFullScreenShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
     const toggleFileManagerPanelShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFileManagerPanel')
