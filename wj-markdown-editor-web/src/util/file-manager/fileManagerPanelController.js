@@ -945,14 +945,22 @@ export function createFileManagerPanelController({
   watch([
     documentDirectoryIdentity,
     () => store?.fileManagerPanelVisible,
-    // 默认目录配置变化后同样需要重算目录目标，保证配置调整能实时生效。
-    () => store?.config?.fileDefaultDirectory,
   ], async ([, visible]) => {
     if (visible) {
       await reloadDirectoryStateFromSnapshot(store?.documentSessionSnapshot)
     }
   }, {
     immediate: true,
+  })
+
+  // 默认目录只在「文件管理栏当前没有目录」时作为兜底生效：
+  // 一旦已展示目录（来自默认目录或手动切换），后续配置变化不再自动跳转。
+  watch(() => store?.config?.fileDefaultDirectory, async () => {
+    if (!store?.fileManagerPanelVisible || directoryState.value.directoryPath) {
+      return
+    }
+
+    await reloadDirectoryStateFromSnapshot(store?.documentSessionSnapshot)
   })
 
   watch([

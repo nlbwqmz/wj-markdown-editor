@@ -558,11 +558,23 @@ function reset() {
           <a-descriptions-item :label="$t('config.fileManager.defaultDirectory')">
             <a-input
               :value="config.fileDefaultDirectory"
-              allow-clear
-              @update:value="value => onNormalizedStringFieldChange(['fileDefaultDirectory'], value)"
+              readonly
             >
               <template #addonAfter>
-                <div class="i-tabler:folder cursor-pointer" style="color: var(--wj-markdown-text-primary)" @click="openFileDefaultDirSelect" />
+                <div class="flex items-center gap-2">
+                  <div
+                    v-if="config.fileDefaultDirectory"
+                    class="i-tabler:x cursor-pointer"
+                    style="color: var(--wj-markdown-text-primary)"
+                    @click="onNormalizedStringFieldChange(['fileDefaultDirectory'], undefined)"
+                  />
+                  <div
+                    v-if="config.fileDefaultDirectory"
+                    class="h-4 w-px"
+                    style="background-color: var(--wj-markdown-text-tertiary)"
+                  />
+                  <div class="i-tabler:folder cursor-pointer" style="color: var(--wj-markdown-text-primary)" @click="openFileDefaultDirSelect" />
+                </div>
               </template>
             </a-input>
           </a-descriptions-item>
@@ -792,7 +804,7 @@ function reset() {
               readonly
             >
               <template #addonAfter>
-                <div class="i-tabler:folder cursor-pointer" @click="openDirSelect" />
+                <div class="i-tabler:folder cursor-pointer" style="color: var(--wj-markdown-text-primary)" @click="openDirSelect" />
               </template>
             </a-input>
           </a-descriptions-item>

@@ -662,7 +662,7 @@ describe('fileManagerPanelController', () => {
     recentMissingPanel.scope.stop()
   })
 
-  it('fileDefaultDirectory 变化后应实时重算目录目标，相同值不重复请求，清空后回到草稿空态', async () => {
+  it('fileDefaultDirectory 只在当前没有目录时生效，已有目录后变更不再自动跳转，相同值不重复请求', async () => {
     const store = createStore()
     store.documentSessionSnapshot = createDraftSnapshot()
     const requestDirectoryState = vi.fn().mockImplementation(async ({ directoryPath }) => ({
@@ -692,12 +692,55 @@ describe('fileManagerPanelController', () => {
 
     expect(requestDirectoryState).toHaveBeenCalledTimes(1)
 
+    // 已经展示目录后再修改或清空配置，不得自动跳转，保持当前目录。
+    store.config.fileDefaultDirectory = 'D:/workspace/other'
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenCalledTimes(1)
+    expect(controller.directoryPath.value).toBe('D:/workspace/notes')
+
     store.config.fileDefaultDirectory = ''
     await flushController()
 
     expect(requestDirectoryState).toHaveBeenCalledTimes(1)
-    expect(controller.directoryPath.value).toBeNull()
-    expect(controller.emptyMessageKey.value).toBe('message.fileManagerSelectDirectory')
+    expect(controller.directoryPath.value).toBe('D:/workspace/notes')
+
+    scope.stop()
+  })
+
+  it('手动切换目录后，fileDefaultDirectory 变化不得覆盖当前目录', async () => {
+    const store = createStore()
+    store.documentSessionSnapshot = createDraftSnapshot()
+    const requestDirectoryState = vi.fn().mockImplementation(async ({ directoryPath }) => ({
+      directoryPath,
+      entryList: [],
+    }))
+    const requestOpenDirectory = vi.fn().mockImplementation(async ({ directoryPath }) => ({
+      directoryPath,
+      entryList: [],
+    }))
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+      requestOpenDirectory,
+    })
+
+    await flushController()
+
+    store.config.fileDefaultDirectory = 'D:/workspace/notes'
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/workspace/notes')
+
+    await controller.openDirectory('D:/manual')
+    await flushController()
+
+    expect(controller.directoryPath.value).toBe('D:/manual')
+
+    store.config.fileDefaultDirectory = 'D:/workspace/other'
+    await flushController()
+
+    expect(requestDirectoryState).toHaveBeenCalledTimes(1)
+    expect(controller.directoryPath.value).toBe('D:/manual')
 
     scope.stop()
   })
