@@ -178,4 +178,45 @@ describe('useEditorCore 组合输入时序', () => {
     expect(editorView.value).toBe(view)
     expect(isProxy(editorView.value)).toBe(false)
   })
+
+  it('drop 事件必须透传 onDrop 处理结果，让上层能阻止 CodeMirror 内建处理', () => {
+    const { initEditor } = useEditorCore({
+      editorRef: {
+        value: {},
+      },
+    })
+
+    const dropEvent = { type: 'drop' }
+    const onDrop = vi.fn(() => true)
+
+    initEditor({
+      doc: '',
+      theme: 'light',
+      keymapList: [],
+      onDrop,
+    })
+
+    const view = editorViewMockState.latestView
+    expect(view).toBeTruthy()
+    expect(view.domHandlers.drop(dropEvent, view)).toBe(true)
+    expect(onDrop).toHaveBeenCalledWith(dropEvent, view)
+  })
+
+  it('未提供 onDrop 时 drop 事件必须返回 false，保持内建行为', () => {
+    const { initEditor } = useEditorCore({
+      editorRef: {
+        value: {},
+      },
+    })
+
+    initEditor({
+      doc: '',
+      theme: 'light',
+      keymapList: [],
+    })
+
+    const view = editorViewMockState.latestView
+    expect(view).toBeTruthy()
+    expect(view.domHandlers.drop({ type: 'drop' }, view)).toBe(false)
+  })
 })

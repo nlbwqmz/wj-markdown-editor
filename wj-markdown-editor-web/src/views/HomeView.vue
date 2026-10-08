@@ -18,6 +18,7 @@ import { useCommonStore } from '@/stores/counter.js'
 import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { registerCurrentWindowOpenPreparation } from '@/util/document-session/currentWindowOpenPreparationService.js'
+import { requestOpenDroppedMarkdownDocument } from '@/util/document-session/documentDropOpenUtil.js'
 import {
   createDocumentOpenInteractionService,
   registerDocumentOpenInteractionService,
@@ -112,12 +113,43 @@ function onKeydown(e) {
   }
 }
 
+function isFileDragEvent(event) {
+  return event.dataTransfer?.types?.includes('Files') === true
+}
+
+function onWindowDragOver(event) {
+  if (isFileDragEvent(event) !== true) {
+    return
+  }
+  // 编辑器以外的窗口区域原本不接受文件落下，这里统一放开；
+  // 真正的打开/拦截动作在 drop 阶段裁决。
+  event.preventDefault()
+}
+
+function onWindowDrop(event) {
+  if (isFileDragEvent(event) !== true) {
+    return
+  }
+  // 编辑器等内部区域已经处理过的拖拽（defaultPrevented）不重复接管，
+  // 避免同一次拖拽被打开两次。
+  if (event.defaultPrevented === true) {
+    return
+  }
+  // 统一拦截文件拖拽，避免 Chromium 回退到 file:// 导航。
+  event.preventDefault()
+  requestOpenDroppedMarkdownDocument(event.dataTransfer.files)
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('dragover', onWindowDragOver)
+  window.addEventListener('drop', onWindowDrop)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('dragover', onWindowDragOver)
+  window.removeEventListener('drop', onWindowDrop)
   unregisterCurrentWindowOpenPreparation()
   unregisterDocumentOpenInteractionService()
   unregisterDocumentOpenHandler()

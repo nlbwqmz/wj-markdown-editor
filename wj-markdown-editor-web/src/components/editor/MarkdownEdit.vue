@@ -34,6 +34,7 @@ import { createPreviewRefreshCoordinator } from '@/components/editor/previewRefr
 import { useCommonStore } from '@/stores/counter.js'
 import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
+import { requestOpenDroppedMarkdownDocument } from '@/util/document-session/documentDropOpenUtil.js'
 import {
   shouldDeferExternalEditorDispatch,
 } from '@/util/editor/compositionStateUtil.js'
@@ -1409,9 +1410,15 @@ onMounted(() => {
     onDrop: (event, view) => {
       const dataTransfer = event.dataTransfer
       if (!dataTransfer) {
-        return
+        return false
+      }
+      // 拖入 Markdown 文档时按“打开文档”处理，不能落入资源插入链路；
+      // 返回 true 让 CodeMirror 阻止内建处理，同时通知 window 级监听无需重复接管。
+      if (requestOpenDroppedMarkdownDocument(dataTransfer.files)) {
+        return true
       }
       pasteOrDrop(event, view, dataTransfer.types, dataTransfer.files)
+      return false
     },
   })
 

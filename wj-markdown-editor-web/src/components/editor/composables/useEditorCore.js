@@ -109,7 +109,9 @@ export function useEditorCore({ editorRef }) {
             onClick && onClick(view)
           },
           drop: (event, view) => {
-            onDrop && onDrop(event, view)
+            // 透传上层处理结果：返回 true 时 CodeMirror 会阻止内建处理，
+            // 供“拖入 Markdown 文档按打开处理”这类场景接管拖拽。
+            return onDrop ? onDrop(event, view) : false
           },
         }),
       ],
