@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   handleSecondInstanceOpenRequest,
   handleStartupOpenRequest,
+  resolveSecondInstanceOpenTarget,
 } from '../appOpenRequestUtil.js'
 
 describe('appOpenRequestUtil', () => {
@@ -113,5 +114,78 @@ describe('appOpenRequestUtil', () => {
       trigger: 'second-instance',
       baseDir: 'D:/workspace',
     })
+  })
+})
+
+describe('resolveSecondInstanceOpenTarget', () => {
+  it('additionalData 完好时，必须优先使用其 filePath 与 baseDir', () => {
+    const result = resolveSecondInstanceOpenTarget({
+      additionalData: { filePath: 'D:/docs/测试 文件.md', baseDir: 'D:/workspace' },
+      commandLine: ['app.exe', 'D:/other.md'],
+    })
+
+    expect(result).toEqual({
+      targetPath: 'D:/docs/测试 文件.md',
+      baseDir: 'D:/workspace',
+    })
+  })
+
+  it('additionalData 为 null（上游载荷损坏）时，必须回退 commandLine 中带空格的路径', () => {
+    const result = resolveSecondInstanceOpenTarget({
+      additionalData: null,
+      commandLine: ['C:\\Program Files\\wj\\app.exe', 'D:\\docs\\测试 文件.md'],
+    })
+
+    expect(result).toEqual({
+      targetPath: 'D:\\docs\\测试 文件.md',
+      baseDir: null,
+    })
+  })
+
+  it('commandLine 中路径后面跟随 Electron 附加开关时，仍必须命中 Markdown 路径', () => {
+    const result = resolveSecondInstanceOpenTarget({
+      additionalData: {},
+      commandLine: ['app.exe', 'D:\\docs\\测试  文件.md', '--allow-file-access-from-files'],
+    })
+
+    expect(result).toEqual({
+      targetPath: 'D:\\docs\\测试  文件.md',
+      baseDir: null,
+    })
+  })
+
+  it('additionalData.filePath 为空白字符串时，必须继续回退 commandLine', () => {
+    const result = resolveSecondInstanceOpenTarget({
+      additionalData: { filePath: '   ', baseDir: 'D:/workspace' },
+      commandLine: ['app.exe', 'docs/demo.md'],
+    })
+
+    expect(result).toEqual({
+      targetPath: 'docs/demo.md',
+      baseDir: null,
+    })
+  })
+
+  it('additionalData 只有 filePath 时，baseDir 必须为 null，交由 workingDirectory 兜底', () => {
+    const result = resolveSecondInstanceOpenTarget({
+      additionalData: { filePath: 'D:/demo.md' },
+      commandLine: [],
+    })
+
+    expect(result).toEqual({
+      targetPath: 'D:/demo.md',
+      baseDir: null,
+    })
+  })
+
+  it('两个来源都没有 Markdown 目标时，必须返回 null，交回聚焦已有窗口的默认行为', () => {
+    expect(resolveSecondInstanceOpenTarget({
+      additionalData: null,
+      commandLine: ['app.exe', '--allow-file-access-from-files'],
+    })).toBeNull()
+    expect(resolveSecondInstanceOpenTarget({
+      additionalData: null,
+      commandLine: undefined,
+    })).toBeNull()
   })
 })

@@ -2,7 +2,7 @@ import { app, Menu, protocol, shell } from 'electron'
 import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
 import { applyWindowsAppIdentity } from './util/appIdentityUtil.js'
-import { handleSecondInstanceOpenRequest, handleStartupOpenRequest } from './util/appOpenRequestUtil.js'
+import { handleSecondInstanceOpenRequest, handleStartupOpenRequest, resolveSecondInstanceOpenTarget } from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
 import { createDocumentOpenFailureNotificationPublisher } from './util/document-session/documentOpenFailureNotificationUtil.js'
 import { isMarkdownFilePath } from './util/document-session/documentOpenTargetUtil.js'
@@ -116,12 +116,17 @@ if (!lock) {
   app.quit()
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory, additionalData) => {
-    if (additionalData.filePath) {
+    const openTarget = resolveSecondInstanceOpenTarget({ additionalData, commandLine })
+    if (openTarget) {
+      if (!additionalData) {
+        // 命中上游单实例载荷缺陷（issue #59）时的诊断线索：载荷丢失但已回退 commandLine。
+        console.warn('[second-instance] additionalData 为空，已回退 commandLine 解析打开路径:', openTarget.targetPath)
+      }
       app.whenReady().then(async () => {
         const runtime = initializeAppDocumentSessionRuntime()
         await handleSecondInstanceOpenRequest({
-          targetPath: additionalData.filePath,
-          baseDir: additionalData.baseDir || workingDirectory || process.cwd(),
+          targetPath: openTarget.targetPath,
+          baseDir: openTarget.baseDir || workingDirectory || process.cwd(),
           openDocumentPath: (targetPath, options) => runtime.openDocumentPath(targetPath, options),
         })
       }).then(() => {})
