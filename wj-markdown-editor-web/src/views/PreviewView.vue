@@ -6,6 +6,7 @@ import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, 
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useViewScrollAnchor } from '@/components/editor/composables/useViewScrollAnchor.js'
+import { readGridTrackValue } from '@/components/editor/markdownEditGridTemplateColumnsUtil.js'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import PreviewAssetContextMenu from '@/components/editor/PreviewAssetContextMenu.vue'
@@ -14,6 +15,8 @@ import channelUtil from '@/util/channel/channelUtil.js'
 import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
+import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUtil.js'
+import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { setCurrentWindowOpenPreparationProvider } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
@@ -30,6 +33,11 @@ import {
 } from '@/util/document-session/rendererSessionActivationStrategy.js'
 import { createRendererSessionEventSubscription } from '@/util/document-session/rendererSessionEventSubscription.js'
 import { createRendererSessionSnapshotController } from '@/util/document-session/rendererSessionSnapshotController.js'
+import {
+  clampMenuWidth,
+  createMenuWidthPersistenceController,
+  resolveMenuWidthUpperBound,
+} from '@/util/editor/menuWidthPersistenceController.js'
 import { preparePreviewAssetCopyImagePayload } from '@/util/editor/previewAssetCopyImageActionUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
 import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
@@ -64,6 +72,15 @@ const router = useRouter()
 const { t } = useI18n()
 
 const store = useCommonStore()
+const menuWidthPersistenceController = createMenuWidthPersistenceController({
+  sendConfigMutationRequest,
+  getConfigUpdateFailureMessageKey,
+  getPersistedWidth: () => store.config.menuWidth,
+  showWarningMessage: messageKey => message.warning(t(messageKey)),
+  applyPersistedWidth: (width) => {
+    store.config.menuWidth = width
+  },
+})
 
 const content = ref('')
 const anchorList = ref([])
@@ -112,6 +129,55 @@ function closePreviewSearchBar() {
     controller: previewSearchBarController,
     store,
   })
+}
+
+/**
+ * 计算纯预览页大纲列在当前容器宽度下允许使用的宽度。
+ * 小窗口下要预留出 1px gutter 与正文区最小宽度，避免大纲列把正文挤没。
+ *
+ * @returns {number} 返回钳制后的大纲列宽度。
+ */
+function resolvePersistedMenuWidth() {
+  const containerWidth = Number(previewContainer.value?.clientWidth)
+
+  return Math.min(resolveMenuWidthUpperBound(containerWidth), clampMenuWidth(store.config.menuWidth))
+}
+
+/**
+ * 把持久化的大纲宽度写成行内列模板。
+ * 必须在 Split 创建之前写入，保证 split-grid 读到稳定的初始轨道定义。
+ */
+function applyPersistedMenuWidth() {
+  if (!previewContainer.value) {
+    return
+  }
+
+  const targetWidth = resolvePersistedMenuWidth()
+  const currentWidth = readGridTrackValue(previewContainer.value.style['grid-template-columns'], 0)
+
+  // 当前生效宽度已经等于目标宽度时直接跳过，避免拖拽结束后重复写行内样式。
+  if (currentWidth !== null && Math.round(currentWidth) === Math.round(targetWidth)) {
+    return
+  }
+
+  previewContainer.value.style['grid-template-columns'] = `${targetWidth}px 1px 1fr`
+}
+
+/**
+ * 拖拽结束后把第 0 列像素宽度写回配置。
+ * 优先读行内样式，退化时再读计算样式，保证两种环境都能拿到真实拖拽结果。
+ */
+function persistMenuWidthFromLayout() {
+  const inlineGridTemplateColumns = previewContainer.value?.style?.['grid-template-columns']
+  const computedGridTemplateColumns = previewContainer.value
+    ? window.getComputedStyle(previewContainer.value).gridTemplateColumns
+    : ''
+  const menuWidth = readGridTrackValue(inlineGridTemplateColumns || computedGridTemplateColumns, 0)
+  if (menuWidth === null) {
+    return
+  }
+
+  menuWidthPersistenceController.persistMenuWidth(menuWidth).then(() => {})
 }
 
 // 纯预览页没有编辑器实例时，只暴露稳定快照降级能力。
@@ -651,12 +717,15 @@ watch(() => menuVisible.value, (newValue) => {
   if (newValue) {
     menuController.value = true
     nextTick(() => {
+      // 行内列宽必须先于 Split 写入，否则拖拽起点会退回默认 200px。
+      applyPersistedMenuWidth()
       splitInstance = Split({
         columnGutters: [{ track: 1, element: gutterRef.value }],
         // 最小尺寸
         minSize: 200,
         // 自动吸附距离
         snapOffset: 0,
+        onDragEnd: persistMenuWidthFromLayout,
       })
     })
   } else {
@@ -666,6 +735,16 @@ watch(() => menuVisible.value, (newValue) => {
   }
 })
 
+// 编辑页与预览页共用同一个持久化宽度，任一页面拖拽后都需要在这里重新应用，
+// 否则切换到本页时布局仍停留在旧宽度。
+watch(() => store.config.menuWidth, () => {
+  if (menuController.value !== true) {
+    return
+  }
+
+  applyPersistedMenuWidth()
+})
+
 onActivated(async () => {
   bindCurrentWindowOpenPreparationProvider()
   pendingRestoreOnActivation = true
@@ -673,6 +752,12 @@ onActivated(async () => {
   documentSessionSnapshotSubscription.activate()
   previewSearchTargetBridge.activate()
   closePreviewSearchBar()
+  nextTick(() => {
+    // 失活期间容器宽度不可用，重新激活后补一次应用，保证与编辑页的大纲宽度一致。
+    if (menuController.value === true) {
+      applyPersistedMenuWidth()
+    }
+  })
   const activationAction = resolveRendererSessionActivationAction({
     hasAppliedSnapshot: previewSessionSnapshotController.hasAppliedSnapshot?.() === true,
     needsBootstrapOnActivate: previewSessionSnapshotController.needsBootstrapOnActivate?.() === true,

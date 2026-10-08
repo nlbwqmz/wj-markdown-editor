@@ -1,4 +1,5 @@
 <script setup>
+import { message } from 'ant-design-vue'
 import Split from 'split-grid'
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +17,11 @@ import { useViewScrollAnchor } from '@/components/editor/composables/useViewScro
 import EditorSearchBar from '@/components/editor/EditorSearchBar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import ImageNetworkModal from '@/components/editor/ImageNetworkModal.vue'
-import { resolveAdaptiveGridTemplateColumns } from '@/components/editor/markdownEditGridTemplateColumnsUtil.js'
+import {
+  readGridTrackValue,
+  resolveAdaptiveGridTemplateColumns,
+  resolveAdaptiveGridTemplateColumnsWithFixedTrack,
+} from '@/components/editor/markdownEditGridTemplateColumnsUtil.js'
 import {
   resolveMarkdownEditLayoutMode,
   resolveMarkdownEditSplitColumnGutters,
@@ -27,6 +32,8 @@ import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { createPreviewRefreshCoordinator } from '@/components/editor/previewRefreshCoordinator.js'
 import { useCommonStore } from '@/stores/counter.js'
+import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUtil.js'
+import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import {
   shouldDeferExternalEditorDispatch,
 } from '@/util/editor/compositionStateUtil.js'
@@ -36,6 +43,11 @@ import {
 } from '@/util/editor/contentUpdateMetaUtil.js'
 import { createFlushableDebounce } from '@/util/editor/flushableDebounceUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
+import {
+  clampMenuWidth,
+  createMenuWidthPersistenceController,
+  resolveMenuWidthUpperBound,
+} from '@/util/editor/menuWidthPersistenceController.js'
 import {
   captureEditorLineAnchor,
   capturePreviewLineAnchor,
@@ -102,6 +114,15 @@ const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange'
 
 const { t } = useI18n()
 const store = useCommonStore()
+const menuWidthPersistenceController = createMenuWidthPersistenceController({
+  sendConfigMutationRequest,
+  getConfigUpdateFailureMessageKey,
+  getPersistedWidth: () => store.config.menuWidth,
+  showWarningMessage: messageKey => message.warning(t(messageKey)),
+  applyPersistedWidth: (width) => {
+    store.config.menuWidth = width
+  },
+})
 
 const toolbarList = ref([])
 const shortcutKeyList = ref([])
@@ -786,6 +807,65 @@ function resolveSplitColumnGutters() {
 }
 
 /**
+ * 解析大纲列在 grid-template-columns 中的轨道下标。
+ * 列模板始终按“面板 / gutter / 面板 ...”排列，因此面板序号需要乘以 2。
+ *
+ * @returns {number} 返回大纲轨道下标；当前布局没有大纲时返回 -1。
+ */
+function resolveMenuTrackIndex() {
+  const menuColumnIndex = layoutMode.value.columnOrder.indexOf('menu')
+
+  return menuColumnIndex < 0 ? -1 : menuColumnIndex * 2
+}
+
+/**
+ * 计算大纲列在当前容器宽度下允许使用的宽度。
+ * 小窗口下要预留出两侧 gutter 与编辑区、预览区的最小宽度，避免大纲列把其他列挤没。
+ *
+ * @returns {number} 返回钳制后的大纲列宽度。
+ */
+function resolvePersistedMenuWidth() {
+  const containerWidth = Number(editorContainer.value?.clientWidth)
+
+  return Math.min(resolveMenuWidthUpperBound(containerWidth), clampMenuWidth(store.config.menuWidth))
+}
+
+/**
+ * 把持久化的大纲宽度应用到当前布局。
+ * 其他列先归一化成 fr 轨道，只有大纲列固定成持久化像素宽度，保证窗口缩放后仍能自适应。
+ * destroySplitLayout 会清空行内列宽，因此这里必须在其之后调用。
+ */
+function applyPersistedMenuWidth() {
+  const menuTrackIndex = resolveMenuTrackIndex()
+  if (menuTrackIndex < 0 || !editorContainer.value) {
+    return
+  }
+
+  const targetWidth = resolvePersistedMenuWidth()
+  const computedGridTemplateColumns = window.getComputedStyle(editorContainer.value).gridTemplateColumns
+  const currentWidth = readGridTrackValue(computedGridTemplateColumns, menuTrackIndex)
+
+  // 当前生效宽度已经等于目标宽度时直接跳过：拖拽结束会先后触发归一化与配置回写，
+  // 这里跳过可以避免重复读取计算样式与写行内样式带来的布局抖动。
+  if (currentWidth !== null && Math.round(currentWidth) === Math.round(targetWidth)) {
+    return
+  }
+
+  // 归一化分母排除大纲列，保证其余列 fr 之和为 1；否则 CSS 会把小于 1 的 fr 总和按 1 处理，
+  // 剩余空间不再参与分配，布局中会出现空白区域。
+  const nextGridTemplateColumns = resolveAdaptiveGridTemplateColumnsWithFixedTrack(
+    computedGridTemplateColumns,
+    menuTrackIndex,
+    targetWidth,
+  )
+  if (!nextGridTemplateColumns) {
+    return
+  }
+
+  editorContainer.value.style['grid-template-columns'] = nextGridTemplateColumns
+}
+
+/**
  * 把当前布局的计算后列宽快照写回行内样式。
  * split-grid 在拖拽开始时会重新读取轨道定义，这里用于给它提供稳定的 px 结果。
  */
@@ -812,12 +892,26 @@ function syncInlineGridTemplateColumnsAsAdaptiveTracks() {
   }
 
   const computedGridTemplateColumns = window.getComputedStyle(editorContainer.value).gridTemplateColumns
-  const adaptiveGridTemplateColumns = resolveAdaptiveGridTemplateColumns(computedGridTemplateColumns)
-  if (!adaptiveGridTemplateColumns) {
+  const menuTrackIndex = resolveMenuTrackIndex()
+  const menuTrackWidth = menuTrackIndex < 0
+    ? null
+    : readGridTrackValue(computedGridTemplateColumns, menuTrackIndex)
+
+  if (menuTrackWidth !== null) {
+    // 大纲列拖拽结果需要持久化，成功后再由 controller 同步 store。
+    menuWidthPersistenceController.persistMenuWidth(menuTrackWidth).then(() => {})
+  }
+
+  // 编辑区与预览区继续走自适应 fr 轨道，只有大纲列保留拖拽后的像素宽度。
+  // 归一化分母排除大纲列，保证其余列 fr 之和为 1，避免出现未分配的空白区域。
+  const nextGridTemplateColumns = menuTrackIndex < 0 || menuTrackWidth === null
+    ? resolveAdaptiveGridTemplateColumns(computedGridTemplateColumns)
+    : resolveAdaptiveGridTemplateColumnsWithFixedTrack(computedGridTemplateColumns, menuTrackIndex, menuTrackWidth)
+  if (!nextGridTemplateColumns) {
     return
   }
 
-  editorContainer.value.style['grid-template-columns'] = adaptiveGridTemplateColumns
+  editorContainer.value.style['grid-template-columns'] = nextGridTemplateColumns
 }
 
 /**
@@ -880,6 +974,8 @@ function resetSplitLayout() {
     return
   }
 
+  // destroySplitLayout 会清空行内列宽，持久化的大纲宽度必须在清空之后再应用。
+  applyPersistedMenuWidth()
   bindSplitGutterSyncListeners(columnGutters)
 
   splitInstance = Split({
@@ -1217,6 +1313,12 @@ watch(() => store.config.shortcutKeyList, (newValue) => {
   reconfigureKeymap(refreshKeymap())
 }, { deep: true, immediate: true })
 
+// 编辑页与预览页共用同一个持久化宽度，任一页面拖拽后都需要在这里重新应用，
+// 否则切换到本页时布局仍停留在旧宽度。
+watch(() => store.config.menuWidth, () => {
+  applyPersistedMenuWidth()
+})
+
 watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {
   closePreviewSearchBar()
   syncLayoutControllers()
@@ -1326,6 +1428,9 @@ onActivated(() => {
   previewSearchTargetBridge.activate()
   closePreviewSearchBar()
   nextTick(() => {
+    // keep-alive 失活期间 DOM 会脱离文档，getComputedStyle 读不到可用列宽，
+    // 配置中的宽度变化无法当场应用；重新激活后补一次，保证与另一页面一致。
+    applyPersistedMenuWidth()
     flushPendingExternalSync()
   })
 })

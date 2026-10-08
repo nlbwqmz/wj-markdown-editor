@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, nextTick, onBeforeUnmount } from 'vue'
+import { defineComponent, h, nextTick, onBeforeUnmount, reactive } from 'vue'
 
 import { viewScrollHandoff } from '../../../util/editor/viewScrollHandoffUtil.js'
 
@@ -570,7 +570,7 @@ describe('markdownEdit 布局运行时接线', () => {
     expect(getLayoutStyle(wrapper)).not.toContain('transition:')
   })
 
-  it('拖拽结束后会把像素列宽重新归一化成自适应 fr 轨道，避免窗口缩放后布局冻结', async () => {
+  it('拖拽结束后会把编辑区与预览区像素列宽重新归一化成自适应 fr 轨道，同时把大纲列固定回持久化像素宽度', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
       menuVisible: true,
@@ -591,7 +591,48 @@ describe('markdownEdit 布局运行时接线', () => {
 
     splitState.calls.at(-1)?.onDragEnd?.('column', 1)
 
-    expect(layoutElement.style.gridTemplateColumns).toBe('0.5fr 1px 0.25fr 1px 0.25fr')
+    // 编辑区与预览区继续自适应，大纲列（第 4 轨道）保留拖拽后的像素宽度；
+    // 其余两列按彼此比例归一化，fr 之和必须保持为 1，否则会留出未分配的空白区域。
+    expect(layoutElement.style.gridTemplateColumns).toBe('0.666667fr 1px 0.333333fr 1px 300px')
+
+    getComputedStyleSpy.mockRestore()
+  })
+
+  it('store 中的持久化大纲宽度变化时，编辑页应立即重新应用列宽', async () => {
+    storeState.current = reactive(createStore({ menuVisible: true }))
+
+    const wrapper = mount(MarkdownEdit, {
+      props: {
+        modelValue: '# title',
+        previewPosition: 'right',
+      },
+    })
+    await flushLayoutRender()
+
+    const layoutElement = wrapper.get('[data-testid="markdown-edit-layout"]').element
+    // jsdom 默认 clientWidth 为 0，这里给出真实容器宽度，避免配置值被下限钳制。
+    Object.defineProperty(layoutElement, 'clientWidth', {
+      value: 1200,
+      configurable: true,
+    })
+
+    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => {
+      if (element === layoutElement) {
+        return {
+          gridTemplateColumns: '600px 1px 300px 1px 300px',
+        }
+      }
+
+      return {
+        gridTemplateColumns: '',
+      }
+    })
+
+    storeState.current.config.menuWidth = 420
+    await flushLayoutRender()
+
+    // 大纲列跟随 store 更新，其余两列按彼此比例归一化，fr 之和保持为 1。
+    expect(layoutElement.style.gridTemplateColumns).toBe('0.666667fr 1px 0.333333fr 1px 420px')
 
     getComputedStyleSpy.mockRestore()
   })

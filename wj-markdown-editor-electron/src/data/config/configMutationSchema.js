@@ -15,6 +15,7 @@ const SET_PATH_SET = new Set([
   'fontSize',
   'previewWidth',
   'menuVisible',
+  'menuWidth',
   'fileManagerVisible',
   'fileManagerWidth',
   'editor.previewPosition',

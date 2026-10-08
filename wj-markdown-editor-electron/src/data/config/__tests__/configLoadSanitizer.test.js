@@ -176,6 +176,33 @@ describe('configLoadSanitizer', () => {
     expect(sanitized.fileManagerWidth).toBe(280)
   })
 
+  it('menuWidth 小于最小值时必须裁剪到 200', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      menuWidth: 100,
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.menuWidth).toBe(200)
+  })
+
+  it('menuWidth 大于最大值时必须裁剪到 2000', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      menuWidth: 2500,
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.menuWidth).toBe(2000)
+  })
+
+  it('menuWidth 非数字时必须回退默认值 200', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      menuWidth: 'invalid',
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.menuWidth).toBe(200)
+  })
+
   it('非法主题枚举值必须回退到默认值', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),

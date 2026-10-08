@@ -33,6 +33,7 @@ describe('validateConfigMutationRequest', () => {
     [['editorExtension', 'closeBrackets'], false],
     [['markdown', 'imageShadow'], false],
     [['fileManagerWidth'], 300],
+    [['menuWidth'], 300],
     [['fileDefaultDirectory'], 'D:/notes'],
     [['imageBed', 'uploader'], 'smms'],
     [['imageBed', 'smms', 'token'], 'token'],

@@ -14,6 +14,7 @@ export default {
   // 可选值 blur(窗口失焦) close(窗口关闭)
   autoSave: [],
   menuVisible: true,
+  menuWidth: 200,
   fileManagerVisible: true,
   fileManagerWidth: 280,
   fileManagerSort: {

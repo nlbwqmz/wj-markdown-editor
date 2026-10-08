@@ -24,6 +24,15 @@ describe('configRepairUtil', () => {
     expect(repaired.fileManagerWidth).toBe(280)
   })
 
+  it('缺失 menuWidth 时必须从默认配置补齐', () => {
+    const legacyConfig = { ...defaultConfig }
+    delete legacyConfig.menuWidth
+
+    const repaired = repairConfig(legacyConfig, defaultConfig)
+
+    expect(repaired.menuWidth).toBe(200)
+  })
+
   it('缺失 fileManagerSort 时必须从默认配置补齐', () => {
     const legacyConfig = { ...defaultConfig }
     delete legacyConfig.fileManagerSort

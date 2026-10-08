@@ -20,6 +20,10 @@ describe('configSchema', () => {
     expect(defaultConfig.fileManagerVisible).toBe(true)
   })
 
+  it('defaultConfig 必须提供 menuWidth 默认值 200', () => {
+    expect(defaultConfig.menuWidth).toBe(200)
+  })
+
   it('defaultConfig 必须提供 fileManagerWidth 默认值 280', () => {
     expect(defaultConfig.fileManagerWidth).toBe(280)
   })
@@ -120,6 +124,38 @@ describe('configSchema', () => {
       ...defaultConfig,
       fileManagerWidth: 500,
     })).toThrow()
+  })
+
+  it('config schema 必须接纳 menuWidth', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      menuWidth: 300,
+    })).not.toThrow()
+  })
+
+  it('config schema 必须拒绝越界 menuWidth', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      menuWidth: 100,
+    })).toThrow()
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      menuWidth: 2500,
+    })).toThrow()
+  })
+
+  it('config schema 必须拒绝非数字 menuWidth', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      menuWidth: '300',
+    })).toThrow()
+  })
+
+  it('menuWidth 缺失时必须校验失败', () => {
+    const brokenConfig = { ...defaultConfig }
+    delete brokenConfig.menuWidth
+
+    expect(() => validateConfigShape(brokenConfig)).toThrow()
   })
 
   it('config schema 必须接纳 fileManagerSort', () => {
