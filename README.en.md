@@ -194,6 +194,7 @@ Running the AppImage (`wj-markdown-editor-linux-x86_64-<version>.AppImage`):
 
 - It is a portable single-file executable, so grant the execute permission first with `chmod +x wj-markdown-editor-linux-x86_64-*.AppImage` and then run it directly
 - Desktop integration is not applied automatically, so no application menu entry or icon is installed; use [Gear Lever](https://gearlever.mijorus.it) (available on Flathub; supports one-click integration into the application menu, drag and drop, and update management) or a tool such as AppImageLauncher if you want integration
+- Alternatively, install and manage it via [AM](https://github.com/ivan-hc/AM) (AppImage Manager): use `appman -i wj-markdown-editor` for user-level or `am -i wj-markdown-editor` for system-level installation, with one-command install, desktop menu integration and automatic updates (community-maintained AM script that dynamically tracks this repository's releases).
 - Some distributions no longer ship FUSE2 by default: install `libfuse2t64` on Ubuntu 24.04+ or `libfuse2` on older releases; without it you may see `AppImages require FUSE to run` / `dlopen(): error loading libfuse.so.2`, and you can also run with `--appimage-extract-and-run` instead
 
 ## 📌 Notes
