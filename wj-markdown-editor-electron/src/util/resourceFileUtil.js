@@ -200,7 +200,14 @@ function resolveDecodedLocalPath(documentContext, decodedPath) {
     return null
   }
 
-  return path.resolve(path.dirname(documentPath), decodedPath)
+  const baseDir = path.dirname(documentPath)
+  const resolvedPath = path.resolve(baseDir, decodedPath)
+  const relativeToBase = path.relative(baseDir, resolvedPath)
+  if (relativeToBase.startsWith('..') || path.isAbsolute(relativeToBase)) {
+    return null
+  }
+
+  return resolvedPath
 }
 
 function resolveDecodedAbsolutePath(decodedPath, options = {}) {
