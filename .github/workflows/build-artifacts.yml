@@ -163,7 +163,7 @@ jobs:
     needs:
       - prepare-version
       - release-windows
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -215,6 +215,14 @@ jobs:
           check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-amd64-*.deb"
           check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.rpm"
           check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-x86_64-*.AppImage"
+
+          # 校验 AppImage 使用静态 runtime（不依赖 libfuse2），防止 toolsets 配置回退
+          APPIMAGE_FILE=$(compgen -G "wj-markdown-editor-electron/electron-build/wj-markdown-editor-x86_64-*.AppImage" | head -n 1)
+          if readelf -lW "$APPIMAGE_FILE" | grep -q 'Requesting program interpreter'; then
+            echo "AppImage runtime 为动态链接，与静态 runtime 预期不符"
+            exit 1
+          fi
+          echo "AppImage runtime 校验通过：静态链接"
 
       - name: Upload Linux assets to Release
         env:

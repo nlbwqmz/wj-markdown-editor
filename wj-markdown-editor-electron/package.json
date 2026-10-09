@@ -95,6 +95,9 @@
     "appImage": {
       "artifactName": "${productName}-${arch}-${version}.${ext}"
     },
+    "toolsets": {
+      "appimage": "1.0.2"
+    },
     "afterPack": "./scripts/afterPack.cjs"
   },
   "dependencies": {
