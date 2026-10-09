@@ -162,7 +162,7 @@ jobs:
   release-linux:
     needs:
       - prepare-version
-      - release-windows
+      - create-release
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
