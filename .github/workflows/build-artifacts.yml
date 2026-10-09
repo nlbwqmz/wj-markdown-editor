@@ -195,6 +195,19 @@ jobs:
           sudo apt-get install --no-install-recommends -y rpm
           rpm --version
 
+      - name: Prepare AppImage toolset with update information
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOOLSET_DIR="$RUNNER_TEMP/appimage-toolset"
+          mkdir -p "$TOOLSET_DIR"
+          curl -sSL "https://github.com/electron-userland/electron-builder-binaries/releases/download/appimage%401.0.2/appimage-tools-runtime-20251108.tar.gz" \
+            | tar -xz -C "$TOOLSET_DIR"
+          node wj-markdown-editor-electron/scripts/injectUpdateInfo.cjs \
+            "$TOOLSET_DIR/runtimes/runtime-x64" \
+            "gh-releases-zsync|nlbwqmz|wj-markdown-editor|latest|wj-markdown-editor-*.AppImage.zsync"
+          echo "APPIMAGE_TOOLS_PATH=$TOOLSET_DIR" >> "$GITHUB_ENV"
+
       - name: Build electron (Linux)
         run: npm run build -- --linux --publish never
         working-directory: wj-markdown-editor-electron
@@ -224,6 +237,26 @@ jobs:
           fi
           echo "AppImage runtime 校验通过：静态链接"
 
+          # 校验 AppImage 已嵌入 AppImageUpdate 的 update information
+          if ! "$APPIMAGE_FILE" --appimage-updateinformation | tr -d '\0' | grep -q "^gh-releases-zsync|nlbwqmz|wj-markdown-editor|"; then
+            echo "AppImage update information 校验失败"
+            exit 1
+          fi
+          echo "AppImage update information 校验通过"
+
+      - name: Generate zsync file
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install --no-install-recommends -y zsync
+          APPIMAGE_FILE=$(compgen -G "wj-markdown-editor-electron/electron-build/wj-markdown-editor-x86_64-*.AppImage" | head -n 1)
+          VERSION=$(node -p "require('./wj-markdown-editor-electron/package.json').version")
+          zsyncmake \
+            -u "https://github.com/nlbwqmz/wj-markdown-editor/releases/download/${VERSION}/$(basename "$APPIMAGE_FILE")" \
+            -o "${APPIMAGE_FILE}.zsync" \
+            "$APPIMAGE_FILE"
+          ls -lh "${APPIMAGE_FILE}.zsync"
+
       - name: Upload Linux assets to Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -237,4 +270,5 @@ jobs:
             wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-amd64-*.deb \
             wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.rpm \
             wj-markdown-editor-electron/electron-build/wj-markdown-editor-x86_64-*.AppImage \
+            wj-markdown-editor-electron/electron-build/wj-markdown-editor-x86_64-*.AppImage.zsync \
             --clobber

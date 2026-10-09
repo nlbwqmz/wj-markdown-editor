@@ -196,6 +196,7 @@ Running the AppImage (`wj-markdown-editor-x86_64-<version>.AppImage`):
 - Desktop integration is not applied automatically, so no application menu entry or icon is installed; use [Gear Lever](https://gearlever.mijorus.it) (available on Flathub; supports one-click integration into the application menu, drag and drop, and update management) or a tool such as AppImageLauncher if you want integration
 - Alternatively, install and manage it via [AM](https://github.com/ivan-hc/AM) (AppImage Manager): use `appman -i wj-markdown-editor` for user-level or `am -i wj-markdown-editor` for system-level installation, with one-command install, desktop menu integration and automatic updates (community-maintained AM script that dynamically tracks this repository's releases).
 - Ships a static runtime (from versions after 2.21.1), so the system `libfuse2` is no longer required; 2.21.1 and earlier use a dynamic runtime and need `libfuse2t64` on some distributions (e.g. Ubuntu 24.04+) or `libfuse2` on older releases, otherwise you may see `AppImages require FUSE to run` / `dlopen(): error loading libfuse.so.2`, and you can also run with `--appimage-extract-and-run` instead
+- Embeds update information (from versions after 2.22.0), so [AppImageUpdate](https://github.com/AppImage/AppImageUpdate) or `appimageupdatetool` can perform delta updates (only the changed blocks are downloaded)
 
 ## 📌 Notes
 

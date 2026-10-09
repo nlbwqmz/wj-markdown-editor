@@ -196,6 +196,7 @@ AppImage 运行说明（`wj-markdown-editor-x86_64-<version>.AppImage`）：
 - 不会自动集成桌面项，因此不会写入应用菜单或安装图标；如需集成可配合 [Gear Lever](https://gearlever.mijorus.it)（可从 Flathub 安装，支持一键集成到应用菜单、拖放添加与更新管理）或 AppImageLauncher 之类的工具
 - 也可通过 [AM](https://github.com/ivan-hc/AM)（AppImage Manager）安装与管理：用户级使用 `appman -i wj-markdown-editor`，系统级使用 `am -i wj-markdown-editor`；支持一键安装、应用菜单集成与自动更新（由 AM 社区维护的收录脚本，动态解析本仓库 Release）
 - 内置静态 runtime（2.21.1 之后的版本起），不再依赖系统的 `libfuse2`；2.21.1 及更早版本使用动态 runtime，在部分发行版（如 Ubuntu 24.04+）需安装 `libfuse2t64`，较旧发行版需安装 `libfuse2`，缺失时会提示 `AppImages require FUSE to run` / `dlopen(): error loading libfuse.so.2`，也可改用 `--appimage-extract-and-run` 参数运行
+- 内置更新信息（2.22.0 之后的版本起），可通过 [AppImageUpdate](https://github.com/AppImage/AppImageUpdate) 或 `appimageupdatetool` 做增量更新（仅下载变化的数据块）
 
 ## 📌 注意事项
 
