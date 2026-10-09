@@ -49,6 +49,11 @@ const scrollAnchorSessionState = vi.hoisted(() => ({
   store: null,
 }))
 
+const viewScrollAnchorState = vi.hoisted(() => ({
+  controllers: [],
+  restorableAreaKeys: new Set(),
+}))
+
 vi.mock('split-grid', () => ({
   default(options) {
     const destroy = vi.fn()
@@ -212,11 +217,18 @@ vi.mock('@/components/editor/composables/useEditorCore.js', () => ({
 }))
 
 vi.mock('@/components/editor/composables/useViewScrollAnchor.js', () => ({
-  useViewScrollAnchor() {
-    return {
+  useViewScrollAnchor(options = {}) {
+    const controller = {
+      options,
       cancelPendingRestore: vi.fn(),
-      scheduleRestoreForCurrentSnapshot: vi.fn(async () => false),
+      scheduleRestoreForCurrentSnapshot: vi.fn(async () => {
+        const documentKey = options.documentKeyGetter?.() ?? ''
+        return viewScrollAnchorState.restorableAreaKeys.has(`${documentKey}::${options.scrollAreaKey}`)
+      }),
+      resetToTop: vi.fn(() => true),
     }
+    viewScrollAnchorState.controllers.push(controller)
+    return controller
   },
 }))
 
@@ -282,6 +294,7 @@ vi.mock('@/util/editor/viewScrollAnchorSessionUtil.js', () => ({
     scrollAnchorSessionState.store = Object.create(null)
     return scrollAnchorSessionState.store
   },
+  pruneAnchorRecords() {},
   saveAnchorRecord(store, record) {
     if (store == null || typeof record?.sessionId !== 'string' || typeof record?.scrollAreaKey !== 'string') {
       return null
@@ -380,6 +393,8 @@ describe('markdownEdit 布局运行时接线', () => {
     markdownPreviewStubState.nextId = 0
     markdownMenuStubState.latestShowHeader = null
     scrollAnchorSessionState.store = null
+    viewScrollAnchorState.controllers.length = 0
+    viewScrollAnchorState.restorableAreaKeys.clear()
     viewScrollHandoff.clear()
     previewLayoutWiringState.rebuildPreviewLayoutIndex.mockClear()
     previewLayoutWiringState.jumpToTargetLine.mockClear()
@@ -788,5 +803,51 @@ describe('markdownEdit 布局运行时接线', () => {
     })
 
     expect(scrollAnchorSessionState.store['session-1']).toBeUndefined()
+  })
+
+  it('同一视图内切换文档时，有记录区域按 documentKey 恢复，无记录区域归零', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+      menuVisible: false,
+    })
+
+    const editorController = viewScrollAnchorState.controllers.at(-2)
+    const previewController = viewScrollAnchorState.controllers.at(-1)
+    viewScrollAnchorState.restorableAreaKeys.add('D:/docs/a.md::editor-code')
+    viewScrollAnchorState.restorableAreaKeys.add('D:/docs/a.md::editor-preview')
+
+    const restoredResult = await wrapper.vm.handleDocumentContextSwitch({
+      sessionId: 'session-a',
+      revision: 0,
+      resourceContext: { documentPath: 'D:/docs/a.md' },
+    })
+
+    expect(restoredResult).toEqual({
+      editorCode: true,
+      editorPreview: true,
+    })
+    expect(editorController.scheduleRestoreForCurrentSnapshot).toHaveBeenCalledWith({ mode: 'document' })
+    expect(previewController.scheduleRestoreForCurrentSnapshot).toHaveBeenCalledWith({ mode: 'document' })
+    expect(editorController.resetToTop).not.toHaveBeenCalled()
+    expect(previewController.resetToTop).not.toHaveBeenCalled()
+    // documentKeyGetter 必须已经把当前快照身份推进到新文档，
+    // 这样两份控制器才能按 documentKey 而非临时 sessionId 读取缓存。
+    expect(editorController.options.documentKeyGetter?.()).toBe('D:/docs/a.md')
+    expect(previewController.options.documentKeyGetter?.()).toBe('D:/docs/a.md')
+
+    const zeroedResult = await wrapper.vm.handleDocumentContextSwitch({
+      sessionId: 'session-b',
+      revision: 0,
+      resourceContext: { documentPath: 'D:/docs/b.md' },
+    })
+
+    expect(zeroedResult).toEqual({
+      editorCode: false,
+      editorPreview: false,
+    })
+    expect(editorController.resetToTop).toHaveBeenCalledTimes(1)
+    expect(previewController.resetToTop).toHaveBeenCalledTimes(1)
+    expect(editorController.options.documentKeyGetter?.()).toBe('D:/docs/b.md')
+    expect(previewController.options.documentKeyGetter?.()).toBe('D:/docs/b.md')
   })
 })

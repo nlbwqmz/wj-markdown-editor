@@ -9,12 +9,12 @@
  * 而不是停留在单个底层 composable 的局部语义。
  *
  * @param {{
- *   updateCurrentScrollSnapshot?: (snapshot: { sessionId?: string, revision?: number } | undefined) => void,
+ *   updateCurrentScrollSnapshot?: (snapshot: object | null | undefined) => void,
  *   editorCodeScrollAnchor?: { captureCurrentAnchor?: () => object | null },
  *   editorPreviewScrollAnchor?: { captureCurrentAnchor?: () => object | null },
  *   previewControllerRef?: { value?: boolean },
  * }} options
- * @returns {(snapshot?: { sessionId?: string, revision?: number }) => {
+ * @returns {(snapshot?: object | null | undefined) => {
  *   editorCode: object | null,
  *   editorPreview: object | null,
  * }} 返回组件侧用于暴露给外层的 captureViewScrollAnchors 方法。
@@ -32,7 +32,7 @@ export function createMarkdownEditScrollAnchorCapture(options = {}) {
    * 右侧预览隐藏时必须完全跳过 editor-preview 控制器，
    * 这样才能保留上一轮已存在的预览记录，而不是把它覆盖成空值。
    *
-   * @param {{ sessionId?: string, revision?: number } | undefined} snapshot
+   * @param {object | null | undefined} snapshot 完整 snapshot 或已解析的文档身份，会原样透传给 updateCurrentScrollSnapshot。
    * @returns {{ editorCode: object | null, editorPreview: object | null }} 返回本轮左右区域采集结果。
    */
   return function captureViewScrollAnchors(snapshot) {

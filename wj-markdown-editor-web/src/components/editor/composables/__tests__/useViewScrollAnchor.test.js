@@ -81,10 +81,13 @@ function seedAnchorRecord(store, options = {}) {
 
 /**
  * 组装 composable 运行所需的通用桩对象。
- * 当前任务只关心调度逻辑，因此把会变化的 sessionId / revision 放在可变 state 中，方便测试动态切换快照。
+ * 当前任务只关心调度逻辑，因此把会变化的 documentKey / sessionId / revision 放在可变 state 中，
+ * 方便测试动态切换快照。
  *
  * @param {{
  *   store?: Record<string, Record<string, any>>,
+ *   documentKey?: string,
+ *   documentKeyGetter?: () => string | null | undefined,
  *   sessionId?: string,
  *   revision?: number,
  *   scrollAreaKey?: string,
@@ -96,7 +99,7 @@ function seedAnchorRecord(store, options = {}) {
  *   onRestoreFinish?: (payload: any) => void,
  * }} [options]
  * @returns {{
- *   state: { sessionId: string, revision: number },
+ *   state: { documentKey: string | null, sessionId: string, revision: number },
  *   store: Record<string, Record<string, any>>,
  *   scrollElement: { scrollTop: number } | null,
  *   api: ReturnType<typeof useViewScrollAnchor>,
@@ -104,6 +107,7 @@ function seedAnchorRecord(store, options = {}) {
  */
 function createHarness(options = {}) {
   const state = {
+    documentKey: options.documentKey ?? null,
     sessionId: options.sessionId ?? 'session-1',
     revision: options.revision ?? 7,
   }
@@ -122,6 +126,7 @@ function createHarness(options = {}) {
     scrollElement,
     api: useViewScrollAnchor({
       store,
+      documentKeyGetter: options.documentKeyGetter ?? (options.documentKey == null ? undefined : () => state.documentKey),
       sessionIdGetter: () => state.sessionId,
       revisionGetter: () => state.revision,
       scrollAreaKey: options.scrollAreaKey ?? 'preview-pane',
@@ -354,6 +359,7 @@ test('captureCurrentAnchor 会将当前 session 与 revision 的锚点写入 sto
       sessionId: 'session-1',
       scrollAreaKey: 'preview-pane',
     }), {
+      documentKey: 'session-1',
       sessionId: 'session-1',
       scrollAreaKey: 'preview-pane',
       revision: 7,
@@ -581,4 +587,242 @@ test('取消挂起恢复后采集锚点应恢复为按当前 DOM 采集', async 
 
   deferred.resolve()
   await restorePromise
+})
+
+test('未注入 documentKeyGetter 时会回退 sessionIdGetter，按 sessionId 建立缓存 bucket', () => {
+  const store = createViewScrollAnchorSessionStore()
+  const { api } = createHarness({
+    store,
+    sessionId: 'session-fallback',
+  })
+
+  api.captureCurrentAnchor()
+
+  assert.equal(store['session-fallback'] != null, true)
+
+  const record = getAnchorRecord(store, {
+    documentKey: 'session-fallback',
+    scrollAreaKey: 'preview-pane',
+  })
+
+  assert.equal(record.documentKey, 'session-fallback')
+  assert.equal(record.sessionId, 'session-fallback')
+  assert.equal(record.fallbackScrollTop, 120)
+})
+
+test('注入 documentKeyGetter 后应按 documentKey 建立缓存 bucket', () => {
+  const store = createViewScrollAnchorSessionStore()
+  const { api } = createHarness({
+    store,
+    sessionId: 'session-b',
+    documentKey: '/docs/a.md',
+  })
+
+  api.captureCurrentAnchor()
+
+  assert.equal(store['/docs/a.md'] != null, true)
+  assert.equal(store['session-b'], undefined)
+
+  const record = getAnchorRecord(store, {
+    documentKey: '/docs/a.md',
+    scrollAreaKey: 'preview-pane',
+  })
+
+  assert.equal(record.documentKey, '/docs/a.md')
+  assert.equal(record.sessionId, 'session-b')
+  assert.equal(record.fallbackScrollTop, 120)
+})
+
+test('scheduleRestoreForCurrentSnapshot 在 document 模式下可跨 sessionId 与 revision 恢复', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const restoreCalls = []
+
+  saveAnchorRecord(store, {
+    documentKey: '/docs/a.md',
+    sessionId: 'session-old',
+    scrollAreaKey: 'preview-pane',
+    revision: 1,
+    anchor: {
+      type: 'preview-line',
+      lineStart: 3,
+      lineEnd: 4,
+      elementOffsetRatio: 0.5,
+    },
+    fallbackScrollTop: 80,
+    savedAt: 1,
+  })
+
+  const { api } = createHarness({
+    store,
+    sessionId: 'session-new',
+    revision: 5,
+    documentKey: '/docs/a.md',
+    waitLayoutStable: async () => {},
+    restoreAnchor: (payload) => {
+      restoreCalls.push(payload)
+      return true
+    },
+  })
+
+  // 缺省 same-session 模式必须拒绝跨会话恢复。
+  assert.equal(await api.scheduleRestoreForCurrentSnapshot(), false)
+  assert.equal(restoreCalls.length, 0)
+
+  // document 模式只认文档身份，允许跨 sessionId 与 revision 恢复。
+  assert.equal(await api.scheduleRestoreForCurrentSnapshot({ mode: 'document' }), true)
+  assert.equal(restoreCalls.length, 1)
+  assert.equal(restoreCalls[0].documentKey, '/docs/a.md')
+  assert.equal(restoreCalls[0].sessionId, 'session-new')
+  assert.equal(restoreCalls[0].revision, 5)
+})
+
+test('hasRestorableAnchor 支持 document 模式判断', () => {
+  const store = createViewScrollAnchorSessionStore()
+
+  saveAnchorRecord(store, {
+    documentKey: '/docs/a.md',
+    sessionId: 'session-old',
+    scrollAreaKey: 'preview-pane',
+    revision: 1,
+    anchor: null,
+    fallbackScrollTop: 80,
+    savedAt: 1,
+  })
+
+  const { api } = createHarness({
+    store,
+    sessionId: 'session-new',
+    revision: 5,
+    documentKey: '/docs/a.md',
+  })
+
+  assert.equal(api.hasRestorableAnchor(), false)
+  assert.equal(api.hasRestorableAnchor({ mode: 'document' }), true)
+})
+
+test('resetToTop 会将滚动容器置顶并返回 true，缺少容器时返回 false', () => {
+  const store = createViewScrollAnchorSessionStore()
+  const { api, scrollElement } = createHarness({
+    store,
+    scrollElement: createScrollElement({ scrollTop: 320 }),
+  })
+
+  assert.equal(api.resetToTop(), true)
+  assert.equal(scrollElement.scrollTop, 0)
+
+  const { api: missingElementApi } = createHarness({
+    store: createViewScrollAnchorSessionStore(),
+    scrollElement: null,
+  })
+
+  assert.equal(missingElementApi.resetToTop(), false)
+})
+
+test('resetToTop 会先取消挂起的恢复请求', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const deferred = createDeferred()
+  const restoreCalls = []
+
+  seedAnchorRecord(store)
+
+  const { api, scrollElement } = createHarness({
+    store,
+    waitLayoutStable: async () => {
+      await deferred.promise
+    },
+    restoreAnchor: (payload) => {
+      restoreCalls.push(payload)
+      return true
+    },
+  })
+
+  const restorePromise = api.scheduleRestoreForCurrentSnapshot()
+
+  assert.equal(api.resetToTop(), true)
+  assert.equal(scrollElement.scrollTop, 0)
+
+  deferred.resolve()
+
+  assert.equal(await restorePromise, false)
+  assert.equal(restoreCalls.length, 0)
+})
+
+test('document 模式恢复等待期间 documentKey 漂移时应放弃恢复', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const deferred = createDeferred()
+  const restoreCalls = []
+
+  saveAnchorRecord(store, {
+    documentKey: '/docs/a.md',
+    sessionId: 'session-a',
+    scrollAreaKey: 'preview-pane',
+    revision: 1,
+    anchor: null,
+    fallbackScrollTop: 80,
+    savedAt: 1,
+  })
+
+  const { api, state } = createHarness({
+    store,
+    sessionId: 'session-a',
+    revision: 1,
+    documentKey: '/docs/a.md',
+    waitLayoutStable: async () => {
+      await deferred.promise
+    },
+    restoreAnchor: (payload) => {
+      restoreCalls.push(payload)
+      return true
+    },
+  })
+
+  const restorePromise = api.scheduleRestoreForCurrentSnapshot({ mode: 'document' })
+  state.documentKey = '/docs/b.md'
+
+  deferred.resolve()
+
+  assert.equal(await restorePromise, false)
+  assert.equal(restoreCalls.length, 0)
+})
+
+test('document 模式恢复等待期间 sessionId 漂移但 documentKey 不变时应继续恢复', async () => {
+  const store = createViewScrollAnchorSessionStore()
+  const deferred = createDeferred()
+  const restoreCalls = []
+
+  saveAnchorRecord(store, {
+    documentKey: '/docs/a.md',
+    sessionId: 'session-a',
+    scrollAreaKey: 'preview-pane',
+    revision: 1,
+    anchor: null,
+    fallbackScrollTop: 80,
+    savedAt: 1,
+  })
+
+  const { api, state } = createHarness({
+    store,
+    sessionId: 'session-a',
+    revision: 1,
+    documentKey: '/docs/a.md',
+    waitLayoutStable: async () => {
+      await deferred.promise
+    },
+    restoreAnchor: (payload) => {
+      restoreCalls.push(payload)
+      return true
+    },
+  })
+
+  const restorePromise = api.scheduleRestoreForCurrentSnapshot({ mode: 'document' })
+  state.sessionId = 'session-a2'
+  state.revision = 2
+
+  deferred.resolve()
+
+  assert.equal(await restorePromise, true)
+  assert.equal(restoreCalls.length, 1)
+  assert.equal(restoreCalls[0].documentKey, '/docs/a.md')
+  assert.equal(restoreCalls[0].sessionId, 'session-a2')
+  assert.equal(restoreCalls[0].revision, 2)
 })

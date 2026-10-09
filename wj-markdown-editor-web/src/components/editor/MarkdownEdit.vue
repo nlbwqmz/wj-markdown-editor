@@ -35,6 +35,7 @@ import { useCommonStore } from '@/stores/counter.js'
 import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { requestOpenDroppedMarkdownDocument } from '@/util/document-session/documentDropOpenUtil.js'
+import { resolveDocumentScrollAnchorIdentity } from '@/util/document-session/documentScrollAnchorIdentityUtil.js'
 import {
   shouldDeferExternalEditorDispatch,
 } from '@/util/editor/compositionStateUtil.js'
@@ -59,6 +60,7 @@ import {
 } from '@/util/editor/viewScrollAnchorMathUtil.js'
 import {
   createViewScrollAnchorSessionStore,
+  pruneAnchorRecords,
   saveAnchorRecord,
 } from '@/util/editor/viewScrollAnchorSessionUtil.js'
 import { viewScrollHandoff } from '@/util/editor/viewScrollHandoffUtil.js'
@@ -155,8 +157,9 @@ const layoutMode = computed(() => resolveMarkdownEditLayoutMode({
 }))
 const handledContentUpdateToken = ref(0)
 // 当前滚动锚点只跟随最近一次对外确认过的 session snapshot。
-// 这样 capture / restore 都会严格绑定到外层给定的 sessionId + revision。
+// 这样 capture / restore 都会严格绑定到外层给定的文档身份（documentKey）与 sessionId + revision。
 const currentScrollSnapshot = ref({
+  documentKey: '',
   sessionId: '',
   revision: 0,
 })
@@ -208,15 +211,13 @@ const {
 
 /**
  * 将外层传入的 snapshot 规范化后写入本地引用。
- * sessionId / revision 会同时驱动两份滚动锚点控制器的读取与恢复资格判断。
+ * documentKey 决定锚点缓存 bucket，sessionId / revision 决定同会话恢复资格，
+ * 三者会同时驱动两份滚动锚点控制器的读取与恢复资格判断。
  *
- * @param {{ sessionId?: string, revision?: number } | undefined} snapshot
+ * @param {object | null | undefined} snapshot
  */
 function updateCurrentScrollSnapshot(snapshot) {
-  currentScrollSnapshot.value = {
-    sessionId: typeof snapshot?.sessionId === 'string' ? snapshot.sessionId : '',
-    revision: Number.isInteger(snapshot?.revision) ? snapshot.revision : 0,
-  }
+  currentScrollSnapshot.value = resolveDocumentScrollAnchorIdentity(snapshot)
 }
 
 /**
@@ -226,7 +227,7 @@ function updateCurrentScrollSnapshot(snapshot) {
  * 真正的几何换算延后到各自恢复入口执行。
  */
 function applyHandoffAnchorToStore() {
-  const { sessionId, revision } = currentScrollSnapshot.value
+  const { documentKey, sessionId, revision } = currentScrollSnapshot.value
   const handoffRecord = viewScrollHandoff.consume({ sessionId, revision })
 
   if (!handoffRecord) {
@@ -240,6 +241,7 @@ function applyHandoffAnchorToStore() {
   }
 
   saveAnchorRecord(viewScrollAnchorStore, {
+    documentKey,
     sessionId,
     scrollAreaKey: 'editor-code',
     revision,
@@ -250,6 +252,7 @@ function applyHandoffAnchorToStore() {
 
   if (previewController.value === true) {
     saveAnchorRecord(viewScrollAnchorStore, {
+      documentKey,
       sessionId,
       scrollAreaKey: 'editor-preview',
       revision,
@@ -548,6 +551,7 @@ function scheduleRestoreStateReset(requestToken) {
 
 const editorCodeScrollAnchor = useViewScrollAnchor({
   store: viewScrollAnchorStore,
+  documentKeyGetter: () => currentScrollSnapshot.value.documentKey,
   sessionIdGetter: () => currentScrollSnapshot.value.sessionId,
   revisionGetter: () => currentScrollSnapshot.value.revision,
   scrollAreaKey: 'editor-code',
@@ -593,6 +597,7 @@ const editorCodeScrollAnchor = useViewScrollAnchor({
 
 const editorPreviewScrollAnchor = useViewScrollAnchor({
   store: viewScrollAnchorStore,
+  documentKeyGetter: () => currentScrollSnapshot.value.documentKey,
   sessionIdGetter: () => currentScrollSnapshot.value.sessionId,
   revisionGetter: () => currentScrollSnapshot.value.revision,
   scrollAreaKey: 'editor-preview',
@@ -996,13 +1001,15 @@ function resetSplitLayout() {
  *
  * 使用 request token 防止旧恢复请求在新恢复开始后回写错误状态。
  *
- * @param {{ sessionId?: string, revision?: number } | undefined} snapshot
+ * @param {object | null | undefined} snapshot
+ * @param {{ mode?: 'same-session' | 'document' }} [options]
  * @returns {Promise<{ editorCode: boolean, editorPreview: boolean }>} 返回左右区域本轮是否实际完成恢复。
  */
-async function scheduleRestoreForCurrentSnapshot(snapshot) {
+async function scheduleRestoreForCurrentSnapshot(snapshot, options = {}) {
   updateCurrentScrollSnapshot(snapshot)
   applyHandoffAnchorToStore()
   const requestToken = ++viewRestoreRequestToken
+  const mode = options?.mode
 
   editorCodeScrollAnchor.cancelPendingRestore()
   editorPreviewScrollAnchor.cancelPendingRestore()
@@ -1018,7 +1025,7 @@ async function scheduleRestoreForCurrentSnapshot(snapshot) {
   try {
     restoreState.value.editorCode = true
     try {
-      restoreResult.editorCode = await editorCodeScrollAnchor.scheduleRestoreForCurrentSnapshot()
+      restoreResult.editorCode = await editorCodeScrollAnchor.scheduleRestoreForCurrentSnapshot({ mode })
     } finally {
       if (requestToken === viewRestoreRequestToken) {
         restoreState.value.editorCode = false
@@ -1028,7 +1035,7 @@ async function scheduleRestoreForCurrentSnapshot(snapshot) {
     if (previewController.value === true) {
       restoreState.value.editorPreview = true
       try {
-        restoreResult.editorPreview = await editorPreviewScrollAnchor.scheduleRestoreForCurrentSnapshot()
+        restoreResult.editorPreview = await editorPreviewScrollAnchor.scheduleRestoreForCurrentSnapshot({ mode })
       } finally {
         if (requestToken === viewRestoreRequestToken) {
           restoreState.value.editorPreview = false
@@ -1044,6 +1051,35 @@ async function scheduleRestoreForCurrentSnapshot(snapshot) {
       scheduleRestoreStateReset(requestToken)
     }
   }
+}
+
+/**
+ * 处理“同一视图内切换到另一文档”时的滚动位置。
+ * 与激活恢复不同，这里按 documentKey 跨 session 复用锚点：
+ * 1. 先按新文档身份裁剪缓存，避免切换次数多时无限增长
+ * 2. 按 document 模式恢复，允许新 session 的 revision 从 0 开始
+ * 3. 没有记录的区域显式归零，避免沿用上一篇文档的 scrollTop
+ * 恢复与归零都复用 scheduleRestoreForCurrentSnapshot 的联动冻结窗口。
+ *
+ * @param {object | null | undefined} snapshot
+ * @returns {Promise<{ editorCode: boolean, editorPreview: boolean }>} 返回左右区域本轮是否实际完成恢复。
+ */
+async function handleDocumentContextSwitch(snapshot) {
+  updateCurrentScrollSnapshot(snapshot)
+  pruneAnchorRecords(viewScrollAnchorStore, currentScrollSnapshot.value.documentKey)
+
+  // 按文档身份恢复（新 session 的 revision 从 0 开始，不能用严格模式）
+  const restoreResult = await scheduleRestoreForCurrentSnapshot(snapshot, { mode: 'document' })
+
+  // 无记录的区域显式归零，避免沿用上一个文档的 scrollTop
+  if (restoreResult.editorCode !== true) {
+    editorCodeScrollAnchor.resetToTop()
+  }
+  if (previewController.value === true && restoreResult.editorPreview !== true) {
+    editorPreviewScrollAnchor.resetToTop()
+  }
+
+  return restoreResult
 }
 
 /**
@@ -1469,6 +1505,7 @@ defineExpose({
   captureViewScrollAnchors,
   scheduleRestoreForCurrentSnapshot,
   cancelPendingViewScrollRestore,
+  handleDocumentContextSwitch,
 })
 </script>
 

@@ -19,11 +19,11 @@ import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUt
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { setCurrentWindowOpenPreparationProvider } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
+  resolveDocumentScrollAnchorIdentity,
+} from '@/util/document-session/documentScrollAnchorIdentityUtil.js'
+import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
-import {
-  getDocumentSessionSnapshotIdentity,
-} from '@/util/document-session/documentSessionSnapshotUtil.js'
 import {
   requestDocumentSessionSnapshot,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
@@ -48,7 +48,11 @@ import {
   resolvePreviewLineNumberFromAnchor,
   resolvePreviewLineNumberOffsetRatio,
 } from '@/util/editor/viewScrollAnchorMathUtil.js'
-import { createViewScrollAnchorSessionStore, saveAnchorRecord } from '@/util/editor/viewScrollAnchorSessionUtil.js'
+import {
+  createViewScrollAnchorSessionStore,
+  pruneAnchorRecords,
+  saveAnchorRecord,
+} from '@/util/editor/viewScrollAnchorSessionUtil.js'
 import { viewScrollHandoff } from '@/util/editor/viewScrollHandoffUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
@@ -98,6 +102,7 @@ let pendingRestoreOnActivation = false
 const watermark = ref()
 const previewAssetMenu = ref(createPreviewAssetMenuState())
 const currentScrollSnapshot = ref({
+  documentKey: '',
   sessionId: '',
   revision: 0,
 })
@@ -178,16 +183,6 @@ function persistMenuWidthFromLayout() {
   }
 
   menuWidthPersistenceController.persistMenuWidth(menuWidth).then(() => {})
-}
-
-// 纯预览页没有编辑器实例时，只暴露稳定快照降级能力。
-async function requestCurrentWindowOpenPreparation() {
-  const snapshot = await requestDocumentSessionSnapshot()
-  return {
-    ok: true,
-    reason: 'prepared',
-    snapshot,
-  }
 }
 
 function bindCurrentWindowOpenPreparationProvider() {
@@ -332,11 +327,12 @@ async function copyPreviewAssetTextFromRuntime(runtimeEvent) {
  * @param {object | null | undefined} snapshot
  */
 function updateCurrentScrollSnapshot(snapshot) {
-  const snapshotIdentity = getDocumentSessionSnapshotIdentity(snapshot)
+  const identity = resolveDocumentScrollAnchorIdentity(snapshot)
 
   currentScrollSnapshot.value = {
-    sessionId: snapshotIdentity.sessionId || '',
-    revision: snapshotIdentity.revision,
+    documentKey: identity.documentKey,
+    sessionId: identity.sessionId,
+    revision: identity.revision,
   }
 }
 
@@ -531,6 +527,7 @@ function findPreviewElementByLineNumber(container, lineNumber) {
 
 const previewPageScrollAnchor = useViewScrollAnchor({
   store: previewPageAnchorStore,
+  documentKeyGetter: () => currentScrollSnapshot.value.documentKey,
   sessionIdGetter: () => currentScrollSnapshot.value.sessionId,
   revisionGetter: () => currentScrollSnapshot.value.revision,
   scrollAreaKey: 'preview-page',
@@ -610,12 +607,42 @@ const previewPageScrollAnchor = useViewScrollAnchor({
   },
 })
 
+// 纯预览页没有编辑器实例时，只暴露稳定快照降级能力。
+async function requestCurrentWindowOpenPreparation() {
+  const snapshot = await requestDocumentSessionSnapshot()
+  // 切换前必须先把当前文档的阅读位置按 documentKey 落缓存，
+  // 否则切换后容器复用会直接沿用像素位置，且切回时无记录可恢复。
+  updateCurrentScrollSnapshot(snapshot)
+  previewPageScrollAnchor.captureCurrentAnchor()
+  return {
+    ok: true,
+    reason: 'prepared',
+    snapshot,
+  }
+}
+
 function applyDocumentSessionSnapshot(snapshot) {
   if (!snapshot) {
     return
   }
 
   previewAssetSessionController.syncSnapshot(snapshot)
+
+  // 判据只认 sessionId：同一视图内切换文档时主进程必然新建 sessionId，
+  // 同文档的内容更新、以及草稿保存后 documentKey 从 session:<sessionId>
+  // 变成真实路径都不算切换。
+  // 首次应用快照（sessionId 仍为空）不视为切换，避免初始化时误触发归零。
+  const nextIdentity = resolveDocumentScrollAnchorIdentity(snapshot)
+  const identityChanged = currentScrollSnapshot.value.sessionId !== ''
+    && nextIdentity.sessionId !== currentScrollSnapshot.value.sessionId
+
+  if (identityChanged) {
+    // 同一窗口切换到另一文档时 keep-alive 实例与滚动容器都会复用，
+    // 必须取消上一文档挂起的恢复，并按新文档身份裁剪缓存，避免恢复串档。
+    previewPageScrollAnchor.cancelPendingRestore()
+    pruneAnchorRecords(previewPageAnchorStore, nextIdentity.documentKey)
+  }
+
   // 预览页只消费已经收敛完毕的 session snapshot，
   // 不直接参与保存态或外部修改态推导。
   content.value = snapshot.content
@@ -627,6 +654,19 @@ function applyDocumentSessionSnapshot(snapshot) {
   updateCurrentScrollSnapshot(snapshot)
 
   if (pendingRestoreOnActivation !== true) {
+    if (identityChanged) {
+      // 同一视图内切换文档：容器复用会沿用上一篇文档的 scrollTop，
+      // 因此必须按新文档身份恢复；没有可恢复记录时归零到顶部。
+      nextTick(() => {
+        previewPageScrollAnchor.scheduleRestoreForCurrentSnapshot({
+          mode: 'document',
+        }).then((restored) => {
+          if (restored !== true) {
+            previewPageScrollAnchor.resetToTop()
+          }
+        })
+      })
+    }
     return
   }
 
@@ -640,6 +680,7 @@ function applyDocumentSessionSnapshot(snapshot) {
   })
   if (handoffRecord) {
     saveAnchorRecord(previewPageAnchorStore, {
+      documentKey: currentScrollSnapshot.value.documentKey,
       sessionId: currentScrollSnapshot.value.sessionId,
       scrollAreaKey: 'preview-page',
       revision: currentScrollSnapshot.value.revision,
@@ -653,7 +694,13 @@ function applyDocumentSessionSnapshot(snapshot) {
   }
 
   nextTick(() => {
-    previewPageScrollAnchor.scheduleRestoreForCurrentSnapshot().then(() => {})
+    previewPageScrollAnchor.scheduleRestoreForCurrentSnapshot({
+      mode: identityChanged ? 'document' : 'same-session',
+    }).then((restored) => {
+      if (restored !== true && identityChanged) {
+        previewPageScrollAnchor.resetToTop()
+      }
+    })
   })
 }
 

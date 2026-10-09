@@ -45,17 +45,35 @@ async function defaultWaitLayoutStable() {
 }
 
 /**
- * 规范化当前快照信息。
- * 这里不强制校验 sessionId / revision 的业务合法性，而是把原值继续向后传递；
- * 真正的恢复资格判断统一交给 shouldRestoreAnchorRecord，保证判定口径只有一处。
+ * 读取 getter 返回的字符串值。
  *
+ * @param {(() => string | null | undefined) | undefined} getter
+ * @returns {string} 返回 getter 给出的字符串；getter 缺失或返回值非法时返回空字符串。
+ */
+function resolveGetterString(getter) {
+  const value = typeof getter === 'function' ? getter() : undefined
+
+  return typeof value === 'string' ? value : ''
+}
+
+/**
+ * 规范化当前快照信息。
+ * 文档身份优先取 documentKeyGetter；未注入时回退 sessionIdGetter，
+ * 保证尚未迁移的调用方行为不变。
+ * 这里不强制校验业务合法性，真正的恢复资格判断统一交给 shouldRestoreAnchorRecord。
+ *
+ * @param {(() => string | null | undefined) | undefined} documentKeyGetter
  * @param {() => string | null | undefined} sessionIdGetter
  * @param {() => number | null | undefined} revisionGetter
- * @returns {{ sessionId: string, revision: number | null | undefined }} 返回当前快照的 sessionId 与 revision。
+ * @returns {{ documentKey: string, sessionId: string, revision: number | null | undefined }} 返回当前快照的文档身份。
  */
-function getCurrentSnapshot(sessionIdGetter, revisionGetter) {
+function getCurrentSnapshot(documentKeyGetter, sessionIdGetter, revisionGetter) {
+  const sessionId = resolveGetterString(sessionIdGetter)
+  const documentKey = resolveGetterString(documentKeyGetter) || sessionId
+
   return {
-    sessionId: typeof sessionIdGetter === 'function' ? (sessionIdGetter() ?? '') : '',
+    documentKey,
+    sessionId,
     revision: typeof revisionGetter === 'function' ? revisionGetter() : undefined,
   }
 }
@@ -78,6 +96,7 @@ function getFallbackScrollTop(scrollElement) {
  *
  * @param {{
  *   store?: Record<string, Record<string, any>>,
+ *   documentKeyGetter?: () => string | null | undefined,
  *   sessionIdGetter?: () => string | null | undefined,
  *   revisionGetter?: () => number | null | undefined,
  *   scrollAreaKey?: string,
@@ -92,6 +111,7 @@ function getFallbackScrollTop(scrollElement) {
 export function useViewScrollAnchor(options = {}) {
   const {
     store,
+    documentKeyGetter,
     sessionIdGetter,
     revisionGetter,
     scrollAreaKey = '',
@@ -118,21 +138,22 @@ export function useViewScrollAnchor(options = {}) {
 
   /**
    * 统一构造当前快照下的缓存读取结果。
-   * 读取逻辑集中在这里，避免多个导出 API 对 sessionId / scrollAreaKey 拼装方式不一致。
+   * 读取逻辑集中在这里，避免多个导出 API 对 documentKey / scrollAreaKey 拼装方式不一致。
    *
    * @returns {{
+   *   documentKey: string,
    *   sessionId: string,
    *   revision: number | null | undefined,
    *   record: object | null,
    * }} 返回当前快照以及该快照对应的缓存记录。
    */
   function getSnapshotRecord() {
-    const snapshot = getCurrentSnapshot(sessionIdGetter, revisionGetter)
+    const snapshot = getCurrentSnapshot(documentKeyGetter, sessionIdGetter, revisionGetter)
 
     return {
       ...snapshot,
       record: getAnchorRecord(store, {
-        sessionId: snapshot.sessionId,
+        documentKey: snapshot.documentKey,
         scrollAreaKey,
       }),
     }
@@ -162,13 +183,13 @@ export function useViewScrollAnchor(options = {}) {
    * @returns {object | null} 返回写入缓存后的记录副本；写入失败时返回 null。
    */
   function captureCurrentAnchor() {
-    const { sessionId, revision } = getCurrentSnapshot(sessionIdGetter, revisionGetter)
+    const { documentKey, sessionId, revision } = getCurrentSnapshot(documentKeyGetter, sessionIdGetter, revisionGetter)
 
     if (restoreInFlight === true) {
       // 恢复进行中：DOM 位置可能仍是恢复前的旧值，
       // 此时采集会把过期位置覆盖进缓存，因此直接返回已有记录维持逻辑位置。
       return getAnchorRecord(store, {
-        sessionId,
+        documentKey,
         scrollAreaKey,
       })
     }
@@ -189,6 +210,7 @@ export function useViewScrollAnchor(options = {}) {
       : null
 
     return saveAnchorRecord(store, {
+      documentKey,
       sessionId,
       scrollAreaKey,
       revision,
@@ -211,33 +233,42 @@ export function useViewScrollAnchor(options = {}) {
    * 判断当前快照下是否存在可恢复的锚点记录。
    * 这里严格复用 shouldRestoreAnchorRecord，确保“是否可恢复”的语义与真正恢复前的资格判断完全一致。
    *
+   * @param {{ mode?: 'same-session' | 'document' }} [options]
    * @returns {boolean} 返回当前快照是否存在可直接参与恢复的锚点记录。
    */
-  function hasRestorableAnchor() {
-    const { sessionId, revision, record } = getSnapshotRecord()
+  function hasRestorableAnchor(options = {}) {
+    const { documentKey, sessionId, revision, record } = getSnapshotRecord()
 
     return shouldRestoreAnchorRecord({
       record,
+      documentKey,
       sessionId,
       revision,
+      mode: options?.mode,
     })
   }
 
   /**
    * 为当前快照安排一次滚动恢复。
-   * 恢复前必须先确认记录仍匹配当前 sessionId + revision；
+   * 恢复前必须先确认记录仍匹配当前文档身份；
+   * `same-session` 模式额外要求 sessionId + revision 一致，
+   * `document` 模式只认 documentKey，用于同一窗口切换文档的场景。
    * 若首次恢复返回 false，则只额外等待一次布局并再重试一次。
    *
+   * @param {{ mode?: 'same-session' | 'document' }} [options]
    * @returns {Promise<boolean>} 返回本次请求是否已完成有效恢复；被取消、无资格或两次尝试均未成功时返回 false。
    */
-  async function scheduleRestoreForCurrentSnapshot() {
+  async function scheduleRestoreForCurrentSnapshot(options = {}) {
+    const mode = options?.mode ?? 'same-session'
     const token = ++restoreToken
-    const { sessionId, revision, record } = getSnapshotRecord()
+    const { documentKey, sessionId, revision, record } = getSnapshotRecord()
 
     if (!shouldRestoreAnchorRecord({
       record,
+      documentKey,
       sessionId,
       revision,
+      mode,
     })) {
       return false
     }
@@ -246,6 +277,7 @@ export function useViewScrollAnchor(options = {}) {
 
     const restoreContext = {
       token,
+      documentKey,
       sessionId,
       revision,
       scrollAreaKey,
@@ -281,19 +313,25 @@ export function useViewScrollAnchor(options = {}) {
         /**
          * 即使 token 仍然有效，也不能假设等待前读取到的快照仍然成立。
          * 这里必须在真正 restore 前重新读取当前 snapshot 与缓存记录，
-         * 既防止等待期间 sessionId / revision 漂移后继续恢复旧记录，
+         * 既防止等待期间文档身份漂移后继续恢复旧记录，
          * 也保证当前 restore 使用的是最新缓存中的同版本记录。
          */
         const latestSnapshotRecord = getSnapshotRecord()
 
-        if (latestSnapshotRecord.sessionId !== sessionId || latestSnapshotRecord.revision !== revision) {
+        if (mode === 'document') {
+          if (latestSnapshotRecord.documentKey !== documentKey) {
+            return false
+          }
+        } else if (latestSnapshotRecord.sessionId !== sessionId || latestSnapshotRecord.revision !== revision) {
           return false
         }
 
         if (!shouldRestoreAnchorRecord({
           record: latestSnapshotRecord.record,
+          documentKey: latestSnapshotRecord.documentKey,
           sessionId: latestSnapshotRecord.sessionId,
           revision: latestSnapshotRecord.revision,
+          mode,
         })) {
           return false
         }
@@ -304,6 +342,7 @@ export function useViewScrollAnchor(options = {}) {
 
         const latestRestoreContext = {
           ...restoreContext,
+          documentKey: latestSnapshotRecord.documentKey,
           sessionId: latestSnapshotRecord.sessionId,
           revision: latestSnapshotRecord.revision,
           record: latestSnapshotRecord.record,
@@ -355,10 +394,33 @@ export function useViewScrollAnchor(options = {}) {
     }
   }
 
+  /**
+   * 将当前滚动容器重置到顶部。
+   * 文档切换或显式重置场景下，调用方需要在没有可恢复记录时主动归零，
+   * 避免共享滚动容器把上一篇文档的 scrollTop 残留到新文档。
+   * 这里只负责取消挂起恢复并写入 scrollTop，不改动其他状态。
+   *
+   * @returns {boolean} 返回是否成功重置；滚动容器不存在时返回 false。
+   */
+  function resetToTop() {
+    cancelPendingRestore()
+
+    const scrollElement = typeof getScrollElement === 'function' ? getScrollElement() : null
+
+    if (!scrollElement) {
+      return false
+    }
+
+    scrollElement.scrollTop = 0
+
+    return true
+  }
+
   return {
     captureCurrentAnchor,
     scheduleRestoreForCurrentSnapshot,
     cancelPendingRestore,
     hasRestorableAnchor,
+    resetToTop,
   }
 }

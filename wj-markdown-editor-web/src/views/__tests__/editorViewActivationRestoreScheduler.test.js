@@ -90,10 +90,12 @@ test('激活恢复应绑定激活窗口内最后一份仍有效的 snapshot iden
   scheduler.applySnapshot({
     sessionId: 'session-1',
     revision: 7,
+    resourceContext: { documentPath: '/docs/a.md' },
   })
   scheduler.applySnapshot({
     sessionId: 'session-1',
     revision: 8,
+    resourceContext: { documentPath: '/docs/a.md' },
   })
 
   assert.equal(deferredScheduler.queueSize(), 1)
@@ -102,6 +104,7 @@ test('激活恢复应绑定激活窗口内最后一份仍有效的 snapshot iden
   deferredScheduler.flush()
 
   assert.deepEqual(restoreCalls, [{
+    documentKey: '/docs/a.md',
     sessionId: 'session-1',
     revision: 8,
   }])
@@ -132,11 +135,13 @@ test('restore 已启动但未完成时，后到 snapshot 应取消旧 restore，
   scheduler.applySnapshot({
     sessionId: 'session-1',
     revision: 7,
+    resourceContext: { documentPath: '/docs/a.md' },
   })
 
   deferredScheduler.flush()
 
   assert.deepEqual(restoreCalls, [{
+    documentKey: '/docs/a.md',
     sessionId: 'session-1',
     revision: 7,
   }])
@@ -145,6 +150,7 @@ test('restore 已启动但未完成时，后到 snapshot 应取消旧 restore，
   scheduler.applySnapshot({
     sessionId: 'session-1',
     revision: 8,
+    resourceContext: { documentPath: '/docs/a.md' },
   })
 
   assert.deepEqual(cancelCalls, ['cancelled'])
@@ -159,10 +165,12 @@ test('restore 已启动但未完成时，后到 snapshot 应取消旧 restore，
 
   assert.deepEqual(restoreCalls, [
     {
+      documentKey: '/docs/a.md',
       sessionId: 'session-1',
       revision: 7,
     },
     {
+      documentKey: '/docs/a.md',
       sessionId: 'session-1',
       revision: 8,
     },
@@ -194,6 +202,7 @@ test('旧 restore 未完成就先失活再重新激活时，旧 promise 结束�
   scheduler.applySnapshot({
     sessionId: 'session-1',
     revision: 7,
+    resourceContext: { documentPath: '/docs/a.md' },
   })
 
   deferredScheduler.flush()
@@ -203,6 +212,7 @@ test('旧 restore 未完成就先失活再重新激活时，旧 promise 结束�
   scheduler.applySnapshot({
     sessionId: 'session-1',
     revision: 9,
+    resourceContext: { documentPath: '/docs/a.md' },
   })
 
   assert.equal(cancelCalls.length, 2)
@@ -211,6 +221,7 @@ test('旧 restore 未完成就先失活再重新激活时，旧 promise 结束�
   // 新窗口此时只记录了最新 identity，但不会立即启动 restore；
   // 真正恢复必须等旧 promise settle 后再重新排队。
   assert.deepEqual(restoreCalls, [{
+    documentKey: '/docs/a.md',
     sessionId: 'session-1',
     revision: 7,
   }])
@@ -224,10 +235,12 @@ test('旧 restore 未完成就先失活再重新激活时，旧 promise 结束�
 
   assert.deepEqual(restoreCalls, [
     {
+      documentKey: '/docs/a.md',
       sessionId: 'session-1',
       revision: 7,
     },
     {
+      documentKey: '/docs/a.md',
       sessionId: 'session-1',
       revision: 9,
     },

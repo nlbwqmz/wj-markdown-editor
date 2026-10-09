@@ -1,6 +1,6 @@
 import { nextTick } from 'vue'
 
-import { getDocumentSessionSnapshotIdentity } from '../util/document-session/documentSessionSnapshotUtil.js'
+import { resolveDocumentScrollAnchorIdentity } from '../util/document-session/documentScrollAnchorIdentityUtil.js'
 
 /**
  * 创建 EditorView 激活后的滚动恢复调度器。
@@ -15,7 +15,7 @@ import { getDocumentSessionSnapshotIdentity } from '../util/document-session/doc
  * @param {{
  *   schedule?: (callback: () => void) => void,
  *   cancelActiveRestore?: () => void,
- *   restoreSnapshot?: (snapshotIdentity: { sessionId: string | null, revision: number }) => void | Promise<void>,
+ *   restoreSnapshot?: (snapshotIdentity: { documentKey: string, sessionId: string, revision: number }) => void | Promise<void>,
  * }} options
  */
 export function createEditorViewActivationRestoreScheduler(options = {}) {
@@ -124,7 +124,9 @@ export function createEditorViewActivationRestoreScheduler(options = {}) {
         return
       }
 
-      latestSnapshotIdentity = getDocumentSessionSnapshotIdentity(snapshot)
+      // 必须解析出真实 documentKey 再下发给恢复侧：
+      // 只带 sessionId / revision 会让恢复侧退化成 session:xxx bucket，与采集侧不一致。
+      latestSnapshotIdentity = resolveDocumentScrollAnchorIdentity(snapshot)
 
       if (restoreInFlight === true) {
         pendingRestore = true

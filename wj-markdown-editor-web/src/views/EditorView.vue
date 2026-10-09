@@ -13,6 +13,7 @@ import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.j
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
 import { setCurrentWindowOpenPreparationProvider } from '@/util/document-session/currentWindowOpenPreparationService.js'
+import { resolveDocumentScrollAnchorIdentity } from '@/util/document-session/documentScrollAnchorIdentityUtil.js'
 import {
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
@@ -99,6 +100,11 @@ let contentUpdateToken = 0
 // 标记当前这次 content 变更是否来自 session snapshot，
 // 用于阻止 watch(content) 再次把同一份内容回写给主进程。
 let applyingSessionContent = false
+// 记录最近一次已应用的会话标识（sessionId），
+// 用于识别“同一视图内切换到另一文档”：同一视图内切换文档时主进程必然新建 sessionId，
+// 同文档的内容/revision 更新、以及草稿保存后获得路径都不算切换。
+// documentKey 仍只作为滚动锚点缓存的 bucket 键。
+let appliedSessionId = null
 // 单资源删除确认弹窗控制器，统一托管 confirm 实例的打开和销毁。
 const previewAssetDeleteConfirmController = createPreviewAssetDeleteConfirmController({
   createModal: config => Modal.confirm(config),
@@ -169,6 +175,11 @@ async function requestCurrentWindowOpenPreparation() {
     ? (await requestDocumentEdit(content.value))?.snapshot || await requestDocumentSessionSnapshot()
     : await requestDocumentSessionSnapshot()
 
+  // 当前窗口切换文档前，必须把完整 snapshot 交给采集入口：
+  // 由下游统一按 documentKey 解析文档身份，避免这里先解析成 identity 后被二次解析，
+  // 导致真实路径退化成临时 sessionId，切换后丢失旧文档的阅读位置。
+  markdownEditRef.value?.captureViewScrollAnchors?.(latestSnapshot)
+
   return {
     ok: true,
     reason: 'prepared',
@@ -194,6 +205,19 @@ function applyDocumentSessionSnapshot(snapshot) {
   }
 
   previewAssetSessionController.syncSnapshot(snapshot)
+
+  // 同一视图内切换到另一文档时，滚动锚点必须按 documentKey 重建；
+  // 判据只认 sessionId：同文档的内容/revision 更新、以及草稿保存后
+  // documentKey 从 session:<sessionId> 变成真实路径都不算切换，
+  // 这些场景继续由激活恢复调度器负责，避免文档切换与激活恢复两条路径重复执行。
+  const nextIdentity = resolveDocumentScrollAnchorIdentity(snapshot)
+  const identityChanged = appliedSessionId !== null && appliedSessionId !== nextIdentity.sessionId
+  appliedSessionId = nextIdentity.sessionId
+
+  if (identityChanged) {
+    markdownEditRef.value?.handleDocumentContextSwitch?.(snapshot)
+  }
+
   // 编辑器内容现在只从 document session snapshot 同步，
   // 避免再和历史遗留的零散元信息入口混写。
   updateEditorContent(snapshot.content, {
@@ -289,7 +313,7 @@ onBeforeRouteLeave(async () => {
   // 否则后续请求到的 snapshot revision 可能仍停留在旧版本。
   markdownEditRef.value?.flushPendingModelSync?.()
 
-  // route leave 需要拿“最终正文对应的稳定 snapshot identity”来记录锚点。
+  // route leave 需要拿“最终正文对应的稳定 snapshot”来记录锚点。
   // 如果当前正文尚未同步进主进程，就优先等待 document.edit 返回最新快照；
   // 只有已经同步好的场景，才直接读取 session snapshot。
   const latestSnapshot = content.value !== (store.documentSessionSnapshot?.content ?? '')
@@ -297,10 +321,9 @@ onBeforeRouteLeave(async () => {
     : await requestDocumentSessionSnapshot()
 
   const revision = Number.isInteger(latestSnapshot?.revision) ? latestSnapshot.revision : 0
-  const capturedAnchors = markdownEditRef.value?.captureViewScrollAnchors?.({
-    sessionId: latestSnapshot?.sessionId ?? null,
-    revision,
-  })
+  // 采集入口必须接收完整 snapshot（含 resourceContext.documentPath），
+  // 由下游统一解析 documentKey，避免二次解析把真实路径退化成 session:xxx。
+  const capturedAnchors = markdownEditRef.value?.captureViewScrollAnchors?.(latestSnapshot)
 
   // 把编辑区当前阅读位置（行号 + 行内像素比例）发布给下一条路由（例如预览页），
   // 让目标视图能在自己的滚动区域内按同一套比例语义换算锚点。

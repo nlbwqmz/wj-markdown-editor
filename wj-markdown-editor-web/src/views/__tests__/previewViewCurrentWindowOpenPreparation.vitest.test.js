@@ -70,6 +70,7 @@ vi.mock('@/components/editor/composables/useViewScrollAnchor.js', () => ({
       captureCurrentAnchor: previewPreparationState.captureCurrentAnchor,
       cancelPendingRestore: vi.fn(),
       scheduleRestoreForCurrentSnapshot: previewPreparationState.scheduleRestoreForCurrentSnapshot,
+      resetToTop: vi.fn(),
     }
   },
 }))
@@ -196,6 +197,7 @@ vi.mock('@/util/editor/viewScrollAnchorSessionUtil.js', () => ({
   createViewScrollAnchorSessionStore() {
     return previewPreparationState.anchorStore
   },
+  pruneAnchorRecords: vi.fn(),
   saveAnchorRecord: previewPreparationState.saveAnchorRecord,
 }))
 
@@ -389,6 +391,37 @@ describe('previewView 当前窗口切换前准备降级', () => {
     expect(previewPreparationState.requestDocumentEdit).not.toHaveBeenCalled()
   })
 
+  it('预览页切换前准备时，应按当前文档身份采集锚点并写入 documentKey bucket', async () => {
+    const wrapper = await mountPreviewView()
+
+    // 模拟真实 useViewScrollAnchor 的采集行为：按注入的 documentKeyGetter 解析文档身份，
+    // 再经 saveAnchorRecord 写入对应的 documentKey bucket。
+    previewPreparationState.captureCurrentAnchor.mockImplementation(() => {
+      const documentKey = previewPreparationState.viewScrollAnchorOptions.documentKeyGetter()
+      return previewPreparationState.saveAnchorRecord(previewPreparationState.anchorStore, {
+        documentKey,
+        sessionId: previewPreparationState.viewScrollAnchorOptions.sessionIdGetter(),
+        scrollAreaKey: previewPreparationState.viewScrollAnchorOptions.scrollAreaKey,
+        revision: previewPreparationState.viewScrollAnchorOptions.revisionGetter(),
+        anchor: null,
+        fallbackScrollTop: 480,
+        savedAt: 1,
+      })
+    })
+
+    await wrapper.vm.$.exposed.requestCurrentWindowOpenPreparation()
+
+    expect(previewPreparationState.captureCurrentAnchor).toHaveBeenCalledTimes(1)
+    expect(previewPreparationState.viewScrollAnchorOptions.documentKeyGetter()).toBe('D:/docs/demo.md')
+    expect(previewPreparationState.saveAnchorRecord).toHaveBeenCalledWith(
+      previewPreparationState.anchorStore,
+      expect.objectContaining({
+        documentKey: 'D:/docs/demo.md',
+        scrollAreaKey: 'preview-page',
+      }),
+    )
+  })
+
   it('预览页激活恢复前消费到跨视图交接记录时，应写入 preview-page 的 line-handoff 记录', async () => {
     previewPreparationState.consumeHandoff.mockReturnValue({
       sessionId: 'session-preview',
@@ -406,6 +439,7 @@ describe('previewView 当前窗口切换前准备降级', () => {
     expect(previewPreparationState.saveAnchorRecord).toHaveBeenCalledWith(
       previewPreparationState.anchorStore,
       expect.objectContaining({
+        documentKey: 'D:/docs/demo.md',
         sessionId: 'session-preview',
         scrollAreaKey: 'preview-page',
         revision: 5,

@@ -8,6 +8,7 @@ const editorPreparationState = vi.hoisted(() => ({
   markdownEditExpose: {
     flushPendingModelSync: vi.fn(),
     captureViewScrollAnchors: vi.fn(),
+    handleDocumentContextSwitch: vi.fn(),
   },
   store: null,
   requestDocumentEdit: vi.fn(),
@@ -19,6 +20,7 @@ const editorPreparationState = vi.hoisted(() => ({
   registerRouteLeave: vi.fn(),
   publishHandoff: vi.fn(),
   consumeHandoff: vi.fn(),
+  capturedSessionListener: null,
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -142,7 +144,8 @@ vi.mock('@/util/document-session/rendererSessionActivationStrategy.js', () => ({
 }))
 
 vi.mock('@/util/document-session/rendererSessionEventSubscription.js', () => ({
-  createRendererSessionEventSubscription() {
+  createRendererSessionEventSubscription(options = {}) {
+    editorPreparationState.capturedSessionListener = options.listener
     return {
       activate: vi.fn(),
       deactivate: vi.fn(),
@@ -164,7 +167,9 @@ vi.mock('@/util/document-session/rendererSessionSnapshotController.js', () => ({
         options.store?.applyDocumentSessionSnapshot?.(snapshot)
         options.applySnapshot?.(snapshot)
       }),
-      applyPushedSnapshot: vi.fn(),
+      applyPushedSnapshot: vi.fn((snapshot) => {
+        options.applySnapshot?.(snapshot)
+      }),
       replaySnapshot: vi.fn(),
       hasAppliedSnapshot: vi.fn(() => true),
       needsBootstrapOnActivate: vi.fn(() => false),
@@ -199,6 +204,7 @@ function createSnapshot({
   sessionId = 'session-editor',
   revision = 5,
   content = '# 旧正文',
+  documentPath = 'D:/docs/demo.md',
 } = {}) {
   return {
     sessionId,
@@ -206,7 +212,7 @@ function createSnapshot({
     content,
     fileName: 'demo.md',
     resourceContext: {
-      documentPath: 'D:/docs/demo.md',
+      documentPath,
     },
   }
 }
@@ -274,6 +280,7 @@ describe('editorView 当前窗口切换前准备', () => {
     editorPreparationState.store = createStore()
     editorPreparationState.markdownEditExpose.flushPendingModelSync.mockReset()
     editorPreparationState.markdownEditExpose.captureViewScrollAnchors.mockReset()
+    editorPreparationState.markdownEditExpose.handleDocumentContextSwitch.mockReset()
     editorPreparationState.requestDocumentEdit.mockReset()
     editorPreparationState.requestDocumentSave.mockReset()
     editorPreparationState.requestDocumentSessionSnapshot.mockReset()
@@ -295,6 +302,7 @@ describe('editorView 当前窗口切换前准备', () => {
 
   afterEach(() => {
     editorPreparationState.store = null
+    editorPreparationState.capturedSessionListener = null
   })
 
   it('当前窗口切换前准备命中挂起正文时，必须先 flush，再等待 document.edit 返回最新快照', async () => {
@@ -341,10 +349,8 @@ describe('editorView 当前窗口切换前准备', () => {
 
     await routeLeaveCallback()
 
-    expect(editorPreparationState.markdownEditExpose.captureViewScrollAnchors).toHaveBeenCalledWith({
-      sessionId: 'session-editor',
-      revision: 5,
-    })
+    // 采集入口必须收到完整 snapshot，而不是被上层预先解析过的 identity。
+    expect(editorPreparationState.markdownEditExpose.captureViewScrollAnchors).toHaveBeenCalledWith(createSnapshot())
     expect(editorPreparationState.publishHandoff).toHaveBeenCalledWith({
       sessionId: 'session-editor',
       revision: 5,
@@ -352,6 +358,68 @@ describe('editorView 当前窗口切换前准备', () => {
       lineOffsetRatio: 0.5,
       sourceAreaKey: 'editor-code',
     })
+  })
+
+  it('当前窗口切换前准备会把完整 snapshot 交给滚动锚点采集', async () => {
+    const wrapper = await mountEditorView()
+    editorPreparationState.markdownEditExpose.captureViewScrollAnchors.mockClear()
+
+    await wrapper.vm.$.exposed.requestCurrentWindowOpenPreparation()
+
+    expect(editorPreparationState.markdownEditExpose.captureViewScrollAnchors).toHaveBeenCalledWith(createSnapshot())
+  })
+
+  it('推送快照切换到另一文档时，应转发文档切换滚动处理', async () => {
+    await mountEditorView()
+    editorPreparationState.markdownEditExpose.handleDocumentContextSwitch.mockClear()
+
+    const nextSnapshot = createSnapshot({
+      sessionId: 'session-next',
+      revision: 0,
+      content: '# 新文档',
+      documentPath: 'D:/docs/next.md',
+    })
+    await editorPreparationState.capturedSessionListener(nextSnapshot)
+
+    expect(editorPreparationState.markdownEditExpose.handleDocumentContextSwitch).toHaveBeenCalledTimes(1)
+    expect(editorPreparationState.markdownEditExpose.handleDocumentContextSwitch).toHaveBeenCalledWith(nextSnapshot)
+  })
+
+  it('同一文档的内容更新不触发文档切换滚动处理', async () => {
+    await mountEditorView()
+    editorPreparationState.markdownEditExpose.handleDocumentContextSwitch.mockClear()
+
+    await editorPreparationState.capturedSessionListener(createSnapshot({
+      revision: 6,
+      content: '# 旧正文更新',
+    }))
+
+    expect(editorPreparationState.markdownEditExpose.handleDocumentContextSwitch).not.toHaveBeenCalled()
+  })
+
+  it('草稿保存获得真实路径（sessionId 未变）时，不应触发文档切换滚动处理', async () => {
+    // 先以无路径草稿身份完成首次加载：documentKey 为 session:session-draft
+    editorPreparationState.requestDocumentSessionSnapshot.mockResolvedValue(createSnapshot({
+      sessionId: 'session-draft',
+      revision: 1,
+      content: '# 草稿',
+      documentPath: null,
+    }))
+    const wrapper = await mountEditorView()
+    editorPreparationState.markdownEditExpose.handleDocumentContextSwitch.mockClear()
+
+    // 保存草稿：sessionId 不变，documentKey 从 session:session-draft 变为真实路径
+    await editorPreparationState.capturedSessionListener(createSnapshot({
+      sessionId: 'session-draft',
+      revision: 2,
+      content: '# 草稿已保存',
+      documentPath: 'D:/docs/a.md',
+    }))
+    await flushEditorView()
+
+    // 草稿保存不是文档切换：不得转发文档切换滚动处理，正文仍按同一会话正常同步
+    expect(editorPreparationState.markdownEditExpose.handleDocumentContextSwitch).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="set-content-latest"]').text()).toBe('# 草稿已保存')
   })
 
   it('路由离开时若编辑区没有合法行号，不得发布交接记录', async () => {

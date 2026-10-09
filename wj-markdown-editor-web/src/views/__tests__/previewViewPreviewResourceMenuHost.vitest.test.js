@@ -119,6 +119,7 @@ vi.mock('@/components/editor/composables/useViewScrollAnchor.js', () => ({
       captureCurrentAnchor: vi.fn(),
       cancelPendingRestore: vi.fn(),
       scheduleRestoreForCurrentSnapshot: vi.fn(async () => true),
+      resetToTop: vi.fn(),
     }
   },
 }))
@@ -289,6 +290,8 @@ vi.mock('@/util/editor/viewScrollAnchorSessionUtil.js', () => ({
   createViewScrollAnchorSessionStore() {
     return {}
   },
+  pruneAnchorRecords: vi.fn(),
+  saveAnchorRecord: vi.fn(),
 }))
 
 vi.mock('@/util/searchBarController.js', () => ({
