@@ -147,6 +147,10 @@ onBeforeMount(async () => {
         </div>
         <template #overlay>
           <a-menu>
+            <a-menu-item key="auto" @click="switchLanguage('auto')">
+              <span v-if="language === 'auto'" class="i-tabler:check mr-1" />
+              <span v-else class="mr-4" />{{ $t('top.languageAuto') }}
+            </a-menu-item>
             <a-menu-item key="zh-CN" @click="switchLanguage('zh-CN')">
               <span v-if="language === 'zh-CN'" class="i-tabler:check mr-1" />
               <span v-else class="mr-4" />中文

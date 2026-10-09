@@ -1,7 +1,8 @@
 import path from 'node:path'
-import { dialog, Notification } from 'electron'
+import { app, dialog, Notification } from 'electron'
 import fs from 'fs-extra'
 import { APP_NOTIFICATION_ICON_PATH } from '../appIdentityUtil.js'
+import { resolveLanguagePreference } from '../systemLocaleUtil.js'
 import {
   isMarkdownFilePath,
   MARKDOWN_FILE_EXTENSION_LIST,
@@ -26,10 +27,11 @@ function getOpenBaseDir(payload) {
     : null
 }
 
-// 读取当前语言配置。
+// 读取当前实际使用的语言。
 // effect 层只在少数需要即时拼接系统提示文案的场景使用它。
+// app?.getLocale?.() 兼容测试环境（electron 命名导出为 undefined）。
 function getLanguage(getConfig) {
-  return getConfig?.()?.language || 'zh-CN'
+  return resolveLanguagePreference(getConfig?.()?.language, app?.getLocale?.())
 }
 
 function getOpenTrigger(payload) {

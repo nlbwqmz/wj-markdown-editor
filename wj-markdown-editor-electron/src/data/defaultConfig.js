@@ -35,7 +35,7 @@ export default {
   startPage: 'preview',
   openRecent: true,
   recentMax: 10,
-  language: 'zh-CN',
+  language: 'auto',
   externalFileChangeStrategy: 'prompt',
   markdown: {
     typographer: true,

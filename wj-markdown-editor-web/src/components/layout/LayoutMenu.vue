@@ -15,6 +15,7 @@ import {
   requestRecentClear,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import toggleFullScreenAction from '@/util/fullScreenActionUtil.js'
+import { resolveLanguagePreference } from '@/util/languagePreferenceUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const { t } = useI18n()
@@ -27,7 +28,7 @@ const isFullScreen = ref(store.isFullScreen)
 const fileManagerPanelVisible = ref(store.fileManagerPanelVisible)
 
 function joinMenuLabel(segmentList) {
-  const compactLocale = String(store.config.language || '').toLowerCase().startsWith('zh')
+  const compactLocale = resolveLanguagePreference(store.config.language, navigator.language) === 'zh-CN'
   return segmentList.filter(Boolean).join(compactLocale ? '' : ' ')
 }
 

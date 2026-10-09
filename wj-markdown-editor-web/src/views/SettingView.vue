@@ -14,6 +14,7 @@ import {
 } from '@/util/config/settingConfigDraftUtil.js'
 import { createSettingConfigMutationController } from '@/util/config/settingConfigMutationController.js'
 import constant from '@/util/constant.js'
+import { resolveLanguagePreference } from '@/util/languagePreferenceUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
@@ -206,7 +207,7 @@ function onKeydown(shortcutKey) {
       const otherShortcutKeyList = config.value.shortcutKeyList.filter(item => item.id !== shortcutKey.id)
       for (let i = 0; i < otherShortcutKeyList.length; i++) {
         if (otherShortcutKeyList[i].keymap === keymap) {
-          if (config.value.language === 'zh-CN') {
+          if (resolveLanguagePreference(config.value.language, navigator.language) === 'zh-CN') {
             const vNode = h('span', {}, [
               h('span', {}, '与 '),
               h('span', { style: { color: '#FAAD14', fontWeight: 'bold' } }, t(`shortcutKey.${otherShortcutKeyList[i].id}`)),
@@ -338,6 +339,9 @@ function reset() {
               class="w-full"
               @update:value="value => submitSetPathMutation(['language'], value)"
             >
+              <a-select-option value="auto">
+                {{ $t('config.general.languageAuto') }}
+              </a-select-option>
               <a-select-option value="zh-CN">
                 中文
               </a-select-option>

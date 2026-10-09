@@ -9,6 +9,7 @@ import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
 import fileWatchUtil from '../fileWatchUtil.js'
 import resourceFileUtil from '../resourceFileUtil.js'
+import { resolveLanguagePreference } from '../systemLocaleUtil.js'
 import updateUtil from '../updateUtil.js'
 import {
   appendMarkdownExtension,
@@ -835,7 +836,7 @@ function isDevRendererMode() {
 }
 
 function getWindowShellLoadFailureContent(documentPath) {
-  const language = configUtil.getConfig().language || 'zh-CN'
+  const language = resolveLanguagePreference(configUtil.getConfig().language, app?.getLocale?.())
   const isDevMode = isDevRendererMode()
 
   if (language === 'en-US') {
@@ -1680,7 +1681,7 @@ function getCopySaveFailureMessage({ reason, error }) {
     ? ` ${error.message}`
     : ''
 
-  if (configUtil.getConfig().language === 'en-US') {
+  if (resolveLanguagePreference(configUtil.getConfig().language, app?.getLocale?.()) === 'en-US') {
     if (reason === 'same-path') {
       return 'Save as failed. The copy path must be different from current document.'
     }

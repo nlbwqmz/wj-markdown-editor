@@ -47,6 +47,8 @@ async function createServiceContext() {
     resourceUtil,
     notificationApi,
     createSystemNotification: showMock,
+    // 语言偏好必须显式声明，避免测试环境无系统 locale 时回退到英文文案
+    getConfig: () => ({ language: 'zh-CN' }),
   })
 
   return {

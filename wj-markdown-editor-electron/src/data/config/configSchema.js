@@ -264,7 +264,7 @@ export const configSchema = {
     startPage: { enum: ['editor', 'preview'] },
     openRecent: { type: 'boolean' },
     recentMax: { type: 'integer', minimum: 0, maximum: 50 },
-    language: { enum: ['zh-CN', 'en-US'] },
+    language: { enum: ['auto', 'zh-CN', 'en-US'] },
     externalFileChangeStrategy: { enum: ['apply', 'prompt'] },
     markdown: markdownSchema,
     export: exportSchema,

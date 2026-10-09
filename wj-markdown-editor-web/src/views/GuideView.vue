@@ -8,6 +8,7 @@ import OtherLayout from '@/components/layout/OtherLayout.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import guideUtil from '@/util/guideUtil.js'
+import { resolveLanguagePreference } from '@/util/languagePreferenceUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
@@ -16,7 +17,7 @@ import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
 const { t } = useI18n()
 
 const commonStore = useCommonStore()
-const content = ref(guideUtil.getGuideContent(commonStore.config.language))
+const content = ref(guideUtil.getGuideContent(resolveLanguagePreference(commonStore.config.language, navigator.language)))
 const previewContainerRef = ref()
 const guideContainerRef = ref()
 const gutterRef = ref()
@@ -27,9 +28,9 @@ const guideSearchTargetBridge = createSearchTargetBridge({
   getTargetElements: () => collectSearchTargetElements(guideContainerRef.value),
 })
 
-watch(() => commonStore.config.language, (language) => {
+watch(() => commonStore.config.language, () => {
   window.document.title = t('topMenu.help.children.example')
-  content.value = guideUtil.getGuideContent(language)
+  content.value = guideUtil.getGuideContent(resolveLanguagePreference(commonStore.config.language, navigator.language))
 }, { immediate: true })
 
 function guideMinimize() {

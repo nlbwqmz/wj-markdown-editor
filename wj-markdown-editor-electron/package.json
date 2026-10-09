@@ -91,6 +91,9 @@
           "name": "Markdown File"
         }
       ]
+    },
+    "appImage": {
+      "artifactName": "${productName}-${arch}-${version}.${ext}"
     }
   },
   "dependencies": {

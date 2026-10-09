@@ -7,6 +7,7 @@ import SearchBar from '@/components/SearchBar.vue'
 import router from '@/router/index.js'
 import { useCommonStore } from '@/stores/counter.js'
 import constant from '@/util/constant.js'
+import { resolveLanguagePreference } from '@/util/languagePreferenceUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
@@ -34,7 +35,7 @@ watch(() => store.config.fontSize, (newValue) => {
 }, { immediate: true })
 
 watch(() => store.config.language, (newValue) => {
-  locale.value = newValue
+  locale.value = resolveLanguagePreference(newValue, navigator.language)
 }, { immediate: true })
 
 watch(() => store.config.fontFamily.editArea, (newValue) => {

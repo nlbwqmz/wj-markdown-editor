@@ -73,6 +73,7 @@ export default {
     exitFullScreen: '退出全屏',
     switchView: '切换视图',
     switchTheme: '切换主题',
+    languageAuto: '自动',
     openInExplorer: '在资源管理器中打开',
     pinTop: '置顶',
     newVersion: '新版本',
@@ -148,6 +149,7 @@ export default {
     },
     general: {
       language: '语言',
+      languageAuto: '自动（跟随系统）',
       startupView: '启动视图',
       openLastRecord: '打开最近一次记录',
       recentHistoryCount: '最近历史记录数量',

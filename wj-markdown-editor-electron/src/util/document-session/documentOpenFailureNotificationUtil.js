@@ -1,9 +1,11 @@
 import path from 'node:path'
-import { dialog, Notification } from 'electron'
+import { app, dialog, Notification } from 'electron'
 import { APP_NOTIFICATION_ICON_PATH } from '../appIdentityUtil.js'
+import { resolveLanguagePreference } from '../systemLocaleUtil.js'
 
 function getLanguage(getConfig) {
-  return getConfig?.()?.language || 'zh-CN'
+  // app?.getLocale?.() 兼容测试环境（electron 命名导出为 undefined）。
+  return resolveLanguagePreference(getConfig?.()?.language, app?.getLocale?.())
 }
 
 function isWindowsLikePath(targetPath) {

@@ -73,6 +73,7 @@ export default {
     exitFullScreen: 'Exit full screen',
     switchView: 'Switch view',
     switchTheme: 'Switch theme',
+    languageAuto: 'Auto',
     openInExplorer: 'Open in explorer',
     pinTop: 'Pin to top',
     newVersion: 'New version',
@@ -148,6 +149,7 @@ export default {
     },
     general: {
       language: 'Language',
+      languageAuto: 'Auto (follow system)',
       startupView: 'Startup view',
       openLastRecord: 'Open latest record',
       recentHistoryCount: 'Recent history count',

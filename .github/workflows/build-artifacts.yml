@@ -214,7 +214,7 @@ jobs:
           check_file "wj-markdown-editor-electron/electron-build/latest-linux.yml"
           check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-amd64-*.deb"
           check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.rpm"
-          check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.AppImage"
+          check_file "wj-markdown-editor-electron/electron-build/wj-markdown-editor-x86_64-*.AppImage"
 
       - name: Upload Linux assets to Release
         env:
@@ -228,5 +228,5 @@ jobs:
             wj-markdown-editor-electron/electron-build/latest-linux.yml \
             wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-amd64-*.deb \
             wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.rpm \
-            wj-markdown-editor-electron/electron-build/wj-markdown-editor-linux-x86_64-*.AppImage \
+            wj-markdown-editor-electron/electron-build/wj-markdown-editor-x86_64-*.AppImage \
             --clobber

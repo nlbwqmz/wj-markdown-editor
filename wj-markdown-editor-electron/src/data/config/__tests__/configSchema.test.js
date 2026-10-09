@@ -323,6 +323,15 @@ describe('configSchema', () => {
     expect(() => validateConfigShape(brokenConfig)).toThrow()
   })
 
+  it('language 必须接受 auto 与显式语言枚举', () => {
+    for (const language of ['auto', 'zh-CN', 'en-US']) {
+      expect(() => validateConfigShape({
+        ...defaultConfig,
+        language,
+      })).not.toThrow()
+    }
+  })
+
   it('非法 language 必须被识别为 schema 违规', () => {
     const brokenConfig = {
       ...defaultConfig,
