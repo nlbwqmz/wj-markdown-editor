@@ -94,7 +94,8 @@
     },
     "appImage": {
       "artifactName": "${productName}-${arch}-${version}.${ext}"
-    }
+    },
+    "afterPack": "./scripts/afterPack.cjs"
   },
   "dependencies": {
     "ajv": "^8.18.0",
