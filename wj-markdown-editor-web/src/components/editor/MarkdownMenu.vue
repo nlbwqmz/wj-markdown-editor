@@ -6,6 +6,7 @@ import {
   findPreviewAnchorTarget,
   scrollPreviewToAnchor,
 } from '@/util/editor/previewAnchorScrollUtil.js'
+import { isFirstScreenReady, STARTUP_LOADING_READY_EVENT } from '@/util/startupLoadingUtil.js'
 import {
   flattenMarkdownMenuAnchors,
   resolveMarkdownMenuActiveHref,
@@ -40,6 +41,7 @@ let currentContainerMutationObserver = null
 let pendingHeadingTargetRefresh = false
 let isProgrammaticScrolling = false
 let programmaticScrollTargetTop = null
+let startupMeasureFallbackTimer = null
 const activeHref = ref('')
 
 const flattenedAnchorList = computed(() => flattenMarkdownMenuAnchors(props.anchorList))
@@ -199,7 +201,26 @@ function shouldFinishProgrammaticScroll(container) {
   return Math.abs(container.scrollTop - programmaticScrollTargetTop) <= 5
 }
 
+// 首屏就绪前不计算目录高亮：此时预览 DOM 仍在渲染，读取标题位置会强制浏览器全量排版，
+// 且排版结果会随首屏内容继续变化而失效，属于白做的开销。
+// 首屏就绪事件或兜底定时器打开这道门之后，才允许读取标题位置并计算高亮。
+let headingMeasureEnabled = false
+
+function enableHeadingMeasure() {
+  if (headingMeasureEnabled) {
+    return
+  }
+
+  headingMeasureEnabled = true
+  // 补算一次，否则门打开前挂载的目录会一直保持无高亮状态。
+  updateActiveHref()
+}
+
 function updateActiveHref() {
+  if (!headingMeasureEnabled) {
+    return
+  }
+
   const container = resolveMenuContainer()
   if (!container) {
     setCurrentActiveHref('')
@@ -323,9 +344,23 @@ watch(resolveMenuContainer, () => {
 
 onMounted(() => {
   bindContainer()
+  if (isFirstScreenReady()) {
+    // 组件在首屏就绪之后才挂载（例如切换视图），直接启用
+    enableHeadingMeasure()
+    return
+  }
+
+  window.addEventListener(STARTUP_LOADING_READY_EVENT, enableHeadingMeasure, { once: true })
+  // 兜底：就绪信号异常时，15 秒后强制启用，避免目录高亮永远不工作
+  startupMeasureFallbackTimer = setTimeout(enableHeadingMeasure, 15 * 1000)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener(STARTUP_LOADING_READY_EVENT, enableHeadingMeasure)
+  if (startupMeasureFallbackTimer !== null) {
+    clearTimeout(startupMeasureFallbackTimer)
+    startupMeasureFallbackTimer = null
+  }
   currentContainer?.removeEventListener?.('scroll', syncActiveHref)
   disconnectContainerMutationObserver()
   stopProgrammaticScroll()

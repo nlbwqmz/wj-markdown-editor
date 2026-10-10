@@ -13,6 +13,17 @@ vi.mock('@/util/commonUtil.js', () => ({
   },
 }))
 
+const startupLoadingRuntimeState = vi.hoisted(() => ({
+  firstScreenReady: true,
+  STARTUP_LOADING_READY_EVENT: 'wj-first-screen-ready',
+}))
+
+// 首屏就绪状态由测试直接控制：默认视为已就绪，便于复用既有目录联动断言。
+vi.mock('@/util/startupLoadingUtil.js', () => ({
+  STARTUP_LOADING_READY_EVENT: startupLoadingRuntimeState.STARTUP_LOADING_READY_EVENT,
+  isFirstScreenReady: () => startupLoadingRuntimeState.firstScreenReady,
+}))
+
 function createAnchorList() {
   return [
     {
@@ -126,6 +137,7 @@ describe('markdownMenu', () => {
   let scrollIntoViewSpy
 
   beforeEach(() => {
+    startupLoadingRuntimeState.firstScreenReady = true
     container = document.createElement('div')
     container.scrollTop = 0
     Object.defineProperty(container, 'clientTop', {
@@ -174,6 +186,31 @@ describe('markdownMenu', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
     document.body.innerHTML = ''
+  })
+
+  it('首屏未就绪时不读取标题布局，就绪事件到达后补算一次目录高亮', async () => {
+    startupLoadingRuntimeState.firstScreenReady = false
+    installHeadingTargets(container)
+    const containerRectSpy = vi.fn(() => ({ top: 100 }))
+    container.getBoundingClientRect = containerRectSpy
+
+    const wrapper = createWrapper({
+      anchorList: createAnchorList(),
+      getContainer: () => container,
+    })
+
+    // 首屏就绪前：不读取标题布局，目录高亮保持为空
+    expect(containerRectSpy).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-active="true"]').exists()).toBe(false)
+
+    window.dispatchEvent(new CustomEvent(startupLoadingRuntimeState.STARTUP_LOADING_READY_EVENT))
+    await wrapper.vm.$nextTick()
+
+    // 首屏就绪后：补算一次，高亮到当前锚点
+    expect(containerRectSpy).toHaveBeenCalled()
+    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#intro')
+
+    wrapper.unmount()
   })
 
   it('会按层级渲染目录项', async () => {
