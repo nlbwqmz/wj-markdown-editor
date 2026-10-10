@@ -32,4 +32,31 @@ describe('createExportWindowOptions', () => {
     expect(options.paintWhenInitiallyHidden).toBe(true)
     expect(options.webPreferences?.backgroundThrottling).toBe(false)
   })
+
+  it('未传主题时应回退为 light，并传递初始主题启动参数', () => {
+    const createExportWindowOptions = requireCreateExportWindowOptions()
+    const parentWindow = { id: 1 }
+
+    const options = createExportWindowOptions({
+      parentWindow,
+      preloadPath: 'D:/code/wj-markdown-editor/wj-markdown-editor-electron/src/preload.js',
+    })
+
+    expect(options.backgroundColor).toBe('#ffffff')
+    expect(options.webPreferences?.additionalArguments).toEqual(['--wj-initial-theme=light'])
+  })
+
+  it('传入 dark 主题时应使用深色背景并传递 dark 初始主题启动参数', () => {
+    const createExportWindowOptions = requireCreateExportWindowOptions()
+    const parentWindow = { id: 1 }
+
+    const options = createExportWindowOptions({
+      parentWindow,
+      preloadPath: 'D:/code/wj-markdown-editor/wj-markdown-editor-electron/src/preload.js',
+      globalTheme: 'dark',
+    })
+
+    expect(options.backgroundColor).toBe('#282c34')
+    expect(options.webPreferences?.additionalArguments).toEqual(['--wj-initial-theme=dark'])
+  })
 })

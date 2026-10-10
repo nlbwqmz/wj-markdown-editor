@@ -20,6 +20,7 @@ import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
 import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
+import { notifyFirstScreenReady } from '@/util/startupLoadingUtil.js'
 
 const { t } = useI18n()
 
@@ -157,6 +158,7 @@ const showImgRelativePath = computed(() => {
   return config.value.imgLocal === '4' || config.value.imgNetwork === '4'
 })
 onMounted(async () => {
+  notifyFirstScreenReady()
   refreshSystemFontList()
   window.addEventListener('visibilitychange', refreshSystemFontList)
   await nextTick()

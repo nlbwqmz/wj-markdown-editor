@@ -13,6 +13,7 @@ import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
 import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
+import { notifyFirstScreenReady } from '@/util/startupLoadingUtil.js'
 
 const { t } = useI18n()
 
@@ -53,6 +54,7 @@ function onPreviewRefreshComplete() {
 }
 
 onMounted(() => {
+  notifyFirstScreenReady()
   guideSearchTargetBridge.activate()
   splitInstance = Split({
     columnGutters: [{ track: 1, element: gutterRef.value }],

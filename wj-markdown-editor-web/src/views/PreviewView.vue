@@ -58,6 +58,7 @@ import { previewSearchBarController } from '@/util/searchBarController.js'
 import { closeSearchBarIfVisible } from '@/util/searchBarLifecycleUtil.js'
 import { createSearchTargetBridge } from '@/util/searchTargetBridgeUtil.js'
 import { collectSearchTargetElements } from '@/util/searchTargetUtil.js'
+import { notifyFirstScreenReady } from '@/util/startupLoadingUtil.js'
 
 // 纯预览页的资源右键菜单状态。
 // 菜单关闭时重建对象，避免保留过期的 asset 或 actionContext。
@@ -647,6 +648,7 @@ function applyDocumentSessionSnapshot(snapshot) {
   // 不直接参与保存态或外部修改态推导。
   content.value = snapshot.content
   ready.value = true
+  notifyFirstScreenReady()
   if (!content.value) {
     anchorList.value = []
   }

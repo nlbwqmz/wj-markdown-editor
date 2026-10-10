@@ -44,6 +44,7 @@ import {
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
 import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
 import { viewScrollHandoff } from '@/util/editor/viewScrollHandoffUtil.js'
+import { notifyFirstScreenReady } from '@/util/startupLoadingUtil.js'
 import { createEditorViewActivationRestoreScheduler } from '@/views/editorViewActivationRestoreScheduler.js'
 
 // 预览资源右键菜单的基础状态工厂。
@@ -224,6 +225,7 @@ function applyDocumentSessionSnapshot(snapshot) {
     skipContentSync: true,
   })
   ready.value = true
+  notifyFirstScreenReady()
   activationRestoreScheduler.applySnapshot(snapshot)
 }
 

@@ -7,6 +7,7 @@
  * @param {{
  *   parentWindow: Electron.BrowserWindow,
  *   preloadPath: string,
+ *   globalTheme?: 'light' | 'dark',
  * }} options
  * @returns {Electron.BrowserWindowConstructorOptions} 返回导出窗口构造参数
  */
@@ -14,6 +15,7 @@ export function createExportWindowOptions(options) {
   const {
     parentWindow,
     preloadPath,
+    globalTheme = 'light',
   } = options
 
   return {
@@ -25,9 +27,11 @@ export function createExportWindowOptions(options) {
     parent: parentWindow,
     show: false,
     paintWhenInitiallyHidden: true,
+    backgroundColor: globalTheme === 'dark' ? '#282c34' : '#ffffff',
     webPreferences: {
       preload: preloadPath,
       backgroundThrottling: false,
+      additionalArguments: [`--wj-initial-theme=${globalTheme}`],
     },
   }
 }

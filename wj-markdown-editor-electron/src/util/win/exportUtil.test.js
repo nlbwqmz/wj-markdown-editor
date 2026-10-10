@@ -325,6 +325,9 @@ describe('exportUtil', () => {
 
       browserWindowInstances[0].webContents.printToPDF.mockResolvedValueOnce(Buffer.from('pdf-buffer'))
 
+      // createExportWin 会读取全局主题用于窗口背景色，这里记录基线，确保 doExport 未额外读取配置
+      const configCallCountAfterCreate = configGetConfig.mock.calls.length
+
       await exportUtil.doExport({
         data: {
           type: 'PDF',
@@ -335,7 +338,7 @@ describe('exportUtil', () => {
       })
 
       expect(clipboardWriteImage).not.toHaveBeenCalled()
-      expect(configGetConfig).not.toHaveBeenCalled()
+      expect(configGetConfig).toHaveBeenCalledTimes(configCallCountAfterCreate)
       expect(fsWriteFile).not.toHaveBeenCalled()
       expect(browserWindowInstances[0].webContents.printToPDF).not.toHaveBeenCalled()
       expect(notify).toHaveBeenCalledWith(expect.objectContaining({

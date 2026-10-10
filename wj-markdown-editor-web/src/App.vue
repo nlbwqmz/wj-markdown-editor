@@ -10,6 +10,7 @@ import constant from '@/util/constant.js'
 import { resolveLanguagePreference } from '@/util/languagePreferenceUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
+import { STARTUP_LOADING_READY_EVENT } from '@/util/startupLoadingUtil.js'
 
 const defaultFontFamily = {
   editArea: `source-code-pro,Menlo,Monaco,Consolas,'Courier New',monospace`,
@@ -81,25 +82,48 @@ function onKeydown(e) {
   }
 }
 
+// 已处理标志，避免就绪事件与兜底定时器重复触发淡出
+let startupLoadingDismissed = false
+
+// 首屏内容可看后淡出并移除启动遮罩。
+// 淡出动画绑定在遮罩第一个子元素上，动画结束后移除整个遮罩。
+function dismissStartupLoading() {
+  if (startupLoadingDismissed) {
+    return
+  }
+  startupLoadingDismissed = true
+
+  const startupLoading = document.getElementById('startup-loading')
+  if (!startupLoading) {
+    return
+  }
+
+  const startupLoadingIcon = startupLoading.children[0]
+  if (!startupLoadingIcon) {
+    startupLoading.remove()
+    return
+  }
+
+  startupLoadingIcon.addEventListener(
+    'animationend',
+    () => {
+      startupLoading.remove()
+    },
+    { once: true },
+  )
+  startupLoadingIcon.style.animation = 'startup-load-leave 0.25s linear forwards'
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
-  setTimeout(() => {
-    const startupLoading = document.getElementById('startup-loading')
-    if (startupLoading) {
-      startupLoading.children[0].addEventListener(
-        'animationend',
-        () => {
-          startupLoading.remove()
-        },
-        { once: true },
-      )
-      startupLoading.children[0].style.animation = 'startup-load-leave 0.8s linear forwards'
-    }
-  })
+  window.addEventListener(STARTUP_LOADING_READY_EVENT, dismissStartupLoading, { once: true })
+  // 兜底：页面异常导致始终没有就绪信号时，15 秒后强制移除遮罩
+  setTimeout(dismissStartupLoading, 15 * 1000)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener(STARTUP_LOADING_READY_EVENT, dismissStartupLoading)
 })
 </script>
 

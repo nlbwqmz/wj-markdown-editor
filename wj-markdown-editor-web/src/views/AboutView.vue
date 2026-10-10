@@ -1,13 +1,14 @@
 <script setup>
+import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { Modal } from 'ant-design-vue'
+import { createVNode, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import logo from '@/assets/img/logo.png'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
-import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { Modal } from 'ant-design-vue'
-import { createVNode, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { notifyFirstScreenReady } from '@/util/startupLoadingUtil.js'
 
 const { t } = useI18n()
 
@@ -18,6 +19,7 @@ watch(() => useCommonStore().config.language, () => {
 }, { immediate: true })
 
 onMounted(async () => {
+  notifyFirstScreenReady()
   document.documentElement.style.fontSize = '16px'
   appInfo.value = await channelUtil.send({ event: 'get-app-info' })
 })
@@ -43,25 +45,25 @@ async function checkUpdate() {
   downloadFinish.value = false
   checkInfo.value = await channelUtil.send({ event: 'check-update' })
   checking.value = false
-  if(checkInfo.value) {
-    if(checkInfo.value.success === true) {
-      if(checkInfo.value.version === appInfo.value.version) {
+  if (checkInfo.value) {
+    if (checkInfo.value.success === true) {
+      if (checkInfo.value.version === appInfo.value.version) {
         Modal.success({
           title: t('prompt'),
           content: t('aboutView.alreadyLatestVersion'),
-        });
+        })
       }
     } else {
       Modal.error({
         title: t('prompt'),
         content: t('aboutView.checkUpdateFailed'),
-      });
+      })
     }
   } else {
     Modal.warning({
       title: t('prompt'),
       content: t('aboutView.tip'),
-    });
+    })
   }
 }
 //
@@ -104,7 +106,7 @@ onMounted(() => {
     Modal.error({
       title: t('prompt'),
       content: t('aboutView.checkUpdateFailed'),
-    });
+    })
   })
   eventEmit.on('download-update-progress', (progress) => {
     percent.value = Number.parseFloat(String(Math.floor(progress.percent * 10) / 10))

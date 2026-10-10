@@ -1975,10 +1975,12 @@ async function createNew(filePath, isRecent = false) {
 
   const id = commonUtil.createId()
   const workAreaSize = screen.getPrimaryDisplay().workAreaSize
+  const globalTheme = configUtil.getConfig()?.theme?.global === 'dark' ? 'dark' : 'light'
   const win = new BrowserWindow({
     frame: false,
     icon: path.resolve(__dirname, '../../../icon/favicon.ico'),
     title: 'wj-markdown-editor',
+    backgroundColor: globalTheme === 'dark' ? '#282c34' : '#ffffff',
     maximizable: true,
     resizable: true,
     width: workAreaSize.width / 4 * 3,
@@ -1988,6 +1990,7 @@ async function createNew(filePath, isRecent = false) {
     webPreferences: {
       webSecurity: true,
       preload: path.resolve(__dirname, '../../preload.js'),
+      additionalArguments: [`--wj-initial-theme=${globalTheme}`],
     },
   })
   let session = null

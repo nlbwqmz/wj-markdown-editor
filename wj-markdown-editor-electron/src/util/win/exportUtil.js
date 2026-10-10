@@ -42,9 +42,11 @@ function createExportWin({ parentWindow, documentContext, type, target = 'file',
 
   loadingKey = commonUtil.createId()
   notify({ type: 'loading', content: 'message.exporting', duration: 0, key: loadingKey })
+  const globalTheme = configUtil.getConfig()?.theme?.global === 'dark' ? 'dark' : 'light'
   exportWin = new BrowserWindow(createExportWindowOptions({
     parentWindow,
     preloadPath: path.resolve(__dirname, '../../preload.js'),
+    globalTheme,
   }))
 
   const searchParams = new URLSearchParams({

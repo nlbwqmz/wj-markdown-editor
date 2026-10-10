@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BrowserWindow, shell } from 'electron'
+import configUtil from '../../data/configUtil.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -15,6 +16,7 @@ export default {
         guideWin.show()
         return
       }
+      const globalTheme = configUtil.getConfig()?.theme?.global === 'dark' ? 'dark' : 'light'
       guideWin = new BrowserWindow({
         frame: false,
         icon: path.resolve(__dirname, '../../../icon/favicon.ico'),
@@ -26,8 +28,10 @@ export default {
         show: false,
         maximizable: false,
         resizable: true,
+        backgroundColor: globalTheme === 'dark' ? '#282c34' : '#ffffff',
         webPreferences: {
           preload: path.resolve(__dirname, '../../preload.js'),
+          additionalArguments: [`--wj-initial-theme=${globalTheme}`],
         },
       })
       guideWin.on('closed', () => {

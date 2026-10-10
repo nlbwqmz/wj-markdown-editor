@@ -32,15 +32,18 @@
       if (window.location.href.indexOf('searchBar') > -1 || window.location.href.indexOf('export') > -1) {
         document.getElementById('startup-loading').remove()
       } else {
-        window.node.sendToMain({ event: 'get-global-theme' }).then((globalTheme) => {
-          const startupLoading = document.getElementById('startup-loading')
-          if (startupLoading) {
-            if (globalTheme === 'dark') {
+        const startupLoading = document.getElementById('startup-loading')
+        if (startupLoading) {
+          try {
+            // 同步读取主进程注入的初始主题，避免异步往返导致遮罩出现明显延迟
+            if (window.node?.initialTheme === 'dark') {
               startupLoading.style.backgroundColor = 'rgb(40,44,52)'
             }
-            startupLoading.style.visibility = 'visible'
+          } catch (error) {
+            // 读取主题失败时保持默认背景，不能阻塞遮罩展示
           }
-        })
+          startupLoading.style.visibility = 'visible'
+        }
       }
     </script>
     <div id="app"></div>
