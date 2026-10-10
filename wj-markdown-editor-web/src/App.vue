@@ -82,36 +82,18 @@ function onKeydown(e) {
   }
 }
 
-// 已处理标志，避免就绪事件与兜底定时器重复触发淡出
+// 已处理标志，避免就绪事件与兜底定时器重复触发移除
 let startupLoadingDismissed = false
 
-// 首屏内容可看后淡出并移除启动遮罩。
-// 淡出动画绑定在遮罩第一个子元素上，动画结束后移除整个遮罩。
+// 首屏内容可看后立即移除启动遮罩。
+// 就绪信号已在 nextTick + requestAnimationFrame 之后派发，此时内容已完成布局，
+// 直接移除不会露出空白；不再做淡出动画，避免让用户多等 250ms。
 function dismissStartupLoading() {
   if (startupLoadingDismissed) {
     return
   }
   startupLoadingDismissed = true
-
-  const startupLoading = document.getElementById('startup-loading')
-  if (!startupLoading) {
-    return
-  }
-
-  const startupLoadingIcon = startupLoading.children[0]
-  if (!startupLoadingIcon) {
-    startupLoading.remove()
-    return
-  }
-
-  startupLoadingIcon.addEventListener(
-    'animationend',
-    () => {
-      startupLoading.remove()
-    },
-    { once: true },
-  )
-  startupLoadingIcon.style.animation = 'startup-load-leave 0.25s linear forwards'
+  document.getElementById('startup-loading')?.remove()
 }
 
 onMounted(() => {
