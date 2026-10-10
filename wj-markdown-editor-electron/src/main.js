@@ -16,7 +16,6 @@ import updateUtil from './util/updateUtil.js'
 import aboutUtil from './util/win/aboutUtil.js'
 import exportUtil from './util/win/exportUtil.js'
 import guideUtil from './util/win/guideUtil.js'
-import screenshotsUtil from './util/win/screenshotsUtil.js'
 import settingUtil from './util/win/settingUtil.js'
 import './util/channel/ipcMainUtil.js'
 
@@ -194,7 +193,6 @@ if (!lock) {
     } else {
       await windowLifecycleService.createNew(null)
     }
-    screenshotsUtil.init()
-    updateUtil.initUpdater(() => windowLifecycleService.listWindows())
+    await updateUtil.initUpdater(() => windowLifecycleService.listWindows())
   })
 }

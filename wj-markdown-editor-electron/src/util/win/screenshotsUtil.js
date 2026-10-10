@@ -1,7 +1,7 @@
 import { globalShortcut } from 'electron'
-import Screenshots from 'electron-screenshots'
 
 let screenshots
+let initPromise
 let onOk
 let onAlways
 
@@ -10,31 +10,45 @@ function finish() {
   onAlways && onAlways()
 }
 
+/**
+ * 懒加载截图模块：该依赖初始化成本较高（约 57ms），
+ * 且只在用户触发截图时才需要，因此移出启动路径。
+ */
+function ensureScreenshots() {
+  if (screenshots)
+    return Promise.resolve(screenshots)
+  if (!initPromise) {
+    initPromise = import('electron-screenshots').then(({ default: Screenshots }) => {
+      const instance = new Screenshots({ singleWindow: true })
+      instance.on('cancel', (e) => {
+        e.preventDefault()
+      })
+      instance.on('ok', (e, buffer, bounds) => {
+        onOk && onOk(Buffer.from(buffer).toString('base64'), bounds)
+        finish()
+      })
+      instance.on('afterSave', () => {
+        finish()
+      })
+      screenshots = instance
+      return instance
+    })
+  }
+  return initPromise
+}
+
 export default {
-  init: () => {
-    screenshots = new Screenshots({ singleWindow: true })
-    screenshots.on('cancel', (e) => {
-      e.preventDefault()
-    })
-    screenshots.on('ok', (e, buffer, bounds) => {
-      onOk && onOk(Buffer.from(buffer).toString('base64'), bounds)
-      finish()
-    })
-    screenshots.on('afterSave', () => {
-      finish()
-    })
-  },
-  startCapture: (ok, always) => {
+  startCapture: async (ok, always) => {
     onOk = ok
     onAlways = always
-    screenshots.startCapture().then(() => {
-      globalShortcut.register('esc', () => {
-        if (screenshots.$win?.isFocused()) {
-          screenshots.endCapture().then(() => {
-            finish()
-          })
-        }
-      })
+    const instance = await ensureScreenshots()
+    await instance.startCapture()
+    globalShortcut.register('esc', () => {
+      if (instance.$win?.isFocused()) {
+        instance.endCapture().then(() => {
+          finish()
+        })
+      }
     })
   },
 }

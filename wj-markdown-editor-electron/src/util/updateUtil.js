@@ -1,11 +1,28 @@
-import axios from 'axios'
 import { app } from 'electron'
-import electronUpdater from 'electron-updater'
-import schedule from 'node-schedule'
 import semver from 'semver'
 import sendUtil from './channel/sendUtil.js'
 
-const { autoUpdater, CancellationToken } = electronUpdater
+let autoUpdater
+let CancellationToken
+let schedule
+
+/**
+ * 懒加载更新相关依赖。
+ * electron-updater / node-schedule 仅在打包环境参与更新检查，
+ * 且最早在窗口创建之后才使用，因此移出启动路径。
+ */
+async function ensureUpdaterDeps() {
+  if (autoUpdater) {
+    return
+  }
+  const [electronUpdater, scheduleModule] = await Promise.all([
+    import('electron-updater'),
+    import('node-schedule'),
+  ])
+  autoUpdater = electronUpdater.default.autoUpdater
+  CancellationToken = electronUpdater.default.CancellationToken
+  schedule = scheduleModule.default
+}
 
 let downloadUpdateToken
 let aboutWinTemp
@@ -22,10 +39,12 @@ async function checkUpdate(windowList) {
   if (!app.isPackaged) {
     return null
   }
+  await ensureUpdaterDeps()
   if (newVersion) {
     broadcastVersionMessage(windowList, true)
     return { finish: true, success: true, version: newVersion }
   }
+  const { default: axios } = await import('axios')
   return new Promise((resolve) => {
     axios.get('https://api.github.com/repos/nlbwqmz/wj-markdown-editor/releases/latest', { headers: { 'User-Agent': 'wj-markdown-editor' } }).then((res) => {
       const versionLatest = res.data.tag_name
@@ -53,8 +72,9 @@ async function checkUpdate(windowList) {
   })
 }
 
-function initUpdater(getWindowList) {
+async function initUpdater(getWindowList) {
   if (app.isPackaged) {
+    await ensureUpdaterDeps()
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = false
     autoUpdater.on('checking-for-update', () => {})
@@ -74,8 +94,9 @@ function initUpdater(getWindowList) {
   }
 }
 
-function downloadUpdate(aboutWin) {
+async function downloadUpdate(aboutWin) {
   aboutWinTemp = aboutWin
+  await ensureUpdaterDeps()
   const cancellationToken = new CancellationToken()
   autoUpdater.downloadUpdate(cancellationToken).then(() => {
     console.info('Download done')
@@ -91,7 +112,8 @@ function cancelDownloadUpdate() {
   }
 }
 
-function executeUpdate() {
+async function executeUpdate() {
+  await ensureUpdaterDeps()
   autoUpdater.quitAndInstall(true, true)
 }
 

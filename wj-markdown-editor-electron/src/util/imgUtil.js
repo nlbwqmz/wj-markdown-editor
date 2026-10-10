@@ -1,5 +1,4 @@
 import path from 'node:path'
-import axios from 'axios'
 import { app } from 'electron'
 import fs from 'fs-extra'
 import commonUtil from './commonUtil.js'
@@ -14,6 +13,7 @@ function getDocumentPath(documentPath) {
  */
 async function checkUrlIsImg(imgUrl) {
   try {
+    const { default: axios } = await import('axios')
     const response = await axios.head(imgUrl, {
       maxRedirects: 5, // 允许重定向
       timeout: 5000, // 5秒超时
@@ -33,6 +33,7 @@ async function checkUrlIsImg(imgUrl) {
 async function saveImgNetworkToLocal(imgUrl, imgPath) {
   try {
     await commonUtil.ensureDirSafe(path.dirname(imgPath))
+    const { default: axios } = await import('axios')
     // 发送 GET 请求，设置 responseType 为 'stream' 以处理大文件
     const response = await axios({
       method: 'get',

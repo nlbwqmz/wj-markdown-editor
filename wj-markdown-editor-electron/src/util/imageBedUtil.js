@@ -1,5 +1,4 @@
 import path from 'node:path'
-import axios from 'axios'
 import FormData from 'form-data'
 import fs from 'fs-extra'
 import mime from 'mime-types'
@@ -15,6 +14,7 @@ const handler = {
       content: base64Image,
       path: option.path + encodeURI(fileName),
     }
+    const { default: axios } = await import('axios')
     const res = await axios.request({
       method: 'PUT',
       url: `https://api.github.com/repos/${option.repo}/contents/${encodeURI(option.path)}${encodeURIComponent(fileName)}`,
@@ -36,6 +36,7 @@ const handler = {
     const buffer = await fs.readFile(filePath)
     const formData = new FormData()
     formData.append('smfile', buffer, fileName)
+    const { default: axios } = await import('axios')
     const res = await axios.request({
       method: 'POST',
       url: `https://${option.domain ? option.domain : 'sm.ms'}/api/v2/upload`,
