@@ -1094,6 +1094,7 @@ defineExpose({
             :preview-theme="config.theme.preview"
             :preview-scroll-container="() => previewContainerRef"
             :watermark="watermark"
+            :defer-watermark-until-ready="true"
             @refresh-complete="onPreviewRefreshComplete"
             @anchor-change="onAnchorChange"
             @preview-contextmenu="onPreviewContextmenu"

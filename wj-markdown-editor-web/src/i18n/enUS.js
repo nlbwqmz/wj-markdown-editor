@@ -96,7 +96,6 @@ export default {
         export: {
           exportToFile: 'Export to File',
           exportToClipboard: 'Export to Clipboard',
-          pdfTip: 'Dark theme is not supported',
         },
         setting: 'Setting',
       },

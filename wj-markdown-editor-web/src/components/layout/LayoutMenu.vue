@@ -1,7 +1,7 @@
 <script setup>
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { Modal, Tooltip } from 'ant-design-vue'
-import { createVNode, h, onBeforeMount, ref, watch } from 'vue'
+import { Modal } from 'ant-design-vue'
+import { createVNode, onBeforeMount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
@@ -167,9 +167,7 @@ function updateMenuList() {
           children: [
             {
               key: commonUtil.createId(),
-              label: h(Tooltip, { 'title': t('topMenu.file.children.export.pdfTip'), 'auto-adjust-overflow': true, 'placement': 'right', 'color': '#1677ff' }, () => [
-                h('div', {}, 'PDF'),
-              ]),
+              label: 'PDF',
               click: () => { sendExportStart('PDF', 'file') },
             },
             {

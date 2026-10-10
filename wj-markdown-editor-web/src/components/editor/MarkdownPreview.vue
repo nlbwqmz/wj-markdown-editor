@@ -13,6 +13,7 @@ import { createPreviewResourceContext } from '@/util/editor/previewResourceConte
 import md from '@/util/markdown-it/markdownItDefault.js'
 import { copyTextWithFeedback, getPreviewInlineCodeCopyText, syncPreviewInlineCodeCopyMetadata } from '@/util/previewInlineCodeCopyUtil.js'
 import { settleMermaidRender } from '@/util/previewMermaidRenderUtil.js'
+import { isFirstScreenReady, STARTUP_LOADING_READY_EVENT } from '@/util/startupLoadingUtil.js'
 
 const props = defineProps({
   content: {
@@ -30,6 +31,10 @@ const props = defineProps({
   watermark: {
     type: Object,
     default: () => null,
+  },
+  deferWatermarkUntilReady: {
+    type: Boolean,
+    default: () => false,
   },
   previewScrollContainer: {
     type: Function,
@@ -81,6 +86,32 @@ const previewShellStyle = computed(() => ({
   '--wj-code-block-action-focus-background': 'var(--wj-code-block-action-bg)',
   '--wj-preview-image-box-shadow': store.config.markdown?.imageShadow === false ? 'none' : 'var(--img-box-shadow)',
 }))
+
+// 首屏就绪状态：仅在 deferWatermarkUntilReady 为 true 时参与判断。
+// 水印绘制会触发 canvas 2D 后端首次初始化（实测约 120ms），
+// 启动期延迟挂载可避免这笔开销挡住首屏内容。
+const firstScreenReady = ref(isFirstScreenReady())
+
+// 只在启用时把配置传给 a-watermark，避免把无关字段渲染成 DOM 属性
+const watermarkProps = computed(() => (props.watermark?.enabled === true ? props.watermark : {}))
+
+// 水印层是否挂载：
+// - 未启用：完全不挂载，省掉水印绘制与 canvas 初始化
+// - 启用 + 非延迟场景（如导出窗口）：立即挂载，保证导出结果含水印
+// - 启用 + 延迟场景（编辑页/预览页首屏）：等首屏就绪后再挂载
+const watermarkLayerVisible = computed(() => {
+  if (props.watermark?.enabled !== true) {
+    return false
+  }
+  if (props.deferWatermarkUntilReady !== true) {
+    return true
+  }
+  return firstScreenReady.value
+})
+
+function handleFirstScreenReady() {
+  firstScreenReady.value = true
+}
 
 const imageSrcList = ref([])
 const imagePreviewVisible = ref(false)
@@ -793,6 +824,10 @@ onMounted(() => {
   initMermaid()
   bindPreviewEvents()
   refreshPreviewImmediately(props.content)
+  // 延迟场景下监听首屏就绪事件，就绪后再挂载水印层。
+  if (props.deferWatermarkUntilReady === true && firstScreenReady.value !== true) {
+    window.addEventListener(STARTUP_LOADING_READY_EVENT, handleFirstScreenReady, { once: true })
+  }
 })
 
 onActivated(() => {
@@ -814,6 +849,7 @@ onBeforeUnmount(() => {
   previewViewActive = false
   clearPreviewRefreshScheduler()
   unbindPreviewEvents()
+  window.removeEventListener(STARTUP_LOADING_READY_EVENT, handleFirstScreenReady)
 })
 
 function getImagePreviewContainer() {
@@ -826,12 +862,18 @@ onBeforeRouteLeave(() => {
 </script>
 
 <template>
-  <a-watermark v-bind="watermark && watermark.enabled ? watermark : {}">
+  <div class="pos-relative">
     <!-- 使用伪元素防止首个子元素导致margin塌陷 -->
     <div ref="previewShellRef" :style="previewShellStyle" class="wj-preview-theme backface-hidden pos-relative w-full p-2 before:table before:content-['']" :class="`code-theme-${codeTheme} preview-theme-${previewTheme}`">
       <div ref="previewRef" class="wj-scrollbar w-full" />
     </div>
-  </a-watermark>
+    <!-- 水印层独立覆盖，不参与布局；关闭时完全不挂载，避免 canvas 绘制开销 -->
+    <div v-if="watermarkLayerVisible" class="pointer-events-none absolute inset-0">
+      <a-watermark v-bind="watermarkProps" style="height: 100%; width: 100%">
+        <div class="h-full w-full" />
+      </a-watermark>
+    </div>
+  </div>
   <div class="hidden">
     <a-image-preview-group :preview="{ getContainer: getImagePreviewContainer, visible: imagePreviewVisible, onVisibleChange: (visible) => { imagePreviewVisible = visible }, current: imagePreviewCurrentIndex }">
       <a-image v-for="(item, index) in imageSrcList" :key="index" :src="item" />

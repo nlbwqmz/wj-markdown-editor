@@ -18,9 +18,6 @@ async function waitingExport({ type, target, filePath }) {
     return
   }
   exportWaitingStarted = true
-  if (type === 'PDF' && document.documentElement.getAttribute('theme') !== 'light') {
-    document.documentElement.setAttribute('theme', 'light')
-  }
   await waitForExportRenderSettled({
     themeName: config.value?.theme?.code,
     images: document.querySelectorAll('img'),

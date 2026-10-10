@@ -91,14 +91,16 @@ async function doExport({ data, notify }) {
       const pageNumber = config.export.pdf.footer.pageNumber
       const footer = config.export.pdf.footer.content
       const header = config.export.pdf.header.content
+      // 页眉页脚文字颜色跟随全局主题，避免深色背景下的默认黑字不可见
+      const headerFooterColor = config.theme?.global === 'dark' ? '#ffffff' : '#000000'
       buffer = await exportWin.webContents.printToPDF({
         pageSize: 'A4',
         printBackground: true,
         generateTaggedPDF: true,
         displayHeaderFooter: Boolean(pageNumber || footer || header),
         generateDocumentOutline: true,
-        headerTemplate: `<div style="font-size: 12px; text-align: center; width: 100%">${header}</div>`,
-        footerTemplate: `<div style="font-size: 12px; text-align: center; width: 100%">${pageNumber === true ? '第<span class="pageNumber"></span>页 共<span class="totalPages"></span>页 ' : ''}${footer}</div>`,
+        headerTemplate: `<div style="font-size: 12px; text-align: center; width: 100%; color: ${headerFooterColor}">${header}</div>`,
+        footerTemplate: `<div style="font-size: 12px; text-align: center; width: 100%; color: ${headerFooterColor}">${pageNumber === true ? '第<span class="pageNumber"></span>页 共<span class="totalPages"></span>页 ' : ''}${footer}</div>`,
       })
       await fs.writeFile(data.filePath, buffer)
     } else {

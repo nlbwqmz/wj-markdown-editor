@@ -1543,6 +1543,7 @@ defineExpose({
             :preview-theme="previewTheme"
             :preview-scroll-container="() => previewRef"
             :watermark="watermark"
+            :defer-watermark-until-ready="true"
             @refresh-complete="onRefreshComplete"
             @anchor-change="onAnchorChange"
             @preview-contextmenu="onPreviewContextmenu"

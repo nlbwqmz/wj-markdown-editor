@@ -19,7 +19,6 @@ const translationMap = {
   'topMenu.file.children.recentFiles.noHistory': '暂无最近历史',
   'topMenu.file.children.export.exportToFile': '导出到文件',
   'topMenu.file.children.export.exportToClipboard': '导出到剪切板',
-  'topMenu.file.children.export.pdfTip': '不支持暗黑主题',
   'topMenu.view.name': '视图',
   'topMenu.view.children.switchView': '切换',
   'topMenu.view.children.enterFullScreen': '进入全屏',
@@ -295,7 +294,7 @@ describe('layoutMenu 文件管理栏接线', () => {
     expect(exportToFileItem).toBeTruthy()
     expect(exportToClipboardItem).toBeTruthy()
     expect(exportToFileItem.children).toHaveLength(3)
-    expect(exportToFileItem.children[0].label.props.title).toBe('不支持暗黑主题')
+    expect(extractTextFromNode(exportToFileItem.children[0].label)).toBe('PDF')
     expect(extractTextFromNode(exportToFileItem.children[1].label)).toBe('PNG')
     expect(extractTextFromNode(exportToFileItem.children[2].label)).toBe('JPEG')
     expect(exportToClipboardItem.children.map(item => extractTextFromNode(item.label))).toEqual([

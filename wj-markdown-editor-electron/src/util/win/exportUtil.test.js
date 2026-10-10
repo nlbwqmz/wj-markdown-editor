@@ -111,6 +111,9 @@ describe('exportUtil', () => {
 
     createId.mockReturnValue('export-loading-key')
     configGetConfig.mockReturnValue({
+      theme: {
+        global: 'light',
+      },
       export: {
         pdf: {
           footer: {
@@ -380,6 +383,100 @@ describe('exportUtil', () => {
 
     expect(fsWriteFile).toHaveBeenCalledWith('D:/exports/demo.pdf', Buffer.from('pdf-file-buffer'))
     expect(clipboardWriteImage).not.toHaveBeenCalled()
+  })
+
+  it('doExport 导出 PDF 时，深色主题下页眉页脚应使用白色文字', async () => {
+    configGetConfig.mockReturnValue({
+      theme: {
+        global: 'dark',
+      },
+      export: {
+        pdf: {
+          footer: {
+            pageNumber: true,
+            content: '页脚内容',
+          },
+          header: {
+            content: '页眉内容',
+          },
+        },
+      },
+    })
+    const { default: exportUtil } = await import('./exportUtil.js')
+    const notify = vi.fn()
+
+    await exportUtil.createExportWin({
+      parentWindow: { id: 1 },
+      documentContext: {
+        path: 'D:/docs/demo.md',
+        content: '# 导出内容',
+      },
+      type: 'PDF',
+      target: 'file',
+      notify,
+    })
+
+    browserWindowInstances[0].webContents.printToPDF.mockResolvedValueOnce(Buffer.from('pdf-file-buffer'))
+
+    await exportUtil.doExport({
+      data: {
+        type: 'PDF',
+        target: 'file',
+        filePath: 'D:/exports/demo.pdf',
+      },
+      notify,
+    })
+
+    const printOptions = browserWindowInstances[0].webContents.printToPDF.mock.calls[0][0]
+    expect(printOptions.headerTemplate).toBe('<div style="font-size: 12px; text-align: center; width: 100%; color: #ffffff">页眉内容</div>')
+    expect(printOptions.footerTemplate).toBe('<div style="font-size: 12px; text-align: center; width: 100%; color: #ffffff">第<span class="pageNumber"></span>页 共<span class="totalPages"></span>页 页脚内容</div>')
+  })
+
+  it('doExport 导出 PDF 时，浅色主题下页眉页脚应使用黑色文字', async () => {
+    configGetConfig.mockReturnValue({
+      theme: {
+        global: 'light',
+      },
+      export: {
+        pdf: {
+          footer: {
+            pageNumber: true,
+            content: '页脚内容',
+          },
+          header: {
+            content: '页眉内容',
+          },
+        },
+      },
+    })
+    const { default: exportUtil } = await import('./exportUtil.js')
+    const notify = vi.fn()
+
+    await exportUtil.createExportWin({
+      parentWindow: { id: 1 },
+      documentContext: {
+        path: 'D:/docs/demo.md',
+        content: '# 导出内容',
+      },
+      type: 'PDF',
+      target: 'file',
+      notify,
+    })
+
+    browserWindowInstances[0].webContents.printToPDF.mockResolvedValueOnce(Buffer.from('pdf-file-buffer'))
+
+    await exportUtil.doExport({
+      data: {
+        type: 'PDF',
+        target: 'file',
+        filePath: 'D:/exports/demo.pdf',
+      },
+      notify,
+    })
+
+    const printOptions = browserWindowInstances[0].webContents.printToPDF.mock.calls[0][0]
+    expect(printOptions.headerTemplate).toBe('<div style="font-size: 12px; text-align: center; width: 100%; color: #000000">页眉内容</div>')
+    expect(printOptions.footerTemplate).toBe('<div style="font-size: 12px; text-align: center; width: 100%; color: #000000">第<span class="pageNumber"></span>页 共<span class="totalPages"></span>页 页脚内容</div>')
   })
 
   it('默认导出不应继续暴露失效的 channel 入口，避免旧形态调用绕过显式参数边界', async () => {

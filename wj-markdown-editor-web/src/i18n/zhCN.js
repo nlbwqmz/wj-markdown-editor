@@ -96,7 +96,6 @@ export default {
         export: {
           exportToFile: '导出到文件',
           exportToClipboard: '导出到剪切板',
-          pdfTip: '不支持暗黑主题',
         },
         setting: '设置',
       },
