@@ -11,6 +11,7 @@ import { loadCodeTheme } from '@/util/codeThemeUtil.js'
 import { handlePreviewHashAnchorClick } from '@/util/editor/previewAnchorLinkScrollUtil.js'
 import { createPreviewResourceContext } from '@/util/editor/previewResourceContextUtil.js'
 import md from '@/util/markdown-it/markdownItDefault.js'
+import { schedulePreviewCodeHighlight } from '@/util/previewCodeHighlightUtil.js'
 import { copyTextWithFeedback, getPreviewInlineCodeCopyText, syncPreviewInlineCodeCopyMetadata } from '@/util/previewInlineCodeCopyUtil.js'
 import { settleMermaidRender } from '@/util/previewMermaidRenderUtil.js'
 import { isFirstScreenReady, STARTUP_LOADING_READY_EVENT } from '@/util/startupLoadingUtil.js'
@@ -123,6 +124,8 @@ let previewRefreshRafId = null
 let previewRefreshTimer = null
 let lastPreviewRefreshAt = 0
 let previewRefreshSequence = 0
+// 当前进行中的代码块分帧高亮控制器；新一轮刷新或组件卸载时取消
+let previewCodeHighlightController = null
 // keep-alive 失活时不能再继续对缓存 DOM 做 mermaid 渲染。
 // 否则 mermaid 在读取几何信息时会命中已经脱离当前活动视图的节点。
 let previewViewActive = false
@@ -741,8 +744,24 @@ async function refreshPreview(doc, forceRefreshMermaid = false) {
       }
     })
   }
-  // 使用临时元素来更新，防止一些attribute没有映射到property上
-  updateDOM(previewRef.value, tempElement)
+  // 首次渲染没有可复用的旧 DOM，直接整体替换，避免对整棵树做无意义的递归 diff；
+  // 后续刷新仍走 updateDOM 增量更新。
+  if (previewRef.value && previewRef.value.childNodes.length === 0) {
+    previewRef.value.innerHTML = rendered
+  } else {
+    // 使用临时元素来更新，防止一些attribute没有映射到property上
+    updateDOM(previewRef.value, tempElement)
+  }
+
+  // 大纲只依赖标题 DOM（与 Mermaid 渲染结果无关），提前推送，避免被大量图表渲染阻塞
+  pushAnchorList()
+
+  // 代码块高亮分帧执行，避免一次性同步高亮大量代码块阻塞主线程
+  previewCodeHighlightController?.cancel?.()
+  previewCodeHighlightController = schedulePreviewCodeHighlight({
+    previewRoot: previewRef.value,
+    isCurrentRefresh: () => currentRefreshSequence === previewRefreshSequence,
+  })
 
   await settleMermaidRender({
     nodes: shouldRefreshMermaid ? previewRef.value.querySelectorAll('.mermaid') : [],
@@ -757,7 +776,6 @@ async function refreshPreview(doc, forceRefreshMermaid = false) {
   refreshCodeBlockActionVariables()
   updatePreviewAssetMetadata()
   updatePreviewInlineCodeCopyMetadata()
-  pushAnchorList()
   emits('refreshComplete')
 }
 
@@ -841,12 +859,16 @@ onDeactivated(() => {
     markPendingActivationRefresh()
   }
   previewViewActive = false
+  previewCodeHighlightController?.cancel?.()
+  previewCodeHighlightController = null
   clearPreviewRefreshScheduler()
 })
 
 onBeforeUnmount(() => {
   activationRefreshTaskToken += 1
   previewViewActive = false
+  previewCodeHighlightController?.cancel?.()
+  previewCodeHighlightController = null
   clearPreviewRefreshScheduler()
   unbindPreviewEvents()
   window.removeEventListener(STARTUP_LOADING_READY_EVENT, handleFirstScreenReady)

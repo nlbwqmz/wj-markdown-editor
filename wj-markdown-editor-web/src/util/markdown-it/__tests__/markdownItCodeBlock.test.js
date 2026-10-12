@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 
-import hljs from 'highlight.js'
 import MarkdownIt from 'markdown-it'
 
 import codeBlockPlugin from '../markdownItCodeBlock.js'
@@ -81,25 +80,6 @@ function assertClassTokensDoNotMatch(toolbarStructure, classKey, forbiddenPatter
   })
 }
 
-function getStableAutoDetectFixture() {
-  const candidates = [
-    '[core]\nname=value',
-    'GET / HTTP/1.1\nHost: example.com',
-    '{\n  "name": "test",\n  "value": 1\n}',
-  ]
-
-  const matchedCandidate = candidates.find(candidate => hljs.highlightAuto(candidate).language)
-  assert.ok(matchedCandidate, '测试前提失败：必须存在至少一个可被 highlight.js 自动识别的样例')
-
-  const detectedLanguage = hljs.highlightAuto(matchedCandidate).language
-  assert.ok(detectedLanguage, '测试前提失败：自动识别成功场景必须拿到检测语言')
-
-  return {
-    code: matchedCandidate,
-    detectedLanguage,
-  }
-}
-
 function toMermaidCacheKey(source) {
   return createHash('sha256').update(source.replace(/\s+/gu, ''), 'utf8').digest('hex')
 }
@@ -136,6 +116,7 @@ test('显式语言且可识别时必须输出标准高亮 DOM 契约', () => {
   assert.equal(toolbarLangInfo.classTokens.has('hidden'), false)
   assert.equal(toolbarLangInfo.text, 'js')
   assert.equal(toolbarStructure.langText, 'js')
+  assert.match(renderedHtml, /data-wj-hl-lang="javascript"/u)
   assert.doesNotMatch(renderedHtml, /<pre class="[^"]*\bhljs\b/u)
   assert.doesNotMatch(renderedHtml, /\b(?:relative|absolute|top-0|right-0)\b/u)
 })
@@ -165,6 +146,7 @@ test('显式语言但未识别时不得输出伪造的 language class 且仍显�
 
   assert.deepEqual([...codeClassTokens].sort(), ['hljs'])
   assert.doesNotMatch(renderedHtml, /\blanguage-[^"\s]+/u)
+  assert.doesNotMatch(renderedHtml, /data-wj-hl-lang=/u)
   assert.equal(toolbarLangInfo.classTokens.has('hidden'), false)
   assert.equal(toolbarLangInfo.text, 'FooLang')
   assert.equal(toolbarStructure.langText, 'FooLang')
@@ -179,17 +161,18 @@ test('普通 fenced code block 不得把正文语义色 utility class 写死到 
   assert.doesNotMatch(renderedHtml, /var\(--wj-markdown-text-secondary\)/u)
 })
 
-test('未显式语言但自动识别成功时只输出检测出的 language class 且隐藏语言标签', () => {
+test('未显式语言时渲染阶段只输出 hljs 与待高亮标记（检测语言在分帧高亮阶段补齐）', () => {
   const md = new MarkdownIt()
   md.use(codeBlockPlugin)
-  const autoDetectFixture = getStableAutoDetectFixture()
 
-  const renderedHtml = md.render(`\`\`\`\n${autoDetectFixture.code}\n\`\`\``)
+  const renderedHtml = md.render('```\n[core]\nname=value\n```')
   const codeClassTokens = getCodeClassTokens(renderedHtml)
   const toolbarLangInfo = getToolbarLangInfo(renderedHtml)
   const toolbarStructure = assertSingleActionSlotToolbarContract(renderedHtml)
 
-  assert.deepEqual([...codeClassTokens].sort(), ['hljs', `language-${autoDetectFixture.detectedLanguage}`].sort())
+  // 渲染阶段不做同步高亮，自动识别的语言类名由分帧高亮阶段补齐
+  assert.deepEqual([...codeClassTokens].sort(), ['hljs'])
+  assert.match(renderedHtml, /data-wj-hl-pending="1"/u)
   assert.equal(toolbarLangInfo.classTokens.has('hidden'), true)
   assert.equal(toolbarLangInfo.text, '')
   assert.equal(toolbarStructure.langText, '')
@@ -210,31 +193,20 @@ test('未显式语言且自动识别失败时只保留 hljs class 且隐藏语�
   assert.equal(toolbarStructure.langText, '')
 })
 
-test('普通 fenced code block 在高亮抛错时仍必须输出稳定 shell 并安全转义代码内容', () => {
+test('普通 fenced code block 渲染阶段必须安全转义代码内容并标记待高亮', () => {
   const md = new MarkdownIt()
   md.use(codeBlockPlugin)
-  const originalHighlightAuto = hljs.highlightAuto
-  const originalConsoleError = console.error
 
-  hljs.highlightAuto = () => {
-    throw new Error('boom')
-  }
-  console.error = () => {}
+  const renderedHtml = md.render('```\n<div>& unsafe\n```')
+  const toolbarStructure = assertSingleActionSlotToolbarContract(renderedHtml)
 
-  try {
-    const renderedHtml = md.render('```\n<div>& unsafe\n```')
-    const toolbarStructure = assertSingleActionSlotToolbarContract(renderedHtml)
-
-    assert.match(renderedHtml, /pre-container/u)
-    assert.match(renderedHtml, /pre-container-toolbar/u)
-    assert.match(renderedHtml, /<pre(?:\s[^>]*)?>\s*<code class="[^"]*\bhljs\b/u)
-    assert.match(renderedHtml, /&lt;div&gt;&amp; unsafe/u)
-    assert.doesNotMatch(renderedHtml, /<pre><code><div>& unsafe/u)
-    assert.equal(toolbarStructure.langText, '')
-  } finally {
-    hljs.highlightAuto = originalHighlightAuto
-    console.error = originalConsoleError
-  }
+  assert.match(renderedHtml, /pre-container/u)
+  assert.match(renderedHtml, /pre-container-toolbar/u)
+  assert.match(renderedHtml, /<pre(?:\s[^>]*)?>\s*<code class="[^"]*\bhljs\b/u)
+  assert.match(renderedHtml, /data-wj-hl-pending="1"/u)
+  assert.match(renderedHtml, /&lt;div&gt;&amp; unsafe/u)
+  assert.doesNotMatch(renderedHtml, /<pre><code><div>& unsafe/u)
+  assert.equal(toolbarStructure.langText, '')
 })
 
 test('mermaid fenced code block 必须保持独立分支输出', () => {

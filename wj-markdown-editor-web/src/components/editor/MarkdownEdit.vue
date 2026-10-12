@@ -1532,7 +1532,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full overflow-y-auto p-2"
+          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full overflow-y-auto p-2"
           :style="previewContainerStyle"
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"

@@ -3,7 +3,7 @@ import { computed, isRef, nextTick, onBeforeUnmount, onMounted, ref, watch } fro
 import IconButton from '@/components/editor/IconButton.vue'
 import commonUtil from '@/util/commonUtil.js'
 import {
-  findPreviewAnchorTarget,
+  normalizeHashAnchor,
   scrollPreviewToAnchor,
 } from '@/util/editor/previewAnchorScrollUtil.js'
 import { isFirstScreenReady, STARTUP_LOADING_READY_EVENT } from '@/util/startupLoadingUtil.js'
@@ -67,18 +67,30 @@ function rebuildHeadingTargetElementMap(container) {
 
   // 目录滚动联动会频繁读取标题位置，这里先把 href 对应的真实标题元素缓存下来，
   // 避免在每次 scroll 时都重新全量扫描预览 DOM。
+  // 大文档下大纲项与锚点候选数量都很大，必须先建索引再逐个查询；
+  // 若对每个大纲项重新扫描候选列表会退化为 O(n²)（1MB 文档实测可达数秒）。
   const candidateList = Array.from(container.querySelectorAll('[id], a[name]'))
+  const anchorElementMap = new Map()
+  for (const candidate of candidateList) {
+    const rawAnchorValue = candidate?.id || candidate?.getAttribute?.('name') || ''
+    if (!rawAnchorValue) {
+      continue
+    }
+    for (const anchorValue of normalizeHashAnchor(`#${rawAnchorValue}`)) {
+      if (anchorElementMap.has(anchorValue) !== true) {
+        anchorElementMap.set(anchorValue, candidate)
+      }
+    }
+  }
+
   const nextHeadingTargetElementMap = new Map()
-
   flattenedAnchorList.value.forEach((item) => {
-    const targetElement = findPreviewAnchorTarget({
-      previewRoot: container,
-      href: item.href,
-      candidateList,
-    })
-
-    if (targetElement) {
-      nextHeadingTargetElementMap.set(item.href, targetElement)
+    for (const anchorValue of normalizeHashAnchor(item.href)) {
+      const targetElement = anchorElementMap.get(anchorValue)
+      if (targetElement) {
+        nextHeadingTargetElementMap.set(item.href, targetElement)
+        return
+      }
     }
   })
 
@@ -137,7 +149,7 @@ function scheduleHeadingTargetRefresh() {
 
     rebuildHeadingTargetElementMap(currentContainer)
     if (isProgrammaticScrolling !== true) {
-      updateActiveHref()
+      scheduleActiveHrefUpdate()
     }
   })
 }
@@ -206,6 +218,21 @@ function shouldFinishProgrammaticScroll(container) {
 // 首屏就绪事件或兜底定时器打开这道门之后，才允许读取标题位置并计算高亮。
 let headingMeasureEnabled = false
 
+// 目录高亮的测量统一延后到下一帧：预览 DOM 刚变更（或首屏刚就绪）时立即读取标题位置
+// 会强制浏览器全量同步排版，大文档下可达秒级，阻塞首帧绘制。
+let activeHrefUpdateRafId = null
+
+function scheduleActiveHrefUpdate() {
+  if (activeHrefUpdateRafId !== null) {
+    return
+  }
+
+  activeHrefUpdateRafId = requestAnimationFrame(() => {
+    activeHrefUpdateRafId = null
+    updateActiveHref()
+  })
+}
+
 function enableHeadingMeasure() {
   if (headingMeasureEnabled) {
     return
@@ -213,7 +240,7 @@ function enableHeadingMeasure() {
 
   headingMeasureEnabled = true
   // 补算一次，否则门打开前挂载的目录会一直保持无高亮状态。
-  updateActiveHref()
+  scheduleActiveHrefUpdate()
 }
 
 function updateActiveHref() {
@@ -272,7 +299,9 @@ function bindContainer() {
   rebuildHeadingTargetElementMap(currentContainer)
   currentContainer?.addEventListener?.('scroll', syncActiveHref)
   observeContainerMutations(currentContainer)
-  updateActiveHref()
+  // 目录列表更新发生在预览 DOM 刚变更之后，此时立即测量标题位置会强制全量同步排版；
+  // 延后到下一帧再补算高亮。
+  scheduleActiveHrefUpdate()
 }
 
 function setMenuItemRef(href, element) {
@@ -334,7 +363,7 @@ watch(() => props.anchorList, () => {
   nextTick(() => {
     bindContainer()
   })
-}, { deep: true })
+})
 
 watch(resolveMenuContainer, () => {
   nextTick(() => {

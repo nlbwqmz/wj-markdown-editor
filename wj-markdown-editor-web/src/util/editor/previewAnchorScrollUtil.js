@@ -1,4 +1,4 @@
-function normalizeHashAnchor(href) {
+export function normalizeHashAnchor(href) {
   if (typeof href !== 'string' || !href.startsWith('#') || href === '#') {
     return []
   }

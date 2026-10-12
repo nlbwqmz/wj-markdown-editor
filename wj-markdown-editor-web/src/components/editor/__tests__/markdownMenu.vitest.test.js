@@ -206,9 +206,11 @@ describe('markdownMenu', () => {
     window.dispatchEvent(new CustomEvent(startupLoadingRuntimeState.STARTUP_LOADING_READY_EVENT))
     await wrapper.vm.$nextTick()
 
-    // 首屏就绪后：补算一次，高亮到当前锚点
-    expect(containerRectSpy).toHaveBeenCalled()
-    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#intro')
+    // 首屏就绪后：补算一次（延后到下一帧执行），高亮到当前锚点
+    await vi.waitFor(() => {
+      expect(containerRectSpy).toHaveBeenCalled()
+      expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#intro')
+    })
 
     wrapper.unmount()
   })
@@ -618,7 +620,10 @@ describe('markdownMenu', () => {
     await wrapper.vm.$nextTick()
     await nextTick()
 
-    expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#session')
+    // 目录高亮测量已延后到下一帧执行
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-active="true"]').attributes('data-href')).toBe('#session')
+    })
   })
 
   it('预览滚动容器引用切换后，会重新绑定新的滚动监听并解绑旧容器', async () => {

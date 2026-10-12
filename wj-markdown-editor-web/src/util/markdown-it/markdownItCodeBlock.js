@@ -55,9 +55,11 @@ function createCanonicalLanguageKeyByAlias() {
 }
 
 /**
- * 解析普通 fenced code block 的语言元数据
+ * 解析普通 fenced code block 的语言元数据。
+ * 高亮计算已改为预览渲染后的分帧流程（previewCodeHighlightUtil），
+ * 这里只做同步的轻量解析：语言类名、工具栏标签与延迟高亮所需的目标语言。
  */
-function resolveCodeBlockLanguageMeta(info, code) {
+function resolveCodeBlockLanguageMeta(info) {
   const explicitLabel = info ? info.split(/\s+/u)[0]?.trim() ?? '' : ''
 
   if (explicitLabel) {
@@ -74,47 +76,7 @@ function resolveCodeBlockLanguageMeta(info, code) {
 
     return {
       codeClassName: codeClassNames.join(' '),
-      highlightedValue: canonicalKey
-        ? hljs.highlight(code, { language: canonicalKey, ignoreIllegals: true }).value
-        : hljs.highlightAuto(code).value,
-      toolbarLangLabel: explicitLabel,
-      toolbarLangHidden: false,
-    }
-  }
-
-  const autoHighlightResult = hljs.highlightAuto(code)
-  const codeClassNames = ['hljs']
-
-  if (autoHighlightResult.language) {
-    codeClassNames.push(`language-${autoHighlightResult.language}`)
-  }
-
-  return {
-    codeClassName: codeClassNames.join(' '),
-    highlightedValue: autoHighlightResult.value,
-    toolbarLangLabel: '',
-    toolbarLangHidden: true,
-  }
-}
-
-function createFallbackCodeBlockLanguageMeta(info, code, md) {
-  const explicitLabel = info ? info.split(/\s+/u)[0]?.trim() ?? '' : ''
-
-  if (explicitLabel) {
-    const normalizedInput = explicitLabel.toLowerCase()
-    const canonicalKey = canonicalLanguageKeyByAlias.get(normalizedInput) ?? ''
-    const codeClassNames = ['hljs']
-
-    if (canonicalKey) {
-      codeClassNames.push(`language-${normalizedInput}`)
-      if (canonicalKey !== normalizedInput) {
-        codeClassNames.push(`language-${canonicalKey}`)
-      }
-    }
-
-    return {
-      codeClassName: codeClassNames.join(' '),
-      highlightedValue: md.utils.escapeHtml(code),
+      highlightLanguage: canonicalKey,
       toolbarLangLabel: explicitLabel,
       toolbarLangHidden: false,
     }
@@ -122,7 +84,7 @@ function createFallbackCodeBlockLanguageMeta(info, code, md) {
 
   return {
     codeClassName: 'hljs',
-    highlightedValue: md.utils.escapeHtml(code),
+    highlightLanguage: '',
     toolbarLangLabel: '',
     toolbarLangHidden: true,
   }
@@ -161,9 +123,12 @@ function html(strings, ...values) {
     .trim() // 去除首尾的空白
 }
 
-function renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md) {
+function renderStandardCodeBlockHtml(token, encodedCode, languageMeta, escapedCode, md) {
   const preAttrs = parseAttrs(token.attrs)
   const escapedToolbarLabel = md.utils.escapeHtml(languageMeta.toolbarLangLabel)
+  const highlightLanguageAttr = languageMeta.highlightLanguage
+    ? ` data-wj-hl-lang="${languageMeta.highlightLanguage}"`
+    : ''
 
   return html`
   <div class="pre-container">
@@ -174,8 +139,8 @@ function renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md) {
       </div>
     </div>
     <pre${preAttrs ? ` ${preAttrs}` : ''}>
-      <code class="${languageMeta.codeClassName}">`
-      + languageMeta.highlightedValue
+      <code class="${languageMeta.codeClassName}" data-wj-hl-pending="1"${highlightLanguageAttr}>`
+      + escapedCode
       + html`</code>
     </pre>
   </div>
@@ -193,13 +158,8 @@ export default function codeBlockPlugin(md) {
       const content = removeTripleBackticks(code)
       return `<pre class="mermaid" data-code="${createMermaidCacheKey(content)}" ${parseAttrs(token.attrs)}>\n${content}\n</pre>\n`
     } else {
-      try {
-        const languageMeta = resolveCodeBlockLanguageMeta(info, code)
-        return renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md)
-      } catch (e) {
-        console.error(e)
-        return renderStandardCodeBlockHtml(token, encodedCode, createFallbackCodeBlockLanguageMeta(info, code, md), md)
-      }
+      const languageMeta = resolveCodeBlockLanguageMeta(info)
+      return renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md.utils.escapeHtml(code), md)
     }
   }
 }
