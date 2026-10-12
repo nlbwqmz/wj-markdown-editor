@@ -57,6 +57,8 @@ export default {
       guideWin.minimize()
     },
     'guide-close': () => {
+      // 先释放前台激活状态，避免隐藏后系统焦点残留在隐藏窗口上（electron#52124）
+      guideWin.blur()
       guideWin.hide()
     },
   },

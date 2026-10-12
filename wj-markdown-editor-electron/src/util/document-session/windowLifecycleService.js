@@ -1980,6 +1980,8 @@ async function createNew(filePath, isRecent = false) {
     frame: false,
     icon: path.resolve(__dirname, '../../../icon/favicon.ico'),
     title: 'wj-markdown-editor',
+    // 先隐藏窗口，待首帧渲染完成（ready-to-show）后再显示，避免暗色主题下启动时暴露页面加载期间的白色帧
+    show: false,
     backgroundColor: globalTheme === 'dark' ? '#282c34' : '#ffffff',
     maximizable: true,
     resizable: true,
