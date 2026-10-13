@@ -313,6 +313,82 @@ function canUseHintResult({ entries, rootElement, scrollTop, hintIndex }) {
   }
 }
 
+// 二分查找专用的偏移量读取器：共享一次容器 rect，按需读取单个条目的实时偏移量。
+// 布局读取只发生在二分路径上（O(log n) 次），因此不需要缓存与失效处理。
+function createEntryOffsetReader(rootElement) {
+  const rootRect = rootElement?.getBoundingClientRect?.()
+  if (!rootRect || !Number.isFinite(rootRect.top)) {
+    return null
+  }
+
+  const rootTop = rootRect.top
+  const clientTop = rootElement.clientTop ?? 0
+  const scrollTop = rootElement.scrollTop ?? 0
+  return (entry) => {
+    const elementRect = entry?.element?.getBoundingClientRect?.()
+    if (!elementRect || !Number.isFinite(elementRect.top)) {
+      return null
+    }
+    return elementRect.top - rootTop - clientTop + scrollTop
+  }
+}
+
+// 二分查找：条目按 DOM 顺序收集，偏移量正常情况下单调递增。
+// 只读取二分路径上的条目（O(log n) 次布局读取），并对结果做边界校验；
+// 检测到乱序或读取失败时返回 null，由调用方回退全量扫描，保证结果正确。
+function findEntryAtScrollTopByBinarySearch(entries, rootElement, scrollTop) {
+  if (entries.length === 0 || !rootElement) {
+    return null
+  }
+
+  const readOffsetTop = createEntryOffsetReader(rootElement)
+  if (!readOffsetTop) {
+    return null
+  }
+
+  let low = 0
+  let high = entries.length - 1
+  let candidateIndex = -1
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    const midTop = readOffsetTop(entries[mid])
+    if (midTop === null) {
+      return null
+    }
+    if (midTop <= scrollTop) {
+      candidateIndex = mid
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+
+  // 全部条目都在目标位置下方时，命中第一个条目（与全量扫描语义一致）
+  if (candidateIndex < 0) {
+    candidateIndex = 0
+  }
+
+  // 边界校验：结果条目必须 <= scrollTop，且后续邻近窗口内不得再出现 <= scrollTop 的条目；
+  // 不满足说明存在乱序，交还全量扫描处理。
+  const VERIFY_WINDOW_SIZE = 4
+  const candidateTop = readOffsetTop(entries[candidateIndex])
+  if (candidateTop === null || candidateTop > scrollTop) {
+    return null
+  }
+  const verifyEndIndex = Math.min(entries.length, candidateIndex + 1 + VERIFY_WINDOW_SIZE)
+  for (let index = candidateIndex + 1; index < verifyEndIndex; index++) {
+    const nextTop = readOffsetTop(entries[index])
+    if (nextTop === null || nextTop <= scrollTop) {
+      return null
+    }
+  }
+
+  return {
+    entry: entries[candidateIndex],
+    index: candidateIndex,
+  }
+}
+
 function findEntryAtScrollTopFromEntries(entries, rootElement, scrollTop, hint) {
   const normalizedScrollTop = normalizeScrollTop(scrollTop)
   if (normalizedScrollTop === null || entries.length === 0 || !rootElement) {
@@ -378,11 +454,33 @@ export function createPreviewLayoutIndex() {
       return findEntryByLineFromEntries(entries, lineNumber, maxLineNumber)
     },
     findAtScrollTop(scrollTop, options = {}) {
+      const activeRootElement = options.rootElement ?? rootElement
+      const normalizedScrollTop = normalizeScrollTop(scrollTop)
+      if (normalizedScrollTop === null || entries.length === 0 || !activeRootElement) {
+        return EMPTY_SCROLL_RESULT
+      }
+
+      // hint 存在时保持既有语义：先按 hint 收敛，必要时回退完整扫描
+      if (normalizeHintIndex(options.hint) !== null) {
+        return findEntryAtScrollTopFromEntries(
+          entries,
+          activeRootElement,
+          normalizedScrollTop,
+          options.hint,
+        )
+      }
+
+      // 无 hint 时优先二分（O(log n) 实时读取，无需缓存与失效处理）；
+      // 检测到乱序或读取失败时回退到全量扫描。
+      const binaryResult = findEntryAtScrollTopByBinarySearch(entries, activeRootElement, normalizedScrollTop)
+      if (binaryResult) {
+        return binaryResult
+      }
+
       return findEntryAtScrollTopFromEntries(
         entries,
-        options.rootElement ?? rootElement,
-        scrollTop,
-        options.hint,
+        activeRootElement,
+        normalizedScrollTop,
       )
     },
   }
