@@ -1,3 +1,4 @@
+import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 
 /**
@@ -18,10 +19,7 @@ function createToggleFullScreenAction({
 }
 
 const toggleFullScreenAction = createToggleFullScreenAction({
-  getIsFullScreen: async () => {
-    const { useCommonStore } = await import('@/stores/counter.js')
-    return useCommonStore().isFullScreen
-  },
+  getIsFullScreen: async () => useCommonStore().isFullScreen,
   send: payload => channelUtil.send(payload),
 })
 

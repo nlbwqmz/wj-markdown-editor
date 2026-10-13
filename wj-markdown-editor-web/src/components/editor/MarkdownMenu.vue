@@ -39,8 +39,12 @@ let currentContainer = null
 let headingTargetElementMap = new Map()
 let currentContainerMutationObserver = null
 let pendingHeadingTargetRefresh = false
+// 程序化滚动保护的超时上限：超过后强制解除，避免平滑滚动被打断（用户手动滚动等）时
+// 保护永久卡死，导致目录高亮从此不再更新。
+const PROGRAMMATIC_SCROLL_PROTECT_MS = 1500
 let isProgrammaticScrolling = false
 let programmaticScrollTargetTop = null
+let programmaticScrollTimeout = null
 let startupMeasureFallbackTimer = null
 const activeHref = ref('')
 
@@ -195,6 +199,10 @@ function setCurrentActiveHref(href) {
 function stopProgrammaticScroll() {
   isProgrammaticScrolling = false
   programmaticScrollTargetTop = null
+  if (programmaticScrollTimeout !== null) {
+    clearTimeout(programmaticScrollTimeout)
+    programmaticScrollTimeout = null
+  }
 }
 
 function resolveReachableProgrammaticScrollTarget(container, targetScrollTop) {
@@ -282,6 +290,16 @@ function startProgrammaticScroll(container, targetScrollTop) {
   const reachableTargetScrollTop = resolveReachableProgrammaticScrollTarget(container, targetScrollTop)
   isProgrammaticScrolling = true
   programmaticScrollTargetTop = reachableTargetScrollTop
+  // 保护超时兜底：平滑滚动被打断（用户手动滚动等）导致永远到不了目标时，
+  // 强制解除保护并补算一次高亮，避免目录高亮永久停止更新。
+  programmaticScrollTimeout = setTimeout(() => {
+    programmaticScrollTimeout = null
+    if (isProgrammaticScrolling !== true) {
+      return
+    }
+    stopProgrammaticScroll()
+    updateActiveHref()
+  }, PROGRAMMATIC_SCROLL_PROTECT_MS)
   if (Math.abs((container?.scrollTop ?? 0) - reachableTargetScrollTop) < 1) {
     stopProgrammaticScroll()
     updateActiveHref()

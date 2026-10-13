@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createToggleFullScreenAction } from '../fullScreenActionUtil.js'
 
+// fullScreenActionUtil 改为静态导入 store 后，测试环境需要 mock 掉 store
+// （counter.js 顶层会发起 IPC 初始化请求）
+vi.mock('@/stores/counter.js', () => ({
+  useCommonStore: () => ({ isFullScreen: false }),
+}))
+
 describe('fullScreenActionUtil', () => {
   it('非全屏时必须发送显式进入全屏指令', async () => {
     const send = vi.fn(() => Promise.resolve())
