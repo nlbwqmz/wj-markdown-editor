@@ -47,10 +47,59 @@ function waitForDocumentFontsReady() {
   return document.fonts?.ready ?? Promise.resolve()
 }
 
+// 分帧高亮等待的超时上限：正常分帧会持续清空 pending 标记，
+// 超时仅作为死锁兜底，避免异常情况下导出永久阻塞。
+const CODE_HIGHLIGHT_WAIT_TIMEOUT_MS = 15 * 1000
+
+/**
+ * 默认检测当前是否还有待高亮的代码块。
+ *
+ * @returns {boolean} 是否仍有待分帧高亮的代码块
+ */
+function defaultHasPendingCodeHighlight() {
+  if (typeof document === 'undefined') {
+    return false
+  }
+
+  return Boolean(document.querySelector('code[data-wj-hl-pending]'))
+}
+
+/**
+ * 等待分帧代码块高亮完成。
+ * 代码块高亮按 rAF 分帧执行，导出必须在全部高亮完成后再抓取，
+ * 否则大文档导出会缺失代码块高亮（PDF 路径没有任何额外等待）。
+ *
+ * @param {{
+ *   waitForAnimationFrame?: () => Promise<void>,
+ *   hasPendingCodeHighlight?: () => boolean,
+ *   now?: () => number,
+ *   timeoutMs?: number,
+ * }} options
+ * @returns {Promise<void>}
+ */
+export async function waitForCodeHighlightSettled(options = {}) {
+  const {
+    waitForAnimationFrame = waitNextAnimationFrame,
+    hasPendingCodeHighlight = defaultHasPendingCodeHighlight,
+    now = Date.now,
+    timeoutMs = CODE_HIGHLIGHT_WAIT_TIMEOUT_MS,
+  } = options
+
+  const startedAt = now()
+  while (hasPendingCodeHighlight()) {
+    if (now() - startedAt >= timeoutMs) {
+      return
+    }
+    await waitForAnimationFrame()
+  }
+}
+
+const defaultWaitForCodeHighlightSettled = waitForCodeHighlightSettled
+
 /**
  * 等待导出前的关键渲染依赖全部稳定。
- * 这里显式把代码主题、Vue DOM patch、两帧布局稳定、字体与图片都串到同一条等待链上，
- * 避免导出时拿到尚未应用完代码主题的页面。
+ * 这里显式把代码主题、Vue DOM patch、两帧布局稳定、分帧高亮完成、字体与图片都串到同一条等待链上，
+ * 避免导出时拿到尚未应用完代码主题或尚未完成代码块高亮的页面。
  *
  * @param {{
  *   themeName?: string,
@@ -58,6 +107,7 @@ function waitForDocumentFontsReady() {
  *   loadCodeTheme?: (themeName: string) => Promise<void>,
  *   waitForNextTick?: () => Promise<void>,
  *   waitForAnimationFrame?: () => Promise<void>,
+ *   waitForCodeHighlightSettled?: (options: { waitForAnimationFrame: () => Promise<void> }) => Promise<void>,
  *   waitForFontsReady?: () => Promise<void>,
  *   waitForImagesSettled?: (images: ArrayLike<EventTarget> | null | undefined) => Promise<void>,
  * }} options
@@ -70,6 +120,7 @@ export async function waitForExportRenderSettled(options = {}) {
     loadCodeTheme = defaultLoadCodeTheme,
     waitForNextTick = nextTick,
     waitForAnimationFrame = waitNextAnimationFrame,
+    waitForCodeHighlightSettled = defaultWaitForCodeHighlightSettled,
     waitForFontsReady = waitForDocumentFontsReady,
     waitForImagesSettled = defaultWaitForImagesSettled,
   } = options
@@ -81,10 +132,12 @@ export async function waitForExportRenderSettled(options = {}) {
   await waitForNextTick()
   await waitForAnimationFrame()
   await waitForAnimationFrame()
+  await waitForCodeHighlightSettled({ waitForAnimationFrame })
   await waitForFontsReady()
   await waitForImagesSettled(images)
 }
 
 export default {
+  waitForCodeHighlightSettled,
   waitForExportRenderSettled,
 }

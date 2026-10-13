@@ -82,3 +82,66 @@ test('未提供代码主题时仍应等待布局、字体与图片稳定', async
 
   assert.deepEqual(phaseList, ['nextTick', 'animationFrame', 'animationFrame', 'fonts', 'images:1'])
 })
+
+test('导出等待链必须在布局稳定后、字体与图片之前等待分帧高亮完成', async () => {
+  const waitForExportRenderSettled = requireWaitForExportRenderSettled()
+  const phaseList = []
+
+  await waitForExportRenderSettled({
+    themeName: '',
+    images: [],
+    loadCodeTheme: async () => {},
+    waitForNextTick: async () => {},
+    waitForAnimationFrame: async () => {
+      phaseList.push('animationFrame')
+    },
+    waitForCodeHighlightSettled: async () => {
+      phaseList.push('codeHighlight')
+    },
+    waitForFontsReady: async () => {
+      phaseList.push('fonts')
+    },
+    waitForImagesSettled: async () => {
+      phaseList.push('images')
+    },
+  })
+
+  assert.deepEqual(phaseList, ['animationFrame', 'animationFrame', 'codeHighlight', 'fonts', 'images'])
+})
+
+test('分帧高亮未完成时必须持续等待，直到 pending 清空', async () => {
+  assert.ok(exportRenderReadyUtilModule, '缺少 export render ready util')
+  const { waitForCodeHighlightSettled } = exportRenderReadyUtilModule
+  assert.equal(typeof waitForCodeHighlightSettled, 'function')
+
+  let pendingCount = 3
+  const frameList = []
+  await waitForCodeHighlightSettled({
+    hasPendingCodeHighlight: () => pendingCount > 0,
+    waitForAnimationFrame: async () => {
+      frameList.push('frame')
+      pendingCount -= 1
+    },
+  })
+
+  assert.equal(frameList.length, 3)
+})
+
+test('分帧高亮超过超时上限后必须放行，避免导出永久阻塞', async () => {
+  assert.ok(exportRenderReadyUtilModule, '缺少 export render ready util')
+  const { waitForCodeHighlightSettled } = exportRenderReadyUtilModule
+
+  let currentTime = 0
+  const frameList = []
+  await waitForCodeHighlightSettled({
+    hasPendingCodeHighlight: () => true,
+    now: () => currentTime,
+    waitForAnimationFrame: async () => {
+      frameList.push('frame')
+      currentTime += 1000
+    },
+    timeoutMs: 3000,
+  })
+
+  assert.equal(frameList.length, 3)
+})
