@@ -1,7 +1,5 @@
 <script setup>
-import { createPatch } from 'diff'
-import { html as diff2html } from 'diff2html'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
@@ -9,14 +7,40 @@ import {
   DOCUMENT_EXTERNAL_APPLY_COMMAND,
   DOCUMENT_EXTERNAL_IGNORE_COMMAND,
 } from '@/util/document-session/documentSessionEventUtil.js'
-import 'diff2html/bundles/css/diff2html.min.css'
 
 const { t } = useI18n()
 const store = useCommonStore()
 
 const externalFileChange = computed(() => store.externalFileChange)
 const diffTheme = computed(() => (store.config.theme.global === 'dark' ? 'dark' : 'light'))
+
+// diff2html 体积较大且仅在外部变更对比时使用，
+// 改为弹窗首次展示时动态加载，避免进入启动路径。
+const diffLibs = ref(null)
+watch(() => externalFileChange.value.visible, async (visible) => {
+  if (!visible || diffLibs.value) {
+    return
+  }
+  try {
+    const [diffModule, diff2htmlModule] = await Promise.all([
+      import('diff'),
+      import('diff2html'),
+      import('diff2html/bundles/css/diff2html.min.css'),
+    ])
+    diffLibs.value = {
+      createPatch: diffModule.createPatch,
+      diff2html: diff2htmlModule.html,
+    }
+  } catch (error) {
+    console.error('[ExternalFileChangeModal] diff2html 动态加载失败:', error)
+  }
+}, { immediate: true })
+
 const diffHtml = computed(() => {
+  if (!diffLibs.value) {
+    return ''
+  }
+  const { createPatch, diff2html } = diffLibs.value
   const fileName = externalFileChange.value.fileName || 'Unnamed'
   const diffString = createPatch(
     fileName,
