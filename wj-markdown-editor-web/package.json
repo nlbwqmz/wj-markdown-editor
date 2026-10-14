@@ -31,7 +31,6 @@
     "dayjs": "^1.11.13",
     "diff": "^8.0.3",
     "diff2html": "^3.4.56",
-    "github-markdown-css": "^5.8.1",
     "highlight.js": "^11.11.1",
     "js-sha256": "^0.11.1",
     "katex": "^0.16.44",
@@ -40,14 +39,12 @@
     "markdown-it-anchor": "^9.2.0",
     "markdown-it-container": "^4.0.0",
     "markdown-it-deflist": "^3.0.0",
-    "markdown-it-for-inline": "^2.0.1",
     "markdown-it-github-alerts": "^1.0.0",
     "markdown-it-ins": "^4.0.0",
     "markdown-it-mark": "^4.0.0",
     "markdown-it-sub": "^2.0.0",
     "markdown-it-sup": "^2.0.0",
     "markdown-it-task-lists": "^2.1.1",
-    "markdown-it-textual-uml": "^0.17.1",
     "mermaid": "^11.4.1",
     "nanoid": "^5.1.5",
     "pinia": "^3.0.1",
@@ -70,8 +67,6 @@
     "sass": "^1.83.0",
     "unocss": "65.4.3",
     "vite": "^6.2.4",
-    "vite-plugin-eslint": "^1.8.1",
-    "vite-plugin-vue-devtools": "^7.7.2",
     "vitest": "^4.0.18"
   }
 }
