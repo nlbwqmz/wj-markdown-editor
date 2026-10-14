@@ -1,6 +1,4 @@
 import { redo, undo } from '@codemirror/commands'
-import * as markdownParser from 'prettier/parser-markdown'
-import * as prettier from 'prettier/standalone'
 import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 
@@ -400,7 +398,7 @@ function container(editorView, type) {
 
 const GITHUB_ALERT_REGEX = /(^> \[![A-Z]+\][^\n]*(?:\n> [^\n]*)*)/gim
 
-function doPrettier(editorView) {
+async function doPrettier(editorView) {
   const content = editorView.state.doc.toString()
 
   // 1. 预处理：不格式化GitHub Alert
@@ -409,7 +407,13 @@ function doPrettier(editorView) {
     '<!-- prettier-ignore-start -->\n$1\n<!-- prettier-ignore-end -->\n',
   )
 
-  // 2. 执行 Prettier 格式化
+  // 2. 动态加载 Prettier：移出编辑器启动路径，首次点击「美化」时才加载（ESM 模块缓存，后续点击零加载开销）
+  const [prettier, markdownParser] = await Promise.all([
+    import('prettier/standalone'),
+    import('prettier/parser-markdown'),
+  ])
+
+  // 3. 执行 Prettier 格式化
   prettier.format(preprocessed, {
     parser: 'markdown',
     plugins: [markdownParser],
@@ -418,13 +422,13 @@ function doPrettier(editorView) {
     printWidth: Infinity,
     proseWrap: 'preserve',
   }).then((formatted) => {
-    // 3. 移除临时注释
+    // 4. 移除临时注释
     const final = formatted.replace(
       /<!-- prettier-ignore-(start|end) -->\n?/g,
       '',
     )
 
-    // 4. 点击外部工具栏后，编辑器可能先因为失焦等 DOM 同步推进内部 state。
+    // 5. 点击外部工具栏后，编辑器可能先因为失焦等 DOM 同步推进内部 state。
     // 这里必须让 dispatch 基于“当前 state”即时创建事务，不能复用预先构造的 Transaction。
     if (editorView.state.doc.toString() !== content) {
       return
