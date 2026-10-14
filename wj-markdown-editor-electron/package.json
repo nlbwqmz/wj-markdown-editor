@@ -28,9 +28,30 @@
     "directories": {
       "output": "electron-build"
     },
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "files": [
       "!config.json",
-      "!img/**"
+      "!img/**",
+      "!**/*.map",
+      "!**/*.test.js",
+      "!**/__tests__/**",
+      "!**/tsconfig.json",
+      "!.vscode/**",
+      "!eslint.config.mjs",
+      "!recent.json",
+      "!installer.nsh",
+      "!scripts/**",
+      "!icon/1024x1024.png",
+      "!**/node_modules/luxon/build/{amd,cjs-browser,es6,global}/**",
+      "!**/node_modules/luxon/src/**",
+      "!**/node_modules/axios/dist/{browser,esm}/**",
+      "!**/node_modules/axios/dist/axios*.js",
+      "!**/node_modules/ajv/lib/**",
+      "!**/node_modules/dayjs/{locale,esm,plugin}/**",
+      "!**/{README,CHANGELOG,HISTORY}*.{md,markdown}"
     ],
     "nsis": {
       "oneClick": false,
