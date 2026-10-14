@@ -5,10 +5,33 @@ import UnoCSS from 'unocss/vite'
 
 import { defineConfig } from 'vite'
 
+// 剥离 KaTeX 字体声明中的 woff/ttf 候选源：
+// Electron 内置 Chromium 只使用 woff2，保留其他格式会让构建产物多拷贝约 817KB 永不加载的字体。
+// 必须在 Vite 的 CSS 插件之前（enforce: 'pre'）改写源码，否则 url 已被登记为构建资产。
+function stripKatexLegacyFonts() {
+  return {
+    name: 'strip-katex-legacy-fonts',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!/[\\/]node_modules[\\/]katex[\\/]/.test(id) || !id.includes('.css')) {
+        return
+      }
+      // 仅当该字体声明提供了 woff2 候选源时才剥离 woff/ttf，避免误删唯一可用格式
+      return code.replace(/src:([^;}]+)/g, (full, value) => {
+        if (!value.includes('woff2')) {
+          return full
+        }
+        return `src:${value.replace(/,\s*url\([^)]*\.(?:woff|ttf)\)\s*format\(["'](?:woff|truetype)["']\)/g, '')}`
+      })
+    },
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   base: './',
   plugins: [
+    stripKatexLegacyFonts(),
     vue(),
     UnoCSS(),
   ],
