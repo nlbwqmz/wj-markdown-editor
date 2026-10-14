@@ -2,6 +2,8 @@ import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import postCssPxToRem from 'postcss-pxtorem'
 import UnoCSS from 'unocss/vite'
+import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers'
+import Components from 'unplugin-vue-components/vite'
 
 import { defineConfig } from 'vite'
 
@@ -34,6 +36,12 @@ export default defineConfig({
     stripKatexLegacyFonts(),
     vue(),
     UnoCSS(),
+    // 模板中的 <a-*> 组件按需自动导入；显式置空 dirs，避免自动导入项目内组件
+    Components({
+      dirs: [],
+      resolvers: [AntDesignVueResolver({ importStyle: false })],
+      dts: false,
+    }),
   ],
   resolve: {
     alias: {

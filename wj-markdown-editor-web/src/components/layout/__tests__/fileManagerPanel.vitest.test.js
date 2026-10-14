@@ -983,8 +983,10 @@ describe('fileManagerPanel 组件', () => {
 
     expect(wrapper.find('[data-testid="file-manager-create-folder"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="file-manager-create-markdown"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="file-manager-create-entry"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="file-manager-sort-entry"]').exists()).toBe(true)
+    // antd 的 Dropdown/Tooltip 设置了 inheritAttrs: false，data-testid 不会透传到 DOM，改用 icon 定位
+    const iconButtonList = wrapper.findAllComponents(IconButton)
+    expect(iconButtonList.some(component => component.props('icon') === 'i-tabler:square-plus')).toBe(true)
+    expect(iconButtonList.some(component => component.props('icon') === 'i-tabler:arrows-sort')).toBe(true)
     expect(resolveSetupStateBinding(wrapper.vm.$.setupState.createMenuList).map(item => item.label)).toEqual([
       'translated:message.fileManagerCreateFolder',
       'translated:message.fileManagerCreateMarkdown',
@@ -1014,8 +1016,8 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     const iconButtonList = wrapper.findAllComponents(IconButton)
-    const createEntryButton = iconButtonList.find(component => component.attributes('data-testid') === 'file-manager-create-entry')
-    const sortEntryButton = iconButtonList.find(component => component.attributes('data-testid') === 'file-manager-sort-entry')
+    const createEntryButton = iconButtonList.find(component => component.props('icon') === 'i-tabler:square-plus')
+    const sortEntryButton = iconButtonList.find(component => component.props('icon') === 'i-tabler:arrows-sort')
 
     expect(createEntryButton?.props('menuTrigger')).toEqual(['click'])
     expect(sortEntryButton?.props('menuTrigger')).toEqual(['hover'])
