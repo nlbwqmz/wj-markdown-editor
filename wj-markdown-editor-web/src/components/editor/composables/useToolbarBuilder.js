@@ -1,10 +1,10 @@
+import { message } from 'ant-design-vue'
+import { createVNode, h } from 'vue'
+import ColorPicker from '@/components/AsyncColorPicker.js'
 import TableShape from '@/components/TableShape.vue'
 import channelUtil from '@/util/channel/channelUtil.js'
 import commonUtil from '@/util/commonUtil.js'
 import editorUtil from '@/util/editor/editorUtil.js'
-import { message } from 'ant-design-vue'
-import { createVNode, h } from 'vue'
-import { ColorPicker } from 'vue3-colorpicker'
 // @unocss-include
 
 /**

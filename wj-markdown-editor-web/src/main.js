@@ -15,7 +15,6 @@ import '@/assets/style/scroll.scss'
 import '@/assets/style/sash.scss'
 import '@/assets/style/wj-markdown-it-container.scss'
 import '@/assets/style/wj-markdown-it-text-color.scss'
-import 'vue3-colorpicker/style.css'
 // 代码主题改为按需动态加载，详见 codeThemeUtil.js
 // 预览主题
 import '@/assets/style/preview-theme/preview-theme.scss'
