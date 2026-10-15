@@ -12,12 +12,6 @@ function removeTripleBackticks(inputString) {
   return inputString.endsWith('```') ? inputString.slice(0, -3) : inputString
 }
 
-function strToBase64(str) {
-  const bytes = new TextEncoder().encode(str)
-  const binString = String.fromCodePoint(...bytes)
-  return btoa(binString)
-}
-
 /**
  * 生成 Mermaid 代码块的缓存键。
  * 仅用于 DOM 属性与缓存复用匹配，避免原始源码中的引号等字符破坏 HTML 属性。
@@ -25,10 +19,6 @@ function strToBase64(str) {
  */
 function createMermaidCacheKey(content) {
   return sha256(content.replace(/\s+/gu, ''))
-}
-
-function createCopyCodeKeydownHandler(encodedCode) {
-  return `if(event.key==='Enter'||event.key===' '){event.preventDefault();copyCode('${encodedCode}')}`
 }
 
 /**
@@ -123,7 +113,7 @@ function html(strings, ...values) {
     .trim() // 去除首尾的空白
 }
 
-function renderStandardCodeBlockHtml(token, encodedCode, languageMeta, escapedCode, md) {
+function renderStandardCodeBlockHtml(token, languageMeta, escapedCode, md) {
   const preAttrs = parseAttrs(token.attrs)
   const escapedToolbarLabel = md.utils.escapeHtml(languageMeta.toolbarLangLabel)
   const highlightLanguageAttr = languageMeta.highlightLanguage
@@ -135,7 +125,7 @@ function renderStandardCodeBlockHtml(token, encodedCode, languageMeta, escapedCo
     <div class="pre-container-toolbar">
       <div class="pre-container-action-slot">
         <div class="pre-container-lang ${languageMeta.toolbarLangHidden ? 'hidden' : ''}">${escapedToolbarLabel}</div>
-        <div class="i-tabler:copy pre-container-copy" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}" onclick="copyCode('${encodedCode}')" onkeydown="${createCopyCodeKeydownHandler(encodedCode)}"></div>
+        <div class="i-tabler:copy pre-container-copy" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}"></div>
       </div>
     </div>
     <pre${preAttrs ? ` ${preAttrs}` : ''}>
@@ -153,13 +143,12 @@ export default function codeBlockPlugin(md) {
     const code = token.content.trim()
     const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
     const lang = info.split(/\s+/g)[0]
-    const encodedCode = strToBase64(code)
     if (lang === 'mermaid') {
       const content = removeTripleBackticks(code)
       return `<pre class="mermaid" data-code="${createMermaidCacheKey(content)}" ${parseAttrs(token.attrs)}>\n${content}\n</pre>\n`
     } else {
       const languageMeta = resolveCodeBlockLanguageMeta(info)
-      return renderStandardCodeBlockHtml(token, encodedCode, languageMeta, md.utils.escapeHtml(code), md)
+      return renderStandardCodeBlockHtml(token, languageMeta, md.utils.escapeHtml(code), md)
     }
   }
 }

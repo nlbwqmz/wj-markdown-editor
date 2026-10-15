@@ -313,10 +313,57 @@ function getAssetInfoFromDom(assetDom, event) {
 }
 
 /**
+ * 复制代码块内容：直接从 DOM 读取代码原文，
+ * 避免把整段代码以 base64 内联到复制按钮属性上。
+ */
+function copyCodeFromButton(button) {
+  const code = button.closest('.pre-container')?.querySelector('code')?.textContent ?? ''
+  copyTextWithFeedback({
+    text: code,
+    writeText: async text => await navigator.clipboard.writeText(text),
+    onEmpty() {
+      message.warning(t('message.noCopyableContent'))
+    },
+    onSuccess() {
+      message.success(t('message.copySucceeded'))
+    },
+    onError() {
+      message.error(t('message.copyFailed'))
+    },
+  }).then(() => {})
+}
+
+/**
+ * 统一处理预览区键盘事件（事件委托）：
+ * 复制按钮是 role="button" 的 div，需要手动支持 Enter/Space 触发复制。
+ */
+function handlePreviewKeydown(e) {
+  if (e.key !== 'Enter' && e.key !== ' ') {
+    return
+  }
+  if (!(e.target instanceof Element)) {
+    return
+  }
+  const copyButton = e.target.closest('.pre-container-copy')
+  if (!copyButton) {
+    return
+  }
+  e.preventDefault()
+  copyCodeFromButton(copyButton)
+}
+
+/**
  * 统一处理预览区点击事件（事件委托）
  */
 function handlePreviewClick(e) {
   if (!(e.target instanceof Element)) {
+    return
+  }
+
+  // 处理代码块复制按钮
+  const copyButton = e.target.closest('.pre-container-copy')
+  if (copyButton) {
+    copyCodeFromButton(copyButton)
     return
   }
 
@@ -420,6 +467,7 @@ function handlePreviewContextmenu(e) {
 function bindPreviewEvents() {
   previewRef.value?.addEventListener('click', handlePreviewClick)
   previewRef.value?.addEventListener('contextmenu', handlePreviewContextmenu)
+  previewRef.value?.addEventListener('keydown', handlePreviewKeydown)
 }
 
 /**
@@ -428,6 +476,7 @@ function bindPreviewEvents() {
 function unbindPreviewEvents() {
   previewRef.value?.removeEventListener('click', handlePreviewClick)
   previewRef.value?.removeEventListener('contextmenu', handlePreviewContextmenu)
+  previewRef.value?.removeEventListener('keydown', handlePreviewKeydown)
 }
 
 /**

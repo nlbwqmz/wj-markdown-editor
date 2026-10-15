@@ -96,8 +96,8 @@ test('普通 fenced code block 必须输出可访问的复制按钮结构', () =
   assert.equal(renderedHtml.includes('hidden'), false)
   assert.match(renderedHtml, /title="复制"/u)
   assert.match(renderedHtml, /aria-label="复制"/u)
-  assert.match(renderedHtml, /onclick="copyCode\('[^']+'\)"/u)
-  assert.match(renderedHtml, /onkeydown="[^"]*copyCode\('[^']+'\)[^"]*"/u)
+  // 复制按钮不再内联 base64 数据，点击/键盘复制由预览区事件委托处理
+  assert.doesNotMatch(renderedHtml, /onclick=|onkeydown=/u)
 })
 
 test('显式语言且可识别时必须输出标准高亮 DOM 契约', () => {
