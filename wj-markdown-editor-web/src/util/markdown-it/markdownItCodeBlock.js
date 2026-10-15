@@ -113,21 +113,39 @@ function html(strings, ...values) {
     .trim() // 去除首尾的空白
 }
 
-function renderStandardCodeBlockHtml(token, languageMeta, escapedCode, md) {
+/**
+ * 渲染标准代码块 HTML（不含 mermaid 分支），供 fence 与其它需要复用代码块形态的扩展调用。
+ * @param {object} token 代码块 token，需携带 attrs（行号等）
+ * @param {string} info 语言信息
+ * @param {string} code 代码内容（未转义）
+ * @param {object} md markdown-it 实例
+ * @param {{ showToolbar?: boolean }} [options] showToolbar 为 false 时不输出工具栏，默认输出
+ */
+export function renderCodeBlockHtml(token, info, code, md, options = {}) {
+  const languageMeta = resolveCodeBlockLanguageMeta(info)
+  return renderStandardCodeBlockHtml(token, languageMeta, md.utils.escapeHtml(code), md, options)
+}
+
+function renderStandardCodeBlockHtml(token, languageMeta, escapedCode, md, options = {}) {
+  const { showToolbar = true } = options
   const preAttrs = parseAttrs(token.attrs)
   const escapedToolbarLabel = md.utils.escapeHtml(languageMeta.toolbarLangLabel)
   const highlightLanguageAttr = languageMeta.highlightLanguage
     ? ` data-wj-hl-lang="${languageMeta.highlightLanguage}"`
     : ''
-
-  return html`
-  <div class="pre-container">
+  const toolbarHtml = showToolbar
+    ? html`
     <div class="pre-container-toolbar">
       <div class="pre-container-action-slot">
         <div class="pre-container-lang ${languageMeta.toolbarLangHidden ? 'hidden' : ''}">${escapedToolbarLabel}</div>
         <div class="i-tabler:copy pre-container-copy" role="button" tabindex="0" title="${COPY_CODE_LABEL}" aria-label="${COPY_CODE_LABEL}"></div>
       </div>
-    </div>
+    </div>`
+    : ''
+
+  return html`
+  <div class="pre-container">
+    ${toolbarHtml}
     <pre${preAttrs ? ` ${preAttrs}` : ''}>
       <code class="${languageMeta.codeClassName}" data-wj-hl-pending="1"${highlightLanguageAttr}>`
       + escapedCode
@@ -146,9 +164,8 @@ export default function codeBlockPlugin(md) {
     if (lang === 'mermaid') {
       const content = removeTripleBackticks(code)
       return `<pre class="mermaid" data-code="${createMermaidCacheKey(content)}" ${parseAttrs(token.attrs)}>\n${content}\n</pre>\n`
-    } else {
-      const languageMeta = resolveCodeBlockLanguageMeta(info)
-      return renderStandardCodeBlockHtml(token, languageMeta, md.utils.escapeHtml(code), md)
     }
+
+    return renderCodeBlockHtml(token, info, code, md)
   }
 }

@@ -15,6 +15,7 @@ import { useCommonStore } from '@/stores/counter.js'
 import markdownItAudio from '@/util/markdown-it/markdownItAudio.js'
 import MarkdownItCodeBlock from '@/util/markdown-it/markdownItCodeBlock.js'
 import markdownItContainerUtil from '@/util/markdown-it/markdownItContainerUtil.js'
+import markdownItFrontMatter from '@/util/markdown-it/markdownItFrontMatter.js'
 import markdownItHtmlImage from '@/util/markdown-it/markdownItHtmlImage.js'
 import markdownItImage from '@/util/markdown-it/markdownItImage.js'
 import markdownItKatexLineNumber from '@/util/markdown-it/markdownItKatexLineNumber.js'
@@ -43,6 +44,9 @@ md.use(MarkdownItSup)
   .use(MarkdownItAnchor)
   .use(imgSize)
   .use(footnote)
+
+// 文档开头的 front matter（YAML 元数据块）
+markdownItFrontMatter(md)
 
 // 文字颜色
 markdownItTextColor(md)
