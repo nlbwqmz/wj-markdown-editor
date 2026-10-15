@@ -12,7 +12,12 @@ const markdownPreviewRuntimeState = vi.hoisted(() => ({
   syncCodeBlockActionVariables: vi.fn(),
   loadCodeTheme: vi.fn(async () => {}),
   handlePreviewHashAnchorClick: vi.fn(() => false),
-  settleMermaidRender: vi.fn(async () => {}),
+  settleMermaidRender: vi.fn(async (options = {}) => {
+    const nodes = Array.from(options.nodes || [])
+    if (nodes.length > 0 && typeof options.runMermaid === 'function') {
+      await options.runMermaid({ nodes })
+    }
+  }),
 }))
 
 vi.mock('mermaid', () => ({
@@ -239,6 +244,11 @@ async function flushRender() {
   await Promise.resolve()
   await nextTick()
   await Promise.resolve()
+  // mermaid 改为动态加载后，initialize 发生在 await import('mermaid') 之后，
+  // 模块解析需要多轮微任务才能完成。
+  for (let i = 0; i < 50; i += 1) {
+    await Promise.resolve()
+  }
 }
 
 describe('markdownPreview keep-alive 主题刷新', () => {

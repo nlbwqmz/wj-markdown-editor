@@ -1,6 +1,5 @@
 <script setup>
 import { message } from 'ant-design-vue'
-import mermaid from 'mermaid'
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
@@ -62,16 +61,40 @@ function getMermaidTheme(globalTheme) {
   return globalTheme === 'dark' ? 'dark' : 'default'
 }
 
+// mermaid 动态加载状态：避免其体积（约 465KB）进入首屏同步解析路径。
+// 模块缓存全局共享，与原先静态 import 的单例语义一致。
+let mermaidInstance = null
+let mermaidInitOptions = null
+
+function resolveMermaidInitOptions() {
+  return {
+    startOnLoad: false,
+    theme: getMermaidTheme(store.config.theme.global),
+    securityLevel: 'loose',
+  }
+}
+
 /**
- * 初始化 mermaid 配置
+ * 初始化 mermaid 配置。
+ * 保持同步：记录最新配置；实例已加载时立即应用，未加载时留待首次渲染加载后应用。
  */
 function initMermaid() {
-  const theme = getMermaidTheme(store.config.theme.global)
-  mermaid.initialize({
-    startOnLoad: false,
-    theme,
-    securityLevel: 'loose',
-  })
+  mermaidInitOptions = resolveMermaidInitOptions()
+  if (mermaidInstance) {
+    mermaidInstance.initialize(mermaidInitOptions)
+  }
+}
+
+/**
+ * 首次需要渲染 Mermaid 图表时才动态加载 mermaid。
+ */
+async function ensureMermaid() {
+  if (!mermaidInstance) {
+    const mermaidModule = await import('mermaid')
+    mermaidInstance = mermaidModule.default
+    mermaidInstance.initialize(mermaidInitOptions || resolveMermaidInitOptions())
+  }
+  return mermaidInstance
 }
 
 const previewRef = ref()
@@ -765,7 +788,10 @@ async function refreshPreview(doc, forceRefreshMermaid = false) {
 
   await settleMermaidRender({
     nodes: shouldRefreshMermaid ? previewRef.value.querySelectorAll('.mermaid') : [],
-    runMermaid: options => mermaid.run(options),
+    runMermaid: async (options) => {
+      const mermaid = await ensureMermaid()
+      return mermaid.run(options)
+    },
     logError: (message, error) => {
       console.error(message, error)
     },
