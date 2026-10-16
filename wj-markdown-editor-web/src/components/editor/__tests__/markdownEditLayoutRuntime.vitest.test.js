@@ -23,6 +23,7 @@ const previewLayoutWiringState = vi.hoisted(() => ({
   jumpToTargetLine: vi.fn(),
   jumpEditorToLine: vi.fn(),
   suppressNextPreviewToEditorSync: vi.fn(),
+  resetSuppressedSyncCounters: vi.fn(),
   syncEditorToPreview: vi.fn(),
   syncPreviewToEditor: vi.fn(),
   bindEvents: vi.fn(),
@@ -240,6 +241,7 @@ vi.mock('@/components/editor/markdownEditPreviewLayoutIndexWiring.js', () => ({
         jumpToTargetLine: previewLayoutWiringState.jumpToTargetLine,
         jumpEditorToLine: previewLayoutWiringState.jumpEditorToLine,
         suppressNextPreviewToEditorSync: previewLayoutWiringState.suppressNextPreviewToEditorSync,
+        resetSuppressedSyncCounters: previewLayoutWiringState.resetSuppressedSyncCounters,
         syncEditorToPreview: previewLayoutWiringState.syncEditorToPreview,
         syncPreviewToEditor: previewLayoutWiringState.syncPreviewToEditor,
         bindEvents: previewLayoutWiringState.bindEvents,
@@ -502,6 +504,26 @@ describe('markdownEdit 布局运行时接线', () => {
     await wrapper.get('button').trigger('click')
 
     expect(storeState.current.setViewMode).toHaveBeenCalledWith('split')
+  })
+
+  it('源码模式切到纯预览时，预览刷新完成后应把编辑器位置同步过去', async () => {
+    await mountMarkdownEdit({ previewPosition: 'right' })
+
+    storeState.current.viewMode = 'source'
+    await flushLayoutRender()
+
+    previewLayoutWiringState.syncEditorToPreview.mockClear()
+
+    storeState.current.viewMode = 'preview'
+    await flushLayoutRender()
+
+    // 预览是从无到有挂载的，首轮同步必须等刷新完成后再执行。
+    expect(previewLayoutWiringState.syncEditorToPreview).not.toHaveBeenCalled()
+
+    getLastMarkdownPreviewStubInstance()?.emitRefreshComplete()
+    await flushLayoutRender()
+
+    expect(previewLayoutWiringState.syncEditorToPreview).toHaveBeenCalled()
   })
 
   it('previewPosition 从 right 切到 left 时，会重建 Split 并同步新的真实 DOM 顺序', async () => {

@@ -110,9 +110,10 @@ const shortcutKeyList = ref([])
 let splitInstance
 let splitGutterSyncElements = []
 let outlineActiveLineRafId = null
+// 离开纯预览态时待交给编辑器的行号：纯预览态不做实时反向同步，切换时一次性交接。
+let pendingEditorLineFromPreview = null
 
 const editorSearchBarVisible = computed(() => store.editorSearchBarVisible)
-const associationHighlightEnabled = computed(() => props.associationHighlight === true)
 const themeRef = computed(() => store.config.theme.global)
 
 const gutterRef = ref()
@@ -125,6 +126,11 @@ const editorScrollTop = ref(0)
 // preview-only 只是把编辑列压到 0 宽，编辑器实例不会被销毁。
 const viewMode = computed(() => store.viewMode)
 const previewVisible = computed(() => viewMode.value !== 'source')
+// 纯预览态编辑器不可见：关联滚动改为模式切换时一次性交接，不做实时反向同步。
+const isEditorVisible = computed(() => viewMode.value !== 'preview')
+// 关联高亮只在双栏态有意义：源码态没有预览区，纯预览态没有可操作的编辑器光标。
+// 其余模式一律停用，避免无效的装饰更新与 CodeMirror 事务。
+const associationHighlightEnabled = computed(() => props.associationHighlight === true && viewMode.value === 'split')
 const previewController = ref(true)
 // 仅在预览从“未渲染”重新挂载为“已渲染”时，延后首轮同步到 refreshComplete。
 const pendingPreviewResyncAfterRefresh = ref(false)
@@ -626,6 +632,7 @@ const {
     jumpToTargetLine,
     jumpEditorToLine,
     suppressNextPreviewToEditorSync,
+    resetSuppressedSyncCounters,
     syncEditorToPreview,
     syncPreviewToEditor,
     bindEvents,
@@ -651,6 +658,7 @@ const {
     scrolling,
     editorScrollTop,
     restoreStateRef: restoreState,
+    isEditorVisibleRef: isEditorVisible,
   },
   useAssociationHighlight,
   associationHighlightOptions: {
@@ -1013,9 +1021,17 @@ function onOutlineNavigate(payload) {
   }
 
   if (payload?.didPreviewScroll === true) {
+    // 预览已经自己滚到目标：抑制「预览 → 编辑器」的反向覆盖，
+    // 同时抑制编辑器跳转回推预览，避免两侧来回拉扯。
     suppressNextPreviewToEditorSync()
+    jumpEditorToLine(lineStart, { suppressEditorToPreviewSync: true })
+    return
   }
-  jumpEditorToLine(lineStart, { suppressEditorToPreviewSync: true })
+
+  // 预览没有滚动（源码态没有预览区，或预览滚动失败）：这里只跳编辑器。
+  // 此时不能设置抑制标记，否则标记会残留到下一次模式切换，
+  // 把切到双栏/预览时该做的位置同步吃掉。
+  jumpEditorToLine(lineStart)
 }
 
 /**
@@ -1330,13 +1346,61 @@ watch(() => store.config.shortcutKeyList, (newValue) => {
   reconfigureKeymap(refreshKeymap())
 }, { deep: true, immediate: true })
 
+// 纯预览态的布局类名：只有它会让编辑器不可见，离开时需要单独做一次位置交接。
+const PREVIEW_ONLY_LAYOUT_CLASS = 'markdown-edit-layout--preview-only'
+
+/**
+ * 解析预览区当前顶部对应的源码行号。
+ * 纯预览态不做实时反向同步，离开该模式时靠这个行号把浏览位置交给编辑器。
+ *
+ * @returns {number | null} 返回行号；预览不存在或无法判定时返回 null。
+ */
+function resolvePreviewTopLineNumber() {
+  const previewElementRoot = previewRef.value
+  if (!previewElementRoot) {
+    return null
+  }
+
+  const targetElement = findPreviewElementAtScrollTop(previewElementRoot, previewElementRoot.scrollTop)
+  const lineNumber = Number.parseInt(targetElement?.dataset?.lineStart, 10)
+
+  return Number.isInteger(lineNumber) && lineNumber > 0 ? lineNumber : null
+}
+
+/**
+ * 把离开纯预览时留档的行号应用到编辑器。
+ * 必须在布局更新之后执行，确保编辑器已按新宽度完成重排。
+ */
+function applyPendingEditorLineFromPreview() {
+  const lineNumber = pendingEditorLineFromPreview
+  pendingEditorLineFromPreview = null
+  if (Number.isInteger(lineNumber) !== true) {
+    return
+  }
+
+  // 这里不抑制「编辑区 → 预览」同步：编辑器跳到该行后让预览跟随，两侧位置才会一致。
+  // 若抑制，标记会残留到下一次切换（离开纯预览时不会发生反向同步来消费它），
+  // 反而会把之后真正需要的同步吃掉。
+  jumpEditorToLine(lineNumber)
+}
+
 watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {
   closePreviewSearchBar()
   syncLayoutControllers()
   destroySplitLayout()
+  // 抑制标记是一次性的，跨模式残留会吃掉新模式下的首次同步，这里统一清零。
+  resetSuppressedSyncCounters()
 
   const previewWasVisible = previousLayoutMode?.columnOrder?.includes('preview') === true
   const previewNowVisible = nextLayoutMode.columnOrder.includes('preview')
+
+  const previewOnlyWasActive = previousLayoutMode?.gridTemplateClass === PREVIEW_ONLY_LAYOUT_CLASS
+  const previewOnlyNowActive = nextLayoutMode.gridTemplateClass === PREVIEW_ONLY_LAYOUT_CLASS
+  if (previewOnlyWasActive === true && previewOnlyNowActive !== true) {
+    // 离开纯预览：先在布局变化前读走预览位置，等 DOM 更新后再交给编辑器。
+    pendingEditorLineFromPreview = resolvePreviewTopLineNumber()
+  }
+
   if (previewNowVisible !== true) {
     pendingPreviewResyncAfterRefresh.value = false
   } else if (previewWasVisible !== true) {
@@ -1346,14 +1410,29 @@ watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {
   }
 
   if (previewController.value !== true) {
+    // 源码态没有预览区，待重同步标记没有意义。
     pendingPreviewResyncAfterRefresh.value = false
+  }
+
+  // 关联高亮只在双栏态有效：源码态没有预览、纯预览态没有可操作的编辑器，都要收起已有高亮。
+  // 注意不能顺带清掉待重同步标记：源码切纯预览时，正是靠它在预览刷新完成后
+  // 把编辑器位置带过去，清掉就会退回顶部。
+  if (viewMode.value !== 'split') {
     clearLinkedHighlightDisplay()
+  }
+
+  // 纯预览态编辑器不可见，编辑搜索栏没有意义，切换过去时直接收起，避免残留浮层。
+  if (viewMode.value === 'preview') {
+    onEditorSearchBarClose()
   }
 
   nextTick(() => {
     resetSplitLayout()
     store.setOutlineScrollContainer(resolveOutlineScrollContainer())
     syncOutlineActiveLine()
+    if (previewOnlyWasActive === true && previewOnlyNowActive !== true) {
+      applyPendingEditorLineFromPreview()
+    }
     if (previewController.value !== true) {
       return
     }
@@ -1364,6 +1443,9 @@ watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {
 
     syncEditorToPreview(true)
     restorePreviewLinkedHighlight()
+    // 关联高亮只在双栏态可用，而 props 的 watch 不会因视图模式变化触发，
+    // 这里补一次主动高亮，否则从其它模式切回双栏后编辑器侧高亮要等下次光标移动才出现。
+    highlightByEditorCursor()
   })
 })
 
@@ -1598,9 +1680,26 @@ defineExpose({
 }
 
 .markdown-edit-layout--preview-only {
-  // 保留 editor 列并压到 0 宽，保证编辑器实例不被销毁；preview 列占满剩余空间。
-  grid-template-columns: 0fr 0px 1fr;
+  // 编辑器保持全宽（与源码态一致）：尺寸不变，CodeMirror 的测量结果才不会被破坏。
+  // 若把 editor 列压到 0 宽，列宽变化会触发重测，而 0 宽下算出的内容高度是错的，
+  // 会导致 scrollTop 被 clamp 回顶部、视口只渲染部分行。
+  grid-template-columns: 1fr 0px 0fr;
   grid-template-areas: 'editor gutter-preview preview';
+}
+
+.markdown-edit-layout--preview-only .markdown-edit-layout__editor {
+  // 占满整行但不可见；不能用 0 宽或 display: none，否则同样会破坏编辑器测量。
+  grid-area: 1 / 1 / 2 / 4;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.markdown-edit-layout--preview-only .markdown-edit-layout__preview {
+  // 与编辑器同占一整行并叠在其上；这里用网格定位而不是绝对定位，
+  // 避免绝对定位在网格里的包含块歧义导致预览拿不到宽度。
+  grid-area: 1 / 1 / 2 / 4;
+  z-index: 1;
+  background-color: var(--wj-markdown-bg-primary);
 }
 
 .markdown-edit-layout__preview-center {

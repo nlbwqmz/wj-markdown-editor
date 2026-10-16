@@ -75,7 +75,8 @@ function onKeydown(e) {
       }
       if (store.searchBarVisible === true) {
         previewSearchBarController.close(store)
-      } else {
+      } else if (router.currentRoute.value.name !== 'editor' || store.viewMode !== 'source') {
+        // 编辑页的源码态没有预览区，此时不该打开一个空的预览搜索条。
         store.searchBarVisible = true
       }
     }

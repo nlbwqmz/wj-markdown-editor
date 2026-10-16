@@ -16,6 +16,7 @@ export function usePreviewSync({
   editorScrollTop,
   previewLayoutIndex,
   restoreStateRef,
+  isEditorVisibleRef,
 }) {
   const SCROLL_IDLE_MS = 160
   const SCROLL_MAX_WAIT_MS = 5000
@@ -184,6 +185,18 @@ export function usePreviewSync({
   function suppressNextLinkedSync() {
     suppressNextEditorToPreviewSync()
     suppressNextPreviewToEditorSync()
+  }
+
+  /**
+   * 清空两端的抑制计数。
+   * 抑制标记是“一次性”语义：设置后必须有对应的同步来消费。若在不会发生该方向同步的
+   * 场景里设置了它（例如源码态没有预览区，却抑制了「编辑区 → 预览」），标记会残留到
+   * 后续模式切换，把真正需要的同步吃掉。布局模式变化时统一清零，保证新模式下的首次
+   * 同步不被旧模式的标记影响。
+   */
+  function resetSuppressedSyncCounters() {
+    suppressedEditorToPreviewSyncCount = 0
+    suppressedPreviewToEditorSyncCount = 0
   }
 
   function shouldSkipEditorToPreviewSync() {
@@ -509,6 +522,11 @@ export function usePreviewSync({
     if (!view || !previewRef.value || scrolling.value.editor) {
       return
     }
+    // 编辑器不可见时（纯预览态）不做实时反向同步：位置改由模式切换时一次性交接，
+    // 避免为看不见的编辑器持续做无谓的滚动与测量。
+    if (isEditorVisibleRef?.value === false) {
+      return
+    }
     // 文档恢复期间，编辑区滚动位置同样需要保持静止，避免预览区的同步逻辑在恢复尚未完成时
     // 抢先写回编辑区，进而破坏恢复流程设定的滚动锚点。
     if (restoreStateRef?.value?.active === true) {
@@ -568,6 +586,7 @@ export function usePreviewSync({
     suppressNextEditorToPreviewSync,
     suppressNextPreviewToEditorSync,
     suppressNextLinkedSync,
+    resetSuppressedSyncCounters,
     syncEditorToPreview,
     syncPreviewToEditor,
     bindEvents,
