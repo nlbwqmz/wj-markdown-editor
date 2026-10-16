@@ -414,31 +414,33 @@ async function doPrettier(editorView) {
   ])
 
   // 3. 执行 Prettier 格式化
-  prettier.format(preprocessed, {
+  // 必须 await 到格式化完成：用 .then() 链时函数会先返回，外部只能靠"猜延时"判断是否完成，
+  // 并行测试或低性能机器上会误判为未完成。
+  const formatted = await prettier.format(preprocessed, {
     parser: 'markdown',
     plugins: [markdownParser],
     tabWidth: 2,
     useTabs: true,
     printWidth: Infinity,
     proseWrap: 'preserve',
-  }).then((formatted) => {
-    // 4. 移除临时注释
-    const final = formatted.replace(
-      /<!-- prettier-ignore-(start|end) -->\n?/g,
-      '',
-    )
-
-    // 5. 点击外部工具栏后，编辑器可能先因为失焦等 DOM 同步推进内部 state。
-    // 这里必须让 dispatch 基于“当前 state”即时创建事务，不能复用预先构造的 Transaction。
-    if (editorView.state.doc.toString() !== content) {
-      return
-    }
-
-    editorView.dispatch({
-      changes: { from: 0, to: content.length, insert: final },
-    })
-    editorView.focus?.()
   })
+
+  // 4. 移除临时注释
+  const final = formatted.replace(
+    /<!-- prettier-ignore-(start|end) -->\n?/g,
+    '',
+  )
+
+  // 5. 点击外部工具栏后，编辑器可能先因为失焦等 DOM 同步推进内部 state。
+  // 这里必须让 dispatch 基于“当前 state”即时创建事务，不能复用预先构造的 Transaction。
+  if (editorView.state.doc.toString() !== content) {
+    return
+  }
+
+  editorView.dispatch({
+    changes: { from: 0, to: content.length, insert: final },
+  })
+  editorView.focus?.()
 }
 
 export default {
@@ -457,7 +459,7 @@ export default {
   taskList: (editorView) => { lineCommand(editorView, '- [ ] ') },
   undo: (editorView) => { undo(editorView) },
   redo: (editorView) => { redo(editorView) },
-  doPrettier: (editorView) => { doPrettier(editorView) },
+  doPrettier: editorView => doPrettier(editorView),
   blockCode: (editorView) => { blockCode(editorView) },
   link: (editorView) => { link(editorView) },
   mark: (editorView) => { inlineCommand(editorView, '==') },

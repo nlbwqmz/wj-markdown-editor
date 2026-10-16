@@ -17,6 +17,20 @@ vi.mock('@/util/commonUtil.js', () => ({
   },
 }))
 
+// 这两个用例验证的是“格式化结果如何回写到视图”的时序，不是 Prettier 本身。
+// 真实 Prettier 首次动态加载耗时在并行测试下不稳定，会让用例靠猜延时失败；
+// 这里用异步假实现替代，既保留异步语义又消除加载抖动。
+vi.mock('prettier/standalone', () => ({
+  format: async (content) => {
+    // 模拟 markdown 格式化：标题与紧随其后的列表之间补一个空行。
+    return content.replace(/^(#.*\n)(?=- )/m, '$1\n')
+  },
+}))
+
+vi.mock('prettier/parser-markdown', () => ({
+  default: {},
+}))
+
 afterEach(() => {
   document.body.innerHTML = ''
 })
@@ -59,8 +73,7 @@ describe('editorUtil.doPrettier', () => {
     window.addEventListener('unhandledrejection', handleUnhandledRejection)
 
     try {
-      editorUtil.doPrettier(view)
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await editorUtil.doPrettier(view)
 
       expect(rejectionList).toHaveLength(0)
       expect(view.getContent()).toBe('# title\n\n- item\n')
@@ -89,11 +102,12 @@ describe('editorUtil.doPrettier', () => {
     try {
       view.focus()
       triggerButton.focus()
+      let prettierPromise
       triggerButton.addEventListener('click', () => {
-        editorUtil.doPrettier(view)
+        prettierPromise = editorUtil.doPrettier(view)
       }, { once: true })
       triggerButton.click()
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await prettierPromise
 
       expect(rejectionList).toHaveLength(0)
       expect(view.state.doc.toString()).toBe('# title\n\n- item\n')
