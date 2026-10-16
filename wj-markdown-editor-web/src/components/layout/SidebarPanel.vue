@@ -9,7 +9,8 @@ import { parseOutlineFromMarkdown } from '@/util/editor/outlineParseUtil.js'
 /**
  * 侧边栏容器：在「文件」与「大纲」两个面板之间切换。
  *
- * - 两个面板都用 v-show 保持挂载，切 tab 不丢失各自状态（搜索词、滚动位置）；
+ * - 文件面板用 v-show 保留搜索词/滚动位置；大纲面板用 v-if，切走即卸载，
+ *   避免隐藏状态下继续测量标题位置与重建索引；
  * - 大纲数据直接解析当前文档源文本，不依赖预览组件实例；
  * - 点击大纲后的编辑器跳转通过 store.outlineNavigateHandler 由当前激活页面处理。
  */
@@ -55,7 +56,7 @@ function onAnchorNavigate(payload) {
       <div v-show="store.sidebarActiveTab === 'files'" class="absolute inset-0">
         <FileManagerPanel />
       </div>
-      <div v-show="store.sidebarActiveTab === 'outline'" class="absolute inset-0">
+      <div v-if="store.sidebarActiveTab === 'outline'" class="absolute inset-0">
         <MarkdownMenu
           :anchor-list="outlineList"
           :get-container="resolveOutlineScrollContainer"

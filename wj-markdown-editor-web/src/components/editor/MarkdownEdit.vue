@@ -1109,6 +1109,26 @@ function unbindOutlineActiveLineEvents() {
   }
 }
 
+// 编辑页是否激活（keep-alive 场景下失活页面不参与联动）
+const isEditorPageActive = ref(false)
+
+// 是否需要编辑区行号上抛：页面激活 + 侧边栏可见 + 停留在大纲 tab
+const shouldSyncOutlineActiveLine = computed(() =>
+  isEditorPageActive.value === true
+  && store.sidebarVisible === true
+  && store.sidebarActiveTab === 'outline',
+)
+
+watch(shouldSyncOutlineActiveLine, (enabled) => {
+  if (enabled === true) {
+    bindOutlineActiveLineEvents()
+    syncOutlineActiveLine()
+    return
+  }
+  unbindOutlineActiveLineEvents()
+  store.setOutlineActiveLine(null)
+})
+
 function onPreviewContextmenu(context) {
   emits('previewContextmenu', context)
 }
@@ -1519,7 +1539,7 @@ onMounted(() => {
   nextTick(() => {
     flushPendingExternalSync()
     bindEvents()
-    bindOutlineActiveLineEvents()
+    isEditorPageActive.value = true
     if (props.associationHighlight === true) {
       highlightByEditorCursor()
     }
@@ -1527,6 +1547,7 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  isEditorPageActive.value = true
   previewSearchTargetBridge.activate()
   closePreviewSearchBar()
   nextTick(() => {
@@ -1536,6 +1557,7 @@ onActivated(() => {
 })
 
 onDeactivated(() => {
+  isEditorPageActive.value = false
   modelSyncScheduler.cancel()
   cancelPendingViewScrollRestore()
   closePreviewSearchBar()
@@ -1544,6 +1566,7 @@ onDeactivated(() => {
 })
 
 onBeforeUnmount(() => {
+  isEditorPageActive.value = false
   modelSyncScheduler.cancel()
   cancelPendingViewScrollRestore()
   closePreviewSearchBar()
@@ -1593,7 +1616,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full overflow-y-auto p-2"
+          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full overflow-y-auto p-2"
           :style="previewContainerStyle"
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"

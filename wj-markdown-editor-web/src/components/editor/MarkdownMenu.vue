@@ -40,6 +40,8 @@ const props = defineProps({
 const emits = defineEmits(['anchorNavigate'])
 
 const menuItemElementMap = Object.create(null)
+// 组件卸载后可能仍有已排队的动画帧回调，用它拦掉卸载后的测量与高亮更新。
+let isDisposed = false
 let currentContainer = null
 let headingTargetElementMap = new Map()
 let currentContainerMutationObserver = null
@@ -235,7 +237,17 @@ let headingMeasureEnabled = false
 // 会强制浏览器全量同步排版，大文档下可达秒级，阻塞首帧绘制。
 let activeHrefUpdateRafId = null
 
+function cancelScheduledActiveHrefUpdate() {
+  if (activeHrefUpdateRafId !== null) {
+    cancelAnimationFrame(activeHrefUpdateRafId)
+    activeHrefUpdateRafId = null
+  }
+}
+
 function scheduleActiveHrefUpdate() {
+  if (isDisposed === true) {
+    return
+  }
   if (activeHrefUpdateRafId !== null) {
     return
   }
@@ -257,6 +269,9 @@ function enableHeadingMeasure() {
 }
 
 function updateActiveHref() {
+  if (isDisposed === true) {
+    return
+  }
   if (!headingMeasureEnabled) {
     return
   }
@@ -431,6 +446,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  isDisposed = true
+  cancelScheduledActiveHrefUpdate()
   window.removeEventListener(STARTUP_LOADING_READY_EVENT, enableHeadingMeasure)
   if (startupMeasureFallbackTimer !== null) {
     clearTimeout(startupMeasureFallbackTimer)
@@ -439,6 +456,7 @@ onBeforeUnmount(() => {
   currentContainer?.removeEventListener?.('scroll', syncActiveHref)
   disconnectContainerMutationObserver()
   stopProgrammaticScroll()
+  currentContainer = null
 })
 </script>
 
