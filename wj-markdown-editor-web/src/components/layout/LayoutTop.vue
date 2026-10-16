@@ -118,15 +118,15 @@ onBeforeMount(async () => {
           <a-menu>
             <a-menu-item key="source" data-testid="layout-top-view-mode-source" @click="store.setViewMode('source')">
               <span v-if="store.viewMode === 'source'" class="i-tabler:check mr-1" />
-              <span v-else class="mr-4" />{{ $t('shortcutKey.viewSource') }}
+              <span v-else class="mr-1 inline-block w-[1em]" />{{ $t('shortcutKey.viewSource') }}
             </a-menu-item>
             <a-menu-item key="split" data-testid="layout-top-view-mode-split" @click="store.setViewMode('split')">
               <span v-if="store.viewMode === 'split'" class="i-tabler:check mr-1" />
-              <span v-else class="mr-4" />{{ $t('shortcutKey.viewSplit') }}
+              <span v-else class="mr-1 inline-block w-[1em]" />{{ $t('shortcutKey.viewSplit') }}
             </a-menu-item>
             <a-menu-item key="preview" data-testid="layout-top-view-mode-preview" @click="store.setViewMode('preview')">
               <span v-if="store.viewMode === 'preview'" class="i-tabler:check mr-1" />
-              <span v-else class="mr-4" />{{ $t('shortcutKey.viewPreview') }}
+              <span v-else class="mr-1 inline-block w-[1em]" />{{ $t('shortcutKey.viewPreview') }}
             </a-menu-item>
           </a-menu>
         </template>
@@ -156,15 +156,15 @@ onBeforeMount(async () => {
           <a-menu>
             <a-menu-item key="auto" @click="switchLanguage('auto')">
               <span v-if="language === 'auto'" class="i-tabler:check mr-1" />
-              <span v-else class="mr-4" />{{ $t('top.languageAuto') }}
+              <span v-else class="mr-1 inline-block w-[1em]" />{{ $t('top.languageAuto') }}
             </a-menu-item>
             <a-menu-item key="zh-CN" @click="switchLanguage('zh-CN')">
               <span v-if="language === 'zh-CN'" class="i-tabler:check mr-1" />
-              <span v-else class="mr-4" />中文
+              <span v-else class="mr-1 inline-block w-[1em]" />中文
             </a-menu-item>
             <a-menu-item key="en-US" @click="switchLanguage('en-US')">
               <span v-if="language === 'en-US'" class="i-tabler:check mr-1" />
-              <span v-else class="mr-4" />English
+              <span v-else class="mr-1 inline-block w-[1em]" />English
             </a-menu-item>
           </a-menu>
         </template>

@@ -73,7 +73,7 @@ const sortMenuCurrentKey = computed(() => {
 
 function createSortMenuLabel(messageKey, key) {
   const label = t(messageKey)
-  const indicatorClass = sortMenuCurrentKey.value === key ? 'i-tabler:check mr-1' : 'mr-4'
+  const indicatorClass = sortMenuCurrentKey.value === key ? 'i-tabler:check mr-1' : 'mr-1 inline-block w-[1em]'
 
   return h('span', { class: 'inline-flex items-center' }, [
     h('span', { class: indicatorClass }),

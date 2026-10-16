@@ -1,7 +1,7 @@
 <script setup>
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { Modal } from 'ant-design-vue'
-import { createVNode, onBeforeMount, ref, watch } from 'vue'
+import { createVNode, h, onBeforeMount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
@@ -35,6 +35,20 @@ function getSidebarToggleLabel() {
 function createMenuLabel(label, shortcutKeyId) {
   const keymap = getKeymapByShortcutKeyId(shortcutKeyId)
   return keymap ? commonUtil.createLabel(label, keymap) : label
+}
+
+const CHECK_INDICATOR_CLASS = 'i-tabler:check mr-1'
+const PLACEHOLDER_INDICATOR_CLASS = 'mr-1 inline-block w-[1em]'
+
+// 视图菜单组内存在勾选项时，组内所有项统一预留等宽占位，保证整列文本对齐。
+function createIndicatorMenuLabel(label, shortcutKeyId, indicatorClass) {
+  const keymap = getKeymapByShortcutKeyId(shortcutKeyId)
+  const baseLabel = keymap ? commonUtil.createLabel(label, keymap) : label
+
+  return h('div', { style: { display: 'flex', alignItems: 'center' } }, [
+    h('span', { class: indicatorClass }),
+    h('div', { style: { flex: 1 } }, [baseLabel]),
+  ])
 }
 
 function sendExportStart(type, target) {
@@ -201,21 +215,33 @@ function updateMenuList() {
       children: [
         {
           key: commonUtil.createId(),
-          label: createMenuLabel(t('shortcutKey.viewSource'), 'viewSource'),
+          label: createIndicatorMenuLabel(
+            t('shortcutKey.viewSource'),
+            'viewSource',
+            store.viewMode === 'source' ? CHECK_INDICATOR_CLASS : PLACEHOLDER_INDICATOR_CLASS,
+          ),
           click: () => {
             store.setViewMode('source')
           },
         },
         {
           key: commonUtil.createId(),
-          label: createMenuLabel(t('shortcutKey.viewSplit'), 'viewSplit'),
+          label: createIndicatorMenuLabel(
+            t('shortcutKey.viewSplit'),
+            'viewSplit',
+            store.viewMode === 'split' ? CHECK_INDICATOR_CLASS : PLACEHOLDER_INDICATOR_CLASS,
+          ),
           click: () => {
             store.setViewMode('split')
           },
         },
         {
           key: commonUtil.createId(),
-          label: createMenuLabel(t('shortcutKey.viewPreview'), 'viewPreview'),
+          label: createIndicatorMenuLabel(
+            t('shortcutKey.viewPreview'),
+            'viewPreview',
+            store.viewMode === 'preview' ? CHECK_INDICATOR_CLASS : PLACEHOLDER_INDICATOR_CLASS,
+          ),
           click: () => {
             store.setViewMode('preview')
           },
@@ -226,14 +252,22 @@ function updateMenuList() {
         },
         {
           key: commonUtil.createId(),
-          label: createMenuLabel(t(isFullScreen.value ? 'topMenu.view.children.exitFullScreen' : 'topMenu.view.children.enterFullScreen'), 'toggleFullScreen'),
+          label: createIndicatorMenuLabel(
+            t(isFullScreen.value ? 'topMenu.view.children.exitFullScreen' : 'topMenu.view.children.enterFullScreen'),
+            'toggleFullScreen',
+            PLACEHOLDER_INDICATOR_CLASS,
+          ),
           click: () => {
             toggleFullScreenAction()
           },
         },
         {
           key: commonUtil.createId(),
-          label: createMenuLabel(getSidebarToggleLabel(), 'toggleFileManagerPanel'),
+          label: createIndicatorMenuLabel(
+            getSidebarToggleLabel(),
+            'toggleFileManagerPanel',
+            PLACEHOLDER_INDICATOR_CLASS,
+          ),
           click: () => {
             if (typeof store.setSidebarVisible === 'function') {
               store.setSidebarVisible(!store.sidebarVisible)
@@ -284,6 +318,9 @@ watch(() => store.isFullScreen, (newValue) => {
 })
 watch(() => store.sidebarVisible, (newValue) => {
   sidebarVisible.value = newValue
+  updateMenuList()
+})
+watch(() => store.viewMode, () => {
   updateMenuList()
 })
 

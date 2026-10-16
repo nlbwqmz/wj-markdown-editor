@@ -110,6 +110,25 @@ function getViewMenuChildren(wrapper) {
   return menuList[1].children
 }
 
+function containsVNodeClass(content, expectedClass, visited = new Set()) {
+  if (Array.isArray(content)) {
+    return content.some(item => containsVNodeClass(item, expectedClass, visited))
+  }
+
+  if (!content || typeof content !== 'object') {
+    return false
+  }
+  if (visited.has(content)) {
+    return false
+  }
+  visited.add(content)
+
+  const classValue = content.props?.class ?? ''
+  const classList = Array.isArray(classValue) ? classValue.join(' ') : String(classValue)
+
+  return classList.split(/\s+/u).includes(expectedClass) || containsVNodeClass(content.children, expectedClass, visited)
+}
+
 describe('layoutMenu full screen', () => {
   beforeEach(() => {
     store.isFullScreen = false
@@ -221,5 +240,52 @@ describe('layoutMenu full screen', () => {
     await viewMenuChildren[4].click()
 
     expect(mocked.toggleFullScreenAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('视图菜单组应统一预留勾选占位，并按当前视图模式打勾', () => {
+    store.viewMode = 'split'
+
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    const viewMenuChildren = getViewMenuChildren(wrapper)
+
+    expect(containsVNodeClass(viewMenuChildren[0].label, 'i-tabler:check')).toBe(false)
+    expect(containsVNodeClass(viewMenuChildren[0].label, 'inline-block')).toBe(true)
+    expect(containsVNodeClass(viewMenuChildren[0].label, 'w-[1em]')).toBe(true)
+    expect(containsVNodeClass(viewMenuChildren[1].label, 'i-tabler:check')).toBe(true)
+    expect(containsVNodeClass(viewMenuChildren[2].label, 'i-tabler:check')).toBe(false)
+    expect(containsVNodeClass(viewMenuChildren[2].label, 'inline-block')).toBe(true)
+    expect(containsVNodeClass(viewMenuChildren[4].label, 'i-tabler:check')).toBe(false)
+    expect(containsVNodeClass(viewMenuChildren[4].label, 'inline-block')).toBe(true)
+    expect(containsVNodeClass(viewMenuChildren[5].label, 'inline-block')).toBe(true)
+  })
+
+  it('store.viewMode 变化后视图菜单勾选应同步更新', async () => {
+    store.viewMode = 'split'
+
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    store.viewMode = 'source'
+    await nextTick()
+
+    const viewMenuChildren = getViewMenuChildren(wrapper)
+
+    expect(containsVNodeClass(viewMenuChildren[0].label, 'i-tabler:check')).toBe(true)
+    expect(containsVNodeClass(viewMenuChildren[1].label, 'i-tabler:check')).toBe(false)
+    expect(containsVNodeClass(viewMenuChildren[1].label, 'inline-block')).toBe(true)
   })
 })

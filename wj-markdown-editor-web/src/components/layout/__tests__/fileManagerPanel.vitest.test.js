@@ -1030,7 +1030,10 @@ describe('fileManagerPanel 组件', () => {
     expect(containsVNodeClass(selectedItem.label, 'i-tabler:check')).toBe(true)
     expect(containsVNodeClass(selectedItem.label, 'mr-1')).toBe(true)
     expect(containsVNodeClass(unselectedItem.label, 'i-tabler:check')).toBe(false)
-    expect(containsVNodeClass(unselectedItem.label, 'mr-4')).toBe(true)
+    // 未选中项使用与勾选图标等宽的占位，避免选中时文本被挤压位移
+    expect(containsVNodeClass(unselectedItem.label, 'mr-1')).toBe(true)
+    expect(containsVNodeClass(unselectedItem.label, 'inline-block')).toBe(true)
+    expect(containsVNodeClass(unselectedItem.label, 'w-[1em]')).toBe(true)
   })
 
   it('点击工具区新建菜单里的文件夹动作后，应走创建文件夹链路', async () => {
