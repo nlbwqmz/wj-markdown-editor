@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, nextTick, onBeforeUnmount } from 'vue'
+import { defineComponent, h, nextTick, onBeforeUnmount, reactive } from 'vue'
 
 import { viewScrollHandoff } from '../../../util/editor/viewScrollHandoffUtil.js'
 
@@ -337,12 +337,15 @@ function createStore() {
   return {
     config: {
       shortcutKeyList: [],
+      previewWidth: 80,
       theme: {
         global: 'light',
       },
     },
     editorSearchBarVisible: false,
     searchBarVisible: false,
+    viewMode: 'split',
+    setViewMode: vi.fn(),
     setOutlineScrollContainer: vi.fn(),
     setOutlineActiveLine: vi.fn(),
     setOutlineNavigateHandler: vi.fn(),
@@ -357,12 +360,13 @@ async function flushLayoutRender() {
 
 async function mountMarkdownEdit({
   previewPosition = 'right',
+  modelValue = '# title',
 } = {}) {
-  storeState.current = createStore()
+  storeState.current = reactive(createStore())
 
   const wrapper = mount(MarkdownEdit, {
     props: {
-      modelValue: '# title',
+      modelValue,
       previewPosition,
     },
   })
@@ -438,6 +442,68 @@ describe('markdownEdit 布局运行时接线', () => {
     expect(splitState.calls[0].columnGutters[0].element.dataset.layoutItem).toBe('gutter-preview')
   })
 
+  it('纯预览布局会保留编辑器 DOM 与预览列，同时隐藏工具栏且不挂 Split 分隔条', async () => {
+    const wrapper = await mountMarkdownEdit({
+      previewPosition: 'right',
+    })
+
+    const splitCallCountBeforeSwitch = splitState.calls.length
+    const activeSplitDestroySpy = splitState.destroySpies.at(-1)
+    const layoutElement = wrapper.get('[data-testid="markdown-edit-layout"]')
+
+    storeState.current.viewMode = 'preview'
+    await flushLayoutRender()
+    vi.runOnlyPendingTimers()
+
+    // editor 列仍然存在于 DOM 中，保证编辑器实例不被销毁。
+    expect(wrapper.find('[data-layout-item="editor"]').exists()).toBe(true)
+    expect(getLayoutSequence(wrapper)).toEqual([
+      'editor',
+      'gutter-preview',
+      'preview',
+    ])
+    expect(layoutElement.classes()).toContain('markdown-edit-layout--preview-only')
+    // 纯预览态工具栏不渲染，顶部横线需要由布局容器自己补上。
+    expect(layoutElement.classes()).toEqual(expect.arrayContaining([
+      'b-t-1',
+      'b-t-border-primary',
+      'b-t-solid',
+    ]))
+    // 纯预览态没有可拖拽分隔条，gutter 需要隐藏，避免留下多余竖线。
+    expect(wrapper.get('[data-layout-item="gutter-preview"]').classes()).toContain('markdown-edit-layout__gutter--preview-hidden')
+    expect(wrapper.findComponent({ name: 'EditorToolbarStub' }).exists()).toBe(false)
+    // 纯预览布局没有分隔条，不得再创建新的 Split 实例，旧实例必须被释放。
+    expect(splitState.calls).toHaveLength(splitCallCountBeforeSwitch)
+    expect(activeSplitDestroySpy).toHaveBeenCalledWith(true)
+
+    // 切回双栏后，顶部横线交还给工具栏，gutter 恢复为可拖拽分隔条。
+    storeState.current.viewMode = 'split'
+    await flushLayoutRender()
+    vi.runOnlyPendingTimers()
+
+    expect(layoutElement.classes()).not.toContain('b-t-1')
+    expect(layoutElement.classes()).not.toContain('b-t-border-primary')
+    expect(layoutElement.classes()).not.toContain('b-t-solid')
+    expect(wrapper.get('[data-layout-item="gutter-preview"]').classes()).not.toContain('markdown-edit-layout__gutter--preview-hidden')
+  })
+
+  it('纯预览布局且正文为空时显示空状态，点击“去编辑”会切回双栏', async () => {
+    const wrapper = await mountMarkdownEdit({
+      modelValue: '',
+      previewPosition: 'right',
+    })
+
+    storeState.current.viewMode = 'preview'
+    await flushLayoutRender()
+
+    expect(wrapper.text()).toContain('editor.emptyDocument')
+    expect(wrapper.text()).toContain('editor.goToEdit')
+
+    await wrapper.get('button').trigger('click')
+
+    expect(storeState.current.setViewMode).toHaveBeenCalledWith('split')
+  })
+
   it('previewPosition 从 right 切到 left 时，会重建 Split 并同步新的真实 DOM 顺序', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
@@ -475,7 +541,7 @@ describe('markdownEdit 布局运行时接线', () => {
       previewPosition: 'right',
     })
 
-    wrapper.vm.$.setupState.previewVisible = false
+    storeState.current.viewMode = 'source'
     await flushLayoutRender()
 
     expect(getLayoutStyle(wrapper)).not.toContain('transition:')
@@ -508,20 +574,20 @@ describe('markdownEdit 布局运行时接线', () => {
   })
 
   it('重新打开预览后，应等待 refresh-complete 再执行首轮预览同步和高亮恢复', async () => {
-    const wrapper = await mountMarkdownEdit({
+    await mountMarkdownEdit({
       previewPosition: 'right',
     })
 
     previewLayoutWiringState.syncEditorToPreview.mockClear()
     previewLayoutWiringState.restorePreviewLinkedHighlight.mockClear()
 
-    wrapper.vm.$.setupState.previewVisible = false
+    storeState.current.viewMode = 'source'
     await flushLayoutRender()
 
     previewLayoutWiringState.syncEditorToPreview.mockClear()
     previewLayoutWiringState.restorePreviewLinkedHighlight.mockClear()
 
-    wrapper.vm.$.setupState.previewVisible = true
+    storeState.current.viewMode = 'split'
     await flushLayoutRender()
 
     expect(previewLayoutWiringState.syncEditorToPreview).not.toHaveBeenCalled()
@@ -540,13 +606,13 @@ describe('markdownEdit 布局运行时接线', () => {
       previewPosition: 'right',
     })
 
-    wrapper.vm.$.setupState.previewVisible = false
+    storeState.current.viewMode = 'source'
     await flushLayoutRender()
 
     previewLayoutWiringState.syncEditorToPreview.mockClear()
     previewLayoutWiringState.restorePreviewLinkedHighlight.mockClear()
 
-    wrapper.vm.$.setupState.previewVisible = true
+    storeState.current.viewMode = 'split'
     await flushLayoutRender()
     const reopenedPreviewInstance = getLastMarkdownPreviewStubInstance()
 
@@ -565,18 +631,18 @@ describe('markdownEdit 布局运行时接线', () => {
   })
 
   it('旧预览实例卸载后的迟到 refresh-complete 不会触发当前实例的重同步', async () => {
-    const wrapper = await mountMarkdownEdit({
+    await mountMarkdownEdit({
       previewPosition: 'right',
     })
 
     const initialPreviewInstance = getLastMarkdownPreviewStubInstance()
-    wrapper.vm.$.setupState.previewVisible = false
+    storeState.current.viewMode = 'source'
     await flushLayoutRender()
 
     previewLayoutWiringState.syncEditorToPreview.mockClear()
     previewLayoutWiringState.restorePreviewLinkedHighlight.mockClear()
 
-    wrapper.vm.$.setupState.previewVisible = true
+    storeState.current.viewMode = 'split'
     await flushLayoutRender()
     const reopenedPreviewInstance = getLastMarkdownPreviewStubInstance()
 

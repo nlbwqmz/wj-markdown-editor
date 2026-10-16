@@ -805,7 +805,7 @@ describe('protocolUtil 协议上下文回退', () => {
     }))
     vi.doMock('../data/configUtil.js', () => ({
       default: {
-        getConfig: vi.fn(() => ({ language: 'zh-CN', autoSave: [], startPage: 'editor' })),
+        getConfig: vi.fn(() => ({ language: 'zh-CN', autoSave: [], startView: 'split' })),
       },
     }))
     vi.doMock('../data/recent.js', () => ({

@@ -1,4 +1,3 @@
-import router from '@/router/index.js'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import { requestDocumentOpenByDialogAndOpen } from '@/util/document-session/documentOpenInteractionService.js'
@@ -120,12 +119,17 @@ const webShortcutKeyHandler = {
       trigger: 'user',
     }).then(() => {})
   },
-  switchView: () => {
-    if (router.currentRoute.value.name === 'editor') {
-      router.push({ name: 'preview' }).then(() => {})
-    } else {
-      router.push({ name: 'editor' }).then(() => {})
-    }
+  viewSource: () => {
+    const store = useCommonStore()
+    store.setViewMode('source')
+  },
+  viewSplit: () => {
+    const store = useCommonStore()
+    store.setViewMode('split')
+  },
+  viewPreview: () => {
+    const store = useCommonStore()
+    store.setViewMode('preview')
   },
   save: () => {
     requestDocumentSave().then(() => {})

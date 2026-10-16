@@ -22,6 +22,9 @@ const useCommonStore = defineStore('common', () => {
   const sidebarVisible = ref(configData.sidebarDefaultView !== 'close')
   // 侧边栏当前 tab：会话内记住上次选择，不持久化
   const sidebarActiveTab = ref(configData.sidebarDefaultView === 'outline' ? 'outline' : 'files')
+  // 编辑页视图模式：source（仅源码）/ split（双栏）/ preview（仅预览）。
+  // 会话内切换不持久化；startView 配置由后续步骤引入，当前先用 split 兜底。
+  const viewMode = ref(configData.startView ?? 'split')
   const searchBarVisible = ref(false)
   const editorSearchBarVisible = ref(false)
   const hasNewVersion = ref(false)
@@ -65,6 +68,12 @@ const useCommonStore = defineStore('common', () => {
     sidebarActiveTab.value = tab === 'outline' ? 'outline' : 'files'
   }
 
+  function setViewMode(mode) {
+    if (['source', 'split', 'preview'].includes(mode)) {
+      viewMode.value = mode
+    }
+  }
+
   function setOutlineScrollContainer(element) {
     outlineScrollContainer.value = element ?? null
   }
@@ -86,6 +95,7 @@ const useCommonStore = defineStore('common', () => {
     config,
     sidebarVisible,
     sidebarActiveTab,
+    viewMode,
     searchBarVisible,
     hasNewVersion,
     isAlwaysOnTop,
@@ -100,6 +110,7 @@ const useCommonStore = defineStore('common', () => {
     setExternalFileChangeLoading,
     setSidebarVisible,
     setSidebarActiveTab,
+    setViewMode,
     setOutlineScrollContainer,
     setOutlineActiveLine,
     setOutlineNavigateHandler,

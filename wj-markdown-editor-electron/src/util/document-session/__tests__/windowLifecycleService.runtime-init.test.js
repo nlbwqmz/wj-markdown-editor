@@ -130,7 +130,7 @@ vi.mock('fs-extra', () => {
 vi.mock('../../../data/configUtil.js', () => {
   return {
     default: {
-      getConfig: vi.fn(() => ({ autoSave: [], startPage: 'editor', theme: { global: 'light' } })),
+      getConfig: vi.fn(() => ({ autoSave: [], startView: 'split', theme: { global: 'light' } })),
       getDefaultConfig: vi.fn(() => ({})),
       updateConfig: vi.fn(),
     },

@@ -13,11 +13,6 @@ const router = createRouter({
           name: 'editor',
           component: () => import('../views/EditorView.vue'),
         },
-        {
-          path: '/preview',
-          name: 'preview',
-          component: () => import('../views/PreviewView.vue'),
-        },
       ],
     },
     {

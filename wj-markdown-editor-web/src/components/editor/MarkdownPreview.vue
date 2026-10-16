@@ -151,7 +151,7 @@ let previewRefreshSequence = 0
 let previewCodeHighlightController = null
 // keep-alive 失活时不能再继续对缓存 DOM 做 mermaid 渲染。
 // 否则 mermaid 在读取几何信息时会命中已经脱离当前活动视图的节点。
-let previewViewActive = false
+let previewActive = false
 let pendingActivationRefresh = false
 let pendingActivationForceMermaidRefresh = false
 let pendingActivationMermaidInit = false
@@ -199,7 +199,7 @@ function hasScheduledPreviewRefresh() {
  * @returns {boolean} 当前预览实例是否允许立即刷新 DOM。
  */
 function canRefreshPreviewNow() {
-  return previewViewActive === true && previewRef.value instanceof HTMLElement
+  return previewActive === true && previewRef.value instanceof HTMLElement
 }
 
 /**
@@ -913,7 +913,7 @@ watch(() => store.externalFileChange.visible, (visible) => {
 })
 
 onMounted(() => {
-  previewViewActive = true
+  previewActive = true
   initMermaid()
   bindPreviewEvents()
   refreshPreviewImmediately(props.content)
@@ -924,7 +924,7 @@ onMounted(() => {
 })
 
 onActivated(() => {
-  previewViewActive = true
+  previewActive = true
   scheduleActivationRefresh(consumePendingActivationRefresh())
 })
 
@@ -933,7 +933,7 @@ onDeactivated(() => {
   if (hasScheduledPreviewRefresh()) {
     markPendingActivationRefresh()
   }
-  previewViewActive = false
+  previewActive = false
   previewCodeHighlightController?.cancel?.()
   previewCodeHighlightController = null
   clearPreviewRefreshScheduler()
@@ -941,7 +941,7 @@ onDeactivated(() => {
 
 onBeforeUnmount(() => {
   activationRefreshTaskToken += 1
-  previewViewActive = false
+  previewActive = false
   previewCodeHighlightController?.cancel?.()
   previewCodeHighlightController = null
   clearPreviewRefreshScheduler()

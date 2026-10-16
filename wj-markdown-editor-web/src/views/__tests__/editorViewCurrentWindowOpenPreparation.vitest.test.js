@@ -239,6 +239,8 @@ function createStore() {
       },
     },
     documentSessionSnapshot: null,
+    viewMode: 'split',
+    setViewMode: vi.fn(),
     applyDocumentSessionSnapshot(snapshot) {
       this.documentSessionSnapshot = snapshot
       return snapshot

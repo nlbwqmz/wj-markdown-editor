@@ -24,6 +24,8 @@ export default {
     textColor: '文字颜色',
     textColorTip: '选中文字颜色语法文本直接更改颜色。',
     preview: '预览',
+    emptyDocument: '文档内容为空',
+    goToEdit: '去编辑',
     outlineTip: '请先打开预览',
     prettier: '美化',
   },
@@ -71,7 +73,6 @@ export default {
   top: {
     enterFullScreen: '进入全屏',
     exitFullScreen: '退出全屏',
-    switchView: '切换视图',
     switchTheme: '切换主题',
     languageAuto: '自动',
     openInExplorer: '在资源管理器中打开',
@@ -103,7 +104,6 @@ export default {
     view: {
       name: '视图',
       children: {
-        switchView: '切换',
         enterFullScreen: '进入全屏',
         exitFullScreen: '退出全屏',
         openSidebar: '打开侧边栏',
@@ -163,8 +163,9 @@ export default {
       externalFileChangeStrategyTip: '直接应用会自动加载磁盘中的最新内容；提醒会打开差异对比弹窗，由你决定是忽略还是应用。',
       startupViewOption: {
         tip: '有内容时生效',
-        edit: '编辑',
-        preview: '预览',
+        source: '源码模式',
+        split: '双栏模式',
+        preview: '预览模式',
       },
       autoSaveOption: {
         tip: '仅当文件保存路径存在时生效',
@@ -279,7 +280,9 @@ export default {
     'save': '保存',
     'saveOther': '另存为',
     'setting': '设置',
-    'switchView': '视图切换',
+    'viewSource': '源码模式',
+    'viewSplit': '双栏模式',
+    'viewPreview': '预览模式',
     'toggleFullScreen': '全屏切换',
     'toggleFileManagerPanel': '文件管理栏切换',
     'editor-heading-1': '一级标题',

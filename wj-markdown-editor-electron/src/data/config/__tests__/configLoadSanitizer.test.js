@@ -185,6 +185,15 @@ describe('configLoadSanitizer', () => {
     expect(sanitized.sidebarDefaultView).toBe('close')
   })
 
+  it('startView 非法枚举值必须回退默认值 split', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      startView: 'editor',
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.startView).toBe('split')
+  })
+
   it('非法主题枚举值必须回退到默认值', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),

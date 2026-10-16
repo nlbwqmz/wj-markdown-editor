@@ -16,7 +16,6 @@ export function useToolbarBuilder({
   editorViewRef,
   emits,
   jumpToTargetLine,
-  previewVisible,
   openNetworkImageModal,
   insertFileToEditor,
 }) {
@@ -365,13 +364,6 @@ export function useToolbarBuilder({
         icon: 'i-tabler:focus-2',
         shortcutKey: getKeymapByShortcutKeyId('editor-focus-line'),
         action: jumpToTargetLine,
-      },
-      previewVisible: {
-        label: t('editor.preview'),
-        icon: 'i-tabler:eye',
-        action: () => {
-          previewVisible.value = !previewVisible.value
-        },
       },
       prettier: {
         label: t('editor.prettier'),

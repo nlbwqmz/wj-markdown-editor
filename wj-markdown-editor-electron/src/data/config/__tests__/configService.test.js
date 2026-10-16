@@ -98,6 +98,27 @@ describe('configService', () => {
     expect(callback).not.toHaveBeenCalled()
   })
 
+  it('初始化时缺失 startView 必须补齐默认值 split 并回写规范化结果', async () => {
+    const legacyConfig = cloneValue(defaultConfig)
+    delete legacyConfig.startView
+    const repository = createRepositoryStub({
+      readResult: legacyConfig,
+    })
+    const callback = vi.fn()
+    const service = createConfigService({
+      defaultConfig,
+      repository,
+    })
+
+    await service.init(callback)
+
+    expect(service.getConfig().startView).toBe('split')
+    expect(repository.writeConfigText).toHaveBeenCalledTimes(1)
+    const persistedConfig = JSON.parse(repository.writeConfigText.mock.calls[0][0])
+    expect(persistedConfig.startView).toBe('split')
+    expect(callback).not.toHaveBeenCalled()
+  })
+
   it('初始化时 recentMax 为 null 只回退该字段，其他合法配置必须保留且会回写规范化结果', async () => {
     const repository = createRepositoryStub({
       readResult: {

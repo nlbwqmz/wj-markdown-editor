@@ -7,13 +7,13 @@ function readEditorViewSource() {
   return fs.readFileSync(new URL('../EditorView.vue', import.meta.url), 'utf8')
 }
 
-test('编辑页必须监听 preview-contextmenu，并把预览资源菜单项透传给 PreviewAssetContextMenu', () => {
+test('编辑页必须监听 preview-contextmenu，并按视图模式选择菜单 profile 后透传给 PreviewAssetContextMenu', () => {
   const source = readEditorViewSource()
 
   assert.match(source, /function onPreviewContextmenu\(context\) \{/u)
   assert.match(
     source,
-    /buildPreviewContextMenuItems\(\{[\s\S]*context,[\s\S]*profile:\s*'editor-preview'[\s\S]*\}\)/u,
+    /buildPreviewContextMenuItems\(\{[\s\S]*?context,[\s\S]*?profile:\s*store\.viewMode === 'preview' \? 'standalone-preview' : 'editor-preview',[\s\S]*?\}\)/u,
   )
   assert.match(
     source,

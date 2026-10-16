@@ -10,7 +10,6 @@ import {
   sendConfigMutationRequest,
 } from '@/util/config/configMutationCommandUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
-import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { createLayoutTopOpenFolderAction } from './layoutTopOpenFolderAction.js'
 
 const store = useCommonStore()
@@ -37,10 +36,6 @@ const openFolder = createLayoutTopOpenFolderAction({
 
 function openAbout() {
   channelUtil.send({ event: 'open-about' })
-}
-
-function switchView() {
-  shortcutKeyUtil.getWebShortcutKeyHandler('switchView', true)
 }
 
 const fileName = computed(() => store.fileName)
@@ -112,18 +107,30 @@ onBeforeMount(async () => {
       <span v-if="!saved" class="color-red">*</span>
     </div>
     <div class="flex items-center">
-      <a-tooltip placement="bottom" color="#1677ff">
-        <template #title>
-          <span>{{ $t('top.switchView') }}</span>
-        </template>
+      <a-dropdown placement="bottom" :trigger="['hover', 'click']" arrow>
         <div
           data-testid="layout-top-switch-view"
           class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover"
-          @click="switchView"
         >
           <div class="i-tabler:arrows-left-right" />
         </div>
-      </a-tooltip>
+        <template #overlay>
+          <a-menu>
+            <a-menu-item key="source" data-testid="layout-top-view-mode-source" @click="store.setViewMode('source')">
+              <span v-if="store.viewMode === 'source'" class="i-tabler:check mr-1" />
+              <span v-else class="mr-4" />{{ $t('shortcutKey.viewSource') }}
+            </a-menu-item>
+            <a-menu-item key="split" data-testid="layout-top-view-mode-split" @click="store.setViewMode('split')">
+              <span v-if="store.viewMode === 'split'" class="i-tabler:check mr-1" />
+              <span v-else class="mr-4" />{{ $t('shortcutKey.viewSplit') }}
+            </a-menu-item>
+            <a-menu-item key="preview" data-testid="layout-top-view-mode-preview" @click="store.setViewMode('preview')">
+              <span v-if="store.viewMode === 'preview'" class="i-tabler:check mr-1" />
+              <span v-else class="mr-4" />{{ $t('shortcutKey.viewPreview') }}
+            </a-menu-item>
+          </a-menu>
+        </template>
+      </a-dropdown>
       <a-tooltip v-if="hasNewVersion" placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.newVersion') }}</span>

@@ -21,7 +21,7 @@ function getSharedRecentMissingSnapshotSync(promptRecentMissing) {
 /**
  * 创建渲染层通用的 session snapshot 协调器。
  *
- * EditorView / PreviewView 都需要同一套约束：
+ * EditorView 需要遵守以下约束：
  * 1. bootstrap 结果先写入 store，再投影到页面
  * 2. recent-missing 提示必须在所有视图一致触发
  * 3. closePrompt / title 不能因为页面不同而分叉

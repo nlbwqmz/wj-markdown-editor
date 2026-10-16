@@ -88,6 +88,40 @@ describe('configSchema', () => {
     expect(editorHeadingShortcutKey.index).toBe(8)
   })
 
+  it('defaultConfig 必须提供源码、双栏、预览三种视图切换快捷键配置', () => {
+    const viewSourceShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'viewSource')
+    const viewSplitShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'viewSplit')
+    const viewPreviewShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'viewPreview')
+
+    expect(viewSourceShortcutKey).toBeDefined()
+    expect(viewSourceShortcutKey).toMatchObject({
+      id: 'viewSource',
+      name: '源码模式',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    })
+    expect(viewSourceShortcutKey.index).toBe(5)
+    expect(viewSplitShortcutKey).toBeDefined()
+    expect(viewSplitShortcutKey).toMatchObject({
+      id: 'viewSplit',
+      name: '双栏模式',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    })
+    expect(viewSplitShortcutKey.index).toBe(5)
+    expect(viewPreviewShortcutKey).toBeDefined()
+    expect(viewPreviewShortcutKey).toMatchObject({
+      id: 'viewPreview',
+      name: '预览模式',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    })
+    expect(viewPreviewShortcutKey.index).toBe(5)
+  })
+
   it('configVersion 必须接纳当前配置版本', () => {
     const validConfig = {
       ...defaultConfig,
@@ -95,6 +129,33 @@ describe('configSchema', () => {
     }
 
     expect(() => validateConfigShape(validConfig)).not.toThrow()
+  })
+
+  it('defaultConfig 必须提供 startView 默认值 split', () => {
+    expect(defaultConfig.startView).toBe('split')
+  })
+
+  it('config schema 必须接纳 startView 三态枚举值', () => {
+    for (const value of ['source', 'split', 'preview']) {
+      expect(() => validateConfigShape({
+        ...defaultConfig,
+        startView: value,
+      })).not.toThrow()
+    }
+  })
+
+  it('config schema 必须拒绝非法 startView', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      startView: 'editor',
+    })).toThrow()
+  })
+
+  it('startView 缺失时必须校验失败', () => {
+    const brokenConfig = { ...defaultConfig }
+    delete brokenConfig.startView
+
+    expect(() => validateConfigShape(brokenConfig)).toThrow()
   })
 
   it('config schema 必须接纳 sidebarDefaultView 合法枚举值', () => {

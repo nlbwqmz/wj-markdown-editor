@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, reactive } from 'vue'
 
 import MarkdownEdit from '../MarkdownEdit.vue'
 
@@ -327,12 +327,15 @@ function createStore() {
   return {
     config: {
       shortcutKeyList: [],
+      previewWidth: 80,
       theme: {
         global: 'light',
       },
     },
     editorSearchBarVisible: false,
     searchBarVisible: false,
+    viewMode: 'split',
+    setViewMode: vi.fn(),
     setOutlineScrollContainer: vi.fn(),
     setOutlineActiveLine: vi.fn(),
     setOutlineNavigateHandler: vi.fn(),
@@ -346,7 +349,7 @@ async function flushLayoutRender() {
 }
 
 async function mountMarkdownEdit({ previewPosition = 'right' } = {}) {
-  storeState.current = createStore()
+  storeState.current = reactive(createStore())
 
   const wrapper = mount(MarkdownEdit, {
     props: {
@@ -455,7 +458,7 @@ describe('markdownEdit 文档切换滚动锚点', () => {
     const editorScrollElement = { scrollTop: 150 }
     editorCoreState.editorView.value = { scrollDOM: editorScrollElement }
 
-    wrapper.vm.$.setupState.previewVisible = false
+    storeState.current.viewMode = 'source'
     await flushLayoutRender()
     expect(wrapper.find('[data-layout-item="preview"]').exists()).toBe(false)
 

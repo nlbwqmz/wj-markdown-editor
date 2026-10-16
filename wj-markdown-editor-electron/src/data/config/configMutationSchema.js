@@ -29,7 +29,7 @@ const SET_PATH_SET = new Set([
   'markdown.inlineCodeClickCopy',
   'markdown.imageShadow',
   'externalFileChangeStrategy',
-  'startPage',
+  'startView',
   'openRecent',
   'recentMax',
   'imgLocal',

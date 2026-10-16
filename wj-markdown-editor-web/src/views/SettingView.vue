@@ -356,17 +356,14 @@ function reset() {
             <template #label>
               <div class="flex items-center gap-1">
                 <span>{{ $t('config.general.startupView') }}</span>
-                <a-tooltip placement="topRight" color="#1677ff" class="flex-shrink-0">
-                  <template #title>
-                    {{ $t('config.general.startupViewOption.tip') }}
-                  </template>
-                  <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
-                </a-tooltip>
               </div>
             </template>
-            <a-radio-group :value="config.startPage" button-style="solid" @update:value="value => submitSetPathMutation(['startPage'], value)">
-              <a-radio-button value="editor">
-                {{ $t('config.general.startupViewOption.edit') }}
+            <a-radio-group :value="config.startView" button-style="solid" @update:value="value => submitSetPathMutation(['startView'], value)">
+              <a-radio-button value="source">
+                {{ $t('config.general.startupViewOption.source') }}
+              </a-radio-button>
+              <a-radio-button value="split">
+                {{ $t('config.general.startupViewOption.split') }}
               </a-radio-button>
               <a-radio-button value="preview">
                 {{ $t('config.general.startupViewOption.preview') }}

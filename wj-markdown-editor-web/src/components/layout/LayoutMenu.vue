@@ -201,10 +201,28 @@ function updateMenuList() {
       children: [
         {
           key: commonUtil.createId(),
-          label: createMenuLabel(t('topMenu.view.children.switchView'), 'switchView'),
+          label: createMenuLabel(t('shortcutKey.viewSource'), 'viewSource'),
           click: () => {
-            shortcutKeyUtil.getWebShortcutKeyHandler('switchView', true)
+            store.setViewMode('source')
           },
+        },
+        {
+          key: commonUtil.createId(),
+          label: createMenuLabel(t('shortcutKey.viewSplit'), 'viewSplit'),
+          click: () => {
+            store.setViewMode('split')
+          },
+        },
+        {
+          key: commonUtil.createId(),
+          label: createMenuLabel(t('shortcutKey.viewPreview'), 'viewPreview'),
+          click: () => {
+            store.setViewMode('preview')
+          },
+        },
+        {
+          key: commonUtil.createId(),
+          type: 'divider',
         },
         {
           key: commonUtil.createId(),

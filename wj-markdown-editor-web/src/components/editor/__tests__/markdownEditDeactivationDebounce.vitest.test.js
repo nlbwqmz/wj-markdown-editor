@@ -281,12 +281,15 @@ function createStore() {
   return {
     config: {
       shortcutKeyList: [],
+      previewWidth: 80,
       theme: {
         global: 'light',
       },
     },
     editorSearchBarVisible: false,
     searchBarVisible: false,
+    viewMode: 'split',
+    setViewMode: vi.fn(),
     setOutlineScrollContainer: vi.fn(),
     setOutlineActiveLine: vi.fn(),
     setOutlineNavigateHandler: vi.fn(),

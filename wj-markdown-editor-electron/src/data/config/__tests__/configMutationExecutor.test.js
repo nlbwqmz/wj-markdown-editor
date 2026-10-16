@@ -23,6 +23,20 @@ describe('applyConfigMutationRequest', () => {
     expect(() => validateConfigShape(nextConfig)).not.toThrow()
   })
 
+  it('按白名单路径更新 startView 三态视图', () => {
+    const inputConfig = cloneValue(defaultConfig)
+    const originalConfig = cloneValue(inputConfig)
+    const nextConfig = applyConfigMutationRequest(inputConfig, {
+      operations: [
+        { type: 'set', path: ['startView'], value: 'source' },
+      ],
+    })
+
+    expect(nextConfig.startView).toBe('source')
+    expect(inputConfig).toEqual(originalConfig)
+    expect(() => validateConfigShape(nextConfig)).not.toThrow()
+  })
+
   it('set 写入合法 sidebarWidth 后结果合法且值正确', () => {
     const inputConfig = cloneValue(defaultConfig)
     const originalConfig = cloneValue(inputConfig)

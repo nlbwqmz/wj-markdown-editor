@@ -13,12 +13,24 @@ const mocked = vi.hoisted(() => ({
 const store = reactive({
   isFullScreen: false,
   recentList: [],
+  viewMode: 'split',
+  setViewMode: vi.fn(),
   config: {
     language: 'zh-CN',
     shortcutKeyList: [
       {
-        id: 'switchView',
-        keymap: 'Ctrl+l',
+        id: 'viewSource',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewSplit',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewPreview',
+        keymap: '',
         enabled: true,
       },
       {
@@ -102,11 +114,22 @@ describe('layoutMenu full screen', () => {
   beforeEach(() => {
     store.isFullScreen = false
     store.recentList = []
+    store.viewMode = 'split'
     store.config.language = 'zh-CN'
     store.config.shortcutKeyList = [
       {
-        id: 'switchView',
-        keymap: 'Ctrl+l',
+        id: 'viewSource',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewSplit',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewPreview',
+        keymap: '',
         enabled: true,
       },
       {
@@ -118,9 +141,10 @@ describe('layoutMenu full screen', () => {
     mocked.toggleFullScreenAction.mockReset()
     mocked.channelSend.mockReset()
     mocked.shortcutKeyHandler.mockReset()
+    store.setViewMode.mockReset()
   })
 
-  it('视图菜单应在切换项后新增全屏项，并显示当前快捷键', () => {
+  it('视图菜单应依次提供三种视图模式项、分隔线与全屏项，并显示当前快捷键', () => {
     const wrapper = shallowMount(LayoutMenu, {
       global: {
         stubs: {
@@ -132,9 +156,33 @@ describe('layoutMenu full screen', () => {
 
     const viewMenuChildren = getViewMenuChildren(wrapper)
 
-    expect(extractTextFromNode(viewMenuChildren[0].label)).toContain('topMenu.view.children.switchView')
-    expect(extractTextFromNode(viewMenuChildren[1].label)).toContain('topMenu.view.children.enterFullScreen')
-    expect(extractTextFromNode(viewMenuChildren[1].label)).toContain('F11')
+    expect(extractTextFromNode(viewMenuChildren[0].label)).toContain('shortcutKey.viewSource')
+    expect(extractTextFromNode(viewMenuChildren[1].label)).toContain('shortcutKey.viewSplit')
+    expect(extractTextFromNode(viewMenuChildren[2].label)).toContain('shortcutKey.viewPreview')
+    expect(viewMenuChildren[3].type).toBe('divider')
+    expect(extractTextFromNode(viewMenuChildren[4].label)).toContain('topMenu.view.children.enterFullScreen')
+    expect(extractTextFromNode(viewMenuChildren[4].label)).toContain('F11')
+  })
+
+  it('点击视图菜单中的三种视图模式项时应调用 store.setViewMode 对应模式', async () => {
+    const wrapper = shallowMount(LayoutMenu, {
+      global: {
+        stubs: {
+          'a-dropdown': true,
+          'a-menu': true,
+        },
+      },
+    })
+
+    const viewMenuChildren = getViewMenuChildren(wrapper)
+
+    await viewMenuChildren[0].click()
+    await viewMenuChildren[1].click()
+    await viewMenuChildren[2].click()
+
+    expect(store.setViewMode).toHaveBeenNthCalledWith(1, 'source')
+    expect(store.setViewMode).toHaveBeenNthCalledWith(2, 'split')
+    expect(store.setViewMode).toHaveBeenNthCalledWith(3, 'preview')
   })
 
   it('store.isFullScreen 变化后应重建菜单文案', async () => {
@@ -150,12 +198,12 @@ describe('layoutMenu full screen', () => {
     store.isFullScreen = true
     await nextTick()
 
-    expect(extractTextFromNode(getViewMenuChildren(wrapper)[1].label)).toContain('topMenu.view.children.exitFullScreen')
+    expect(extractTextFromNode(getViewMenuChildren(wrapper)[4].label)).toContain('topMenu.view.children.exitFullScreen')
 
     store.isFullScreen = false
     await nextTick()
 
-    expect(extractTextFromNode(getViewMenuChildren(wrapper)[1].label)).toContain('topMenu.view.children.enterFullScreen')
+    expect(extractTextFromNode(getViewMenuChildren(wrapper)[4].label)).toContain('topMenu.view.children.enterFullScreen')
   })
 
   it('点击视图菜单中的全屏项时应调用共享动作', async () => {
@@ -170,7 +218,7 @@ describe('layoutMenu full screen', () => {
 
     const viewMenuChildren = getViewMenuChildren(wrapper)
 
-    await viewMenuChildren[1].click()
+    await viewMenuChildren[4].click()
 
     expect(mocked.toggleFullScreenAction).toHaveBeenCalledTimes(1)
   })

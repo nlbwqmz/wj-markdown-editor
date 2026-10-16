@@ -20,7 +20,9 @@ const translationMap = {
   'topMenu.file.children.export.exportToFile': '导出到文件',
   'topMenu.file.children.export.exportToClipboard': '导出到剪切板',
   'topMenu.view.name': '视图',
-  'topMenu.view.children.switchView': '切换',
+  'shortcutKey.viewSource': '源码模式',
+  'shortcutKey.viewSplit': '双栏模式',
+  'shortcutKey.viewPreview': '预览模式',
   'topMenu.view.children.enterFullScreen': '进入全屏',
   'topMenu.view.children.exitFullScreen': '退出全屏',
   'topMenu.view.children.openSidebar': '打开侧边栏',
@@ -42,8 +44,18 @@ const store = reactive({
     language: 'zh-CN',
     shortcutKeyList: [
       {
-        id: 'switchView',
-        keymap: 'Ctrl+l',
+        id: 'viewSource',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewSplit',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewPreview',
+        keymap: '',
         enabled: true,
       },
       {
@@ -59,6 +71,7 @@ const store = reactive({
     ],
   },
   setSidebarVisible: vi.fn(),
+  setViewMode: vi.fn(),
 })
 
 vi.mock('vue-i18n', () => ({
@@ -165,8 +178,18 @@ describe('layoutMenu 文件管理栏接线', () => {
     store.config.language = 'zh-CN'
     store.config.shortcutKeyList = [
       {
-        id: 'switchView',
-        keymap: 'Ctrl+l',
+        id: 'viewSource',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewSplit',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewPreview',
+        keymap: '',
         enabled: true,
       },
       {
@@ -181,6 +204,7 @@ describe('layoutMenu 文件管理栏接线', () => {
       },
     ]
     store.setSidebarVisible.mockReset()
+    store.setViewMode.mockReset()
     store.setSidebarVisible.mockImplementation((visible) => {
       store.sidebarVisible = visible
     })
@@ -323,7 +347,7 @@ describe('layoutMenu 文件管理栏接线', () => {
       },
     })
 
-    const initialToggleItem = getMenuChildren(wrapper, 1)[2]
+    const initialToggleItem = findMenuItemByLabel(getMenuChildren(wrapper, 1), '关闭侧边栏')
     const initialLabel = extractTextFromNode(initialToggleItem.label)
 
     expect(initialLabel).toBe('关闭侧边栏')
@@ -334,7 +358,7 @@ describe('layoutMenu 文件管理栏接线', () => {
 
     await nextTick()
 
-    const nextToggleItem = getMenuChildren(wrapper, 1)[2]
+    const nextToggleItem = findMenuItemByLabel(getMenuChildren(wrapper, 1), '打开侧边栏')
     const nextLabel = extractTextFromNode(nextToggleItem.label)
 
     expect(nextLabel).toBe('打开侧边栏')
@@ -354,7 +378,7 @@ describe('layoutMenu 文件管理栏接线', () => {
       },
     })
 
-    const toggleItemLabel = extractTextFromNode(getMenuChildren(wrapper, 1)[2].label)
+    const toggleItemLabel = extractTextFromNode(findMenuItemByLabel(getMenuChildren(wrapper, 1), '关闭侧边栏').label)
 
     expect(toggleItemLabel).toBe('关闭侧边栏')
   })
@@ -362,8 +386,18 @@ describe('layoutMenu 文件管理栏接线', () => {
   it('文件管理栏快捷键配置后，视图菜单项应显示当前快捷键', () => {
     store.config.shortcutKeyList = [
       {
-        id: 'switchView',
-        keymap: 'Ctrl+l',
+        id: 'viewSource',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewSplit',
+        keymap: '',
+        enabled: true,
+      },
+      {
+        id: 'viewPreview',
+        keymap: '',
         enabled: true,
       },
       {
@@ -387,7 +421,7 @@ describe('layoutMenu 文件管理栏接线', () => {
       },
     })
 
-    const toggleItemLabel = extractTextFromNode(getMenuChildren(wrapper, 1)[2].label)
+    const toggleItemLabel = extractTextFromNode(findMenuItemByLabel(getMenuChildren(wrapper, 1), '关闭侧边栏').label)
 
     expect(toggleItemLabel).toContain('关闭侧边栏')
     expect(toggleItemLabel).toContain('Ctrl+b')

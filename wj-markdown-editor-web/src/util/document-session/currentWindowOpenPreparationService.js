@@ -23,7 +23,7 @@ export function registerCurrentWindowOpenPreparation(handler) {
 /**
  * 设置当前活动视图提供的准备能力。
  *
- * EditorView / PreviewView 只负责暴露自己的稳定化逻辑，
+ * EditorView 只负责暴露自己的稳定化逻辑，
  * 不直接成为最终 owner。
  *
  * @param {Function | null | undefined} provider

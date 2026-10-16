@@ -24,6 +24,8 @@ export default {
     textColor: 'Text color',
     textColorTip: 'Selected text color syntax text directly changes the color.',
     preview: 'Preview',
+    emptyDocument: 'The document is empty',
+    goToEdit: 'Go to edit',
     outlineTip: 'Please open preview first',
     prettier: 'Prettier',
   },
@@ -71,7 +73,6 @@ export default {
   top: {
     enterFullScreen: 'Enter full screen',
     exitFullScreen: 'Exit full screen',
-    switchView: 'Switch view',
     switchTheme: 'Switch theme',
     languageAuto: 'Auto',
     openInExplorer: 'Open in explorer',
@@ -103,7 +104,6 @@ export default {
     view: {
       name: 'View',
       children: {
-        switchView: 'Switch',
         enterFullScreen: 'Enter Full Screen',
         exitFullScreen: 'Exit Full Screen',
         openSidebar: 'Open sidebar',
@@ -163,8 +163,9 @@ export default {
       externalFileChangeStrategyTip: 'Apply will load the latest content from disk automatically; Prompt will open a diff dialog for you to choose ignore or apply.',
       startupViewOption: {
         tip: 'Effective when there is content',
-        edit: 'Edit',
-        preview: 'Preview',
+        source: 'Source mode',
+        split: 'Split mode',
+        preview: 'Preview mode',
       },
       autoSaveOption: {
         tip: 'Effective only if the file save path exists',
@@ -279,7 +280,9 @@ export default {
     'save': 'Save',
     'saveOther': 'Save as',
     'setting': 'Setting',
-    'switchView': 'Switch view',
+    'viewSource': 'Source mode',
+    'viewSplit': 'Split view',
+    'viewPreview': 'Preview mode',
     'toggleFullScreen': 'Toggle full screen',
     'toggleFileManagerPanel': 'Toggle file manager panel',
     'editor-heading-1': 'Level 1 Heading',

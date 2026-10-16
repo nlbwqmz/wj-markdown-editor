@@ -15,14 +15,21 @@ const LAYOUT_MODE_MAP = {
     gridTemplateClass: 'markdown-edit-layout--preview-editor',
     columnGutters: [{ track: 1, refKey: 'gutterRef' }],
   },
+  'preview-only': {
+    // columnOrder 仍然包含 editor，保证编辑器实例不随布局切换销毁，
+    // 真实宽度由 CSS 把 editor 列压到 0 实现；没有分隔条，因此不挂 Split 拖拽。
+    columnOrder: ['editor', 'preview'],
+    gridTemplateClass: 'markdown-edit-layout--preview-only',
+    columnGutters: [],
+  },
 }
 
 /**
- * 将编辑页显示状态解析为稳定且纯粹的布局描述。
+ * 将编辑页视图模式解析为稳定且纯粹的布局描述。
  * 这里只负责列顺序、模板类名和分隔条轨道，不处理任何 DOM 或 Split 接线。
  *
  * @param {{
- *   previewVisible?: boolean,
+ *   viewMode?: 'source' | 'split' | 'preview' | string,
  *   previewPosition?: string,
  * }} options
  * @returns {{
@@ -32,8 +39,16 @@ const LAYOUT_MODE_MAP = {
  * }} 返回可供编辑页布局和分隔条接线消费的稳定描述对象。
  */
 export function resolveMarkdownEditLayoutMode(options = {}) {
-  if (options.previewVisible !== true) {
+  const viewMode = options.viewMode === 'source' || options.viewMode === 'preview'
+    ? options.viewMode
+    : 'split'
+
+  if (viewMode === 'source') {
     return cloneLayoutMode('editor-only')
+  }
+
+  if (viewMode === 'preview') {
+    return cloneLayoutMode('preview-only')
   }
 
   const resolvedPreviewPosition = options.previewPosition === 'left' ? 'left' : 'right'

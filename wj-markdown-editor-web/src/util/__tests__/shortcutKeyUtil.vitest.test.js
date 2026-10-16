@@ -8,17 +8,7 @@ const { mockedStore } = vi.hoisted(() => ({
   mockedStore: {
     sidebarVisible: true,
     setSidebarVisible: vi.fn(),
-  },
-}))
-
-vi.mock('@/router/index.js', () => ({
-  default: {
-    currentRoute: {
-      value: {
-        name: 'editor',
-      },
-    },
-    push: vi.fn(),
+    setViewMode: vi.fn(),
   },
 }))
 
@@ -68,6 +58,7 @@ beforeEach(async () => {
   mockedStore.setSidebarVisible.mockImplementation((visible) => {
     mockedStore.sidebarVisible = visible
   })
+  mockedStore.setViewMode.mockReset()
   shortcutKeyUtil = (await import('../shortcutKeyUtil.js')).default
 })
 
@@ -114,6 +105,36 @@ describe('shortcutKeyUtil', () => {
       entrySource: 'shortcut-open-file',
       trigger: 'user',
     })
+  })
+
+  it('viewSource handler 必须将视图模式切换为 source', () => {
+    const handler = shortcutKeyUtil.getWebShortcutKeyHandler('viewSource')
+
+    expect(handler).toBeTypeOf('function')
+
+    handler()
+
+    expect(mockedStore.setViewMode).toHaveBeenCalledWith('source')
+  })
+
+  it('viewSplit handler 必须将视图模式切换为 split', () => {
+    const handler = shortcutKeyUtil.getWebShortcutKeyHandler('viewSplit')
+
+    expect(handler).toBeTypeOf('function')
+
+    handler()
+
+    expect(mockedStore.setViewMode).toHaveBeenCalledWith('split')
+  })
+
+  it('viewPreview handler 必须将视图模式切换为 preview', () => {
+    const handler = shortcutKeyUtil.getWebShortcutKeyHandler('viewPreview')
+
+    expect(handler).toBeTypeOf('function')
+
+    handler()
+
+    expect(mockedStore.setViewMode).toHaveBeenCalledWith('preview')
   })
 
   it('toggleFileManagerPanel handler 必须复用 store 侧边栏开关动作', () => {

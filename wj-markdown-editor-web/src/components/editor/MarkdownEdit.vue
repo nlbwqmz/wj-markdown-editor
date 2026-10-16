@@ -121,12 +121,15 @@ const previewRef = ref()
 const scrolling = ref({ editor: false, preview: false })
 const editorContainer = ref()
 const editorScrollTop = ref(0)
-const previewVisible = ref(true)
+// 视图模式来自 store：source 关闭预览，split / preview 都保留预览列；
+// preview-only 只是把编辑列压到 0 宽，编辑器实例不会被销毁。
+const viewMode = computed(() => store.viewMode)
+const previewVisible = computed(() => viewMode.value !== 'source')
 const previewController = ref(true)
 // 仅在预览从“未渲染”重新挂载为“已渲染”时，延后首轮同步到 refreshComplete。
 const pendingPreviewResyncAfterRefresh = ref(false)
 const layoutMode = computed(() => resolveMarkdownEditLayoutMode({
-  previewVisible: previewVisible.value,
+  viewMode: viewMode.value,
   previewPosition: props.previewPosition,
 }))
 const handledContentUpdateToken = ref(0)
@@ -681,7 +684,6 @@ const {
   editorViewRef: editorView,
   emits,
   jumpToTargetLine,
-  previewVisible,
   openNetworkImageModal,
   insertFileToEditor,
 })
@@ -700,7 +702,25 @@ const previewContainerStyle = computed(() => {
   }
 })
 
-const editorContainerClass = computed(() => layoutMode.value.gridTemplateClass)
+// 纯预览态用配置的预览宽度做居中留白；双栏态不设置宽度，保持原有满宽行为。
+const previewCenterStyle = computed(() => {
+  if (viewMode.value !== 'preview') {
+    return {}
+  }
+
+  return {
+    width: `${store.config.previewWidth}%`,
+  }
+})
+
+// 纯预览态且正文为空时展示空状态，引导用户回到双栏继续编辑。
+const showPreviewEmptyState = computed(() => viewMode.value === 'preview' && !props.modelValue)
+
+// 纯预览态不渲染工具栏，需要在布局容器顶部补回横线，保持与其它页面视觉一致。
+const editorContainerClass = computed(() => [
+  layoutMode.value.gridTemplateClass,
+  viewMode.value === 'preview' ? 'b-t-1 b-t-border-primary b-t-solid' : '',
+])
 const layoutRenderItems = computed(() => resolveMarkdownEditRenderItems(layoutMode.value))
 const modelSyncScheduler = createFlushableDebounce(() => {
   const view = editorView.value
@@ -1471,7 +1491,7 @@ defineExpose({
   <div
     class="grid grid-rows-[auto_1fr] grid-cols-1 h-full w-full"
   >
-    <EditorToolbar :toolbar-list="toolbarList" />
+    <EditorToolbar v-if="viewMode !== 'preview'" :toolbar-list="toolbarList" />
     <div ref="editorContainer" data-testid="markdown-edit-layout" class="markdown-edit-layout grid w-full overflow-hidden" :class="editorContainerClass" :style="editorContainerStyle">
       <template v-for="item in layoutRenderItems" :key="item.key">
         <div
@@ -1485,6 +1505,7 @@ defineExpose({
           :ref="setPreviewGutterElement"
           data-layout-item="gutter-preview"
           class="wj-sash wj-sash--vertical markdown-edit-layout__gutter markdown-edit-layout__gutter--preview h-full"
+          :class="{ 'markdown-edit-layout__gutter--preview-hidden': viewMode === 'preview' }"
         />
         <div
           v-else-if="item.type === 'preview'"
@@ -1495,17 +1516,30 @@ defineExpose({
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"
         >
-          <MarkdownPreview
-            :content="props.modelValue"
-            :code-theme="codeTheme"
-            :preview-theme="previewTheme"
-            :preview-scroll-container="() => previewRef"
-            :watermark="watermark"
-            :defer-watermark-until-ready="true"
-            @refresh-complete="onRefreshComplete"
-            @preview-contextmenu="onPreviewContextmenu"
-            @asset-open="onAssetOpen"
-          />
+          <div class="markdown-edit-layout__preview-center" :style="previewCenterStyle">
+            <div v-if="showPreviewEmptyState" class="h-full flex items-center justify-center">
+              <a-empty>
+                <template #description>
+                  <span>{{ t('editor.emptyDocument') }}</span>
+                </template>
+                <a-button type="primary" ghost @click="store.setViewMode('split')">
+                  {{ t('editor.goToEdit') }}
+                </a-button>
+              </a-empty>
+            </div>
+            <MarkdownPreview
+              v-else
+              :content="props.modelValue"
+              :code-theme="codeTheme"
+              :preview-theme="previewTheme"
+              :preview-scroll-container="() => previewRef"
+              :watermark="watermark"
+              :defer-watermark-until-ready="true"
+              @refresh-complete="onRefreshComplete"
+              @preview-contextmenu="onPreviewContextmenu"
+              @asset-open="onAssetOpen"
+            />
+          </div>
         </div>
       </template>
     </div>
@@ -1542,6 +1576,11 @@ defineExpose({
   grid-area: gutter-preview;
 }
 
+// 纯预览态没有可拖拽分隔条，隐藏 gutter 元素，避免留下多余竖线。
+.markdown-edit-layout__gutter--preview-hidden {
+  display: none;
+}
+
 .markdown-edit-layout--editor-only {
   // split-grid 只能解析 px / fr / % / auto，不能直接吃 minmax(...)。
   grid-template-columns: 1fr 0px 0fr;
@@ -1556,6 +1595,17 @@ defineExpose({
 .markdown-edit-layout--preview-editor {
   grid-template-columns: 1fr 1px 1fr;
   grid-template-areas: 'preview gutter-preview editor';
+}
+
+.markdown-edit-layout--preview-only {
+  // 保留 editor 列并压到 0 宽，保证编辑器实例不被销毁；preview 列占满剩余空间。
+  grid-template-columns: 0fr 0px 1fr;
+  grid-template-areas: 'editor gutter-preview preview';
+}
+
+.markdown-edit-layout__preview-center {
+  margin: 0 auto;
+  height: 100%;
 }
 
 :deep(.wj-preview-link-highlight) {

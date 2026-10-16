@@ -1,13 +1,11 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { h, reactive } from 'vue'
+import { h, nextTick, reactive } from 'vue'
 
 import LayoutTop from '../LayoutTop.vue'
 
 const mocked = vi.hoisted(() => ({
   channelSend: vi.fn(),
-  getShortcutHandler: vi.fn(),
-  switchViewHandler: vi.fn(),
 }))
 
 const store = reactive({
@@ -17,6 +15,8 @@ const store = reactive({
   isFullScreen: false,
   isAlwaysOnTop: false,
   hasNewVersion: false,
+  viewMode: 'split',
+  setViewMode: vi.fn(),
   config: {
     language: 'zh-CN',
     theme: {
@@ -38,12 +38,6 @@ vi.mock('@/stores/counter.js', () => ({
 vi.mock('@/util/channel/channelUtil.js', () => ({
   default: {
     send: mocked.channelSend,
-  },
-}))
-
-vi.mock('@/util/shortcutKeyUtil.js', () => ({
-  default: {
-    getWebShortcutKeyHandler: (...args) => mocked.getShortcutHandler(...args),
   },
 }))
 
@@ -104,8 +98,8 @@ const MenuItemStub = {
   name: 'AMenuItemStub',
   setup(_props, { attrs, slots }) {
     return () => h('div', {
-      ...attrs,
       'data-testid': 'menu-item-stub',
+      ...attrs,
     }, slots.default?.())
   },
 }
@@ -134,23 +128,11 @@ describe('layoutTop full screen control', () => {
     store.isFullScreen = false
     store.isAlwaysOnTop = false
     store.hasNewVersion = false
+    store.viewMode = 'split'
     store.config.language = 'zh-CN'
     store.config.theme.global = 'light'
     mocked.channelSend.mockReset()
-    mocked.getShortcutHandler.mockReset()
-    mocked.switchViewHandler.mockReset()
-    mocked.getShortcutHandler.mockImplementation((id, execute) => {
-      if (id === 'switchView') {
-        if (execute === true) {
-          mocked.switchViewHandler()
-          return undefined
-        }
-
-        return mocked.switchViewHandler
-      }
-
-      return vi.fn()
-    })
+    store.setViewMode.mockReset()
     mocked.channelSend.mockImplementation(async ({ event }) => {
       if (event === 'app-info') {
         return {
@@ -201,20 +183,55 @@ describe('layoutTop full screen control', () => {
   it('顶部栏应在右侧操作区最左侧渲染切换视图入口', () => {
     const wrapper = mountLayoutTop()
     const html = wrapper.html()
-    const tooltipList = wrapper.findAll('[data-testid="tooltip-stub"]')
 
     expect(html).toContain('i-tabler:arrows-left-right')
-    expect(tooltipList.some(item => item.attributes('data-tooltip-title') === 'top.switchView')).toBe(true)
     expect(html.indexOf('i-tabler:arrows-left-right')).toBeLessThan(html.indexOf('i-tabler:moon'))
   })
 
-  it('点击顶部栏切换视图入口时应调用共享 switchView 动作', async () => {
+  it('顶部栏切换视图入口应以下拉方式提供三种视图模式选项', () => {
+    const wrapper = mountLayoutTop()
+    const html = wrapper.html()
+
+    expect(html).toContain('i-tabler:arrows-left-right')
+    expect(html.indexOf('i-tabler:arrows-left-right')).toBeLessThan(html.indexOf('i-tabler:moon'))
+
+    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').text()).toContain('shortcutKey.viewSource')
+    expect(wrapper.get('[data-testid="layout-top-view-mode-split"]').text()).toContain('shortcutKey.viewSplit')
+    expect(wrapper.get('[data-testid="layout-top-view-mode-preview"]').text()).toContain('shortcutKey.viewPreview')
+  })
+
+  it('点击顶部栏视图模式项时应调用 store.setViewMode 对应模式', async () => {
     const wrapper = mountLayoutTop()
 
-    await wrapper.get('[data-testid="layout-top-switch-view"]').trigger('click')
+    await wrapper.get('[data-testid="layout-top-view-mode-source"]').trigger('click')
+    await wrapper.get('[data-testid="layout-top-view-mode-split"]').trigger('click')
+    await wrapper.get('[data-testid="layout-top-view-mode-preview"]').trigger('click')
 
-    expect(mocked.getShortcutHandler).toHaveBeenCalledWith('switchView', true)
-    expect(mocked.switchViewHandler).toHaveBeenCalledTimes(1)
+    expect(store.setViewMode).toHaveBeenNthCalledWith(1, 'source')
+    expect(store.setViewMode).toHaveBeenNthCalledWith(2, 'split')
+    expect(store.setViewMode).toHaveBeenNthCalledWith(3, 'preview')
+  })
+
+  it('顶部栏视图下拉应体现当前 viewMode 选中态', () => {
+    store.viewMode = 'split'
+    const wrapper = mountLayoutTop()
+
+    expect(wrapper.get('[data-testid="layout-top-view-mode-split"]').find('.i-tabler\\:check').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').find('.i-tabler\\:check').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="layout-top-view-mode-preview"]').find('.i-tabler\\:check').exists()).toBe(false)
+  })
+
+  it('viewMode 变化后顶部栏视图下拉选中态应同步更新', async () => {
+    store.viewMode = 'source'
+    const wrapper = mountLayoutTop()
+
+    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').find('.i-tabler\\:check').exists()).toBe(true)
+
+    store.viewMode = 'preview'
+    await nextTick()
+
+    expect(wrapper.get('[data-testid="layout-top-view-mode-preview"]').find('.i-tabler\\:check').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').find('.i-tabler\\:check').exists()).toBe(false)
   })
 
   it('切换主题时必须通过 config.update 提交 theme.global mutation', async () => {

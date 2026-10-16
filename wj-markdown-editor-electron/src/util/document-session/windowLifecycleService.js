@@ -873,8 +873,9 @@ function showWindowShellLoadFailureDialog(documentPath) {
   }
 }
 
-async function loadWindowShellContent(win, { hasContent }) {
-  const hash = hasContent ? configUtil.getConfig().startPage : 'editor'
+async function loadWindowShellContent(win) {
+  // 主进程不再按配置选择启动路由，一律打开编辑页，由渲染层按 startView 决定三态视图
+  const hash = 'editor'
 
   if (isDevRendererMode()) {
     await win.loadURL(`http://localhost:8080/#/${hash}`)
@@ -2126,9 +2127,7 @@ async function createNew(filePath, isRecent = false) {
     }
 
     try {
-      await loadWindowShellContent(win, {
-        hasContent: Boolean(content),
-      })
+      await loadWindowShellContent(win)
     } catch {
       const shouldNotifyUser = isWindowAlive(win)
       rollbackCreatedWindow({

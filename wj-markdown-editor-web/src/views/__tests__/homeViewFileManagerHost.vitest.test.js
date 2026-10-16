@@ -355,9 +355,8 @@ describe('homeView 文件管理栏宿主壳层', () => {
     expect(fileManagerGutter.classes()).toContain('wj-sash--vertical')
   })
 
-  it('文件管理栏只应在 editor 与 preview 路由显示，在 setting / export / about / guide 路由隐藏', async () => {
+  it('文件管理栏只应在 editor 路由显示，在 setting / export / about / guide 路由隐藏', async () => {
     expect((await mountHomeViewByRoute('/editor')).find('[data-testid="home-file-manager-host"]').exists()).toBe(true)
-    expect((await mountHomeViewByRoute('/preview')).find('[data-testid="home-file-manager-host"]').exists()).toBe(true)
     expect((await mountHomeViewByRoute('/setting')).find('[data-testid="home-file-manager-host"]').exists()).toBe(false)
     expect((await mountHomeViewByRoute('/export')).find('[data-testid="home-file-manager-host"]').exists()).toBe(false)
     expect((await mountHomeViewByRoute('/about')).find('[data-testid="home-file-manager-host"]').exists()).toBe(false)
@@ -494,7 +493,7 @@ describe('homeView 文件管理栏宿主壳层', () => {
 
     expect(homeViewFileManagerHostState.invalidateActiveRequest).not.toHaveBeenCalled()
 
-    homeViewFileManagerHostState.route.name = 'preview'
+    homeViewFileManagerHostState.route.name = 'setting'
     await flushHomeView()
 
     expect(homeViewFileManagerHostState.invalidateActiveRequest).toHaveBeenCalledTimes(1)

@@ -95,11 +95,26 @@ test('模块文件存在但导入失败时，模块探测必须抛出原始错�
   )
 })
 
-test('右侧模式返回编辑区、预览区的列顺序与单分隔条', () => {
+test('源码模式只保留编辑区且不返回任何分隔条', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
 
   const layoutMode = resolveMarkdownEditLayoutMode({
-    previewVisible: true,
+    viewMode: 'source',
+    previewPosition: 'left',
+  })
+
+  assert.deepEqual(layoutMode, {
+    columnOrder: ['editor'],
+    gridTemplateClass: 'markdown-edit-layout--editor-only',
+    columnGutters: [],
+  })
+})
+
+test('双栏模式在右侧时返回编辑区、预览区的列顺序与单分隔条', () => {
+  const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
+
+  const layoutMode = resolveMarkdownEditLayoutMode({
+    viewMode: 'split',
     previewPosition: 'right',
   })
 
@@ -112,11 +127,11 @@ test('右侧模式返回编辑区、预览区的列顺序与单分隔条', () =>
   })
 })
 
-test('左侧模式返回预览区、编辑区的列顺序与单分隔条', () => {
+test('双栏模式在左侧时返回预览区、编辑区的列顺序与单分隔条', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
 
   const layoutMode = resolveMarkdownEditLayoutMode({
-    previewVisible: true,
+    viewMode: 'split',
     previewPosition: 'left',
   })
 
@@ -129,26 +144,47 @@ test('左侧模式返回预览区、编辑区的列顺序与单分隔条', () =>
   })
 })
 
-test('预览关闭时，只保留编辑区且不返回任何分隔条', () => {
+test('纯预览模式保留 editor 列以保证编辑器保活，且不返回任何分隔条', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
 
   const layoutMode = resolveMarkdownEditLayoutMode({
-    previewVisible: false,
+    viewMode: 'preview',
     previewPosition: 'left',
   })
 
   assert.deepEqual(layoutMode, {
-    columnOrder: ['editor'],
-    gridTemplateClass: 'markdown-edit-layout--editor-only',
+    columnOrder: ['editor', 'preview'],
+    gridTemplateClass: 'markdown-edit-layout--preview-only',
     columnGutters: [],
   })
 })
 
-test('非法 previewPosition 会回退到 right 模式', () => {
+test('缺失或非法 viewMode 会回退到双栏布局', () => {
+  const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
+
+  const missingViewModeLayout = resolveMarkdownEditLayoutMode({
+    previewPosition: 'right',
+  })
+  const invalidViewModeLayout = resolveMarkdownEditLayoutMode({
+    viewMode: 'bottom',
+    previewPosition: 'right',
+  })
+
+  assert.deepEqual(missingViewModeLayout, {
+    columnOrder: ['editor', 'preview'],
+    gridTemplateClass: 'markdown-edit-layout--editor-preview',
+    columnGutters: [
+      { track: 1, refKey: 'gutterRef' },
+    ],
+  })
+  assert.deepEqual(invalidViewModeLayout, missingViewModeLayout)
+})
+
+test('非法 previewPosition 在双栏模式下会回退到 right 模式', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
 
   const layoutMode = resolveMarkdownEditLayoutMode({
-    previewVisible: true,
+    viewMode: 'split',
     previewPosition: 'bottom',
   })
 
@@ -166,7 +202,7 @@ test('编辑区与预览区布局会把 track 1 绑定到 gutterRef', () => {
   const resolveMarkdownEditSplitColumnGutters = requireResolveMarkdownEditSplitColumnGutters()
   const gutterRef = { name: 'editor-preview-gutter' }
   const layoutMode = resolveMarkdownEditLayoutMode({
-    previewVisible: true,
+    viewMode: 'split',
     previewPosition: 'left',
   })
 
@@ -179,11 +215,25 @@ test('编辑区与预览区布局会把 track 1 绑定到 gutterRef', () => {
   ])
 })
 
+test('纯预览模式没有分隔条，Split gutter 解析结果为空', () => {
+  const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
+  const resolveMarkdownEditSplitColumnGutters = requireResolveMarkdownEditSplitColumnGutters()
+  const layoutMode = resolveMarkdownEditLayoutMode({
+    viewMode: 'preview',
+  })
+
+  const columnGutters = resolveMarkdownEditSplitColumnGutters(layoutMode.columnGutters, {
+    gutterRef: { name: 'editor-preview-gutter' },
+  })
+
+  assert.deepEqual(columnGutters, [])
+})
+
 test('缺失 gutter ref 时会过滤掉无法绑定的 Split 分隔条', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
   const resolveMarkdownEditSplitColumnGutters = requireResolveMarkdownEditSplitColumnGutters()
   const layoutMode = resolveMarkdownEditLayoutMode({
-    previewVisible: true,
+    viewMode: 'split',
     previewPosition: 'left',
   })
 

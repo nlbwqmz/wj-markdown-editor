@@ -516,7 +516,9 @@ function onPreviewContextmenu(context) {
     actionContext: previewAssetSessionController.captureActionContext(),
     items: buildPreviewContextMenuItems({
       context,
-      profile: 'editor-preview',
+      // 纯预览态没有可回写的编辑区，菜单不提供“删除引用”；
+      // 双栏态保持原有含删除项的 profile。
+      profile: store.viewMode === 'preview' ? 'standalone-preview' : 'editor-preview',
       t,
     }),
   }

@@ -26,7 +26,7 @@ const settlePendingChangeMock = vi.fn((state) => {
   return 'settled'
 })
 const appExitMock = vi.fn()
-const getConfigMock = vi.fn(() => ({ language: 'zh-CN', autoSave: [], startPage: 'editor' }))
+const getConfigMock = vi.fn(() => ({ language: 'zh-CN', autoSave: [], startView: 'split' }))
 const browserWindowInstances = []
 const loadURLMock = vi.fn(() => Promise.resolve())
 const loadFileMock = vi.fn(() => Promise.resolve())
@@ -484,7 +484,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     settlePendingChangeMock.mockReset()
     appExitMock.mockReset()
     getConfigMock.mockReset()
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startView: 'split' })
     loadURLMock.mockReset()
     loadURLMock.mockResolvedValue(undefined)
     loadFileMock.mockReset()
@@ -616,6 +616,35 @@ describe('windowLifecycleService 生命周期 facade', () => {
     )
     expect(browserWindowInstances).toHaveLength(1)
     expect(browserWindowInstances[0].isDestroyed()).toBe(true)
+  })
+
+  it('createNew 加载壳页时必须恒为 editor hash，不得再按 startView 选择启动路由', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startView: 'preview' })
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    expect(loadFileMock).toHaveBeenCalledWith(
+      path.resolve(process.cwd(), 'web-dist/index.html'),
+      { hash: 'editor' },
+    )
+  })
+
+  it('createNew 在开发态加载壳页时同样必须恒为 editor hash', async () => {
+    const originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'dev'
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startView: 'source' })
+
+    try {
+      await winInfoUtil.createNew('D:/demo.md')
+
+      expect(loadURLMock).toHaveBeenCalledWith('http://localhost:8080/#/editor')
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
   })
 
   it('runtime host deps 构造 effectContext 时，必须只暴露显式 controller，不再暴露旧聚合宿主字段', async () => {
@@ -890,7 +919,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
   it('window.blur 触发自动保存时，必须复用统一保存管线且不发送成功提示', async () => {
     const saveDeferred = createDeferred()
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     writeFileMock.mockReturnValueOnce(saveDeferred.promise)
@@ -920,7 +949,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
   it('关闭请求命中 autoSave=close 且已有有效路径时，应走统一保存管线并在成功后关闭窗口', async () => {
     const saveDeferred = createDeferred()
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     writeFileMock.mockReturnValueOnce(saveDeferred.promise)
@@ -948,7 +977,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
   })
 
   it('close-auto-save 成功关闭窗口后，不得再次 startWatching', async () => {
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -970,7 +999,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
   })
 
   it('关闭链路命中草稿首次保存且 dialog.save-target-cancelled 时，必须直接取消关闭流程并保持窗口打开', async () => {
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startView: 'split' })
     showSaveDialogSyncMock.mockReturnValueOnce(undefined)
 
     await winInfoUtil.createNew(null)
@@ -1138,7 +1167,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
   })
 
   it('关闭链路命中未保存变更时，必须只通过 snapshot.closePrompt 推送关闭确认，不能再发送 unsaved 事件', async () => {
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -1168,7 +1197,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
   })
 
   it('关闭确认继续链路只有在既有 continue path 才允许 allowImmediateClose 置位', async () => {
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -1304,7 +1333,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
   it('blur-auto-save 进行中按 Ctrl+S 时，document.save 必须等待当前保存链路完成并返回手动保存成功', async () => {
     const saveDeferred = createDeferred()
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     writeFileMock.mockReturnValueOnce(saveDeferred.promise)
@@ -1350,7 +1379,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
   it('close-auto-save 进行中按 Ctrl+S 时，manual request 也必须绑定当前保存链路并返回成功', async () => {
     const saveDeferred = createDeferred()
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     writeFileMock.mockReturnValueOnce(saveDeferred.promise)
@@ -1387,7 +1416,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
   it('挂靠中的 Ctrl+S 只能等待自己绑定的那条保存链路，不能被后续新的 auto-save 抢走结果', async () => {
     const firstSaveDeferred = createDeferred()
     const secondSaveDeferred = createDeferred()
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     writeFileMock
@@ -1444,7 +1473,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
   it('manual request 超过 10 秒仍未完成时，必须继续等待自己的 request 完成，不能提前误报成功或失败', async () => {
     const saveDeferred = createDeferred()
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     writeFileMock.mockReturnValueOnce(saveDeferred.promise)
@@ -1516,7 +1545,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
     await dispatchWatchFileChanged(winInfo, {
@@ -1552,7 +1581,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
   it('pending external change 在 save.succeeded 同轮被 reconcile 成 noop 时，manual-save 仍必须返回成功', async () => {
     const saveDeferred = createDeferred()
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     writeFileMock.mockReturnValueOnce(saveDeferred.promise)
@@ -1577,7 +1606,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: ['blur'],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
     await dispatchWatchFileChanged(winInfo, {
@@ -1607,7 +1636,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
   it('manual-save 写盘失败时，即使当前正文又回到磁盘版本，也不能误报成功', async () => {
     const saveDeferred = createDeferred()
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['blur'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     writeFileMock.mockReturnValueOnce(saveDeferred.promise)
@@ -1911,7 +1940,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
     const loadDeferred = createDeferred()
@@ -1959,7 +1988,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'apply',
     })
 
@@ -2004,7 +2033,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
 
@@ -2045,7 +2074,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
 
@@ -2090,7 +2119,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
 
@@ -2124,7 +2153,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
 
@@ -2165,7 +2194,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
 
@@ -2209,7 +2238,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
 
@@ -2275,7 +2304,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
 
@@ -2524,7 +2553,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
   })
 
   it('force-close 会走 confirm-force-close 语义，直接关闭窗口且不再启动保存', async () => {
-    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startPage: 'editor' })
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
 
@@ -3360,7 +3389,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
 
@@ -3600,7 +3629,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     getConfigMock.mockReturnValue({
       language: 'zh-CN',
       autoSave: [],
-      startPage: 'editor',
+      startView: 'split',
       externalFileChangeStrategy: 'prompt',
     })
 

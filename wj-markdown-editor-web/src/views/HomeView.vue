@@ -50,7 +50,7 @@ const documentOpenInteractionService = createDocumentOpenInteractionService({
 const fileManagerOpenDecisionController = createFileManagerOpenDecisionController({
   t,
 })
-const shouldShowFileManagerShell = computed(() => ['editor', 'preview'].includes(String(route.name ?? '')))
+const shouldShowFileManagerShell = computed(() => String(route.name ?? '') === 'editor')
 const shouldEnableFileManagerSplit = computed(() => shouldShowFileManagerShell.value && Boolean(store.sidebarVisible))
 const homeViewFileManagerHostStyle = computed(() => {
   if (shouldShowFileManagerShell.value === false) {

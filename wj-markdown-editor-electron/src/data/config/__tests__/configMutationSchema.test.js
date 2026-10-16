@@ -35,6 +35,7 @@ describe('validateConfigMutationRequest', () => {
     [['sidebarWidth'], 300],
     [['sidebarDefaultView'], 'files'],
     [['fileDefaultDirectory'], 'D:/notes'],
+    [['startView'], 'source'],
     [['imageBed', 'uploader'], 'smms'],
     [['imageBed', 'smms', 'token'], 'token'],
     [['imageBed', 'smms', 'backupDomain'], 'smms.app'],

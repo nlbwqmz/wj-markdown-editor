@@ -308,6 +308,8 @@ function createStore() {
       },
     },
     documentSessionSnapshot: null,
+    viewMode: 'split',
+    setViewMode: vi.fn(),
     applyDocumentSessionSnapshot(snapshot) {
       this.documentSessionSnapshot = snapshot
       return snapshot
@@ -454,6 +456,20 @@ describe('editorView 预览资源菜单宿主接线', () => {
     expect(wrapper.find('[data-menu-key="resource.open-in-folder"]').exists()).toBe(true)
     expect(wrapper.find('[data-menu-key="resource.copy-markdown-reference"]').exists()).toBe(true)
     expect(wrapper.find('[data-menu-key="resource.delete"]').exists()).toBe(true)
+  })
+
+  it('纯预览模式下资源菜单不包含删除项，其余项保持可用', async () => {
+    const wrapper = await mountEditorView()
+
+    editorViewHostState.store.viewMode = 'preview'
+    await openPreviewAssetMenu(wrapper, {
+      sourceType: 'local',
+    })
+
+    expect(wrapper.find('[data-menu-key="resource.copy-absolute-path"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.copy-markdown-reference"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.open-in-folder"]').exists()).toBe(true)
+    expect(wrapper.find('[data-menu-key="resource.delete"]').exists()).toBe(false)
   })
 
   it('收到 MarkdownEdit 抛出的远程图片资源右键事件后，会显示 copy-link 菜单项', async () => {
