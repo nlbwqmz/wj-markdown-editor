@@ -252,7 +252,6 @@ function createSnapshot({
 function createStore() {
   return {
     config: {
-      menuVisible: false,
       previewWidth: 100,
       theme: {
         global: 'light',
@@ -272,6 +271,8 @@ function createStore() {
       this.documentSessionSnapshot = snapshot
       return snapshot
     },
+    setOutlineScrollContainer: vi.fn(),
+    setOutlineActiveLine: vi.fn(),
   }
 }
 

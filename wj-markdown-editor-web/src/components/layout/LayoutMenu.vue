@@ -15,7 +15,6 @@ import {
   requestRecentClear,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import toggleFullScreenAction from '@/util/fullScreenActionUtil.js'
-import { resolveLanguagePreference } from '@/util/languagePreferenceUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const { t } = useI18n()
@@ -25,27 +24,12 @@ const menuList = ref([])
 const shortcutKeyList = ref(store.config.shortcutKeyList)
 const recentList = ref(store.recentList)
 const isFullScreen = ref(store.isFullScreen)
-const fileManagerPanelVisible = ref(store.fileManagerPanelVisible)
+const sidebarVisible = ref(store.sidebarVisible)
 
-function joinMenuLabel(segmentList) {
-  const compactLocale = resolveLanguagePreference(store.config.language, navigator.language) === 'zh-CN'
-  return segmentList.filter(Boolean).join(compactLocale ? '' : ' ')
-}
-
-function getFileManagerToggleLabel() {
-  const labelKey = fileManagerPanelVisible.value
-    ? 'topMenu.view.children.hideFileManager'
-    : 'topMenu.view.children.showFileManager'
-  const translatedLabel = t(labelKey)
-
-  if (translatedLabel !== labelKey) {
-    return translatedLabel
-  }
-
-  return joinMenuLabel([
-    t(fileManagerPanelVisible.value ? 'config.disable' : 'config.enable'),
-    t('config.view.defaultShowFileManager'),
-  ])
+function getSidebarToggleLabel() {
+  return t(sidebarVisible.value
+    ? 'topMenu.view.children.closeSidebar'
+    : 'topMenu.view.children.openSidebar')
 }
 
 function createMenuLabel(label, shortcutKeyId) {
@@ -231,14 +215,14 @@ function updateMenuList() {
         },
         {
           key: commonUtil.createId(),
-          label: createMenuLabel(getFileManagerToggleLabel(), 'toggleFileManagerPanel'),
+          label: createMenuLabel(getSidebarToggleLabel(), 'toggleFileManagerPanel'),
           click: () => {
-            if (typeof store.setFileManagerPanelVisible === 'function') {
-              store.setFileManagerPanelVisible(!store.fileManagerPanelVisible)
+            if (typeof store.setSidebarVisible === 'function') {
+              store.setSidebarVisible(!store.sidebarVisible)
               return
             }
 
-            store.fileManagerPanelVisible = !store.fileManagerPanelVisible
+            store.sidebarVisible = !store.sidebarVisible
           },
         },
       ],
@@ -280,8 +264,8 @@ watch(() => store.isFullScreen, (newValue) => {
   isFullScreen.value = newValue
   updateMenuList()
 })
-watch(() => store.fileManagerPanelVisible, (newValue) => {
-  fileManagerPanelVisible.value = newValue
+watch(() => store.sidebarVisible, (newValue) => {
+  sidebarVisible.value = newValue
   updateMenuList()
 })
 

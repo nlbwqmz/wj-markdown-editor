@@ -10,27 +10,26 @@ describe('configRepairUtil', () => {
       },
     }, defaultConfig)
 
-    expect(repaired.menuVisible).toBe(defaultConfig.menuVisible)
-    expect(repaired.fileManagerVisible).toBe(defaultConfig.fileManagerVisible)
+    expect(repaired.sidebarDefaultView).toBe(defaultConfig.sidebarDefaultView)
     expect(repaired.theme.global).toBe(defaultConfig.theme.global)
   })
 
-  it('缺失 fileManagerWidth 时必须从默认配置补齐', () => {
+  it('缺失 sidebarWidth 时必须从默认配置补齐', () => {
     const legacyConfig = { ...defaultConfig }
-    delete legacyConfig.fileManagerWidth
+    delete legacyConfig.sidebarWidth
 
     const repaired = repairConfig(legacyConfig, defaultConfig)
 
-    expect(repaired.fileManagerWidth).toBe(280)
+    expect(repaired.sidebarWidth).toBe(280)
   })
 
-  it('缺失 menuWidth 时必须从默认配置补齐', () => {
+  it('缺失 sidebarDefaultView 时必须从默认配置补齐', () => {
     const legacyConfig = { ...defaultConfig }
-    delete legacyConfig.menuWidth
+    delete legacyConfig.sidebarDefaultView
 
     const repaired = repairConfig(legacyConfig, defaultConfig)
 
-    expect(repaired.menuWidth).toBe(200)
+    expect(repaired.sidebarDefaultView).toBe('close')
   })
 
   it('缺失 fileManagerSort 时必须从默认配置补齐', () => {

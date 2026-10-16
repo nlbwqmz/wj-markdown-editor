@@ -199,6 +199,18 @@ vi.mock('@/components/layout/FileManagerPanel.vue', async () => {
   }
 })
 
+vi.mock('@/components/layout/SidebarPanel.vue', async () => {
+  const { defineComponent, h } = await import('vue')
+  return {
+    default: defineComponent({
+      name: 'SidebarPanelStub',
+      setup() {
+        return () => h('div', { 'data-testid': 'sidebar-panel-stub' })
+      },
+    }),
+  }
+})
+
 vi.mock('@/components/ExternalFileChangeModal.vue', async () => {
   const { defineComponent, h } = await import('vue')
   return {
@@ -219,10 +231,10 @@ async function flushHomeView() {
 
 async function mountHomeView({
   routeName = 'editor',
-  fileManagerPanelVisible = true,
+  sidebarVisible = true,
 } = {}) {
   homeViewFileManagerHostState.route.name = routeName
-  homeViewFileManagerHostState.store.fileManagerPanelVisible = fileManagerPanelVisible
+  homeViewFileManagerHostState.store.sidebarVisible = sidebarVisible
   const attachTarget = document.createElement('div')
   document.body.appendChild(attachTarget)
 
@@ -250,11 +262,11 @@ describe('homeView 文件管理栏宿主壳层', () => {
     homeViewFileManagerHostState.store = reactive({
       config: {
         shortcutKeyList: [],
-        fileManagerWidth: 280,
+        sidebarWidth: 280,
       },
-      fileManagerPanelVisible: true,
+      sidebarVisible: true,
       documentSessionSnapshot: null,
-      setFileManagerPanelVisible: vi.fn(),
+      setSidebarVisible: vi.fn(),
     })
     homeViewFileManagerHostState.splitDestroy.mockReset()
     homeViewFileManagerHostState.splitOptionsList.splice(0)
@@ -276,8 +288,8 @@ describe('homeView 文件管理栏宿主壳层', () => {
     homeViewFileManagerHostState.shortcutKeyUtil.getShortcutKey.mockReset()
     homeViewFileManagerHostState.shortcutKeyUtil.getWebShortcutKeyHandler.mockReset()
     homeViewFileManagerHostState.shortcutKeyUtil.isShortcutKey.mockReturnValue(false)
-    homeViewFileManagerHostState.store.fileManagerPanelVisible = true
-    homeViewFileManagerHostState.store.setFileManagerPanelVisible.mockReset()
+    homeViewFileManagerHostState.store.sidebarVisible = true
+    homeViewFileManagerHostState.store.setSidebarVisible.mockReset()
     homeViewFileManagerHostState.openDecisionFactory.mockReturnValue({
       openDocument: homeViewFileManagerHostState.openDecisionOpenDocument,
     })
@@ -354,7 +366,7 @@ describe('homeView 文件管理栏宿主壳层', () => {
 
   it('文件管理栏关闭后不应保留左侧唤起手柄，宿主应收拢为单列', async () => {
     const wrapper = await mountHomeView({
-      fileManagerPanelVisible: false,
+      sidebarVisible: false,
     })
 
     expect(wrapper.find('[data-testid="home-file-manager-reopen-handle"]').exists()).toBe(false)
@@ -363,8 +375,8 @@ describe('homeView 文件管理栏宿主壳层', () => {
     wrapper.unmount()
   })
 
-  it('store.config.fileManagerWidth 存在时，宿主初始 grid 列宽应使用配置值', async () => {
-    homeViewFileManagerHostState.store.config.fileManagerWidth = 320
+  it('store.config.sidebarWidth 存在时，宿主初始 grid 列宽应使用配置值', async () => {
+    homeViewFileManagerHostState.store.config.sidebarWidth = 320
     const wrapper = await mountHomeView()
 
     expect(wrapper.get('[data-testid="home-file-manager-host"]').attributes('style')).toContain('grid-template-columns: 320px 1px 1fr;')
@@ -381,7 +393,7 @@ describe('homeView 文件管理栏宿主壳层', () => {
 
     const controllerOptions = homeViewFileManagerHostState.createFileManagerPanelWidthPersistenceController.mock.calls[0][0]
     controllerOptions.applyPersistedWidth(360)
-    expect(homeViewFileManagerHostState.store.config.fileManagerWidth).toBe(360)
+    expect(homeViewFileManagerHostState.store.config.sidebarWidth).toBe(360)
   })
 
   it('homeView 作为宿主时，应注册统一打开交互处理器和当前窗口准备器', async () => {

@@ -106,8 +106,8 @@ export default {
         switchView: '切换',
         enterFullScreen: '进入全屏',
         exitFullScreen: '退出全屏',
-        showFileManager: '显示文件管理栏',
-        hideFileManager: '隐藏文件管理栏',
+        openSidebar: '打开侧边栏',
+        closeSidebar: '关闭侧边栏',
       },
     },
     help: {
@@ -116,6 +116,12 @@ export default {
         example: '示例',
         about: '关于',
       },
+    },
+  },
+  sidebar: {
+    tab: {
+      files: '文件',
+      outline: '大纲',
     },
   },
   config: {
@@ -136,7 +142,7 @@ export default {
     title: {
       general: '常规',
       view: '视图',
-      fileManager: '文件管理栏',
+      fileManager: '侧边栏',
       editor: '编辑器',
       file: '文件',
       picture: '图片',
@@ -178,8 +184,6 @@ export default {
       tip: '本程序依赖系统字体库。新字体安装完毕后，请重启程序，以重新加载并刷新字体列表。',
     },
     view: {
-      defaultShowOutline: '默认显示大纲',
-      defaultShowFileManager: '默认显示文件管理栏',
       editorPreviewPosition: '编辑页预览位置',
       globalTheme: '全局主题',
       codeTheme: '代码主题',
@@ -198,7 +202,12 @@ export default {
       },
     },
     fileManager: {
-      defaultShowFileManager: '默认显示文件管理栏',
+      defaultView: '默认视图',
+      defaultViewOption: {
+        close: '关闭',
+        files: '文件',
+        outline: '大纲',
+      },
       defaultDirectory: '默认目录',
       markdownLeftClickAction: 'Markdown 左键逻辑',
       leftClickActionOption: {

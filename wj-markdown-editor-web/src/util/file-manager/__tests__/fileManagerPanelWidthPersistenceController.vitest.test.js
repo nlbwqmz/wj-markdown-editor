@@ -34,7 +34,7 @@ describe('fileManagerPanelWidthPersistenceController', () => {
     vi.clearAllMocks()
   })
 
-  it('持久化成功后应发送 fileManagerWidth 单路径 set 并同步 store 宽度', async () => {
+  it('持久化成功后应发送 sidebarWidth 单路径 set 并同步 store 宽度', async () => {
     const { controller, sendConfigMutationRequest, showWarningMessage, applyPersistedWidth } = createController()
 
     const result = await controller.persistFileManagerPanelWidth(320)
@@ -43,7 +43,7 @@ describe('fileManagerPanelWidthPersistenceController', () => {
       operations: [
         {
           type: 'set',
-          path: ['fileManagerWidth'],
+          path: ['sidebarWidth'],
           value: 320,
         },
       ],

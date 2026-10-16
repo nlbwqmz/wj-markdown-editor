@@ -323,11 +323,9 @@ vi.mock('@/util/searchTargetBridgeUtil.js', () => ({
   },
 }))
 
-function createStore({ menuVisible = false } = {}) {
+function createStore() {
   return {
     config: {
-      menuVisible,
-      menuWidth: 300,
       shortcutKeyList: [],
       theme: {
         global: 'light',
@@ -335,6 +333,9 @@ function createStore({ menuVisible = false } = {}) {
     },
     editorSearchBarVisible: false,
     searchBarVisible: false,
+    setOutlineScrollContainer: vi.fn(),
+    setOutlineActiveLine: vi.fn(),
+    setOutlineNavigateHandler: vi.fn(),
   }
 }
 
@@ -344,8 +345,8 @@ async function flushLayoutRender() {
   await nextTick()
 }
 
-async function mountMarkdownEdit({ previewPosition = 'right', menuVisible = false } = {}) {
-  storeState.current = createStore({ menuVisible })
+async function mountMarkdownEdit({ previewPosition = 'right' } = {}) {
+  storeState.current = createStore()
 
   const wrapper = mount(MarkdownEdit, {
     props: {

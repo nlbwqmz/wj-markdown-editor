@@ -10,6 +10,7 @@ import { isFirstScreenReady, STARTUP_LOADING_READY_EVENT } from '@/util/startupL
 import {
   flattenMarkdownMenuAnchors,
   resolveMarkdownMenuActiveHref,
+  resolveMarkdownMenuActiveHrefByLineNumber,
   resolveMarkdownMenuTargetScrollTop,
   resolveMarkdownMenuTypography,
 } from './markdownMenuUtil.js'
@@ -30,6 +31,10 @@ const props = defineProps({
   showHeader: {
     type: Boolean,
     default: true,
+  },
+  activeLineNumber: {
+    type: Number,
+    default: null,
   },
 })
 const emits = defineEmits(['anchorNavigate'])
@@ -256,6 +261,15 @@ function updateActiveHref() {
     return
   }
 
+  // 无预览容器时，编辑区滚动只能提供行号，这里走行号驱动的活动项判定。
+  if (Number.isFinite(props.activeLineNumber)) {
+    setCurrentActiveHref(resolveMarkdownMenuActiveHrefByLineNumber({
+      anchorList: flattenedAnchorList.value,
+      lineNumber: props.activeLineNumber,
+    }))
+    return
+  }
+
   const container = resolveMenuContainer()
   if (!container) {
     setCurrentActiveHref('')
@@ -361,6 +375,16 @@ function onAnchorClick(event, item) {
     targetElement,
   })
   if (!scrollResult) {
+    // 无预览容器时没有可滚动的预览区，但仍需把锚点行号上抛给编辑页跳转。
+    if (Number.isFinite(props.activeLineNumber)) {
+      setCurrentActiveHref(href)
+      emits('anchorNavigate', {
+        didPreviewScroll: false,
+        href,
+        lineStart: item?.lineStart,
+        lineEnd: item?.lineEnd,
+      })
+    }
     return
   }
 
@@ -376,6 +400,10 @@ function onAnchorClick(event, item) {
     lineEnd: item?.lineEnd,
   })
 }
+
+watch(() => props.activeLineNumber, () => {
+  updateActiveHref()
+})
 
 watch(() => props.anchorList, () => {
   nextTick(() => {

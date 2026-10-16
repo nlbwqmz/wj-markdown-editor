@@ -106,8 +106,8 @@ export default {
         switchView: 'Switch',
         enterFullScreen: 'Enter Full Screen',
         exitFullScreen: 'Exit Full Screen',
-        showFileManager: 'Show file manager',
-        hideFileManager: 'Hide file manager',
+        openSidebar: 'Open sidebar',
+        closeSidebar: 'Close sidebar',
       },
     },
     help: {
@@ -116,6 +116,12 @@ export default {
         example: 'Example',
         about: 'About',
       },
+    },
+  },
+  sidebar: {
+    tab: {
+      files: 'Files',
+      outline: 'Outline',
     },
   },
   config: {
@@ -136,7 +142,7 @@ export default {
     title: {
       general: 'General',
       view: 'View',
-      fileManager: 'File Manager',
+      fileManager: 'Sidebar',
       editor: 'Editor',
       file: 'File',
       picture: 'Picture',
@@ -178,8 +184,6 @@ export default {
       tip: 'This program relies on the system font library. After installing a new font, please restart the program to reload and refresh the font list.',
     },
     view: {
-      defaultShowOutline: 'Default show outline',
-      defaultShowFileManager: 'Default show file manager',
       editorPreviewPosition: 'Editor preview position',
       globalTheme: 'Global theme',
       codeTheme: 'Code theme',
@@ -198,7 +202,12 @@ export default {
       },
     },
     fileManager: {
-      defaultShowFileManager: 'Default show file manager',
+      defaultView: 'Default view',
+      defaultViewOption: {
+        close: 'Closed',
+        files: 'Files',
+        outline: 'Outline',
+      },
       defaultDirectory: 'Default directory',
       markdownLeftClickAction: 'Markdown Left Click Action',
       leftClickActionOption: {

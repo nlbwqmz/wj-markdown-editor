@@ -457,16 +457,6 @@ function reset() {
           <template #title>
             <span id="view">{{ $t('config.title.view') }}</span>
           </template>
-          <a-descriptions-item :label="$t('config.view.defaultShowOutline')">
-            <a-radio-group :value="config.menuVisible" button-style="solid" @update:value="value => submitSetPathMutation(['menuVisible'], value)">
-              <a-radio-button :value="true">
-                {{ $t('config.yes') }}
-              </a-radio-button>
-              <a-radio-button :value="false">
-                {{ $t('config.no') }}
-              </a-radio-button>
-            </a-radio-group>
-          </a-descriptions-item>
           <a-descriptions-item :label="$t('config.view.editorPreviewPosition')">
             <a-radio-group :value="config.editor.previewPosition" button-style="solid" @update:value="value => submitSetPathMutation(['editor', 'previewPosition'], value)">
               <a-radio-button value="left">
@@ -551,13 +541,16 @@ function reset() {
           <template #title>
             <span id="fileManager">{{ $t('config.title.fileManager') }}</span>
           </template>
-          <a-descriptions-item :label="$t('config.fileManager.defaultShowFileManager')">
-            <a-radio-group :value="config.fileManagerVisible" button-style="solid" @update:value="value => submitSetPathMutation(['fileManagerVisible'], value)">
-              <a-radio-button :value="true">
-                {{ $t('config.yes') }}
+          <a-descriptions-item :label="$t('config.fileManager.defaultView')">
+            <a-radio-group :value="config.sidebarDefaultView" button-style="solid" @update:value="value => submitSetPathMutation(['sidebarDefaultView'], value)">
+              <a-radio-button value="close">
+                {{ $t('config.fileManager.defaultViewOption.close') }}
               </a-radio-button>
-              <a-radio-button :value="false">
-                {{ $t('config.no') }}
+              <a-radio-button value="files">
+                {{ $t('config.fileManager.defaultViewOption.files') }}
+              </a-radio-button>
+              <a-radio-button value="outline">
+                {{ $t('config.fileManager.defaultViewOption.outline') }}
               </a-radio-button>
             </a-radio-group>
           </a-descriptions-item>

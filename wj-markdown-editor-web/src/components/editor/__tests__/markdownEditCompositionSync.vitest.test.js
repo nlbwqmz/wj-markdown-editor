@@ -282,7 +282,6 @@ vi.mock('@/util/searchTargetBridgeUtil.js', () => ({
 function createStore() {
   return {
     config: {
-      menuVisible: false,
       shortcutKeyList: [],
       theme: {
         global: 'light',
@@ -290,6 +289,9 @@ function createStore() {
     },
     editorSearchBarVisible: false,
     searchBarVisible: false,
+    setOutlineScrollContainer: vi.fn(),
+    setOutlineActiveLine: vi.fn(),
+    setOutlineNavigateHandler: vi.fn(),
   }
 }
 

@@ -14,7 +14,7 @@ const fileManagerPanelState = vi.hoisted(() => {
 
   return {
     store: {
-      fileManagerPanelVisible: true,
+      sidebarVisible: true,
       documentSessionSnapshot: null,
       config: {
         language: 'zh-CN',
@@ -374,7 +374,7 @@ vi.mock('@/util/file-manager/fileManagerOpenDecisionController.js', () => ({
 
 describe('fileManagerPanel 组件', () => {
   beforeEach(() => {
-    fileManagerPanelState.store.fileManagerPanelVisible = true
+    fileManagerPanelState.store.sidebarVisible = true
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot()
     fileManagerPanelState.store.config.language = 'zh-CN'
     fileManagerPanelState.store.config.fileManagerSort = {
@@ -1342,7 +1342,7 @@ describe('fileManagerPanel 组件', () => {
 
 describe('fileManagerPanelController', () => {
   beforeEach(() => {
-    fileManagerPanelState.store.fileManagerPanelVisible = true
+    fileManagerPanelState.store.sidebarVisible = true
     fileManagerPanelState.store.documentSessionSnapshot = createDocumentSnapshot()
     fileManagerPanelState.store.config.fileManagerSort = {
       field: 'type',
@@ -2466,7 +2466,7 @@ describe('fileManagerPanelController', () => {
     const staleRequest = createDeferred()
     const latestRequest = createDeferred()
     const localStore = reactive({
-      fileManagerPanelVisible: true,
+      sidebarVisible: true,
       documentSessionSnapshot: createDocumentSnapshot(),
       config: {
         fileManagerSort: {

@@ -1,13 +1,10 @@
 <script setup>
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
-import Split from 'split-grid'
 import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useViewScrollAnchor } from '@/components/editor/composables/useViewScrollAnchor.js'
-import { readGridTrackValue } from '@/components/editor/markdownEditGridTemplateColumnsUtil.js'
-import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import PreviewAssetContextMenu from '@/components/editor/PreviewAssetContextMenu.vue'
 import { useCommonStore } from '@/stores/counter.js'
@@ -15,8 +12,6 @@ import channelUtil from '@/util/channel/channelUtil.js'
 import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import commonUtil from '@/util/commonUtil.js'
-import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUtil.js'
-import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { setCurrentWindowOpenPreparationProvider } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
   resolveDocumentScrollAnchorIdentity,
@@ -33,11 +28,6 @@ import {
 } from '@/util/document-session/rendererSessionActivationStrategy.js'
 import { createRendererSessionEventSubscription } from '@/util/document-session/rendererSessionEventSubscription.js'
 import { createRendererSessionSnapshotController } from '@/util/document-session/rendererSessionSnapshotController.js'
-import {
-  clampMenuWidth,
-  createMenuWidthPersistenceController,
-  resolveMenuWidthUpperBound,
-} from '@/util/editor/menuWidthPersistenceController.js'
 import { preparePreviewAssetCopyImagePayload } from '@/util/editor/previewAssetCopyImageActionUtil.js'
 import { createPreviewAssetSessionController } from '@/util/editor/previewAssetSessionController.js'
 import { buildPreviewContextMenuItems } from '@/util/editor/previewContextMenuActionUtil.js'
@@ -77,23 +67,9 @@ const router = useRouter()
 const { t } = useI18n()
 
 const store = useCommonStore()
-const menuWidthPersistenceController = createMenuWidthPersistenceController({
-  sendConfigMutationRequest,
-  getConfigUpdateFailureMessageKey,
-  getPersistedWidth: () => store.config.menuWidth,
-  showWarningMessage: messageKey => message.warning(t(messageKey)),
-  applyPersistedWidth: (width) => {
-    store.config.menuWidth = width
-  },
-})
 
 const content = ref('')
-const anchorList = ref([])
-let splitInstance
-const gutterRef = ref()
 const previewContainerRef = ref()
-const menuVisible = ref(false)
-const menuController = ref(false)
 const previewContainer = ref()
 const config = ref({})
 const ready = ref(false)
@@ -135,55 +111,6 @@ function closePreviewSearchBar() {
     controller: previewSearchBarController,
     store,
   })
-}
-
-/**
- * 计算纯预览页大纲列在当前容器宽度下允许使用的宽度。
- * 小窗口下要预留出 1px gutter 与正文区最小宽度，避免大纲列把正文挤没。
- *
- * @returns {number} 返回钳制后的大纲列宽度。
- */
-function resolvePersistedMenuWidth() {
-  const containerWidth = Number(previewContainer.value?.clientWidth)
-
-  return Math.min(resolveMenuWidthUpperBound(containerWidth), clampMenuWidth(store.config.menuWidth))
-}
-
-/**
- * 把持久化的大纲宽度写成行内列模板。
- * 必须在 Split 创建之前写入，保证 split-grid 读到稳定的初始轨道定义。
- */
-function applyPersistedMenuWidth() {
-  if (!previewContainer.value) {
-    return
-  }
-
-  const targetWidth = resolvePersistedMenuWidth()
-  const currentWidth = readGridTrackValue(previewContainer.value.style['grid-template-columns'], 0)
-
-  // 当前生效宽度已经等于目标宽度时直接跳过，避免拖拽结束后重复写行内样式。
-  if (currentWidth !== null && Math.round(currentWidth) === Math.round(targetWidth)) {
-    return
-  }
-
-  previewContainer.value.style['grid-template-columns'] = `${targetWidth}px 1px 1fr`
-}
-
-/**
- * 拖拽结束后把第 0 列像素宽度写回配置。
- * 优先读行内样式，退化时再读计算样式，保证两种环境都能拿到真实拖拽结果。
- */
-function persistMenuWidthFromLayout() {
-  const inlineGridTemplateColumns = previewContainer.value?.style?.['grid-template-columns']
-  const computedGridTemplateColumns = previewContainer.value
-    ? window.getComputedStyle(previewContainer.value).gridTemplateColumns
-    : ''
-  const menuWidth = readGridTrackValue(inlineGridTemplateColumns || computedGridTemplateColumns, 0)
-  if (menuWidth === null) {
-    return
-  }
-
-  menuWidthPersistenceController.persistMenuWidth(menuWidth).then(() => {})
 }
 
 function bindCurrentWindowOpenPreparationProvider() {
@@ -649,9 +576,6 @@ function applyDocumentSessionSnapshot(snapshot) {
   content.value = snapshot.content
   ready.value = true
   notifyFirstScreenReady()
-  if (!content.value) {
-    anchorList.value = []
-  }
 
   updateCurrentScrollSnapshot(snapshot)
 
@@ -736,7 +660,6 @@ watch(() => store.config, (newValue) => {
 }, { deep: true, immediate: true })
 
 onMounted(() => {
-  menuVisible.value = store.config.menuVisible
   bindCurrentWindowOpenPreparationProvider()
   previewSearchTargetBridge.activate()
   previewSessionSnapshotController.activate()
@@ -758,40 +681,7 @@ onBeforeUnmount(() => {
   closePreviewAssetMenu()
   closePreviewSearchBar()
   previewSearchTargetBridge.deactivate({ preserveCleanupTarget: false })
-})
-
-watch(() => menuVisible.value, (newValue) => {
-  closePreviewSearchBar()
-
-  if (newValue) {
-    menuController.value = true
-    nextTick(() => {
-      // 行内列宽必须先于 Split 写入，否则拖拽起点会退回默认 200px。
-      applyPersistedMenuWidth()
-      splitInstance = Split({
-        columnGutters: [{ track: 1, element: gutterRef.value }],
-        // 最小尺寸
-        minSize: 200,
-        // 自动吸附距离
-        snapOffset: 0,
-        onDragEnd: persistMenuWidthFromLayout,
-      })
-    })
-  } else {
-    splitInstance.destroy(true)
-    previewContainer.value.style['grid-template-columns'] = ''
-    menuController.value = false
-  }
-})
-
-// 编辑页与预览页共用同一个持久化宽度，任一页面拖拽后都需要在这里重新应用，
-// 否则切换到本页时布局仍停留在旧宽度。
-watch(() => store.config.menuWidth, () => {
-  if (menuController.value !== true) {
-    return
-  }
-
-  applyPersistedMenuWidth()
+  unregisterSidebarBridges()
 })
 
 onActivated(async () => {
@@ -802,10 +692,7 @@ onActivated(async () => {
   previewSearchTargetBridge.activate()
   closePreviewSearchBar()
   nextTick(() => {
-    // 失活期间容器宽度不可用，重新激活后补一次应用，保证与编辑页的大纲宽度一致。
-    if (menuController.value === true) {
-      applyPersistedMenuWidth()
-    }
+    registerSidebarBridges()
   })
   const activationAction = resolveRendererSessionActivationAction({
     hasAppliedSnapshot: previewSessionSnapshotController.hasAppliedSnapshot?.() === true,
@@ -837,6 +724,7 @@ onDeactivated(() => {
   closePreviewAssetMenu()
   closePreviewSearchBar()
   previewSearchTargetBridge.deactivate()
+  unregisterSidebarBridges()
 })
 
 onBeforeRouteLeave(() => {
@@ -865,8 +753,16 @@ function toEdit() {
   })
 }
 
-function onAnchorChange(changedAnchorList) {
-  anchorList.value = changedAnchorList
+/**
+ * 把当前页面的预览滚动容器注册到 store，供侧边栏大纲做滚动联动与锚点跳转。
+ * keep-alive 下只有激活页面会注册，失活时清理，避免两页互相覆盖。
+ */
+function registerSidebarBridges() {
+  store.setOutlineScrollContainer(previewContainerRef.value ?? null)
+}
+
+function unregisterSidebarBridges() {
+  store.setOutlineScrollContainer(null)
 }
 
 function onPreviewRefreshComplete() {
@@ -1070,21 +966,10 @@ defineExpose({
 </script>
 
 <template>
-  <a-tooltip v-if="menuController === false" placement="right" color="#1677ff">
-    <template #title>
-      <span>{{ $t('outline') }}</span>
-    </template>
-    <div class="absolute left-0 z-10 flex cursor-pointer items-center p-1 op-60 hover:op-100" @click="() => { menuVisible = true }">
-      <div class="i-tabler:menu-2" />
-    </div>
-  </a-tooltip>
   <div
     v-show="ready" ref="previewContainer"
-    class="allow-search grid h-full w-full overflow-hidden b-t-1 b-t-border-primary b-t-solid"
-    :class="menuController ? 'grid-cols-[200px_1px_1fr]' : 'grid-cols-[1fr]'"
+    class="allow-search grid grid-cols-[1fr] h-full w-full overflow-hidden b-t-1 b-t-border-primary b-t-solid"
   >
-    <MarkdownMenu v-if="menuController" :anchor-list="anchorList" :get-container="() => previewContainerRef" :close="() => { menuVisible = false }" />
-    <div v-if="menuController" ref="gutterRef" class="wj-sash wj-sash--vertical h-full" />
     <div v-if="content" ref="previewContainerRef" class="wj-scrollbar h-full w-full overflow-y-auto">
       <div class="h-full w-full flex justify-center">
         <div class="h-full w-full" :style="{ width: `${config.previewWidth}%` }">
@@ -1096,7 +981,6 @@ defineExpose({
             :watermark="watermark"
             :defer-watermark-until-ready="true"
             @refresh-complete="onPreviewRefreshComplete"
-            @anchor-change="onAnchorChange"
             @preview-contextmenu="onPreviewContextmenu"
             @asset-open="onAssetOpen"
           />

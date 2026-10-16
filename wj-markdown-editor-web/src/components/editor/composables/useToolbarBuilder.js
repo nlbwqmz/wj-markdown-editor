@@ -1,4 +1,3 @@
-import { message } from 'ant-design-vue'
 import { createVNode, h } from 'vue'
 import ColorPicker from '@/components/AsyncColorPicker.js'
 import TableShape from '@/components/TableShape.vue'
@@ -18,8 +17,6 @@ export function useToolbarBuilder({
   emits,
   jumpToTargetLine,
   previewVisible,
-  menuVisible,
-  previewRef,
   openNetworkImageModal,
   insertFileToEditor,
 }) {
@@ -374,17 +371,6 @@ export function useToolbarBuilder({
         icon: 'i-tabler:eye',
         action: () => {
           previewVisible.value = !previewVisible.value
-        },
-      },
-      menuVisible: {
-        label: t('outline'),
-        icon: 'i-tabler:menu-2',
-        action: () => {
-          if (previewRef.value) {
-            menuVisible.value = !menuVisible.value
-          } else {
-            message.warning(t('editor.outlineTip'))
-          }
         },
       },
       prettier: {

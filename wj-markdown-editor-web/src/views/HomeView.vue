@@ -4,7 +4,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import ExternalFileChangeModal from '@/components/ExternalFileChangeModal.vue'
-import FileManagerPanel from '@/components/layout/FileManagerPanel.vue'
 import {
   clampFileManagerPanelWidth,
   createHomeViewFilePanelLayoutController,
@@ -14,6 +13,7 @@ import {
 import LayoutContainer from '@/components/layout/LayoutContainer.vue'
 import LayoutMenu from '@/components/layout/LayoutMenu.vue'
 import LayoutTop from '@/components/layout/LayoutTop.vue'
+import SidebarPanel from '@/components/layout/SidebarPanel.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
@@ -34,14 +34,14 @@ const store = useCommonStore()
 const route = useRoute()
 const fileManagerHostRef = ref()
 const fileManagerGutterRef = ref()
-const fileManagerPanelWidth = ref(clampFileManagerPanelWidth(store.config.fileManagerWidth ?? FILE_MANAGER_PANEL_DEFAULT_WIDTH))
+const fileManagerPanelWidth = ref(clampFileManagerPanelWidth(store.config.sidebarWidth ?? FILE_MANAGER_PANEL_DEFAULT_WIDTH))
 const fileManagerPanelWidthPersistenceController = createFileManagerPanelWidthPersistenceController({
   sendConfigMutationRequest,
   getConfigUpdateFailureMessageKey,
-  getPersistedWidth: () => store.config.fileManagerWidth,
+  getPersistedWidth: () => store.config.sidebarWidth,
   showWarningMessage: messageKey => message.warning(t(messageKey)),
   applyPersistedWidth: (width) => {
-    store.config.fileManagerWidth = width
+    store.config.sidebarWidth = width
   },
 })
 const documentOpenInteractionService = createDocumentOpenInteractionService({
@@ -51,13 +51,13 @@ const fileManagerOpenDecisionController = createFileManagerOpenDecisionControlle
   t,
 })
 const shouldShowFileManagerShell = computed(() => ['editor', 'preview'].includes(String(route.name ?? '')))
-const shouldEnableFileManagerSplit = computed(() => shouldShowFileManagerShell.value && Boolean(store.fileManagerPanelVisible))
+const shouldEnableFileManagerSplit = computed(() => shouldShowFileManagerShell.value && Boolean(store.sidebarVisible))
 const homeViewFileManagerHostStyle = computed(() => {
   if (shouldShowFileManagerShell.value === false) {
     return undefined
   }
 
-  if (store.fileManagerPanelVisible) {
+  if (store.sidebarVisible) {
     return {
       gridTemplateColumns: resolveHomeViewFilePanelGridTemplateColumns(fileManagerPanelWidth.value),
     }
@@ -183,14 +183,14 @@ watch(() => route.name, () => {
         :style="homeViewFileManagerHostStyle"
       >
         <div
-          v-if="store.fileManagerPanelVisible"
+          v-if="store.sidebarVisible"
           data-testid="home-file-manager-panel-slot"
           class="h-full min-w-0 overflow-hidden b-t-1 b-t-border-primary b-t-solid"
         >
-          <FileManagerPanel />
+          <SidebarPanel />
         </div>
         <div
-          v-if="store.fileManagerPanelVisible"
+          v-if="store.sidebarVisible"
           ref="fileManagerGutterRef"
           data-testid="home-file-manager-gutter"
           class="wj-sash wj-sash--vertical h-full"

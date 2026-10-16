@@ -100,14 +100,14 @@ const functionKeyCodePattern = /^F(?:[1-9]|1[0-2])$/
 
 function toggleFileManagerPanelAction() {
   const store = useCommonStore()
-  const nextVisible = !store.fileManagerPanelVisible
+  const nextVisible = !store.sidebarVisible
 
-  if (typeof store.setFileManagerPanelVisible === 'function') {
-    store.setFileManagerPanelVisible(nextVisible)
+  if (typeof store.setSidebarVisible === 'function') {
+    store.setSidebarVisible(nextVisible)
     return
   }
 
-  store.fileManagerPanelVisible = nextVisible
+  store.sidebarVisible = nextVisible
 }
 
 const webShortcutKeyHandler = {

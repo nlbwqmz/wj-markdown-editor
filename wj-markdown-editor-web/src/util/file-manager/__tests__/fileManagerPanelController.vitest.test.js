@@ -39,7 +39,7 @@ function stopTrackedEffectScopes() {
 
 function createStore() {
   return reactive({
-    fileManagerPanelVisible: true,
+    sidebarVisible: true,
     documentSessionSnapshot: {
       sessionId: 'session-current',
       displayPath: 'D:/docs/current.md',

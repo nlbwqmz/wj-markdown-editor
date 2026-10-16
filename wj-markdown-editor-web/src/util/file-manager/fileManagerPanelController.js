@@ -944,7 +944,7 @@ export function createFileManagerPanelController({
 
   watch([
     documentDirectoryIdentity,
-    () => store?.fileManagerPanelVisible,
+    () => store?.sidebarVisible,
   ], async ([, visible]) => {
     if (visible) {
       await reloadDirectoryStateFromSnapshot(store?.documentSessionSnapshot)
@@ -956,7 +956,7 @@ export function createFileManagerPanelController({
   // 默认目录只在「文件管理栏当前没有目录」时作为兜底生效：
   // 一旦已展示目录（来自默认目录或手动切换），后续配置变化不再自动跳转。
   watch(() => store?.config?.fileDefaultDirectory, async () => {
-    if (!store?.fileManagerPanelVisible || directoryState.value.directoryPath) {
+    if (!store?.sidebarVisible || directoryState.value.directoryPath) {
       return
     }
 

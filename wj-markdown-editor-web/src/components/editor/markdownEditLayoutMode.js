@@ -9,28 +9,11 @@ const LAYOUT_MODE_MAP = {
     gridTemplateClass: 'markdown-edit-layout--editor-preview',
     columnGutters: [{ track: 1, refKey: 'gutterRef' }],
   },
-  'editor-preview-menu': {
-    columnOrder: ['editor', 'preview', 'menu'],
-    gridTemplateClass: 'markdown-edit-layout--editor-preview-menu',
-    columnGutters: [
-      { track: 1, refKey: 'gutterRef' },
-      { track: 3, refKey: 'gutterMenuRef' },
-    ],
-  },
   'preview-editor': {
     // columnOrder 同时作为真实渲染顺序和视觉顺序来源。
     columnOrder: ['preview', 'editor'],
     gridTemplateClass: 'markdown-edit-layout--preview-editor',
     columnGutters: [{ track: 1, refKey: 'gutterRef' }],
-  },
-  'menu-preview-editor': {
-    // 左侧三栏模式同样以 columnOrder 作为真实渲染顺序来源。
-    columnOrder: ['menu', 'preview', 'editor'],
-    gridTemplateClass: 'markdown-edit-layout--menu-preview-editor',
-    columnGutters: [
-      { track: 1, refKey: 'gutterMenuRef' },
-      { track: 3, refKey: 'gutterRef' },
-    ],
   },
 }
 
@@ -40,7 +23,6 @@ const LAYOUT_MODE_MAP = {
  *
  * @param {{
  *   previewVisible?: boolean,
- *   menuVisible?: boolean,
  *   previewPosition?: string,
  * }} options
  * @returns {{
@@ -55,9 +37,6 @@ export function resolveMarkdownEditLayoutMode(options = {}) {
   }
 
   const resolvedPreviewPosition = options.previewPosition === 'left' ? 'left' : 'right'
-  if (options.menuVisible === true) {
-    return cloneLayoutMode(resolvedPreviewPosition === 'left' ? 'menu-preview-editor' : 'editor-preview-menu')
-  }
 
   return cloneLayoutMode(resolvedPreviewPosition === 'left' ? 'preview-editor' : 'editor-preview')
 }

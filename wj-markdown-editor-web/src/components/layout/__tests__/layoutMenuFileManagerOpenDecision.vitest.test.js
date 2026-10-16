@@ -23,13 +23,13 @@ const translationMap = {
   'topMenu.view.children.switchView': '切换',
   'topMenu.view.children.enterFullScreen': '进入全屏',
   'topMenu.view.children.exitFullScreen': '退出全屏',
-  'topMenu.view.children.showFileManager': '显示文件管理栏',
-  'topMenu.view.children.hideFileManager': '隐藏文件管理栏',
+  'topMenu.view.children.openSidebar': '打开侧边栏',
+  'topMenu.view.children.closeSidebar': '关闭侧边栏',
 }
 
 const store = reactive({
   isFullScreen: false,
-  fileManagerPanelVisible: true,
+  sidebarVisible: true,
   recentList: [],
   documentSessionSnapshot: {
     dirty: false,
@@ -58,7 +58,7 @@ const store = reactive({
       },
     ],
   },
-  setFileManagerPanelVisible: vi.fn(),
+  setSidebarVisible: vi.fn(),
 })
 
 vi.mock('vue-i18n', () => ({
@@ -153,7 +153,7 @@ function findMenuItemByLabel(children, matcher) {
 describe('layoutMenu 文件管理栏接线', () => {
   beforeEach(() => {
     store.isFullScreen = false
-    store.fileManagerPanelVisible = true
+    store.sidebarVisible = true
     store.recentList = []
     store.documentSessionSnapshot = {
       dirty: false,
@@ -180,9 +180,9 @@ describe('layoutMenu 文件管理栏接线', () => {
         enabled: true,
       },
     ]
-    store.setFileManagerPanelVisible.mockReset()
-    store.setFileManagerPanelVisible.mockImplementation((visible) => {
-      store.fileManagerPanelVisible = visible
+    store.setSidebarVisible.mockReset()
+    store.setSidebarVisible.mockImplementation((visible) => {
+      store.sidebarVisible = visible
     })
     mocked.channelSend.mockReset()
     mocked.shortcutKeyHandler.mockReset()
@@ -326,22 +326,22 @@ describe('layoutMenu 文件管理栏接线', () => {
     const initialToggleItem = getMenuChildren(wrapper, 1)[2]
     const initialLabel = extractTextFromNode(initialToggleItem.label)
 
-    expect(initialLabel).toBe('隐藏文件管理栏')
+    expect(initialLabel).toBe('关闭侧边栏')
 
     await initialToggleItem.click()
 
-    expect(store.setFileManagerPanelVisible).toHaveBeenCalledWith(false)
+    expect(store.setSidebarVisible).toHaveBeenCalledWith(false)
 
     await nextTick()
 
     const nextToggleItem = getMenuChildren(wrapper, 1)[2]
     const nextLabel = extractTextFromNode(nextToggleItem.label)
 
-    expect(nextLabel).toBe('显示文件管理栏')
+    expect(nextLabel).toBe('打开侧边栏')
 
     await nextToggleItem.click()
 
-    expect(store.setFileManagerPanelVisible).toHaveBeenLastCalledWith(true)
+    expect(store.setSidebarVisible).toHaveBeenLastCalledWith(true)
   })
 
   it('文件管理栏快捷键为空时，视图菜单项不应显示空快捷键占位', () => {
@@ -356,7 +356,7 @@ describe('layoutMenu 文件管理栏接线', () => {
 
     const toggleItemLabel = extractTextFromNode(getMenuChildren(wrapper, 1)[2].label)
 
-    expect(toggleItemLabel).toBe('隐藏文件管理栏')
+    expect(toggleItemLabel).toBe('关闭侧边栏')
   })
 
   it('文件管理栏快捷键配置后，视图菜单项应显示当前快捷键', () => {
@@ -389,20 +389,20 @@ describe('layoutMenu 文件管理栏接线', () => {
 
     const toggleItemLabel = extractTextFromNode(getMenuChildren(wrapper, 1)[2].label)
 
-    expect(toggleItemLabel).toContain('隐藏文件管理栏')
+    expect(toggleItemLabel).toContain('关闭侧边栏')
     expect(toggleItemLabel).toContain('Ctrl+b')
   })
 
-  it('中英文文案应补齐文件管理栏显示与隐藏的运行时 key', async () => {
+  it('中英文文案应补齐侧边栏打开与关闭的运行时 key', async () => {
     const zhCN = (await import('@/i18n/zhCN.js')).default
     const enUS = (await import('@/i18n/enUS.js')).default
 
-    expect(zhCN.topMenu.view.children.showFileManager).toBe('显示文件管理栏')
-    expect(zhCN.topMenu.view.children.hideFileManager).toBe('隐藏文件管理栏')
+    expect(zhCN.topMenu.view.children.openSidebar).toBe('打开侧边栏')
+    expect(zhCN.topMenu.view.children.closeSidebar).toBe('关闭侧边栏')
     expect(zhCN.topMenu.file.children.export.exportToFile).toBe('导出到文件')
     expect(zhCN.topMenu.file.children.export.exportToClipboard).toBe('导出到剪切板')
-    expect(enUS.topMenu.view.children.showFileManager).toBe('Show file manager')
-    expect(enUS.topMenu.view.children.hideFileManager).toBe('Hide file manager')
+    expect(enUS.topMenu.view.children.openSidebar).toBe('Open sidebar')
+    expect(enUS.topMenu.view.children.closeSidebar).toBe('Close sidebar')
     expect(enUS.topMenu.file.children.export.exportToFile).toBe('Export to File')
     expect(enUS.topMenu.file.children.export.exportToClipboard).toBe('Export to Clipboard')
     expect(zhCN.message.onlyMarkdownFilesCanBeOpened).toBe('不支当前文件格式')

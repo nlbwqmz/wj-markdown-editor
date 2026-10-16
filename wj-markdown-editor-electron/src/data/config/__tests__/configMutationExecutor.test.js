@@ -23,16 +23,16 @@ describe('applyConfigMutationRequest', () => {
     expect(() => validateConfigShape(nextConfig)).not.toThrow()
   })
 
-  it('set 写入合法 fileManagerWidth 后结果合法且值正确', () => {
+  it('set 写入合法 sidebarWidth 后结果合法且值正确', () => {
     const inputConfig = cloneValue(defaultConfig)
     const originalConfig = cloneValue(inputConfig)
     const nextConfig = applyConfigMutationRequest(inputConfig, {
       operations: [
-        { type: 'set', path: ['fileManagerWidth'], value: 320 },
+        { type: 'set', path: ['sidebarWidth'], value: 320 },
       ],
     })
 
-    expect(nextConfig.fileManagerWidth).toBe(320)
+    expect(nextConfig.sidebarWidth).toBe(320)
     expect(inputConfig).toEqual(originalConfig)
     expect(() => validateConfigShape(nextConfig)).not.toThrow()
   })

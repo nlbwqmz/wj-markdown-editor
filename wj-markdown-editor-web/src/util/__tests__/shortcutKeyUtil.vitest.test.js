@@ -6,8 +6,8 @@ const { sharedToggleFullScreenAction } = vi.hoisted(() => ({
 
 const { mockedStore } = vi.hoisted(() => ({
   mockedStore: {
-    fileManagerPanelVisible: true,
-    setFileManagerPanelVisible: vi.fn(),
+    sidebarVisible: true,
+    setSidebarVisible: vi.fn(),
   },
 }))
 
@@ -63,10 +63,10 @@ function createKeyboardEvent(code, options = {}) {
 beforeEach(async () => {
   vi.resetModules()
   sharedToggleFullScreenAction.mockReset()
-  mockedStore.fileManagerPanelVisible = true
-  mockedStore.setFileManagerPanelVisible.mockReset()
-  mockedStore.setFileManagerPanelVisible.mockImplementation((visible) => {
-    mockedStore.fileManagerPanelVisible = visible
+  mockedStore.sidebarVisible = true
+  mockedStore.setSidebarVisible.mockReset()
+  mockedStore.setSidebarVisible.mockImplementation((visible) => {
+    mockedStore.sidebarVisible = visible
   })
   shortcutKeyUtil = (await import('../shortcutKeyUtil.js')).default
 })
@@ -116,19 +116,19 @@ describe('shortcutKeyUtil', () => {
     })
   })
 
-  it('toggleFileManagerPanel handler 必须复用 store 文件管理栏开关动作', () => {
+  it('toggleFileManagerPanel handler 必须复用 store 侧边栏开关动作', () => {
     const handler = shortcutKeyUtil.getWebShortcutKeyHandler('toggleFileManagerPanel')
 
     expect(handler).toBeTypeOf('function')
 
     handler()
 
-    expect(mockedStore.setFileManagerPanelVisible).toHaveBeenCalledWith(false)
-    expect(mockedStore.fileManagerPanelVisible).toBe(false)
+    expect(mockedStore.setSidebarVisible).toHaveBeenCalledWith(false)
+    expect(mockedStore.sidebarVisible).toBe(false)
 
     handler()
 
-    expect(mockedStore.setFileManagerPanelVisible).toHaveBeenLastCalledWith(true)
-    expect(mockedStore.fileManagerPanelVisible).toBe(true)
+    expect(mockedStore.setSidebarVisible).toHaveBeenLastCalledWith(true)
+    expect(mockedStore.sidebarVisible).toBe(true)
   })
 })

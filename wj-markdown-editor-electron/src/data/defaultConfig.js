@@ -13,10 +13,9 @@ export default {
   fileDefaultDirectory: '',
   // 可选值 blur(窗口失焦) close(窗口关闭)
   autoSave: [],
-  menuVisible: true,
-  menuWidth: 200,
-  fileManagerVisible: true,
-  fileManagerWidth: 280,
+  // 侧边栏默认视图：close(关闭) files(文件) outline(大纲)
+  sidebarDefaultView: 'close',
+  sidebarWidth: 280,
   fileManagerSort: {
     field: 'type',
     direction: 'asc',
@@ -145,7 +144,7 @@ export default {
     {
       index: 7,
       id: 'toggleFileManagerPanel',
-      name: '文件管理栏切换',
+      name: '侧边栏切换',
       keymap: '',
       enabled: true,
       type: 'web',

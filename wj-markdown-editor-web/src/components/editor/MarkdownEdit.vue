@@ -1,5 +1,4 @@
 <script setup>
-import { message } from 'ant-design-vue'
 import Split from 'split-grid'
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -17,23 +16,16 @@ import { useViewScrollAnchor } from '@/components/editor/composables/useViewScro
 import EditorSearchBar from '@/components/editor/EditorSearchBar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import ImageNetworkModal from '@/components/editor/ImageNetworkModal.vue'
-import {
-  readGridTrackValue,
-  resolveAdaptiveGridTemplateColumns,
-  resolveAdaptiveGridTemplateColumnsWithFixedTrack,
-} from '@/components/editor/markdownEditGridTemplateColumnsUtil.js'
+import { resolveAdaptiveGridTemplateColumns } from '@/components/editor/markdownEditGridTemplateColumnsUtil.js'
 import {
   resolveMarkdownEditLayoutMode,
   resolveMarkdownEditSplitColumnGutters,
 } from '@/components/editor/markdownEditLayoutMode.js'
 import { createMarkdownEditPreviewLayoutIndexWiring } from '@/components/editor/markdownEditPreviewLayoutIndexWiring.js'
 import { resolveMarkdownEditRenderItems } from '@/components/editor/markdownEditRenderItems.js'
-import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import { createPreviewRefreshCoordinator } from '@/components/editor/previewRefreshCoordinator.js'
 import { useCommonStore } from '@/stores/counter.js'
-import { sendConfigMutationRequest } from '@/util/config/configMutationCommandUtil.js'
-import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { requestOpenDroppedMarkdownDocument } from '@/util/document-session/documentDropOpenUtil.js'
 import { resolveDocumentScrollAnchorIdentity } from '@/util/document-session/documentScrollAnchorIdentityUtil.js'
 import {
@@ -45,11 +37,6 @@ import {
 } from '@/util/editor/contentUpdateMetaUtil.js'
 import { createFlushableDebounce } from '@/util/editor/flushableDebounceUtil.js'
 import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
-import {
-  clampMenuWidth,
-  createMenuWidthPersistenceController,
-  resolveMenuWidthUpperBound,
-} from '@/util/editor/menuWidthPersistenceController.js'
 import {
   captureEditorLineAnchor,
   capturePreviewLineAnchor,
@@ -117,42 +104,29 @@ const emits = defineEmits(['update:modelValue', 'upload', 'save', 'anchorChange'
 
 const { t } = useI18n()
 const store = useCommonStore()
-const menuWidthPersistenceController = createMenuWidthPersistenceController({
-  sendConfigMutationRequest,
-  getConfigUpdateFailureMessageKey,
-  getPersistedWidth: () => store.config.menuWidth,
-  showWarningMessage: messageKey => message.warning(t(messageKey)),
-  applyPersistedWidth: (width) => {
-    store.config.menuWidth = width
-  },
-})
 
 const toolbarList = ref([])
 const shortcutKeyList = ref([])
 let splitInstance
 let splitGutterSyncElements = []
+let outlineActiveLineRafId = null
 
 const editorSearchBarVisible = computed(() => store.editorSearchBarVisible)
 const associationHighlightEnabled = computed(() => props.associationHighlight === true)
 const themeRef = computed(() => store.config.theme.global)
 
 const gutterRef = ref()
-const gutterMenuRef = ref()
 const editorRef = ref()
 const previewRef = ref()
 const scrolling = ref({ editor: false, preview: false })
 const editorContainer = ref()
-const anchorList = ref([])
 const editorScrollTop = ref(0)
-const menuVisible = ref(false)
-const menuController = ref(false)
 const previewVisible = ref(true)
 const previewController = ref(true)
 // 仅在预览从“未渲染”重新挂载为“已渲染”时，延后首轮同步到 refreshComplete。
 const pendingPreviewResyncAfterRefresh = ref(false)
 const layoutMode = computed(() => resolveMarkdownEditLayoutMode({
   previewVisible: previewVisible.value,
-  menuVisible: menuVisible.value,
   previewPosition: props.previewPosition,
 }))
 const handledContentUpdateToken = ref(0)
@@ -708,8 +682,6 @@ const {
   emits,
   jumpToTargetLine,
   previewVisible,
-  menuVisible,
-  previewRef,
   openNetworkImageModal,
   insertFileToEditor,
 })
@@ -793,82 +765,20 @@ function refreshKeymap() {
  */
 function syncLayoutControllers() {
   previewController.value = layoutMode.value.columnOrder.includes('preview')
-  menuController.value = layoutMode.value.columnOrder.includes('menu')
 }
 
 /**
  * 按 helper 返回的 gutter 描述解析 Split 需要的真实 DOM。
- * refKey 明确区分预览分隔条与大纲分隔条，避免左侧三栏时绑反。
  *
  * @returns {Array<{ track: number, element: HTMLElement | undefined }>} 返回可直接传给 Split 的 gutter 配置。
  */
 function resolveSplitColumnGutters() {
   const gutterRefMap = {
     gutterRef: gutterRef.value,
-    gutterMenuRef: gutterMenuRef.value,
   }
 
   // 真实的 refKey -> gutter element 绑定已下沉到纯函数中，等价于 gutterRefMap[refKey]。
   return resolveMarkdownEditSplitColumnGutters(layoutMode.value.columnGutters, gutterRefMap)
-}
-
-/**
- * 解析大纲列在 grid-template-columns 中的轨道下标。
- * 列模板始终按“面板 / gutter / 面板 ...”排列，因此面板序号需要乘以 2。
- *
- * @returns {number} 返回大纲轨道下标；当前布局没有大纲时返回 -1。
- */
-function resolveMenuTrackIndex() {
-  const menuColumnIndex = layoutMode.value.columnOrder.indexOf('menu')
-
-  return menuColumnIndex < 0 ? -1 : menuColumnIndex * 2
-}
-
-/**
- * 计算大纲列在当前容器宽度下允许使用的宽度。
- * 小窗口下要预留出两侧 gutter 与编辑区、预览区的最小宽度，避免大纲列把其他列挤没。
- *
- * @returns {number} 返回钳制后的大纲列宽度。
- */
-function resolvePersistedMenuWidth() {
-  const containerWidth = Number(editorContainer.value?.clientWidth)
-
-  return Math.min(resolveMenuWidthUpperBound(containerWidth), clampMenuWidth(store.config.menuWidth))
-}
-
-/**
- * 把持久化的大纲宽度应用到当前布局。
- * 其他列先归一化成 fr 轨道，只有大纲列固定成持久化像素宽度，保证窗口缩放后仍能自适应。
- * destroySplitLayout 会清空行内列宽，因此这里必须在其之后调用。
- */
-function applyPersistedMenuWidth() {
-  const menuTrackIndex = resolveMenuTrackIndex()
-  if (menuTrackIndex < 0 || !editorContainer.value) {
-    return
-  }
-
-  const targetWidth = resolvePersistedMenuWidth()
-  const computedGridTemplateColumns = window.getComputedStyle(editorContainer.value).gridTemplateColumns
-  const currentWidth = readGridTrackValue(computedGridTemplateColumns, menuTrackIndex)
-
-  // 当前生效宽度已经等于目标宽度时直接跳过：拖拽结束会先后触发归一化与配置回写，
-  // 这里跳过可以避免重复读取计算样式与写行内样式带来的布局抖动。
-  if (currentWidth !== null && Math.round(currentWidth) === Math.round(targetWidth)) {
-    return
-  }
-
-  // 归一化分母排除大纲列，保证其余列 fr 之和为 1；否则 CSS 会把小于 1 的 fr 总和按 1 处理，
-  // 剩余空间不再参与分配，布局中会出现空白区域。
-  const nextGridTemplateColumns = resolveAdaptiveGridTemplateColumnsWithFixedTrack(
-    computedGridTemplateColumns,
-    menuTrackIndex,
-    targetWidth,
-  )
-  if (!nextGridTemplateColumns) {
-    return
-  }
-
-  editorContainer.value.style['grid-template-columns'] = nextGridTemplateColumns
 }
 
 /**
@@ -898,21 +808,7 @@ function syncInlineGridTemplateColumnsAsAdaptiveTracks() {
   }
 
   const computedGridTemplateColumns = window.getComputedStyle(editorContainer.value).gridTemplateColumns
-  const menuTrackIndex = resolveMenuTrackIndex()
-  const menuTrackWidth = menuTrackIndex < 0
-    ? null
-    : readGridTrackValue(computedGridTemplateColumns, menuTrackIndex)
-
-  if (menuTrackWidth !== null) {
-    // 大纲列拖拽结果需要持久化，成功后再由 controller 同步 store。
-    menuWidthPersistenceController.persistMenuWidth(menuTrackWidth).then(() => {})
-  }
-
-  // 编辑区与预览区继续走自适应 fr 轨道，只有大纲列保留拖拽后的像素宽度。
-  // 归一化分母排除大纲列，保证其余列 fr 之和为 1，避免出现未分配的空白区域。
-  const nextGridTemplateColumns = menuTrackIndex < 0 || menuTrackWidth === null
-    ? resolveAdaptiveGridTemplateColumns(computedGridTemplateColumns)
-    : resolveAdaptiveGridTemplateColumnsWithFixedTrack(computedGridTemplateColumns, menuTrackIndex, menuTrackWidth)
+  const nextGridTemplateColumns = resolveAdaptiveGridTemplateColumns(computedGridTemplateColumns)
   if (!nextGridTemplateColumns) {
     return
   }
@@ -980,8 +876,6 @@ function resetSplitLayout() {
     return
   }
 
-  // destroySplitLayout 会清空行内列宽，持久化的大纲宽度必须在清空之后再应用。
-  applyPersistedMenuWidth()
   bindSplitGutterSyncListeners(columnGutters)
 
   splitInstance = Split({
@@ -1092,11 +986,6 @@ function cancelPendingViewScrollRestore() {
   resetRestoreState()
 }
 
-function onAnchorChange(changedAnchorList) {
-  anchorList.value = changedAnchorList
-  emits('anchorChange', changedAnchorList)
-}
-
 function onOutlineNavigate(payload) {
   const lineStart = Number(payload?.lineStart)
   if (!Number.isInteger(lineStart) || lineStart <= 0) {
@@ -1107,6 +996,81 @@ function onOutlineNavigate(payload) {
     suppressNextPreviewToEditorSync()
   }
   jumpEditorToLine(lineStart, { suppressEditorToPreviewSync: true })
+}
+
+/**
+ * 把当前页面的大纲联动容器与导航处理器注册到 store，供侧边栏大纲使用。
+ * keep-alive 下只有激活页面会注册，失活时清理，避免两页互相覆盖。
+ */
+function registerSidebarBridges() {
+  store.setOutlineScrollContainer(resolveOutlineScrollContainer())
+  store.setOutlineNavigateHandler(onOutlineNavigate)
+}
+
+function unregisterSidebarBridges() {
+  store.setOutlineScrollContainer(null)
+  store.setOutlineActiveLine(null)
+  store.setOutlineNavigateHandler(null)
+}
+
+/**
+ * 解析侧边栏大纲的滚动联动容器。
+ * 有预览时交给预览容器做 DOM 测量；无预览时返回 null，改由编辑区滚动上抛行号驱动。
+ */
+function resolveOutlineScrollContainer() {
+  return previewVisible.value === true ? (previewRef.value ?? null) : null
+}
+
+/**
+ * 解析编辑区顶部行号。
+ * 视图可能处于过渡状态（尚未完全初始化），这里先做能力检测再读取。
+ */
+function resolveEditorTopLineNumber(view) {
+  if (typeof view?.lineBlockAtHeight !== 'function' || !view.scrollDOM) {
+    return null
+  }
+
+  const topBlock = view.lineBlockAtHeight(view.scrollDOM.scrollTop)
+  const topLine = view.state?.doc?.lineAt?.(topBlock.from)
+
+  return topLine?.number ?? null
+}
+
+/**
+ * 无预览时把编辑区顶部行号同步给侧边栏大纲，用于滚动联动高亮；
+ * 有预览时清空，避免两套来源互相覆盖。
+ */
+function syncOutlineActiveLine() {
+  const view = editorView.value
+  if (!view || previewVisible.value === true) {
+    store.setOutlineActiveLine(null)
+    return
+  }
+
+  store.setOutlineActiveLine(resolveEditorTopLineNumber(view))
+}
+
+function scheduleOutlineActiveLineSync() {
+  if (outlineActiveLineRafId !== null) {
+    return
+  }
+
+  outlineActiveLineRafId = window.requestAnimationFrame(() => {
+    outlineActiveLineRafId = null
+    syncOutlineActiveLine()
+  })
+}
+
+function bindOutlineActiveLineEvents() {
+  editorView.value?.scrollDOM?.addEventListener('scroll', scheduleOutlineActiveLineSync, { passive: true })
+}
+
+function unbindOutlineActiveLineEvents() {
+  editorView.value?.scrollDOM?.removeEventListener('scroll', scheduleOutlineActiveLineSync)
+  if (outlineActiveLineRafId !== null) {
+    window.cancelAnimationFrame(outlineActiveLineRafId)
+    outlineActiveLineRafId = null
+  }
 }
 
 function onPreviewContextmenu(context) {
@@ -1127,10 +1091,6 @@ function setPreviewElement(element) {
 
 function setPreviewGutterElement(element) {
   gutterRef.value = element
-}
-
-function setMenuGutterElement(element) {
-  gutterMenuRef.value = element
 }
 
 function getCurrentEditorContent(view = editorView.value) {
@@ -1350,12 +1310,6 @@ watch(() => store.config.shortcutKeyList, (newValue) => {
   reconfigureKeymap(refreshKeymap())
 }, { deep: true, immediate: true })
 
-// 编辑页与预览页共用同一个持久化宽度，任一页面拖拽后都需要在这里重新应用，
-// 否则切换到本页时布局仍停留在旧宽度。
-watch(() => store.config.menuWidth, () => {
-  applyPersistedMenuWidth()
-})
-
 watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {
   closePreviewSearchBar()
   syncLayoutControllers()
@@ -1378,6 +1332,8 @@ watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {
 
   nextTick(() => {
     resetSplitLayout()
+    store.setOutlineScrollContainer(resolveOutlineScrollContainer())
+    syncOutlineActiveLine()
     if (previewController.value !== true) {
       return
     }
@@ -1392,11 +1348,11 @@ watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {
 })
 
 onMounted(() => {
-  menuVisible.value = store.config.menuVisible
   previewSearchTargetBridge.activate()
   syncLayoutControllers()
   nextTick(() => {
     resetSplitLayout()
+    registerSidebarBridges()
   })
 
   initEditor({
@@ -1461,6 +1417,7 @@ onMounted(() => {
   nextTick(() => {
     flushPendingExternalSync()
     bindEvents()
+    bindOutlineActiveLineEvents()
     if (props.associationHighlight === true) {
       highlightByEditorCursor()
     }
@@ -1471,9 +1428,7 @@ onActivated(() => {
   previewSearchTargetBridge.activate()
   closePreviewSearchBar()
   nextTick(() => {
-    // keep-alive 失活期间 DOM 会脱离文档，getComputedStyle 读不到可用列宽，
-    // 配置中的宽度变化无法当场应用；重新激活后补一次，保证与另一页面一致。
-    applyPersistedMenuWidth()
+    registerSidebarBridges()
     flushPendingExternalSync()
   })
 })
@@ -1483,6 +1438,7 @@ onDeactivated(() => {
   cancelPendingViewScrollRestore()
   closePreviewSearchBar()
   previewSearchTargetBridge.deactivate()
+  unregisterSidebarBridges()
 })
 
 onBeforeUnmount(() => {
@@ -1493,10 +1449,12 @@ onBeforeUnmount(() => {
   cancelScheduledCursorHighlight()
   clearAllLinkedHighlight()
   unbindEvents()
+  unbindOutlineActiveLineEvents()
   clearScrollTimer()
   destroySplitLayout()
   destroyEditor()
   pendingExternalSync.value = null
+  unregisterSidebarBridges()
 })
 
 defineExpose({
@@ -1532,7 +1490,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full overflow-y-auto p-2"
+          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full overflow-y-auto p-2"
           :style="previewContainerStyle"
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"
@@ -1545,27 +1503,10 @@ defineExpose({
             :watermark="watermark"
             :defer-watermark-until-ready="true"
             @refresh-complete="onRefreshComplete"
-            @anchor-change="onAnchorChange"
             @preview-contextmenu="onPreviewContextmenu"
             @asset-open="onAssetOpen"
           />
         </div>
-        <div
-          v-else-if="item.type === 'gutter-menu'"
-          :ref="setMenuGutterElement"
-          data-layout-item="gutter-menu"
-          class="markdown-edit-layout__gutter wj-sash wj-sash--vertical markdown-edit-layout__gutter--menu h-full"
-        />
-        <MarkdownMenu
-          v-else-if="item.type === 'menu'"
-          :anchor-list="anchorList"
-          :get-container="() => previewRef"
-          :close="() => { menuVisible = false }"
-          :show-header="false"
-          data-layout-item="menu"
-          class="allow-search markdown-edit-layout__menu"
-          @anchor-navigate="onOutlineNavigate"
-        />
       </template>
     </div>
 
@@ -1597,43 +1538,24 @@ defineExpose({
   min-width: 0;
 }
 
-.markdown-edit-layout__menu {
-  grid-area: menu;
-  min-width: 0;
-}
-
 .markdown-edit-layout__gutter--preview {
   grid-area: gutter-preview;
 }
 
-.markdown-edit-layout__gutter--menu {
-  grid-area: gutter-menu;
-}
-
 .markdown-edit-layout--editor-only {
   // split-grid 只能解析 px / fr / % / auto，不能直接吃 minmax(...)。
-  grid-template-columns: 1fr 0px 0fr 0px 0fr;
-  grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
+  grid-template-columns: 1fr 0px 0fr;
+  grid-template-areas: 'editor gutter-preview preview';
 }
 
 .markdown-edit-layout--editor-preview {
-  grid-template-columns: 1fr 1px 1fr 0px 0fr;
-  grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
-}
-
-.markdown-edit-layout--editor-preview-menu {
-  grid-template-columns: 1fr 1px 1fr 1px 0.4fr;
-  grid-template-areas: 'editor gutter-preview preview gutter-menu menu';
+  grid-template-columns: 1fr 1px 1fr;
+  grid-template-areas: 'editor gutter-preview preview';
 }
 
 .markdown-edit-layout--preview-editor {
-  grid-template-columns: 1fr 1px 1fr 0px 0fr;
-  grid-template-areas: 'preview gutter-preview editor gutter-menu menu';
-}
-
-.markdown-edit-layout--menu-preview-editor {
-  grid-template-columns: 0.4fr 1px 1fr 1px 1fr;
-  grid-template-areas: 'menu gutter-menu preview gutter-preview editor';
+  grid-template-columns: 1fr 1px 1fr;
+  grid-template-areas: 'preview gutter-preview editor';
 }
 
 :deep(.wj-preview-link-highlight) {

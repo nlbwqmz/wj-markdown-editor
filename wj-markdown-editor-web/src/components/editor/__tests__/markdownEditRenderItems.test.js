@@ -61,38 +61,6 @@ test('左侧双栏布局会生成 preview -> gutter-preview -> editor 的渲染�
   ])
 })
 
-test('左侧三栏布局会生成 menu -> gutter-menu -> preview -> gutter-preview -> editor 的渲染顺序', () => {
-  const resolveMarkdownEditRenderItems = requireResolveMarkdownEditRenderItems()
-
-  const renderItems = resolveMarkdownEditRenderItems({
-    columnOrder: ['menu', 'preview', 'editor'],
-  })
-
-  assert.deepEqual(renderItems, [
-    { key: 'menu', type: 'menu' },
-    { key: 'gutter-menu', type: 'gutter-menu' },
-    { key: 'preview', type: 'preview' },
-    { key: 'gutter-preview', type: 'gutter-preview' },
-    { key: 'editor', type: 'editor' },
-  ])
-})
-
-test('右侧三栏布局会生成 editor -> gutter-preview -> preview -> gutter-menu -> menu 的渲染顺序', () => {
-  const resolveMarkdownEditRenderItems = requireResolveMarkdownEditRenderItems()
-
-  const renderItems = resolveMarkdownEditRenderItems({
-    columnOrder: ['editor', 'preview', 'menu'],
-  })
-
-  assert.deepEqual(renderItems, [
-    { key: 'editor', type: 'editor' },
-    { key: 'gutter-preview', type: 'gutter-preview' },
-    { key: 'preview', type: 'preview' },
-    { key: 'gutter-menu', type: 'gutter-menu' },
-    { key: 'menu', type: 'menu' },
-  ])
-})
-
 test('仅编辑区布局不会生成任何 gutter', () => {
   const resolveMarkdownEditRenderItems = requireResolveMarkdownEditRenderItems()
 

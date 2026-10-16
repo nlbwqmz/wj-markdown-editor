@@ -16,16 +16,12 @@ describe('configSchema', () => {
     expect(defaultConfig.markdown.imageShadow).toBe(true)
   })
 
-  it('defaultConfig 必须提供 fileManagerVisible 默认值 true', () => {
-    expect(defaultConfig.fileManagerVisible).toBe(true)
+  it('defaultConfig 必须提供 sidebarDefaultView 默认值 close', () => {
+    expect(defaultConfig.sidebarDefaultView).toBe('close')
   })
 
-  it('defaultConfig 必须提供 menuWidth 默认值 200', () => {
-    expect(defaultConfig.menuWidth).toBe(200)
-  })
-
-  it('defaultConfig 必须提供 fileManagerWidth 默认值 280', () => {
-    expect(defaultConfig.fileManagerWidth).toBe(280)
+  it('defaultConfig 必须提供 sidebarWidth 默认值 280', () => {
+    expect(defaultConfig.sidebarWidth).toBe(280)
   })
 
   it('defaultConfig 必须提供 fileManagerSort 默认值', () => {
@@ -83,7 +79,7 @@ describe('configSchema', () => {
     expect(toggleFileManagerPanelShortcutKey).toBeDefined()
     expect(toggleFileManagerPanelShortcutKey).toMatchObject({
       id: 'toggleFileManagerPanel',
-      name: '文件管理栏切换',
+      name: '侧边栏切换',
       keymap: '',
       enabled: true,
       type: 'web',
@@ -101,59 +97,50 @@ describe('configSchema', () => {
     expect(() => validateConfigShape(validConfig)).not.toThrow()
   })
 
-  it('config schema 必须接纳 fileManagerVisible', () => {
+  it('config schema 必须接纳 sidebarDefaultView 合法枚举值', () => {
+    for (const value of ['close', 'files', 'outline']) {
+      expect(() => validateConfigShape({
+        ...defaultConfig,
+        sidebarDefaultView: value,
+      })).not.toThrow()
+    }
+  })
+
+  it('config schema 必须拒绝非法 sidebarDefaultView', () => {
     expect(() => validateConfigShape({
       ...defaultConfig,
-      fileManagerVisible: true,
+      sidebarDefaultView: 'invalid',
+    })).toThrow()
+  })
+
+  it('config schema 必须接纳 sidebarWidth', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      sidebarWidth: 300,
     })).not.toThrow()
   })
 
-  it('config schema 必须接纳 fileManagerWidth', () => {
+  it('config schema 必须拒绝越界 sidebarWidth', () => {
     expect(() => validateConfigShape({
       ...defaultConfig,
-      fileManagerWidth: 300,
-    })).not.toThrow()
-  })
-
-  it('config schema 必须拒绝越界 fileManagerWidth', () => {
-    expect(() => validateConfigShape({
-      ...defaultConfig,
-      fileManagerWidth: 100,
+      sidebarWidth: 100,
     })).toThrow()
     expect(() => validateConfigShape({
       ...defaultConfig,
-      fileManagerWidth: 500,
+      sidebarWidth: 500,
     })).toThrow()
   })
 
-  it('config schema 必须接纳 menuWidth', () => {
+  it('config schema 必须拒绝非数字 sidebarWidth', () => {
     expect(() => validateConfigShape({
       ...defaultConfig,
-      menuWidth: 300,
-    })).not.toThrow()
-  })
-
-  it('config schema 必须拒绝越界 menuWidth', () => {
-    expect(() => validateConfigShape({
-      ...defaultConfig,
-      menuWidth: 100,
-    })).toThrow()
-    expect(() => validateConfigShape({
-      ...defaultConfig,
-      menuWidth: 2500,
+      sidebarWidth: '300',
     })).toThrow()
   })
 
-  it('config schema 必须拒绝非数字 menuWidth', () => {
-    expect(() => validateConfigShape({
-      ...defaultConfig,
-      menuWidth: '300',
-    })).toThrow()
-  })
-
-  it('menuWidth 缺失时必须校验失败', () => {
+  it('sidebarWidth 缺失时必须校验失败', () => {
     const brokenConfig = { ...defaultConfig }
-    delete brokenConfig.menuWidth
+    delete brokenConfig.sidebarWidth
 
     expect(() => validateConfigShape(brokenConfig)).toThrow()
   })

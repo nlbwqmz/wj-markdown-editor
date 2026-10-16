@@ -92,6 +92,50 @@ export function resolveMarkdownMenuActiveHref({
   return activeHref
 }
 
+/**
+ * 按源码行号解析目录活动项。
+ * 无预览容器时，编辑区滚动只能提供行号，这里按大纲项的起始行做区间归属，
+ * 取最后一个起始行不大于当前行号的条目。
+ *
+ * @param {{
+ *   anchorList?: Array<{ href?: string, lineStart?: number }>,
+ *   lineNumber?: number,
+ * }} options
+ * @returns {string} 返回活动项 href；无法判定时返回空串。
+ */
+export function resolveMarkdownMenuActiveHrefByLineNumber({
+  anchorList,
+  lineNumber,
+}) {
+  const normalizedAnchorList = Array.isArray(anchorList) ? anchorList : []
+  if (normalizedAnchorList.length === 0) {
+    return ''
+  }
+
+  // 严格只接受有限数字：null / undefined / 字符串都不能被当成行号（Number(null) === 0 会误判）。
+  if (typeof lineNumber !== 'number' || Number.isFinite(lineNumber) !== true) {
+    return ''
+  }
+
+  let activeHref = normalizedAnchorList[0]?.href || ''
+  for (const item of normalizedAnchorList) {
+    const lineStart = Number(item?.lineStart)
+    if (Number.isFinite(lineStart) !== true) {
+      continue
+    }
+
+    if (lineStart > lineNumber) {
+      break
+    }
+
+    if (item?.href) {
+      activeHref = item.href
+    }
+  }
+
+  return activeHref
+}
+
 export function resolveMarkdownMenuTargetScrollTop({
   containerTop,
   containerScrollTop,

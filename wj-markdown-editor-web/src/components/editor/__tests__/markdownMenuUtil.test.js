@@ -6,6 +6,7 @@ const markdownMenuUtilModule = await import('../markdownMenuUtil.js')
 const {
   flattenMarkdownMenuAnchors,
   resolveMarkdownMenuActiveHref,
+  resolveMarkdownMenuActiveHrefByLineNumber,
   resolveMarkdownMenuTypography,
   resolveMarkdownMenuTargetScrollTop,
 } = markdownMenuUtilModule
@@ -197,4 +198,63 @@ test('resolveMarkdownMenuTypography 应按标题等级返回递减的字号与�
     fontSize: '11px',
     fontWeight: 400,
   })
+})
+
+test('resolveMarkdownMenuActiveHrefByLineNumber 应按源码行号归属到最后一个起始行不大于当前行号的标题', () => {
+  const anchorList = [
+    { href: '#intro', lineStart: 1, lineEnd: 4 },
+    { href: '#session', lineStart: 8, lineEnd: 12 },
+    { href: '#appendix', lineStart: 20, lineEnd: 24 },
+  ]
+
+  assert.equal(resolveMarkdownMenuActiveHrefByLineNumber({
+    anchorList,
+    lineNumber: 1,
+  }), '#intro')
+  assert.equal(resolveMarkdownMenuActiveHrefByLineNumber({
+    anchorList,
+    lineNumber: 7,
+  }), '#intro')
+  assert.equal(resolveMarkdownMenuActiveHrefByLineNumber({
+    anchorList,
+    lineNumber: 8,
+  }), '#session')
+  assert.equal(resolveMarkdownMenuActiveHrefByLineNumber({
+    anchorList,
+    lineNumber: 99,
+  }), '#appendix')
+})
+
+test('resolveMarkdownMenuActiveHrefByLineNumber 在空列表或非法行号时返回空串', () => {
+  assert.equal(resolveMarkdownMenuActiveHrefByLineNumber({
+    anchorList: [],
+    lineNumber: 3,
+  }), '')
+
+  assert.equal(resolveMarkdownMenuActiveHrefByLineNumber({
+    anchorList: [{ href: '#intro', lineStart: 1 }],
+    lineNumber: null,
+  }), '')
+
+  assert.equal(resolveMarkdownMenuActiveHrefByLineNumber({
+    anchorList: null,
+    lineNumber: 3,
+  }), '')
+})
+
+test('resolveMarkdownMenuActiveHrefByLineNumber 应跳过缺少行号的条目', () => {
+  const anchorList = [
+    { href: '#intro', lineStart: 1 },
+    { href: '#no-line' },
+    { href: '#session', lineStart: 10 },
+  ]
+
+  assert.equal(resolveMarkdownMenuActiveHrefByLineNumber({
+    anchorList,
+    lineNumber: 5,
+  }), '#intro')
+  assert.equal(resolveMarkdownMenuActiveHrefByLineNumber({
+    anchorList,
+    lineNumber: 10,
+  }), '#session')
 })

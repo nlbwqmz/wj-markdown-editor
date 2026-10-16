@@ -149,58 +149,40 @@ describe('configLoadSanitizer', () => {
     expect(() => validateConfigShape(sanitized)).not.toThrow()
   })
 
-  it('fileManagerWidth 小于最小值时必须裁剪到 220', () => {
+  it('sidebarWidth 小于最小值时必须裁剪到 220', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),
-      fileManagerWidth: 100,
+      sidebarWidth: 100,
     }, defaultConfig, configSchema)
 
-    expect(sanitized.fileManagerWidth).toBe(220)
+    expect(sanitized.sidebarWidth).toBe(220)
   })
 
-  it('fileManagerWidth 大于最大值时必须裁剪到 420', () => {
+  it('sidebarWidth 大于最大值时必须裁剪到 420', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),
-      fileManagerWidth: 500,
+      sidebarWidth: 500,
     }, defaultConfig, configSchema)
 
-    expect(sanitized.fileManagerWidth).toBe(420)
+    expect(sanitized.sidebarWidth).toBe(420)
   })
 
-  it('fileManagerWidth 非数字时必须回退默认值 280', () => {
+  it('sidebarWidth 非数字时必须回退默认值 280', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),
-      fileManagerWidth: 'invalid',
+      sidebarWidth: 'invalid',
     }, defaultConfig, configSchema)
 
-    expect(sanitized.fileManagerWidth).toBe(280)
+    expect(sanitized.sidebarWidth).toBe(280)
   })
 
-  it('menuWidth 小于最小值时必须裁剪到 200', () => {
+  it('sidebarDefaultView 非法枚举值必须回退默认值 close', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),
-      menuWidth: 100,
+      sidebarDefaultView: 'invalid',
     }, defaultConfig, configSchema)
 
-    expect(sanitized.menuWidth).toBe(200)
-  })
-
-  it('menuWidth 大于最大值时必须裁剪到 2000', () => {
-    const sanitized = sanitizeLoadedConfig({
-      ...cloneConfig(defaultConfig),
-      menuWidth: 2500,
-    }, defaultConfig, configSchema)
-
-    expect(sanitized.menuWidth).toBe(2000)
-  })
-
-  it('menuWidth 非数字时必须回退默认值 200', () => {
-    const sanitized = sanitizeLoadedConfig({
-      ...cloneConfig(defaultConfig),
-      menuWidth: 'invalid',
-    }, defaultConfig, configSchema)
-
-    expect(sanitized.menuWidth).toBe(200)
+    expect(sanitized.sidebarDefaultView).toBe('close')
   })
 
   it('非法主题枚举值必须回退到默认值', () => {

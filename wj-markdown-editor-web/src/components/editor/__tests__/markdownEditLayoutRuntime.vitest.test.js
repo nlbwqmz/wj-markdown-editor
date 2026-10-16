@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, nextTick, onBeforeUnmount, reactive } from 'vue'
+import { defineComponent, h, nextTick, onBeforeUnmount } from 'vue'
 
 import { viewScrollHandoff } from '../../../util/editor/viewScrollHandoffUtil.js'
 
@@ -333,10 +333,9 @@ vi.mock('@/util/searchTargetBridgeUtil.js', () => ({
   },
 }))
 
-function createStore({ menuVisible }) {
+function createStore() {
   return {
     config: {
-      menuVisible,
       shortcutKeyList: [],
       theme: {
         global: 'light',
@@ -344,6 +343,9 @@ function createStore({ menuVisible }) {
     },
     editorSearchBarVisible: false,
     searchBarVisible: false,
+    setOutlineScrollContainer: vi.fn(),
+    setOutlineActiveLine: vi.fn(),
+    setOutlineNavigateHandler: vi.fn(),
   }
 }
 
@@ -355,9 +357,8 @@ async function flushLayoutRender() {
 
 async function mountMarkdownEdit({
   previewPosition = 'right',
-  menuVisible = true,
 } = {}) {
-  storeState.current = createStore({ menuVisible })
+  storeState.current = createStore()
 
   const wrapper = mount(MarkdownEdit, {
     props: {
@@ -423,7 +424,6 @@ describe('markdownEdit 布局运行时接线', () => {
   it('左侧双栏布局会按真实 DOM 顺序渲染 preview -> gutter-preview -> editor，并把 preview gutter 绑定给 Split', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'left',
-      menuVisible: false,
     })
 
     expect(getLayoutSequence(wrapper)).toEqual([
@@ -438,110 +438,15 @@ describe('markdownEdit 布局运行时接线', () => {
     expect(splitState.calls[0].columnGutters[0].element.dataset.layoutItem).toBe('gutter-preview')
   })
 
-  it('左侧三栏布局会按真实 DOM 顺序渲染 menu -> gutter-menu -> preview -> gutter-preview -> editor，并保持 Split gutter 顺序一致', async () => {
-    const wrapper = await mountMarkdownEdit({
-      previewPosition: 'left',
-      menuVisible: true,
-    })
-
-    expect(getLayoutSequence(wrapper)).toEqual([
-      'menu',
-      'gutter-menu',
-      'preview',
-      'gutter-preview',
-      'editor',
-    ])
-
-    expect(splitState.calls.length).toBeGreaterThanOrEqual(1)
-    const latestSplitCall = splitState.calls.at(-1)
-    expect(latestSplitCall.columnGutters.map(item => item.track)).toEqual([1, 3])
-    expect(latestSplitCall.columnGutters.map(item => item.element.dataset.layoutItem)).toEqual([
-      'gutter-menu',
-      'gutter-preview',
-    ])
-    const menuLayoutItem = wrapper.get('[data-layout-item="menu"]')
-    expect(menuLayoutItem.classes()).not.toContain('b-r-1')
-    expect(menuLayoutItem.classes()).not.toContain('b-r-border-primary')
-    expect(menuLayoutItem.classes()).not.toContain('b-r-solid')
-  })
-
-  it('右侧三栏布局不应给 menu 注入左侧布局专用右边框 class', async () => {
-    const wrapper = await mountMarkdownEdit({
-      previewPosition: 'right',
-      menuVisible: true,
-    })
-
-    const menuLayoutItem = wrapper.get('[data-layout-item="menu"]')
-    expect(menuLayoutItem.classes()).not.toContain('b-r-1')
-    expect(menuLayoutItem.classes()).not.toContain('b-r-border-primary')
-    expect(menuLayoutItem.classes()).not.toContain('b-r-solid')
-  })
-
-  it('编辑页中的目录菜单会关闭顶部标题栏', async () => {
-    const wrapper = await mountMarkdownEdit({
-      previewPosition: 'right',
-      menuVisible: true,
-    })
-
-    expect(markdownMenuStubState.latestShowHeader).toBe(false)
-    expect(wrapper.get('[data-layout-item="menu"]').attributes('data-show-header')).toBe('false')
-  })
-
-  it('目录菜单上抛锚点行号后，编辑页只会按实际发生的预览滚动抑制 preview 到 editor 回流', async () => {
-    const wrapper = await mountMarkdownEdit({
-      previewPosition: 'right',
-      menuVisible: true,
-    })
-    previewLayoutWiringState.jumpEditorToLine.mockReturnValue(true)
-
-    wrapper.getComponent({ name: 'MarkdownMenuStub' }).vm.$emit('anchorNavigate', {
-      didPreviewScroll: true,
-      href: '#section',
-      lineStart: 88,
-      lineEnd: 88,
-    })
-    await nextTick()
-
-    expect(previewLayoutWiringState.suppressNextPreviewToEditorSync).toHaveBeenCalledTimes(1)
-    expect(previewLayoutWiringState.jumpEditorToLine).toHaveBeenCalledTimes(1)
-    expect(previewLayoutWiringState.jumpEditorToLine).toHaveBeenCalledWith(88, {
-      suppressEditorToPreviewSync: true,
-    })
-  })
-
-  it('目录菜单点击若未触发预览程序化滚动，不应预支 preview 到 editor 抑制', async () => {
-    const wrapper = await mountMarkdownEdit({
-      previewPosition: 'right',
-      menuVisible: true,
-    })
-    previewLayoutWiringState.jumpEditorToLine.mockReturnValue(false)
-
-    wrapper.getComponent({ name: 'MarkdownMenuStub' }).vm.$emit('anchorNavigate', {
-      didPreviewScroll: false,
-      href: '#section',
-      lineStart: 88,
-      lineEnd: 88,
-    })
-    await nextTick()
-
-    expect(previewLayoutWiringState.suppressNextPreviewToEditorSync).not.toHaveBeenCalled()
-    expect(previewLayoutWiringState.jumpEditorToLine).toHaveBeenCalledWith(88, {
-      suppressEditorToPreviewSync: true,
-    })
-  })
-
   it('previewPosition 从 right 切到 left 时，会重建 Split 并同步新的真实 DOM 顺序', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
-      menuVisible: true,
     })
 
     expect(getLayoutSequence(wrapper)).toEqual([
       'editor',
       'gutter-preview',
       'preview',
-      'gutter-menu',
-      'menu',
     ])
     expect(splitState.calls.length).toBeGreaterThanOrEqual(1)
     const splitCallCountBeforeSwitch = splitState.calls.length
@@ -554,8 +459,6 @@ describe('markdownEdit 布局运行时接线', () => {
     vi.runOnlyPendingTimers()
 
     expect(getLayoutSequence(wrapper)).toEqual([
-      'menu',
-      'gutter-menu',
       'preview',
       'gutter-preview',
       'editor',
@@ -563,21 +466,14 @@ describe('markdownEdit 布局运行时接线', () => {
     expect(splitState.calls.length).toBe(splitCallCountBeforeSwitch + 1)
     expect(activeSplitDestroySpy).toHaveBeenCalledWith(true)
     expect(splitState.calls.at(-1).columnGutters.map(item => item.element.dataset.layoutItem)).toEqual([
-      'gutter-menu',
       'gutter-preview',
     ])
   })
 
-  it('切换目录栏和预览区显隐时，不应给布局容器注入宽度过渡样式', async () => {
+  it('切换预览区显隐时，不应给布局容器注入宽度过渡样式', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
-      menuVisible: true,
     })
-
-    wrapper.vm.$.setupState.menuVisible = false
-    await flushLayoutRender()
-
-    expect(getLayoutStyle(wrapper)).not.toContain('transition:')
 
     wrapper.vm.$.setupState.previewVisible = false
     await flushLayoutRender()
@@ -585,17 +481,16 @@ describe('markdownEdit 布局运行时接线', () => {
     expect(getLayoutStyle(wrapper)).not.toContain('transition:')
   })
 
-  it('拖拽结束后会把编辑区与预览区像素列宽重新归一化成自适应 fr 轨道，同时把大纲列固定回持久化像素宽度', async () => {
+  it('拖拽结束后会把编辑区与预览区像素列宽重新归一化成自适应 fr 轨道', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
-      menuVisible: true,
     })
 
     const layoutElement = wrapper.get('[data-testid="markdown-edit-layout"]').element
     const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => {
       if (element === layoutElement) {
         return {
-          gridTemplateColumns: '600px 1px 300px 1px 300px',
+          gridTemplateColumns: '600px 1px 300px',
         }
       }
 
@@ -606,48 +501,8 @@ describe('markdownEdit 布局运行时接线', () => {
 
     splitState.calls.at(-1)?.onDragEnd?.('column', 1)
 
-    // 编辑区与预览区继续自适应，大纲列（第 4 轨道）保留拖拽后的像素宽度；
-    // 其余两列按彼此比例归一化，fr 之和必须保持为 1，否则会留出未分配的空白区域。
-    expect(layoutElement.style.gridTemplateColumns).toBe('0.666667fr 1px 0.333333fr 1px 300px')
-
-    getComputedStyleSpy.mockRestore()
-  })
-
-  it('store 中的持久化大纲宽度变化时，编辑页应立即重新应用列宽', async () => {
-    storeState.current = reactive(createStore({ menuVisible: true }))
-
-    const wrapper = mount(MarkdownEdit, {
-      props: {
-        modelValue: '# title',
-        previewPosition: 'right',
-      },
-    })
-    await flushLayoutRender()
-
-    const layoutElement = wrapper.get('[data-testid="markdown-edit-layout"]').element
-    // jsdom 默认 clientWidth 为 0，这里给出真实容器宽度，避免配置值被下限钳制。
-    Object.defineProperty(layoutElement, 'clientWidth', {
-      value: 1200,
-      configurable: true,
-    })
-
-    const getComputedStyleSpy = vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => {
-      if (element === layoutElement) {
-        return {
-          gridTemplateColumns: '600px 1px 300px 1px 300px',
-        }
-      }
-
-      return {
-        gridTemplateColumns: '',
-      }
-    })
-
-    storeState.current.config.menuWidth = 420
-    await flushLayoutRender()
-
-    // 大纲列跟随 store 更新，其余两列按彼此比例归一化，fr 之和保持为 1。
-    expect(layoutElement.style.gridTemplateColumns).toBe('0.666667fr 1px 0.333333fr 1px 420px')
+    // 编辑区与预览区按彼此比例归一化，fr 之和必须保持为 1，否则会留出未分配的空白区域。
+    expect(layoutElement.style.gridTemplateColumns).toBe('0.666667fr 1px 0.333333fr')
 
     getComputedStyleSpy.mockRestore()
   })
@@ -655,7 +510,6 @@ describe('markdownEdit 布局运行时接线', () => {
   it('重新打开预览后，应等待 refresh-complete 再执行首轮预览同步和高亮恢复', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
-      menuVisible: false,
     })
 
     previewLayoutWiringState.syncEditorToPreview.mockClear()
@@ -684,7 +538,6 @@ describe('markdownEdit 布局运行时接线', () => {
   it('等待 reopen 的 refresh-complete 期间再次切换布局时，不应提前消费重同步机会', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
-      menuVisible: false,
     })
 
     wrapper.vm.$.setupState.previewVisible = false
@@ -697,7 +550,7 @@ describe('markdownEdit 布局运行时接线', () => {
     await flushLayoutRender()
     const reopenedPreviewInstance = getLastMarkdownPreviewStubInstance()
 
-    wrapper.vm.$.setupState.menuVisible = true
+    await wrapper.setProps({ previewPosition: 'left' })
     await flushLayoutRender()
 
     expect(previewLayoutWiringState.syncEditorToPreview).not.toHaveBeenCalled()
@@ -714,7 +567,6 @@ describe('markdownEdit 布局运行时接线', () => {
   it('旧预览实例卸载后的迟到 refresh-complete 不会触发当前实例的重同步', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
-      menuVisible: false,
     })
 
     const initialPreviewInstance = getLastMarkdownPreviewStubInstance()
@@ -747,7 +599,6 @@ describe('markdownEdit 布局运行时接线', () => {
   it('恢复快照前会消费跨视图交接记录，并把同一行号写入编辑区与预览区锚点', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
-      menuVisible: false,
     })
 
     viewScrollHandoff.publish({
@@ -788,7 +639,6 @@ describe('markdownEdit 布局运行时接线', () => {
   it('跨视图交接记录身份不匹配时，不应写入编辑区锚点缓存', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
-      menuVisible: false,
     })
 
     viewScrollHandoff.publish({
@@ -808,7 +658,6 @@ describe('markdownEdit 布局运行时接线', () => {
   it('同一视图内切换文档时，有记录区域按 documentKey 恢复，无记录区域归零', async () => {
     const wrapper = await mountMarkdownEdit({
       previewPosition: 'right',
-      menuVisible: false,
     })
 
     const editorController = viewScrollAnchorState.controllers.at(-2)

@@ -251,7 +251,6 @@ function createSnapshot({
 function createStore() {
   return {
     config: {
-      menuVisible: false,
       previewWidth: 100,
       theme: {
         global: 'light',

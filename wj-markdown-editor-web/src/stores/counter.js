@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
 import channelUtil from '@/util/channel/channelUtil.js'
 import {
   createDefaultDocumentSessionSnapshot,
@@ -18,13 +18,22 @@ const useCommonStore = defineStore('common', () => {
   const isMaximize = ref(false)
   const isFullScreen = ref(false)
   const config = ref(configData)
-  const fileManagerPanelVisible = ref(Boolean(configData.fileManagerVisible))
+  // 侧边栏是否可见：由“默认视图”配置初始化，会话内切换不写盘
+  const sidebarVisible = ref(configData.sidebarDefaultView !== 'close')
+  // 侧边栏当前 tab：会话内记住上次选择，不持久化
+  const sidebarActiveTab = ref(configData.sidebarDefaultView === 'outline' ? 'outline' : 'files')
   const searchBarVisible = ref(false)
   const editorSearchBarVisible = ref(false)
   const hasNewVersion = ref(false)
   const isAlwaysOnTop = ref(false)
   const recentList = ref(normalizeRecentList(recentListData))
   const externalFileChange = ref(createDefaultExternalFileChangeState())
+  // 大纲滚动联动容器（有预览时为预览容器；无预览时为 null，改由 outlineActiveLine 驱动）
+  const outlineScrollContainer = shallowRef(null)
+  // 无预览时由编辑区滚动驱动的活动行号（有预览时为 null）
+  const outlineActiveLine = shallowRef(null)
+  // 当前激活页面提供的大纲导航处理器（编辑页据此跳转编辑器行）
+  const outlineNavigateHandler = shallowRef(null)
 
   function applyDocumentSessionSnapshot(snapshot) {
     const nextState = deriveDocumentSessionStoreState(snapshot, externalFileChange.value)
@@ -48,8 +57,24 @@ const useCommonStore = defineStore('common', () => {
     }
   }
 
-  function setFileManagerPanelVisible(visible) {
-    fileManagerPanelVisible.value = Boolean(visible)
+  function setSidebarVisible(visible) {
+    sidebarVisible.value = Boolean(visible)
+  }
+
+  function setSidebarActiveTab(tab) {
+    sidebarActiveTab.value = tab === 'outline' ? 'outline' : 'files'
+  }
+
+  function setOutlineScrollContainer(element) {
+    outlineScrollContainer.value = element ?? null
+  }
+
+  function setOutlineActiveLine(lineNumber) {
+    outlineActiveLine.value = Number.isFinite(lineNumber) ? lineNumber : null
+  }
+
+  function setOutlineNavigateHandler(handler) {
+    outlineNavigateHandler.value = typeof handler === 'function' ? handler : null
   }
 
   return {
@@ -59,17 +84,25 @@ const useCommonStore = defineStore('common', () => {
     isMaximize,
     isFullScreen,
     config,
-    fileManagerPanelVisible,
+    sidebarVisible,
+    sidebarActiveTab,
     searchBarVisible,
     hasNewVersion,
     isAlwaysOnTop,
     recentList,
     editorSearchBarVisible,
     externalFileChange,
+    outlineScrollContainer,
+    outlineActiveLine,
+    outlineNavigateHandler,
     applyDocumentSessionSnapshot,
     replaceRecentList,
     setExternalFileChangeLoading,
-    setFileManagerPanelVisible,
+    setSidebarVisible,
+    setSidebarActiveTab,
+    setOutlineScrollContainer,
+    setOutlineActiveLine,
+    setOutlineNavigateHandler,
   }
 })
 

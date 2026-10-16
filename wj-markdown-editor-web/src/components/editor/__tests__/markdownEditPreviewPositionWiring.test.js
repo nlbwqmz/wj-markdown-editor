@@ -28,7 +28,6 @@ test('MarkdownEdit 会按 layoutMode.columnGutters 的 refKey 绑定 Split 分�
   assert.ok(source.includes('layoutMode.value.columnGutters'))
   assert.ok(source.includes('refKey'))
   assert.ok(source.includes('gutterRef: gutterRef.value'))
-  assert.ok(source.includes('gutterMenuRef: gutterMenuRef.value'))
   assert.ok(source.includes('resolveMarkdownEditSplitColumnGutters(layoutMode.value.columnGutters, gutterRefMap)'))
 })
 

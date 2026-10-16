@@ -42,7 +42,7 @@ export function createFileManagerPanelWidthPersistenceController({
     }
 
     try {
-      const result = await sendMutationRequest(createSetConfigPathRequest(['fileManagerWidth'], normalizedWidth))
+      const result = await sendMutationRequest(createSetConfigPathRequest(['sidebarWidth'], normalizedWidth))
       const failureMessageKey = resolveConfigUpdateFailureMessageKey(result)
       if (failureMessageKey) {
         showWarningMessage(failureMessageKey)

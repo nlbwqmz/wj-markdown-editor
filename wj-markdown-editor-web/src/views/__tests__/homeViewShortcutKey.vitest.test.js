@@ -16,7 +16,7 @@ const mocked = vi.hoisted(() => ({
     config: {
       shortcutKeyList: [],
     },
-    fileManagerPanelVisible: false,
+    sidebarVisible: false,
     documentSessionSnapshot: null,
   },
 }))
@@ -104,6 +104,13 @@ vi.mock('@/components/layout/FileManagerPanel.vue', () => ({
   default: {
     name: 'FileManagerPanelStub',
     template: '<div data-testid="file-manager-panel-stub" />',
+  },
+}))
+
+vi.mock('@/components/layout/SidebarPanel.vue', () => ({
+  default: {
+    name: 'SidebarPanelStub',
+    template: '<div data-testid="sidebar-panel-stub" />',
   },
 }))
 

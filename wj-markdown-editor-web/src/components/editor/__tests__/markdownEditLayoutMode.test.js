@@ -95,50 +95,28 @@ test('模块文件存在但导入失败时，模块探测必须抛出原始错�
   )
 })
 
-test('右侧模式且大纲开启时，返回编辑区、预览区、大纲的列顺序与双分隔条', () => {
+test('右侧模式返回编辑区、预览区的列顺序与单分隔条', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
 
   const layoutMode = resolveMarkdownEditLayoutMode({
     previewVisible: true,
-    menuVisible: true,
     previewPosition: 'right',
   })
 
   assert.deepEqual(layoutMode, {
-    columnOrder: ['editor', 'preview', 'menu'],
-    gridTemplateClass: 'markdown-edit-layout--editor-preview-menu',
+    columnOrder: ['editor', 'preview'],
+    gridTemplateClass: 'markdown-edit-layout--editor-preview',
     columnGutters: [
       { track: 1, refKey: 'gutterRef' },
-      { track: 3, refKey: 'gutterMenuRef' },
     ],
   })
 })
 
-test('左侧模式且大纲开启时，返回大纲、预览区、编辑区的列顺序与双分隔条', () => {
+test('左侧模式返回预览区、编辑区的列顺序与单分隔条', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
 
   const layoutMode = resolveMarkdownEditLayoutMode({
     previewVisible: true,
-    menuVisible: true,
-    previewPosition: 'left',
-  })
-
-  assert.deepEqual(layoutMode, {
-    columnOrder: ['menu', 'preview', 'editor'],
-    gridTemplateClass: 'markdown-edit-layout--menu-preview-editor',
-    columnGutters: [
-      { track: 1, refKey: 'gutterMenuRef' },
-      { track: 3, refKey: 'gutterRef' },
-    ],
-  })
-})
-
-test('左侧模式且大纲关闭时，返回预览区、编辑区的列顺序与单分隔条', () => {
-  const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
-
-  const layoutMode = resolveMarkdownEditLayoutMode({
-    previewVisible: true,
-    menuVisible: false,
     previewPosition: 'left',
   })
 
@@ -151,12 +129,11 @@ test('左侧模式且大纲关闭时，返回预览区、编辑区的列顺序�
   })
 })
 
-test('预览关闭时，无论大纲开关如何都只保留编辑区且不返回任何分隔条', () => {
+test('预览关闭时，只保留编辑区且不返回任何分隔条', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
 
   const layoutMode = resolveMarkdownEditLayoutMode({
     previewVisible: false,
-    menuVisible: true,
     previewPosition: 'left',
   })
 
@@ -172,7 +149,6 @@ test('非法 previewPosition 会回退到 right 模式', () => {
 
   const layoutMode = resolveMarkdownEditLayoutMode({
     previewVisible: true,
-    menuVisible: false,
     previewPosition: 'bottom',
   })
 
@@ -185,43 +161,33 @@ test('非法 previewPosition 会回退到 right 模式', () => {
   })
 })
 
-test('左侧三栏布局会把 track 1 绑定到 gutterMenuRef，track 3 绑定到 gutterRef', () => {
+test('编辑区与预览区布局会把 track 1 绑定到 gutterRef', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
   const resolveMarkdownEditSplitColumnGutters = requireResolveMarkdownEditSplitColumnGutters()
   const gutterRef = { name: 'editor-preview-gutter' }
-  const gutterMenuRef = { name: 'menu-preview-gutter' }
   const layoutMode = resolveMarkdownEditLayoutMode({
     previewVisible: true,
-    menuVisible: true,
     previewPosition: 'left',
   })
 
   const columnGutters = resolveMarkdownEditSplitColumnGutters(layoutMode.columnGutters, {
     gutterRef,
-    gutterMenuRef,
   })
 
   assert.deepEqual(columnGutters, [
-    { track: 1, element: gutterMenuRef },
-    { track: 3, element: gutterRef },
+    { track: 1, element: gutterRef },
   ])
 })
 
 test('缺失 gutter ref 时会过滤掉无法绑定的 Split 分隔条', () => {
   const resolveMarkdownEditLayoutMode = requireResolveMarkdownEditLayoutMode()
   const resolveMarkdownEditSplitColumnGutters = requireResolveMarkdownEditSplitColumnGutters()
-  const gutterMenuRef = { name: 'menu-preview-gutter' }
   const layoutMode = resolveMarkdownEditLayoutMode({
     previewVisible: true,
-    menuVisible: true,
     previewPosition: 'left',
   })
 
-  const columnGutters = resolveMarkdownEditSplitColumnGutters(layoutMode.columnGutters, {
-    gutterMenuRef,
-  })
+  const columnGutters = resolveMarkdownEditSplitColumnGutters(layoutMode.columnGutters, {})
 
-  assert.deepEqual(columnGutters, [
-    { track: 1, element: gutterMenuRef },
-  ])
+  assert.deepEqual(columnGutters, [])
 })
