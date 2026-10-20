@@ -15,6 +15,28 @@ import { createLayoutTopOpenFolderAction } from './layoutTopOpenFolderAction.js'
 const store = useCommonStore()
 const { t } = useI18n()
 
+// 顶部栏视图模式按钮组：源码 / 双栏 / 预览
+const VIEW_MODE_ITEMS = [
+  { mode: 'source', icon: 'i-tabler:code', labelKey: 'shortcutKey.viewSource', shortcutKeyId: 'viewSource' },
+  { mode: 'split', icon: 'i-tabler:layout-columns', labelKey: 'shortcutKey.viewSplit', shortcutKeyId: 'viewSplit' },
+  { mode: 'preview', icon: 'i-tabler:eye', labelKey: 'shortcutKey.viewPreview', shortcutKeyId: 'viewPreview' },
+]
+
+// 从配置中收集已启用且已配置的快捷键，供按钮 tooltip 展示
+const shortcutKeyMap = computed(() => {
+  const map = {}
+  for (const item of store.config.shortcutKeyList ?? []) {
+    if (item.enabled === true && item.keymap) {
+      map[item.id] = item.keymap
+    }
+  }
+  return map
+})
+
+function selectViewMode(mode) {
+  store.setViewMode(mode)
+}
+
 function minimize() {
   channelUtil.send({ event: 'minimize' })
 }
@@ -107,30 +129,37 @@ onBeforeMount(async () => {
       <span v-if="!saved" class="color-red">*</span>
     </div>
     <div class="flex items-center">
-      <a-dropdown placement="bottom" :trigger="['hover', 'click']" arrow>
-        <div
-          data-testid="layout-top-switch-view"
-          class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover"
-        >
-          <div class="i-tabler:arrows-left-right" />
-        </div>
-        <template #overlay>
-          <a-menu>
-            <a-menu-item key="source" data-testid="layout-top-view-mode-source" @click="store.setViewMode('source')">
-              <span v-if="store.viewMode === 'source'" class="i-tabler:check mr-1" />
-              <span v-else class="mr-1 inline-block w-[1em]" />{{ $t('shortcutKey.viewSource') }}
-            </a-menu-item>
-            <a-menu-item key="split" data-testid="layout-top-view-mode-split" @click="store.setViewMode('split')">
-              <span v-if="store.viewMode === 'split'" class="i-tabler:check mr-1" />
-              <span v-else class="mr-1 inline-block w-[1em]" />{{ $t('shortcutKey.viewSplit') }}
-            </a-menu-item>
-            <a-menu-item key="preview" data-testid="layout-top-view-mode-preview" @click="store.setViewMode('preview')">
-              <span v-if="store.viewMode === 'preview'" class="i-tabler:check mr-1" />
-              <span v-else class="mr-1 inline-block w-[1em]" />{{ $t('shortcutKey.viewPreview') }}
-            </a-menu-item>
-          </a-menu>
+      <a-tooltip
+        v-for="item in VIEW_MODE_ITEMS"
+        :key="item.mode"
+        placement="bottom"
+        color="#1677ff"
+      >
+        <template #title>
+          <div v-if="shortcutKeyMap[item.shortcutKeyId]" class="flex gap-2">
+            <div>{{ $t(item.labelKey) }}</div>
+            <div class="color-[rgb(200,200,200)]">
+              {{ shortcutKeyMap[item.shortcutKeyId] }}
+            </div>
+          </div>
+          <span v-else>{{ $t(item.labelKey) }}</span>
         </template>
-      </a-dropdown>
+        <div
+          :data-testid="`layout-top-view-mode-${item.mode}`"
+          :data-active="String(store.viewMode === item.mode)"
+          :aria-pressed="store.viewMode === item.mode"
+          class="h-8 w-8 flex items-center justify-center hover:cursor-pointer"
+          :class="store.viewMode === item.mode ? 'bg-bg-hover' : 'hover:bg-bg-hover'"
+          @click="selectViewMode(item.mode)"
+        >
+          <div :class="item.icon" />
+        </div>
+      </a-tooltip>
+      <div
+        data-testid="layout-top-view-group-divider"
+        class="mx-1 h-4 w-px shrink-0"
+        style="background-color: var(--wj-markdown-border-primary)"
+      />
       <a-tooltip v-if="hasNewVersion" placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.newVersion') }}</span>

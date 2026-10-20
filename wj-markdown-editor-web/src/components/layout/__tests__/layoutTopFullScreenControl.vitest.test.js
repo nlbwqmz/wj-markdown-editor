@@ -22,6 +22,7 @@ const store = reactive({
     theme: {
       global: 'light',
     },
+    shortcutKeyList: [],
   },
 })
 
@@ -120,6 +121,14 @@ function mountLayoutTop() {
   })
 }
 
+// a-tooltip 包裹整个按钮容器，因此要从 tooltip 反向定位所属模式按钮
+function getViewModeTooltipTitle(wrapper, mode) {
+  return wrapper
+    .findAll('[data-testid="tooltip-stub"]')
+    .find(item => item.find(`[data-testid="layout-top-view-mode-${mode}"]`).exists())
+    .attributes('data-tooltip-title')
+}
+
 describe('layoutTop full screen control', () => {
   beforeEach(() => {
     store.fileName = 'demo.md'
@@ -131,6 +140,7 @@ describe('layoutTop full screen control', () => {
     store.viewMode = 'split'
     store.config.language = 'zh-CN'
     store.config.theme.global = 'light'
+    store.config.shortcutKeyList = []
     mocked.channelSend.mockReset()
     store.setViewMode.mockReset()
     mocked.channelSend.mockImplementation(async ({ event }) => {
@@ -184,20 +194,23 @@ describe('layoutTop full screen control', () => {
     const wrapper = mountLayoutTop()
     const html = wrapper.html()
 
-    expect(html).toContain('i-tabler:arrows-left-right')
-    expect(html.indexOf('i-tabler:arrows-left-right')).toBeLessThan(html.indexOf('i-tabler:moon'))
+    expect(wrapper.find('[data-testid="layout-top-view-mode-source"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="layout-top-view-mode-split"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="layout-top-view-mode-preview"]').exists()).toBe(true)
+
+    expect(html.indexOf('layout-top-view-mode-source')).toBeLessThan(html.indexOf('i-tabler:moon'))
   })
 
-  it('顶部栏切换视图入口应以下拉方式提供三种视图模式选项', () => {
+  it('顶部栏切换视图入口应按源码、双栏、预览顺序提供三种视图模式按钮', () => {
     const wrapper = mountLayoutTop()
     const html = wrapper.html()
+    const sourceIndex = html.indexOf('layout-top-view-mode-source')
+    const splitIndex = html.indexOf('layout-top-view-mode-split')
+    const previewIndex = html.indexOf('layout-top-view-mode-preview')
 
-    expect(html).toContain('i-tabler:arrows-left-right')
-    expect(html.indexOf('i-tabler:arrows-left-right')).toBeLessThan(html.indexOf('i-tabler:moon'))
-
-    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').text()).toContain('shortcutKey.viewSource')
-    expect(wrapper.get('[data-testid="layout-top-view-mode-split"]').text()).toContain('shortcutKey.viewSplit')
-    expect(wrapper.get('[data-testid="layout-top-view-mode-preview"]').text()).toContain('shortcutKey.viewPreview')
+    expect(sourceIndex).toBeGreaterThan(-1)
+    expect(sourceIndex).toBeLessThan(splitIndex)
+    expect(splitIndex).toBeLessThan(previewIndex)
   })
 
   it('点击顶部栏视图模式项时应调用 store.setViewMode 对应模式', async () => {
@@ -212,26 +225,85 @@ describe('layoutTop full screen control', () => {
     expect(store.setViewMode).toHaveBeenNthCalledWith(3, 'preview')
   })
 
-  it('顶部栏视图下拉应体现当前 viewMode 选中态', () => {
+  it('顶部栏视图模式按钮应体现当前 viewMode 选中态', () => {
     store.viewMode = 'split'
     const wrapper = mountLayoutTop()
 
-    expect(wrapper.get('[data-testid="layout-top-view-mode-split"]').find('.i-tabler\\:check').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').find('.i-tabler\\:check').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="layout-top-view-mode-preview"]').find('.i-tabler\\:check').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="layout-top-view-mode-split"]').attributes('data-active')).toBe('true')
+    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').attributes('data-active')).toBe('false')
+    expect(wrapper.get('[data-testid="layout-top-view-mode-preview"]').attributes('data-active')).toBe('false')
   })
 
-  it('viewMode 变化后顶部栏视图下拉选中态应同步更新', async () => {
+  it('viewMode 变化后顶部栏视图模式按钮选中态应同步更新', async () => {
     store.viewMode = 'source'
     const wrapper = mountLayoutTop()
 
-    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').find('.i-tabler\\:check').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').attributes('data-active')).toBe('true')
 
     store.viewMode = 'preview'
     await nextTick()
 
-    expect(wrapper.get('[data-testid="layout-top-view-mode-preview"]').find('.i-tabler\\:check').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').find('.i-tabler\\:check').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="layout-top-view-mode-preview"]').attributes('data-active')).toBe('true')
+    expect(wrapper.get('[data-testid="layout-top-view-mode-source"]').attributes('data-active')).toBe('false')
+  })
+
+  it('顶部栏视图模式按钮组后应渲染分组竖线', () => {
+    const wrapper = mountLayoutTop()
+    const html = wrapper.html()
+    const divider = wrapper.find('[data-testid="layout-top-view-group-divider"]')
+
+    expect(divider.exists()).toBe(true)
+    expect(html.indexOf('layout-top-view-group-divider')).toBeGreaterThan(html.indexOf('layout-top-view-mode-preview'))
+    expect(html.indexOf('layout-top-view-group-divider')).toBeLessThan(html.indexOf('i-tabler:moon'))
+  })
+
+  it('配置了快捷键时视图模式 tooltip 应展示快捷键', () => {
+    store.config.shortcutKeyList = [{ id: 'viewSplit', keymap: 'Ctrl+2', enabled: true }]
+    const wrapper = mountLayoutTop()
+    const title = getViewModeTooltipTitle(wrapper, 'split')
+
+    expect(title).toContain('shortcutKey.viewSplit')
+    expect(title).toContain('Ctrl+2')
+  })
+
+  it('快捷键 keymap 为空时视图模式 tooltip 不应展示快捷键', () => {
+    store.config.shortcutKeyList = [{ id: 'viewSplit', keymap: '', enabled: true }]
+    const wrapper = mountLayoutTop()
+    const title = getViewModeTooltipTitle(wrapper, 'split')
+
+    expect(title).toContain('shortcutKey.viewSplit')
+    expect(title).not.toContain('Ctrl')
+  })
+
+  it('快捷键 enabled 为 false 时视图模式 tooltip 不应展示快捷键', () => {
+    store.config.shortcutKeyList = [{ id: 'viewSplit', keymap: 'Ctrl+2', enabled: false }]
+    const wrapper = mountLayoutTop()
+    const title = getViewModeTooltipTitle(wrapper, 'split')
+
+    expect(title).toContain('shortcutKey.viewSplit')
+    expect(title).not.toContain('Ctrl+2')
+  })
+
+  it('快捷键配置变化后视图模式 tooltip 应响应式更新', async () => {
+    const wrapper = mountLayoutTop()
+    const splitTooltip = () => getViewModeTooltipTitle(wrapper, 'split')
+
+    expect(splitTooltip()).not.toContain('Ctrl+2')
+
+    store.config.shortcutKeyList = [{ id: 'viewSplit', keymap: 'Ctrl+2', enabled: true }]
+    await nextTick()
+
+    expect(splitTooltip()).toContain('Ctrl+2')
+  })
+
+  it('配置中缺失 shortcutKeyList 时视图模式按钮仍应正常渲染', () => {
+    delete store.config.shortcutKeyList
+
+    const wrapper = mountLayoutTop()
+
+    expect(wrapper.find('[data-testid="layout-top-view-mode-source"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="layout-top-view-mode-split"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="layout-top-view-mode-preview"]').exists()).toBe(true)
   })
 
   it('切换主题时必须通过 config.update 提交 theme.global mutation', async () => {
