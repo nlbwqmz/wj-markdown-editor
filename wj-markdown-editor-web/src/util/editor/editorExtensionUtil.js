@@ -71,6 +71,8 @@ const fixedExtension = [
     override: [
       completionHandler,
     ],
+    tooltipClass: () => 'wj-completion-tooltip',
+    icons: false,
   }),
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
   EditorState.allowMultipleSelections.of(true),

@@ -1,0 +1,59 @@
+// CodeMirror 补全弹层（含斜杠命令）的 Ant Design Vue 菜单风格样式
+.cm-editor .cm-tooltip.cm-tooltip-autocomplete.wj-completion-tooltip {
+  padding: 4px;
+  border: none;
+  border-radius: 8px;
+  background: var(--wj-markdown-bg-tertiary);
+  box-shadow:
+    0 6px 16px rgb(0 0 0 / 8%),
+    0 3px 6px -4px rgb(0 0 0 / 12%),
+    0 9px 28px 8px rgb(0 0 0 / 5%);
+
+  > ul {
+    min-width: 180px;
+    max-height: 320px;
+    padding: 0;
+
+    > li {
+      height: 32px;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 22px;
+      color: var(--wj-markdown-text-primary);
+      overflow: hidden;
+      box-sizing: border-box;
+      transition: background-color 0.2s;
+
+      &[aria-selected] {
+        background: var(--wj-markdown-bg-hover);
+        color: var(--wj-markdown-text-primary);
+      }
+
+      &:hover:not([aria-selected]) {
+        background: var(--wj-markdown-bg-secondary);
+      }
+    }
+
+    > li > .cm-completionIcon {
+      display: none;
+    }
+
+    > completion-section {
+      display: block;
+      height: 0;
+      margin: 4px 0;
+      padding: 0;
+      overflow: hidden;
+      border-bottom: 1px solid var(--wj-markdown-border-primary);
+      font-size: 0;
+      line-height: 0;
+      opacity: 1;
+      list-style: none;
+
+      &:first-child {
+        display: none;
+      }
+    }
+  }
+}
