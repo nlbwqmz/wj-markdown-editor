@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, reactive } from 'vue'
 
 import IconButton from '@/components/editor/IconButton.vue'
+import FileManagerEntryNameInput from '../FileManagerEntryNameInput.vue'
 import FileManagerPanel from '../FileManagerPanel.vue'
 
 const fileManagerPanelState = vi.hoisted(() => {
@@ -1101,10 +1102,12 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     const createMarkdownActionPromise = resolveSetupStateBinding(wrapper.vm.$.setupState.createMenuList)[1].action()
-    const markdownAddonAfterNode = markdownDialogConfig.content.children.addonAfter()
 
-    expect(extractVNodeText(markdownAddonAfterNode)).toBe('.md')
-    expect(markdownAddonAfterNode.props.style.color).toBe('var(--wj-markdown-text-primary)')
+    // 输入框由独立组件渲染，.md 后缀等展示细节由 fileManagerEntryNameInput 组件用例覆盖。
+    expect(markdownDialogConfig.content.type).toBe(FileManagerEntryNameInput)
+    expect(markdownDialogConfig.content.props.kind).toBe('markdown')
+    // 确定按钮不能带 autofocus 属性，否则浏览器会拦截自动聚焦并输出控制台警告。
+    expect(markdownDialogConfig.autoFocusButton).toBeNull()
 
     markdownDialogConfig.content.props['onUpdate:value']('draft-note.md')
     await markdownDialogConfig.onOk()

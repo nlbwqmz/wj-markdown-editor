@@ -1,5 +1,6 @@
-import { Input, message, Modal } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { computed, createVNode, onScopeDispose, ref, watch } from 'vue'
+import FileManagerEntryNameInput from '@/components/layout/FileManagerEntryNameInput.vue'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
 import { createBatchSetConfigPathRequest } from '@/util/config/configMutationCommandUtil.js'
@@ -337,7 +338,7 @@ function buildBreadcrumbList(directoryPath) {
   })
 }
 
-function createDefaultOpenNameInputModal({
+export function createDefaultOpenNameInputModal({
   t,
   createModal = config => Modal.confirm(config),
   showWarning = messageKey => message.warning(t(messageKey)),
@@ -367,20 +368,12 @@ function createDefaultOpenNameInputModal({
         okText: t('okText'),
         cancelText: t('cancelText'),
         centered: true,
-        content: createVNode(Input, {
-          'value': inputValue.value,
-          'autofocus': true,
+        // 确定按钮默认会带 DOM autofocus 属性，弹窗打开时浏览器会拦截并输出控制台警告。
+        autoFocusButton: null,
+        content: createVNode(FileManagerEntryNameInput, {
+          kind,
           'onUpdate:value': value => inputValue.value = value,
-        }, kind === 'markdown'
-          ? {
-              // 新建 Markdown 时固定展示 .md，用户只输入基础名称即可。
-              addonAfter: () => createVNode('span', {
-                style: {
-                  color: 'var(--wj-markdown-text-primary)',
-                },
-              }, '.md'),
-            }
-          : undefined),
+        }),
         onOk: async () => {
           const nextValue = trim ? normalizeFileManagerEntryName(inputValue.value) : inputValue.value
           if (!nextValue) {
