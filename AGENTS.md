@@ -420,3 +420,17 @@ npm run test:run
 3. **允许资源文件删除与 Markdown 落盘非原子**：当前实现允许先删除本地资源，再由用户决定是否保存文档；不以“删除后未立即保存可能导致文档仍保留旧引用”作为默认评审问题。
 
 如果后续评审发现的是上述策略之外的新风险，例如实现偏离既定行为、误删目录、解析错误导致删错目标、或与本次需求冲突，再正常报告。
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as markdown files under `.scratch/<feature-slug>/` in this repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles, mapped 1:1 to the default label strings. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
