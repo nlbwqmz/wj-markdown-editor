@@ -238,6 +238,28 @@ describe('fileManagerOpenDecisionController', () => {
     })
     expect(mocked.promptOpenModeChoice).not.toHaveBeenCalled()
     expect(mocked.requestPrepareOpenPathInCurrentWindow).not.toHaveBeenCalled()
+    expect(mocked.showInfoMessage).toHaveBeenCalledWith('message.fileAlreadyEditingCurrent')
+  })
+
+  it('命中当前窗口的其它标签时，必须提示已切换到该标签页且不得再开新窗口', async () => {
+    mocked.requestDocumentResolveOpenTarget.mockResolvedValue({
+      ok: true,
+      decision: 'activated-existing-tab',
+      path: '/tmp/opened-tab.md',
+    })
+    const controller = createController()
+
+    // 即使调用方明确选了“新窗口打开”，只要预判命中已有标签也必须早退。
+    const result = await controller.openDocument('/tmp/opened-tab.md', {
+      entrySource: 'file-manager',
+      trigger: 'user',
+      openMode: 'new-window',
+    })
+
+    expect(result.stageList).toEqual(['target-preflight'])
+    expect(mocked.promptOpenModeChoice).not.toHaveBeenCalled()
+    expect(mocked.requestDocumentOpenPath).not.toHaveBeenCalled()
+    expect(mocked.showInfoMessage).toHaveBeenCalledWith('message.fileActivatedExistingTab')
   })
 
   it('点击其他 markdown 时，应先过目标预判和当前窗口预判，再在 dirty 场景下追加 save-choice', async () => {

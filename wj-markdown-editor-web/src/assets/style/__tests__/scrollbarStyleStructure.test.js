@@ -96,6 +96,26 @@ test('scroll.scss 必须集中定义共享滚动条变量并覆盖 wj-scrollbar 
   )
 })
 
+test('共享滚动条颜色变量必须定义在根作用域，供自绘 overlay 滚动条直接引用', () => {
+  const source = readSource('../scroll.scss')
+  const rootRuleMatch = /:root\s*\{/u.exec(source)
+  assert.ok(rootRuleMatch, 'scroll.scss 必须存在根作用域的滚动条颜色变量')
+
+  const rootBlock = getBraceBlockByStartIndex(source, source.indexOf('{', rootRuleMatch.index))
+
+  for (const variableName of [
+    'wj-scrollbar-thumb-bg',
+    'wj-scrollbar-thumb-bg-hover',
+    'wj-scrollbar-thumb-bg-active',
+  ]) {
+    assert.match(
+      rootBlock,
+      new RegExp(`--${variableName}\\s*:\\s*[^;]+;`, 'u'),
+      `scroll.scss 的根作用域必须定义 --${variableName}，自绘 overlay 滚动条直接引用该变量`,
+    )
+  }
+})
+
 test('scroll.scss 必须使用固定命中区 + 透明 border 的细粗态方案，并通过真实滚动条 hover 触发轨道显示', () => {
   const source = readSource('../scroll.scss')
   const sharedWhereRule = getSharedWhereRule(source)

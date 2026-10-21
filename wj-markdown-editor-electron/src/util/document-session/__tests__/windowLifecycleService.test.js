@@ -311,6 +311,11 @@ function createResettableWindowRegistry() {
       sessionMap.set(normalizeWindowId(windowId), sessionId)
       return sessionId
     },
+    // 与真实 windowRegistry 保持同一契约：切标签只改绑定，不重新挂载。
+    activateSession({ windowId, sessionId }) {
+      sessionMap.set(normalizeWindowId(windowId), sessionId)
+      return sessionId
+    },
     getWindowById(windowId) {
       return windowMap.get(normalizeWindowId(windowId)) || null
     },
@@ -3127,7 +3132,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
       expectedRevision: currentSnapshot.revision,
     })
 
-    expect(result).toEqual({
+    // 命中结果里还会带上 path / sessionId，这里只断言对渲染层有语义的字段。
+    expect(result).toMatchObject({
       ok: true,
       reason: 'focused-existing-window',
       windowId: otherWinInfo.id,
@@ -3218,6 +3224,113 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(recentAddMock).not.toHaveBeenCalled()
     expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/current.md')
     expectDocumentContent(winInfo, '# 当前内容')
+  })
+
+  describe('系统级打开（双击文件 / 第二实例）', () => {
+    function prepareOpenableFiles(pathList) {
+      pathExistsMock.mockImplementation(async targetPath => pathList.includes(targetPath))
+      statMock.mockResolvedValue({
+        isFile: () => true,
+      })
+      readFileMock.mockImplementation(async (targetPath) => {
+        if (pathList.includes(targetPath)) {
+          return `# ${targetPath}`
+        }
+        throw new Error(`unexpected read path: ${targetPath}`)
+      })
+    }
+
+    it('openDocumentTabInWindow 必须把文档作为新标签开进窗口，旧文档留在标签栏里', async () => {
+      prepareOpenableFiles(['D:/current.md', 'D:/next.md'])
+
+      await winInfoUtil.createNew('D:/current.md')
+      const [winInfo] = listWindowRefs()
+      const { openDocumentTabInWindow } = winInfoUtil.getDocumentSessionRuntimeHostDeps()
+
+      const result = await openDocumentTabInWindow(winInfo.id, 'D:/next.md', { trigger: 'second-instance' })
+
+      expect(result.ok).toBe(true)
+      expect(result.reason).toBe('opened')
+      expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/next.md')
+
+      // 关键回归：旧文档不能被销毁，必须继续留在标签栏里
+      const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+      expect(snapshot.tabs).toHaveLength(2)
+      expect(snapshot.tabs.map(tab => tab.displayPath)).toEqual(['D:/current.md', 'D:/next.md'])
+      expect(snapshot.activeSessionId).toBe(snapshot.sessionId)
+    })
+
+    it('openDocumentTabInWindow 在目标窗口已打开同一文档时必须激活那个标签，不重复建会话', async () => {
+      prepareOpenableFiles(['D:/current.md', 'D:/next.md'])
+
+      await winInfoUtil.createNew('D:/current.md')
+      const [winInfo] = listWindowRefs()
+      const { openDocumentTabInWindow } = winInfoUtil.getDocumentSessionRuntimeHostDeps()
+
+      await openDocumentTabInWindow(winInfo.id, 'D:/next.md')
+      const beforeSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+      const result = await openDocumentTabInWindow(winInfo.id, 'D:/current.md')
+
+      expect(result).toMatchObject({
+        ok: true,
+        reason: 'activated-existing-tab',
+        path: 'D:/current.md',
+        sessionId: beforeSnapshot.tabs[0].sessionId,
+      })
+
+      const afterSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+      expect(afterSnapshot.tabs).toHaveLength(2)
+      expect(afterSnapshot.activeSessionId).toBe(beforeSnapshot.tabs[0].sessionId)
+      expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/current.md')
+    })
+
+    it('openDocumentTabInWindow 在其它窗口已打开同一文档时必须聚焦那个窗口，不在当前窗口重复开', async () => {
+      prepareOpenableFiles(['D:/a.md', 'D:/b.md'])
+
+      await winInfoUtil.createNew('D:/a.md')
+      await winInfoUtil.createNew('D:/b.md')
+      const [windowA, windowB] = listWindowRefs()
+      const { openDocumentTabInWindow } = winInfoUtil.getDocumentSessionRuntimeHostDeps()
+
+      const result = await openDocumentTabInWindow(windowA.id, 'D:/b.md')
+
+      expect(result.ok).toBe(true)
+      expect(result.reason).toBe('focused-existing-window')
+      expect(result.windowId).toBe(windowB.id)
+
+      // 发起窗口的文档不能被换掉
+      expect(winInfoUtil.getDocumentContext(windowA.id).path).toBe('D:/a.md')
+      const snapshotA = await executeTestCommand(windowA, 'document.get-session-snapshot')
+      expect(snapshotA.tabs).toHaveLength(1)
+    })
+
+    it('openDocumentTabInWindow 在窗口不存在时必须返回 window-not-found', async () => {
+      const { openDocumentTabInWindow } = winInfoUtil.getDocumentSessionRuntimeHostDeps()
+
+      const result = await openDocumentTabInWindow('missing-window', 'D:/next.md')
+
+      expect(result).toEqual({
+        ok: false,
+        reason: 'window-not-found',
+        path: 'D:/next.md',
+      })
+    })
+
+    it('getTargetEditorWindowId 在无焦点记录时退回第一个窗口，焦点变化后跟随最近活动窗口', async () => {
+      prepareOpenableFiles(['D:/a.md', 'D:/b.md'])
+
+      await winInfoUtil.createNew('D:/a.md')
+      await winInfoUtil.createNew('D:/b.md')
+      const [windowA, windowB] = listWindowRefs()
+      const { getTargetEditorWindowId } = winInfoUtil.getDocumentSessionRuntimeHostDeps()
+
+      expect(getTargetEditorWindowId()).toBe(windowA.id)
+
+      windowB.win.emit('focus')
+
+      expect(getTargetEditorWindowId()).toBe(windowB.id)
+    })
   })
 
   it('document.open-path-in-current-window 在 switchPolicy=save-before-switch 且用户取消首存时，必须返回结构化取消结果并保持当前 session', async () => {
@@ -3371,7 +3484,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
     const result = await openPromise
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       reason: 'focused-existing-window',
       windowId: otherWinInfo.id,

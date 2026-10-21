@@ -160,11 +160,12 @@ export function createDocumentSessionRuntime(deps = {}) {
   const effectService = deps.effectService
   const windowBridge = deps.windowBridge
   const getDocumentContextByWindowId = deps.getDocumentContext || null
-  const getExistingWindowIdByDocumentPath = deps.getExistingWindowIdByDocumentPath || (() => null)
-  const focusWindowById = deps.focusWindowById || (() => false)
+  const resolveOpenExistingTabByPath = deps.resolveOpenExistingTab || null
   const openDocumentWindow = deps.openDocumentWindow || null
   const prepareOpenPathInCurrentWindow = deps.prepareOpenPathInCurrentWindow || null
   const openDocumentInCurrentWindow = deps.openDocumentInCurrentWindow || null
+  const openDocumentTabInWindow = deps.openDocumentTabInWindow || null
+  const getTargetEditorWindowId = deps.getTargetEditorWindowId || (() => null)
   const publishOpenFailureSystemNotification = deps.publishOpenFailureSystemNotification || (() => null)
   const buildRunnerEffectContext = deps.buildRunnerEffectContext || (() => ({}))
   let runtimeApi = null
@@ -467,10 +468,30 @@ export function createDocumentSessionRuntime(deps = {}) {
           expectedRevision: options.expectedRevision,
         })
       },
-      getExistingWindowIdByPath: targetPath => getExistingWindowIdByDocumentPath(targetPath, {
-        excludeWindowId: normalizedWindowId,
-      }),
-      focusWindowById,
+      // 注意签名：系统级打开必须显式指定目标窗口，
+      // 不能像 openDocumentInCurrentWindow 那样隐式绑定 normalizedWindowId（第二实例场景下它是 null）。
+      openDocumentTabInWindow: (windowId, targetPath, options = {}) => {
+        if (typeof openDocumentTabInWindow !== 'function') {
+          return {
+            ok: false,
+            reason: 'open-document-tab-not-configured',
+            path: targetPath || null,
+          }
+        }
+
+        return openDocumentTabInWindow(windowId, targetPath, {
+          trigger: options.trigger || 'user',
+        })
+      },
+      getTargetEditorWindowId,
+      // 目标文档已在某个窗口的标签页里打开时，主进程会直接聚焦窗口 + 激活标签，
+      // 并把结果翻译成 activated-existing-tab / focused-existing-window。
+      // 这里只把“发起打开的窗口”带下去，让主进程能区分本窗口标签与其它窗口。
+      resolveOpenExistingTab: targetPath => (
+        typeof resolveOpenExistingTabByPath === 'function'
+          ? resolveOpenExistingTabByPath(targetPath, normalizedWindowId)
+          : null
+      ),
       getSessionSnapshot: () => getSessionSnapshot(normalizedWindowId),
       ...effectContext,
     })).then(result => normalizeEffectCommandResult(
@@ -506,6 +527,25 @@ export function createDocumentSessionRuntime(deps = {}) {
     })
   }
 
+  /**
+   * 把文档作为新标签开进“最近活动的编辑窗口”。
+   *
+   * 这是系统级打开（双击文件 / 第二实例）的入口：
+   * 它不绑定发起窗口，也不要求 switchPolicy / expected session 协议，
+   * 因为新增标签不会替换任何已有文档。
+   * 一个窗口都没有时，主进程会退回新建窗口。
+   *
+   * @param {string} targetPath
+   * @param {{ trigger?: string, baseDir?: string }} [options]
+   */
+  function openDocumentPathAsTab(targetPath, options = {}) {
+    return executeUiCommand(options.sourceWindowId || null, 'document.open-path-as-tab', {
+      path: targetPath,
+      trigger: options.trigger || 'second-instance',
+      baseDir: options.baseDir || null,
+    })
+  }
+
   function openRecent(targetPath, options = {}) {
     return executeUiCommand(options.sourceWindowId || null, 'document.open-recent', {
       path: targetPath,
@@ -531,6 +571,7 @@ export function createDocumentSessionRuntime(deps = {}) {
     getDocumentContext,
     publishRecentListChanged,
     openDocumentPath,
+    openDocumentPathAsTab,
     openRecent,
   }
 

@@ -1,3 +1,16 @@
+/**
+ * 共享滚动条的颜色变量定义在根作用域。
+ *
+ * 不能只放在下面的 :where(...) 里：那个作用域只覆盖真实滚动容器及其后代，
+ * 而自绘 overlay 滚动条（标签栏滑块）既不是滚动容器也不是 .wj-scrollbar 的后代，
+ * 拿不到作用域内的变量。提到根作用域后，任何元素都能直接引用同一套颜色。
+ */
+:root {
+  --wj-scrollbar-thumb-bg: #0000004d;
+  --wj-scrollbar-thumb-bg-hover: #00000059;
+  --wj-scrollbar-thumb-bg-active: #00000061;
+}
+
 :where(
   .wj-scrollbar,
   .wj-scrollbar *,
@@ -9,9 +22,6 @@
   --wj-scrollbar-thumb-border-idle: 2px;
   --wj-scrollbar-thumb-border-active: 1px;
   --wj-scrollbar-thumb-radius: 999px;
-  --wj-scrollbar-thumb-bg: #0000004d;
-  --wj-scrollbar-thumb-bg-hover: #00000059;
-  --wj-scrollbar-thumb-bg-active: #00000061;
 
   &::-webkit-scrollbar {
     display: revert;

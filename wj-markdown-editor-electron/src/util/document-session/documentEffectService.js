@@ -323,7 +323,7 @@ export function createDocumentEffectService({
 
   async function resolveOpenTargetDecision(payload, {
     getSessionSnapshot,
-    getExistingWindowIdByPath,
+    resolveOpenExistingTab,
     fallbackEntrySource = null,
   } = {}) {
     const entrySource = getOpenEntrySource(payload, fallbackEntrySource)
@@ -344,13 +344,17 @@ export function createDocumentEffectService({
       }
     }
 
-    const existingWindowId = getExistingWindowIdByPath?.(resolvedTargetPath) || null
-    if (existingWindowId) {
+    // 目标已在某个窗口（含当前窗口）的标签页里打开时，不再新建窗口，
+    // 而是聚焦那个窗口并切到对应标签。
+    // “是否已打开 / 在哪个窗口 / 哪个标签”只由主进程 `resolveOpenExistingTab()` 裁决，
+    // 这里只把结果翻译成渲染层认识的 decision。
+    const existingTabResult = await resolveOpenExistingTab?.(resolvedTargetPath) || null
+    if (existingTabResult) {
       return {
         ok: true,
-        decision: 'focused-existing-window',
-        path: resolvedTargetPath,
-        windowId: existingWindowId,
+        decision: existingTabResult.reason,
+        path: existingTabResult.path,
+        windowId: existingTabResult.windowId,
       }
     }
 
@@ -396,8 +400,13 @@ export function createDocumentEffectService({
     return windowMessageController?.publishWindowMessage?.(data) || null
   }
 
-  async function finalizeFocusedExistingWindowResult(result, {
-    focusWindowById,
+  /**
+   * 把“目标已在已有标签里打开”的结果补齐 recent 顺序。
+   *
+   * 聚焦窗口与激活标签已由主进程 `resolveOpenExistingTab()` 统一完成，
+   * 这里不再重复聚焦，避免同一个动作在两处各实现一次。
+   */
+  async function finalizeExistingTabResult(result, {
     fallbackPath = null,
   } = {}) {
     const decision = typeof result?.decision === 'string'
@@ -405,12 +414,6 @@ export function createDocumentEffectService({
       : result?.reason
     if (result?.ok !== true || decision !== 'focused-existing-window' || !result.windowId) {
       return result
-    }
-
-    try {
-      focusWindowById?.(result.windowId)
-    } catch {
-      // 聚焦失败不应反向打断结构化返回，保持调用方能继续按 focused-existing-window 处理。
     }
 
     const recentPath = typeof result?.path === 'string' && result.path
@@ -423,7 +426,7 @@ export function createDocumentEffectService({
     try {
       await recentStore.add(recentPath)
     } catch {
-      // recent 顺序刷新只是附属副作用，失败时不能把“已聚焦已有窗口”的主结果改写成失败。
+      // recent 顺序刷新只是附属副作用，失败时不能把“已命中已有标签”的主结果改写成失败。
     }
     return result
   }
@@ -476,9 +479,10 @@ export function createDocumentEffectService({
     prepareOpenPathInCurrentWindow,
     openDocumentWindow,
     openDocumentInCurrentWindow,
-    getExistingWindowIdByPath,
+    openDocumentTabInWindow,
+    getTargetEditorWindowId,
+    resolveOpenExistingTab,
     getSessionSnapshot,
-    focusWindowById,
   }) {
     switch (command) {
       case 'document.request-open-dialog': {
@@ -514,27 +518,25 @@ export function createDocumentEffectService({
       }
 
       case 'document.resolve-open-target':
-        return await finalizeFocusedExistingWindowResult(await resolveOpenTargetDecision(payload, {
+        return await finalizeExistingTabResult(await resolveOpenTargetDecision(payload, {
           getSessionSnapshot,
-          getExistingWindowIdByPath,
+          resolveOpenExistingTab,
         }), {
-          focusWindowById,
           fallbackPath: getRecentTargetPath(payload),
         })
 
       case 'document.prepare-open-path-in-current-window': {
         const resolveResult = await resolveOpenTargetDecision(payload, {
           getSessionSnapshot,
-          getExistingWindowIdByPath,
+          resolveOpenExistingTab,
         })
         if (resolveResult.ok !== true) {
           return resolveResult
         }
         if (resolveResult.decision !== 'needs-open-mode-choice') {
-          return await finalizeFocusedExistingWindowResult(
+          return await finalizeExistingTabResult(
             attachSourceSessionEnvelope(resolveResult, payload),
             {
-              focusWindowById,
               fallbackPath: resolveResult.path,
             },
           )
@@ -547,22 +549,20 @@ export function createDocumentEffectService({
             sourceSessionId: payload?.sourceSessionId || null,
             sourceRevision: payload?.sourceRevision,
           })
-          return await finalizeFocusedExistingWindowResult(
+          return await finalizeExistingTabResult(
             attachSourceSessionEnvelope(prepareResult, payload),
             {
-              focusWindowById,
               fallbackPath: resolveResult.path,
             },
           )
         }
 
         const snapshot = getSessionSnapshot?.() || null
-        return await finalizeFocusedExistingWindowResult(attachSourceSessionEnvelope({
+        return await finalizeExistingTabResult(attachSourceSessionEnvelope({
           ok: true,
           decision: snapshot?.dirty === true ? 'needs-save-choice' : 'ready-to-switch',
           path: resolveResult.path,
         }, payload), {
-          focusWindowById,
           fallbackPath: resolveResult.path,
         })
       }
@@ -572,16 +572,42 @@ export function createDocumentEffectService({
         // 避免 open-path / recent / startup 分叉出不同的 current-file / focus 语义。
         const resolveResult = await resolveOpenTargetDecision(payload, {
           getSessionSnapshot,
-          getExistingWindowIdByPath,
+          resolveOpenExistingTab,
         })
         if (resolveResult.ok !== true || resolveResult.decision !== 'needs-open-mode-choice') {
-          return await finalizeFocusedExistingWindowResult(resolveResult, {
-            focusWindowById,
+          return await finalizeExistingTabResult(resolveResult, {
             fallbackPath: getRecentTargetPath(payload),
           })
         }
         return await openDocumentWindow?.(resolveResult.path, {
           isRecent: false,
+          trigger: getOpenTrigger(payload),
+        })
+      }
+
+      case 'document.open-path-as-tab': {
+        // 系统级打开（双击文件 / 第二实例）：不替换任何已有文档，只往目标窗口里新增一个标签。
+        // 因此不需要 switchPolicy / expected session 协议，也不会弹保存确认。
+        const validationResult = await validateExplicitOpenTarget(getRecentTargetPath(payload), {
+          baseDir: getOpenBaseDir(payload),
+        })
+        if (validationResult.ok !== true) {
+          return validationResult
+        }
+
+        const targetWindowId = typeof getTargetEditorWindowId === 'function'
+          ? getTargetEditorWindowId()
+          : null
+
+        // 没有任何编辑窗口（只剩设置/关于窗口，或全部关闭）时退回新建窗口。
+        if (!targetWindowId || typeof openDocumentTabInWindow !== 'function') {
+          return await openDocumentWindow?.(validationResult.path, {
+            isRecent: false,
+            trigger: getOpenTrigger(payload),
+          })
+        }
+
+        return await openDocumentTabInWindow(targetWindowId, validationResult.path, {
           trigger: getOpenTrigger(payload),
         })
       }
@@ -600,14 +626,13 @@ export function createDocumentEffectService({
           return validationResult
         }
 
-        return await finalizeFocusedExistingWindowResult(await openDocumentInCurrentWindow?.(validationResult.path, {
+        return await finalizeExistingTabResult(await openDocumentInCurrentWindow?.(validationResult.path, {
           entrySource: getOpenEntrySource(payload),
           trigger: getOpenTrigger(payload),
           switchPolicy: payload?.switchPolicy || null,
           expectedSessionId: payload?.expectedSessionId || null,
           expectedRevision: payload?.expectedRevision,
         }), {
-          focusWindowById,
           fallbackPath: validationResult.path,
         })
       }
@@ -616,7 +641,7 @@ export function createDocumentEffectService({
         const trigger = getOpenTrigger(payload)
         const resolveResult = await resolveOpenTargetDecision(payload, {
           getSessionSnapshot,
-          getExistingWindowIdByPath,
+          resolveOpenExistingTab,
           fallbackEntrySource: 'recent',
         })
         if (resolveResult.ok !== true) {
@@ -629,8 +654,7 @@ export function createDocumentEffectService({
           })
         }
         if (resolveResult.decision !== 'needs-open-mode-choice') {
-          return await finalizeFocusedExistingWindowResult(resolveResult, {
-            focusWindowById,
+          return await finalizeExistingTabResult(resolveResult, {
             fallbackPath: getRecentTargetPath(payload),
           })
         }

@@ -56,6 +56,10 @@ const REQUIRED_WINDOW_REGISTRY_METHODS = [
 let activeWindowRegistry = null
 const hostStateStore = createWindowHostStateStore()
 const windowLifecycleService = {}
+// 最近一次获得焦点的编辑窗口。
+// 系统级“双击文件 / 第二实例”没有发起窗口，只能靠这个记录决定该把新标签开在哪个窗口里；
+// 进程重启或窗口全部关闭后自然失效，读取时会再校验存活。
+let lastActiveEditorWindowId = null
 
 function assertWindowRegistryContract(registry) {
   if (!registry || typeof registry !== 'object') {
@@ -219,7 +223,7 @@ function buildRuntimeHostDeps() {
   return {
     getWindowById: windowId => getWindowById(windowId),
     getDocumentContext: windowId => getDocumentContext(windowId),
-    getExistingWindowIdByDocumentPath: (targetPath, options = {}) => getExistingWindowIdByDocumentPath(targetPath, options),
+    resolveOpenExistingTab: (targetPath, currentWindowId) => resolveOpenExistingTab(targetPath, currentWindowId),
     focusWindowById: windowId => focusWindow(windowId),
     buildRunnerEffectContext: ({ windowId, dispatchCommand }) => {
       if (!getWindowById(windowId)) {
@@ -294,6 +298,10 @@ function buildRuntimeHostDeps() {
     openDocumentInCurrentWindow: async (windowId, targetPath, options = {}) => {
       return await openDocumentInCurrentWindow(windowId, targetPath, options)
     },
+    openDocumentTabInWindow: async (windowId, targetPath, options = {}) => {
+      return await openDocumentTabInWindow(windowId, targetPath, options)
+    },
+    getTargetEditorWindowId: () => resolveTargetEditorWindowId(),
   }
 }
 
@@ -1215,27 +1223,6 @@ function requestForceClose(windowId) {
   return true
 }
 
-function getExistingWindowIdByDocumentPath(targetPath, { excludeWindowId = null } = {}) {
-  const normalizedTargetPath = resolveDocumentOpenPath(targetPath)
-  if (!normalizedTargetPath) {
-    return null
-  }
-
-  const existedSession = ensureSessionRuntimeInitialized().store.findSessionByComparablePath(normalizedTargetPath)
-  if (!existedSession) {
-    return null
-  }
-
-  const existedWindowId = findRegisteredWindowIdBySessionId(existedSession.sessionId)
-  if (!existedWindowId) {
-    return null
-  }
-  if (normalizeWindowId(existedWindowId) === normalizeWindowId(excludeWindowId)) {
-    return null
-  }
-  return existedWindowId
-}
-
 function createSaveBeforeSwitchFailedResult(documentPath) {
   return {
     ok: false,
@@ -1265,21 +1252,6 @@ function createSourceSessionChangedResult(documentPath) {
     ok: false,
     reason: 'source-session-changed',
     path: documentPath || null,
-  }
-}
-
-function getFocusedExistingWindowResult(targetPath, { excludeWindowId = null } = {}) {
-  const existedWindowId = getExistingWindowIdByDocumentPath(targetPath, {
-    excludeWindowId,
-  })
-  if (!existedWindowId) {
-    return null
-  }
-
-  return {
-    ok: true,
-    reason: 'focused-existing-window',
-    windowId: existedWindowId,
   }
 }
 
@@ -1388,17 +1360,13 @@ async function prepareOpenPathInCurrentWindow(windowId, targetPath, options = {}
     }
   }
 
-  const existedWindowId = getExistingWindowIdByDocumentPath(targetPath, {
-    excludeWindowId: normalizedWindowId,
-  })
-  if (existedWindowId) {
+  const existingTabResult = await resolveOpenExistingTab(targetPath, normalizedWindowId)
+  if (existingTabResult) {
     return {
-      ok: true,
-      decision: 'focused-existing-window',
-      path: targetPath || null,
+      ...existingTabResult,
+      decision: existingTabResult.reason,
       sourceSessionId: options.sourceSessionId || null,
       sourceRevision: options.sourceRevision,
-      windowId: existedWindowId,
     }
   }
 
@@ -1549,11 +1517,9 @@ async function openDocumentInCurrentWindow(windowId, targetPath, options = {}) {
     }
   }
 
-  const focusedExistingWindowResult = getFocusedExistingWindowResult(targetPath, {
-    excludeWindowId: normalizedWindowId,
-  })
-  if (focusedExistingWindowResult) {
-    return focusedExistingWindowResult
+  const focusedExistingTabResult = await resolveOpenExistingTab(targetPath, normalizedWindowId)
+  if (focusedExistingTabResult) {
+    return focusedExistingTabResult
   }
 
   let validationResult = await validateSwitchTarget(targetPath)
@@ -1574,11 +1540,9 @@ async function openDocumentInCurrentWindow(windowId, targetPath, options = {}) {
 
     // save-before-switch 可能等待用户较久。
     // 保存完成后需要重新校验目标占用和磁盘状态，避免沿用保存前的旧结论继续切换。
-    const refreshedFocusedExistingWindowResult = getFocusedExistingWindowResult(targetPath, {
-      excludeWindowId: normalizedWindowId,
-    })
-    if (refreshedFocusedExistingWindowResult) {
-      return refreshedFocusedExistingWindowResult
+    const refreshedExistingTabResult = await resolveOpenExistingTab(targetPath, normalizedWindowId)
+    if (refreshedExistingTabResult) {
+      return refreshedExistingTabResult
     }
 
     validationResult = await validateSwitchTarget(targetPath)
@@ -1699,6 +1663,177 @@ function focusWindow(windowId) {
   win.show?.()
   win.focus?.()
   return true
+}
+
+/**
+ * 记录最近获得焦点的窗口。
+ * 窗口销毁后不主动清理，读取时用 `resolveTargetEditorWindowId` 统一校验存活。
+ *
+ * @param {string | null | undefined} windowId
+ */
+function setLastActiveEditorWindowId(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+
+  if (normalizedWindowId) {
+    lastActiveEditorWindowId = normalizedWindowId
+  }
+}
+
+/**
+ * 解析“新标签应该开在哪个窗口”。
+ *
+ * 优先最近获得焦点的编辑窗口；它已经不存在（用户关掉了）时退回第一个存活窗口。
+ * 一个窗口都没有时返回 null，由调用方决定新建窗口。
+ *
+ * @returns {string | null} 返回目标窗口 id；没有可用窗口时返回 null。
+ */
+function resolveTargetEditorWindowId() {
+  const aliveWindowIdList = listWindows()
+    .map(win => findRegisteredWindowIdByWin(win))
+    .filter(windowId => Boolean(windowId))
+
+  if (aliveWindowIdList.length === 0) {
+    return null
+  }
+
+  if (lastActiveEditorWindowId && aliveWindowIdList.includes(lastActiveEditorWindowId)) {
+    return lastActiveEditorWindowId
+  }
+
+  return aliveWindowIdList[0]
+}
+
+/**
+ * 按文档路径查找「已经打开该文档」的标签页。
+ *
+ * 这是全应用唯一的「同一文档是否已经打开」判定：按路径查全局会话表，
+ * 再通过 store 的会话 → 窗口映射拿到所在窗口（包含后台标签），
+ * 因此跨窗口去重与窗口内标签去重共用同一套语义，不会出现
+ * “某个入口认得出重复、另一个入口又开一份”的分叉。
+ *
+ * @param {string} targetPath
+ * @returns {{ windowId: string, sessionId: string } | null} 未命中时返回 null。
+ */
+function findOpenDocumentTab(targetPath) {
+  const normalizedTargetPath = resolveDocumentOpenPath(targetPath)
+  if (!normalizedTargetPath) {
+    return null
+  }
+
+  const { store } = ensureSessionRuntimeInitialized()
+  const existedSession = store.findSessionByComparablePath(normalizedTargetPath)
+  if (!existedSession) {
+    return null
+  }
+
+  // 会话到窗口的映射以 store 为准：它包含窗口内的**后台标签**。
+  // 窗口注册表只记活动会话，用它查会把后台标签当成“没打开”。
+  const existedWindowId = store.getWindowIdBySessionId?.(existedSession.sessionId)
+    || findRegisteredWindowIdBySessionId(existedSession.sessionId)
+  if (!existedWindowId) {
+    return null
+  }
+
+  return {
+    windowId: existedWindowId,
+    sessionId: existedSession.sessionId,
+  }
+}
+
+/**
+ * 把「已经打开该文档」的窗口拉到前台，并把该窗口的活动标签切到对应标签。
+ *
+ * 聚焦与激活必须成对发生：只聚焦会让用户停在同窗口的另一个标签上，
+ * 只激活标签又看不到别的窗口。所以副作用只保留这一个入口。
+ *
+ * @param {string} targetPath
+ * @returns {Promise<{ windowId: string, sessionId: string } | null>} 未命中时返回 null。
+ */
+async function focusOpenDocumentTab(targetPath) {
+  const hit = findOpenDocumentTab(targetPath)
+  if (!hit) {
+    return null
+  }
+
+  await activateTabInWindow(hit.windowId, hit.sessionId)
+  focusWindow(hit.windowId)
+  return hit
+}
+
+/**
+ * 把「已打开文档」的命中结果统一翻译成打开结果。
+ *
+ * 命中当前窗口 → `activated-existing-tab`：用户本来就在这个窗口，不需要提示；
+ * 命中其它窗口 → `focused-existing-window`：渲染层会提示已切到那个窗口。
+ */
+function createOpenExistingTabResult(targetPath, { windowId, sessionId }, currentWindowId) {
+  const sameWindow = normalizeWindowId(windowId) === normalizeWindowId(currentWindowId)
+  return {
+    ok: true,
+    reason: sameWindow ? 'activated-existing-tab' : 'focused-existing-window',
+    path: targetPath || null,
+    windowId,
+    sessionId,
+  }
+}
+
+/**
+ * 目标文档已经打开时，聚焦并激活对应标签，返回统一打开结果；否则返回 null。
+ *
+ * 所有“打开某个路径”的入口都必须先经过这里，否则去重规则会散落成多份实现。
+ *
+ * @param {string} targetPath
+ * @param {string} currentWindowId 发起打开的窗口，用于区分“本窗口标签”与“其它窗口”。
+ */
+async function resolveOpenExistingTab(targetPath, currentWindowId) {
+  const hit = await focusOpenDocumentTab(targetPath)
+  return hit ? createOpenExistingTabResult(targetPath, hit, currentWindowId) : null
+}
+
+/**
+ * 把一个文档作为**新标签**开进指定窗口。
+ *
+ * 与 `document.open-path-in-current-window` 的区别：那条命令带 switchPolicy / expected session 协议
+ * 并会弹保存确认；新增标签不替换任何已有文档，因此不需要这些协议。
+ *
+ * 去重规则统一由 `resolveOpenExistingTab()` 裁决：
+ * 1. 目标窗口已经开着同一文档 → 激活那个标签
+ * 2. 其它窗口已经开着同一文档 → 聚焦那个窗口并切到对应标签，不重复开
+ *
+ * @param {string} windowId
+ * @param {string} targetPath
+ * @param {{ trigger?: string }} [options]
+ * @returns {Promise<object>} 返回统一打开结果。
+ */
+async function openDocumentTabInWindow(windowId, targetPath, options = {}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const targetWin = getWindowById(normalizedWindowId)
+
+  if (!normalizedWindowId || !isWindowAlive(targetWin)) {
+    return {
+      ok: false,
+      reason: 'window-not-found',
+      path: targetPath || null,
+    }
+  }
+
+  const existingTabResult = await resolveOpenExistingTab(targetPath, normalizedWindowId)
+  if (existingTabResult) {
+    return existingTabResult
+  }
+
+  const validationResult = await validateSwitchTarget(targetPath)
+  if (validationResult.ok !== true) {
+    return validationResult
+  }
+
+  focusWindow(normalizedWindowId)
+
+  return await switchSessionInCurrentWindow(normalizedWindowId, {
+    documentPath: validationResult.path,
+    content: validationResult.content,
+    trigger: options.trigger || 'second-instance',
+  })
 }
 
 function createCloseHostController(windowId) {
@@ -2277,20 +2412,17 @@ async function waitForManualSaveRequestCompletion(windowId, requestId, {
 }
 
 async function createNew(filePath, isRecent = false) {
+  // 未显式初始化 runtime 时必须在这里直接失败，不能在内部自举。
+  ensureSessionRuntimeInitialized()
   const windowRegistry = getWindowRegistry()
-  const { store } = ensureSessionRuntimeInitialized()
   const normalizedFilePath = resolveDocumentOpenPath(filePath)
   const exists = Boolean(normalizedFilePath && await fs.pathExists(normalizedFilePath))
   if (exists) {
-    const existedSession = store.findSessionByComparablePath(normalizedFilePath)
-    if (existedSession) {
-      const existedWindowId = findRegisteredWindowIdBySessionId(existedSession.sessionId)
-      const existedWin = existedWindowId ? getWindowById(existedWindowId) : null
-      if (existedWin) {
-        existedWin.show()
-        await refreshRecentOrderAfterOpen(normalizedFilePath)
-        return existedWindowId
-      }
+    // 复用统一的“已打开文档”判定：命中就聚焦窗口 + 激活标签，不再新建窗口。
+    const existingTab = await focusOpenDocumentTab(normalizedFilePath)
+    if (existingTab) {
+      await refreshRecentOrderAfterOpen(normalizedFilePath)
+      return existingTab.windowId
     }
   }
 
@@ -2449,6 +2581,12 @@ async function createNew(filePath, isRecent = false) {
     win.on('blur', () => {
       const currentWindowId = findRegisteredWindowIdByWin(win)
       dispatchCommand(currentWindowId, 'window.blur').then(() => {}).catch(() => {})
+    })
+
+    // 系统级打开（双击文件 / 第二实例）没有发起窗口，
+    // 只能靠“最近获得焦点的窗口”决定新标签开在哪里。
+    win.on('focus', () => {
+      setLastActiveEditorWindowId(findRegisteredWindowIdByWin(win))
     })
 
     if (exists) {

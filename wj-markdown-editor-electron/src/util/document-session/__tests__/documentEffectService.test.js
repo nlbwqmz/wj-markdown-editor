@@ -279,7 +279,12 @@ describe('documentEffectService', () => {
       payload: {
         path: 'C:/docs/other.md',
       },
-      getExistingWindowIdByPath: vi.fn(() => 'window-2'),
+      resolveOpenExistingTab: vi.fn(async targetPath => ({
+        ok: true,
+        reason: 'focused-existing-window',
+        path: targetPath,
+        windowId: 'window-2',
+      })),
     })
 
     expect(result).toEqual({
@@ -287,6 +292,37 @@ describe('documentEffectService', () => {
       decision: 'focused-existing-window',
       path: 'C:/docs/other.md',
       windowId: 'window-2',
+    })
+  })
+
+  it('document.resolve-open-target 命中当前窗口的其它标签时，必须返回 activated-existing-tab', async () => {
+    const { service, fsModule } = await createServiceContext()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# opened as tab')
+
+    // 侧边栏右键“新窗口打开”走到这里时，目标其实已经在当前窗口的后台标签里。
+    const result = await service.executeCommand({
+      command: 'document.resolve-open-target',
+      payload: {
+        path: 'C:/docs/other.md',
+      },
+      resolveOpenExistingTab: vi.fn(async targetPath => ({
+        ok: true,
+        reason: 'activated-existing-tab',
+        path: targetPath,
+        windowId: 'window-1',
+      })),
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      decision: 'activated-existing-tab',
+      path: 'C:/docs/other.md',
+      windowId: 'window-1',
     })
   })
 
@@ -465,7 +501,12 @@ describe('documentEffectService', () => {
           documentPath: 'C:/docs/current.md',
         },
       }),
-      getExistingWindowIdByPath: vi.fn(() => 'window-2'),
+      resolveOpenExistingTab: vi.fn(async targetPath => ({
+        ok: true,
+        reason: 'focused-existing-window',
+        path: targetPath,
+        windowId: 'window-2',
+      })),
     })
 
     expect(result).toEqual({
@@ -541,7 +582,6 @@ describe('documentEffectService', () => {
     ],
   ])('%s 命中其他窗口已打开目标时，必须通过统一副作用同时聚焦并刷新 recent 顺序', async (_title, commandInput, expectedResult) => {
     const { service, fsModule, recentStore } = await createServiceContext()
-    const focusWindowById = vi.fn(() => true)
     const openDocumentWindow = vi.fn()
     const prepareOpenPathInCurrentWindow = vi.fn()
 
@@ -553,14 +593,17 @@ describe('documentEffectService', () => {
 
     const result = await service.executeCommand({
       ...commandInput,
-      getExistingWindowIdByPath: vi.fn(() => 'window-2'),
-      focusWindowById,
+      resolveOpenExistingTab: vi.fn(async targetPath => ({
+        ok: true,
+        reason: 'focused-existing-window',
+        path: targetPath,
+        windowId: 'window-2',
+      })),
       openDocumentWindow,
       prepareOpenPathInCurrentWindow,
     })
 
     expect(result).toEqual(expectedResult)
-    expect(focusWindowById).toHaveBeenCalledWith('window-2')
     expect(recentStore.add).toHaveBeenCalledWith('C:/docs/other.md')
     expect(openDocumentWindow).not.toHaveBeenCalled()
     expect(prepareOpenPathInCurrentWindow).not.toHaveBeenCalled()
@@ -809,6 +852,106 @@ describe('documentEffectService', () => {
       reason: 'opened',
       path: 'C:/docs/next.md',
     })
+  })
+
+  it('document.open-path-as-tab 有目标窗口时必须把文档作为新标签开进那个窗口', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentTabInWindow = vi.fn().mockResolvedValue({
+      ok: true,
+      reason: 'opened',
+      path: 'C:/docs/next.md',
+    })
+    const openDocumentWindow = vi.fn()
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# next')
+
+    const result = await service.executeCommand({
+      command: 'document.open-path-as-tab',
+      payload: {
+        path: 'C:/docs/next.md',
+        trigger: 'second-instance',
+      },
+      openDocumentTabInWindow,
+      openDocumentWindow,
+      getTargetEditorWindowId: () => 'window-1',
+    })
+
+    // 系统级打开不得走新建窗口，也不得携带 switchPolicy 协议
+    expect(openDocumentWindow).not.toHaveBeenCalled()
+    expect(openDocumentTabInWindow).toHaveBeenCalledWith('window-1', 'C:/docs/next.md', {
+      trigger: 'second-instance',
+    })
+    expect(result).toEqual({
+      ok: true,
+      reason: 'opened',
+      path: 'C:/docs/next.md',
+    })
+  })
+
+  it('document.open-path-as-tab 没有任何编辑窗口时必须退回新建窗口', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentTabInWindow = vi.fn()
+    const openDocumentWindow = vi.fn().mockResolvedValue({
+      ok: true,
+      reason: 'opened',
+      path: 'C:/docs/next.md',
+    })
+
+    fsModule.pathExists.mockResolvedValue(true)
+    fsModule.stat.mockResolvedValue({
+      isFile: () => true,
+    })
+    fsModule.readFile.mockResolvedValue('# next')
+
+    const result = await service.executeCommand({
+      command: 'document.open-path-as-tab',
+      payload: {
+        path: 'C:/docs/next.md',
+        trigger: 'second-instance',
+      },
+      openDocumentTabInWindow,
+      openDocumentWindow,
+      getTargetEditorWindowId: () => null,
+    })
+
+    expect(openDocumentTabInWindow).not.toHaveBeenCalled()
+    expect(openDocumentWindow).toHaveBeenCalledWith('C:/docs/next.md', {
+      isRecent: false,
+      trigger: 'second-instance',
+    })
+    expect(result).toEqual({
+      ok: true,
+      reason: 'opened',
+      path: 'C:/docs/next.md',
+    })
+  })
+
+  it('document.open-path-as-tab 目标路径不存在时必须保留阶段一失败结果', async () => {
+    const { service, fsModule } = await createServiceContext()
+    const openDocumentTabInWindow = vi.fn()
+    const openDocumentWindow = vi.fn()
+
+    fsModule.pathExists.mockResolvedValue(false)
+
+    const result = await service.executeCommand({
+      command: 'document.open-path-as-tab',
+      payload: {
+        path: 'C:/docs/missing.md',
+        trigger: 'second-instance',
+      },
+      openDocumentTabInWindow,
+      openDocumentWindow,
+      getTargetEditorWindowId: () => 'window-1',
+    })
+
+    expect(openDocumentTabInWindow).not.toHaveBeenCalled()
+    expect(openDocumentWindow).not.toHaveBeenCalled()
+    expect(result.ok).toBe(false)
+    expect(result.path).toBe('C:/docs/missing.md')
   })
 
   it('recent.clear 在列表本来就是空时，不应触发真实清空副作用', async () => {

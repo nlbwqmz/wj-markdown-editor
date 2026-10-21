@@ -108,6 +108,8 @@ function createRuntimeContext(overrides = {}) {
       payload,
       prepareOpenPathInCurrentWindow,
       openDocumentInCurrentWindow,
+      openDocumentTabInWindow,
+      getTargetEditorWindowId,
       openDocumentWindow,
       getSessionSnapshot,
     }) => {
@@ -144,6 +146,11 @@ function createRuntimeContext(overrides = {}) {
             switchPolicy: payload.switchPolicy,
             expectedSessionId: payload.expectedSessionId,
             expectedRevision: payload.expectedRevision,
+          })
+        // 与真实 effectService 保持同一调用契约：(windowId, targetPath, options)
+        case 'document.open-path-as-tab':
+          return await openDocumentTabInWindow(getTargetEditorWindowId(), payload.path, {
+            trigger: payload.trigger,
           })
         case 'document.get-session-snapshot':
           return getSessionSnapshot()
@@ -257,6 +264,13 @@ function createRuntimeContext(overrides = {}) {
     decision: 'ready-to-switch',
     path: targetPath,
   }))
+  const openDocumentTabInWindow = vi.fn(async (windowId, targetPath) => ({
+    ok: true,
+    reason: 'opened',
+    path: targetPath,
+    windowId,
+  }))
+  const getTargetEditorWindowId = vi.fn(() => 18)
   const publishOpenFailureSystemNotification = vi.fn()
 
   const runtime = createDocumentSessionRuntime({
@@ -285,6 +299,8 @@ function createRuntimeContext(overrides = {}) {
     openDocumentWindow,
     prepareOpenPathInCurrentWindow,
     openDocumentInCurrentWindow,
+    openDocumentTabInWindow,
+    getTargetEditorWindowId,
     publishOpenFailureSystemNotification,
     ...overrides,
   })
@@ -302,6 +318,8 @@ function createRuntimeContext(overrides = {}) {
     openDocumentWindow,
     prepareOpenPathInCurrentWindow,
     openDocumentInCurrentWindow,
+    openDocumentTabInWindow,
+    getTargetEditorWindowId,
     publishOpenFailureSystemNotification,
   }
 }
@@ -1382,6 +1400,35 @@ describe('documentSessionRuntime', () => {
     expect(publishOpenFailureSystemNotification).toHaveBeenCalledWith({
       windowId: null,
       path: 'C:/docs/locked.md',
+    })
+  })
+
+  it('openDocumentPathAsTab 必须把目标窗口与路径按正确顺序交给 openDocumentTabInWindow', async () => {
+    const openDocumentTabInWindow = vi.fn(async (windowId, targetPath) => ({
+      ok: true,
+      reason: 'activated-existing-tab',
+      path: targetPath,
+      windowId,
+    }))
+    const { runtime } = createRuntimeContext({
+      openDocumentTabInWindow,
+      getTargetEditorWindowId: () => 18,
+    })
+
+    const result = await runtime.openDocumentPathAsTab('C:/docs/a.md', {
+      trigger: 'second-instance',
+    })
+
+    // 回归：曾经把窗口 id 当路径传下去，导致 openDocumentTabInWindow 收到
+    // (null, '窗口id') 并返回 window-not-found，表现为双击文件毫无反应。
+    expect(openDocumentTabInWindow).toHaveBeenCalledWith(18, 'C:/docs/a.md', {
+      trigger: 'second-instance',
+    })
+    expect(result).toEqual({
+      ok: true,
+      reason: 'activated-existing-tab',
+      path: 'C:/docs/a.md',
+      windowId: 18,
     })
   })
 

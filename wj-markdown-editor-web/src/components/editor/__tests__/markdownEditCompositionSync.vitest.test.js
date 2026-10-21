@@ -614,6 +614,35 @@ describe('markdownEdit 组合输入外部同步', () => {
     expect(fakeView.focus).toHaveBeenCalled()
   })
 
+  it('外部同步携带的光标位置超出新正文长度时必须夹到文档内，不得写入越界选区', async () => {
+    const { wrapper, fakeView } = await mountMarkdownEdit({
+      modelValue: '# start',
+    })
+
+    // 模拟多标签场景：上一份文档（1012 字符）的光标位置被带到了只有 14 字符的新文档上。
+    const nextContent = '# 短文档 14 字符'
+    await wrapper.setProps({
+      modelValue: nextContent,
+      contentUpdateMeta: {
+        token: 1,
+        cursorPosition: 1012,
+        focus: true,
+        scrollIntoView: true,
+      },
+    })
+    await flushRender()
+
+    expect(fakeView.dispatch).toHaveBeenCalledTimes(1)
+    const dispatched = fakeView.dispatch.mock.calls[0][0]
+    expect(dispatched.selection).toEqual({
+      anchor: nextContent.length,
+      head: nextContent.length,
+    })
+    // 选区一旦越界，CodeMirror 状态会变得不一致，下一次带 changes 的事务会直接抛
+    // `Position X is out of range for changeset of length Y`。
+    expect(dispatched.selection.anchor).toBeLessThanOrEqual(nextContent.length)
+  })
+
   it('组合输入结束后若父层已先回放新快照，延后冲刷不得再把旧挂起 payload 回滚回来', async () => {
     const { wrapper, fakeView } = await mountMarkdownEdit({
       modelValue: '# start',

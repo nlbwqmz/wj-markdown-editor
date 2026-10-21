@@ -899,14 +899,8 @@ export function createFileManagerPanelController({
     }
 
     if (entry?.kind === 'markdown') {
-      const currentDocumentPath = normalizeComparablePath(resolveDocumentOpenCurrentPath(store?.documentSessionSnapshot))
-      if (entry?.isActive === true || normalizeComparablePath(entry?.path) === currentDocumentPath) {
-        return {
-          ok: true,
-          reason: 'noop-current-file',
-        }
-      }
-
+      // 不在这里本地判“就是当前文件”：是否已打开、命中哪类标签统一由主进程预判 +
+      // openDecisionController 裁决。本地早退会绕开“已打开”提示，同一语义又出现第二份实现。
       const openMode = typeof options?.openMode === 'string' && options.openMode
         ? options.openMode
         : normalizeFileManagerMarkdownLeftClickAction(store?.config?.fileManagerLeftClickAction?.markdown)

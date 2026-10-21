@@ -124,11 +124,17 @@ if (!lock) {
       }
       app.whenReady().then(async () => {
         const runtime = initializeAppDocumentSessionRuntime()
-        await handleSecondInstanceOpenRequest({
+        const openResult = await handleSecondInstanceOpenRequest({
           targetPath: openTarget.targetPath,
           baseDir: openTarget.baseDir || workingDirectory || process.cwd(),
-          openDocumentPath: (targetPath, options) => runtime.openDocumentPath(targetPath, options),
+          // 双击文件 / 第二实例属于系统级打开：默认把它作为新标签开进最近活动的编辑窗口，
+          // 一个窗口都没有时才新建窗口（由 effect 层回落）。
+          openDocumentPath: (targetPath, options) => runtime.openDocumentPathAsTab(targetPath, options),
         })
+        if (openResult?.ok !== true) {
+          // 打开失败在无窗口上下文时没有弹窗出口，只能留一条日志便于排查。
+          console.warn('[second-instance] 打开失败:', openTarget.targetPath, openResult)
+        }
       }).then(() => {})
       return
     }

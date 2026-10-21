@@ -82,8 +82,17 @@ function resolveResultDecision(result) {
       : null
 }
 
-function isFocusedExistingWindowResult(result) {
-  return resolveResultDecision(result) === 'focused-existing-window'
+/**
+ * 打开结果 → 提示文案。
+ *
+ * 提示只在“用户发起的打开没有按预期新开”时出现，用一句话说明原因：
+ * 命中其它窗口 / 命中本窗口的其它标签 / 就是当前文档。
+ * 真正新开成功（opened / ready-to-switch）不需要提示，结果本身就是反馈。
+ */
+const OPEN_RESULT_MESSAGE_KEY_MAP = {
+  'focused-existing-window': 'message.fileAlreadyOpenedInOtherWindow',
+  'activated-existing-tab': 'message.fileActivatedExistingTab',
+  'noop-current-file': 'message.fileAlreadyEditingCurrent',
 }
 
 function resolveOpenInteractionMeta(options = {}) {
@@ -244,6 +253,17 @@ export function createFileManagerOpenDecisionController({
   showErrorMessage = messageKey => message.error(t(messageKey)),
   notifySourceSessionChanged = () => message.warning(t('message.fileManagerSourceSessionChanged')),
 } = {}) {
+  /**
+   * 按打开结果统一发提示：
+   * “哪种结果配哪句话”只在这张表里决定，不再由每个阶段各自 if 一遍。
+   */
+  function notifyOpenResult(result) {
+    const messageKey = OPEN_RESULT_MESSAGE_KEY_MAP[resolveResultDecision(result)]
+    if (messageKey) {
+      showInfoMessage(messageKey)
+    }
+  }
+
   async function openDocument(targetPath, options = {}) {
     const stageList = []
     const interactionMeta = resolveOpenInteractionMeta(options)
@@ -277,9 +297,7 @@ export function createFileManagerOpenDecisionController({
     if (targetPreflightInvalidatedResult) {
       return targetPreflightInvalidatedResult
     }
-    if (isFocusedExistingWindowResult(targetPreflightResult)) {
-      showInfoMessage('message.fileAlreadyOpenedInOtherWindow')
-    }
+    notifyOpenResult(targetPreflightResult)
     if (targetPreflightResult?.decision !== 'needs-open-mode-choice') {
       return appendStageList(targetPreflightResult, stageList)
     }
@@ -316,9 +334,7 @@ export function createFileManagerOpenDecisionController({
       if (newWindowDispatchInvalidatedResult) {
         return newWindowDispatchInvalidatedResult
       }
-      if (isFocusedExistingWindowResult(dispatchResult)) {
-        showInfoMessage('message.fileAlreadyOpenedInOtherWindow')
-      }
+      notifyOpenResult(dispatchResult)
       return appendStageList(dispatchResult, stageList)
     }
 
@@ -346,9 +362,7 @@ export function createFileManagerOpenDecisionController({
     if (currentWindowPreflightInvalidatedResult) {
       return currentWindowPreflightInvalidatedResult
     }
-    if (isFocusedExistingWindowResult(currentWindowPreflightResult)) {
-      showInfoMessage('message.fileAlreadyOpenedInOtherWindow')
-    }
+    notifyOpenResult(currentWindowPreflightResult)
     if (currentWindowPreflightResult?.decision !== 'needs-save-choice'
       && currentWindowPreflightResult?.decision !== 'ready-to-switch') {
       return appendStageList(currentWindowPreflightResult, stageList)
@@ -393,9 +407,7 @@ export function createFileManagerOpenDecisionController({
     if (currentWindowDispatchInvalidatedResult) {
       return currentWindowDispatchInvalidatedResult
     }
-    if (isFocusedExistingWindowResult(dispatchResult)) {
-      showInfoMessage('message.fileAlreadyOpenedInOtherWindow')
-    }
+    notifyOpenResult(dispatchResult)
     if (dispatchResult?.reason === 'save-before-switch-failed') {
       showErrorMessage('message.fileManagerSaveBeforeSwitchFailed')
     }

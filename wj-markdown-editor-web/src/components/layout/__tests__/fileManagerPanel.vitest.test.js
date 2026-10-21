@@ -831,7 +831,7 @@ describe('fileManagerPanel 组件', () => {
     expect(wrapper.get('[data-testid="file-manager-breadcrumb"]').text()).toContain('assets')
   })
 
-  it('点击当前 Markdown 时应无操作，不再重复触发统一打开决策', async () => {
+  it('点击当前 Markdown 时也必须经由统一打开决策，由主进程预判返回 noop-current-file 并提示已打开', async () => {
     fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
       entryList: [
         { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
@@ -845,7 +845,8 @@ describe('fileManagerPanel 组件', () => {
     await wrapper.get('[data-testid="file-manager-entry-current"]').trigger('click')
     await flushFileManagerPanel()
 
-    expect(fileManagerPanelState.openDecisionOpenDocument).not.toHaveBeenCalled()
+    // 本地不再短路：否则会绕开“已打开”提示，同一语义又出现第二份实现。
+    expect(fileManagerPanelState.openDecisionOpenDocument).toHaveBeenCalledWith('D:/docs/current.md', expect.any(Object))
   })
 
   it('点击其他 Markdown 时，必须经由 HomeView 宿主的统一打开交互 service', async () => {

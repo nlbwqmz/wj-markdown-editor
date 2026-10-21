@@ -1046,6 +1046,9 @@ watch(
 async function handleDocumentContextSwitch(snapshot) {
   // 按当前身份采集即将离开的标签的滚动位置（不传 snapshot 即不切身份）。
   captureViewScrollAnchors()
+  // 挂起的外部同步带着上一份文档的光标坐标，换文档后一律作废，
+  // 否则会把旧坐标应用到新文档上，产生越界选区。
+  pendingExternalSync.value = null
   // 再把上一个会话的编辑器状态（正文 + 选区 + undo 历史）存档，
   // 然后尝试把目标会话的存档换回来；换不回来就走整篇替换的常规路径。
   saveCurrentEditorStateForSession()
@@ -1244,6 +1247,14 @@ function applyExternalEditorSync({
   cursorPosition,
 }) {
   const currentValue = getCurrentEditorContent(view)
+  // 光标位置必须夹到「本次同步后的文档长度」内。
+  // 否则会向 CodeMirror 写入一个超出文档范围的选区：这种状态本身不报错，
+  // 但下一次带 changes 的事务在映射选区时就会抛
+  // `Position X is out of range for changeset of length Y`。
+  // 多标签换入 EditorState 后，上一份文档的光标坐标很容易变成这种超界值。
+  const safeCursorPosition = Number.isInteger(cursorPosition)
+    ? Math.max(0, Math.min(nextContent.length, cursorPosition))
+    : null
 
   if (currentValue !== nextContent) {
     const transaction = {
@@ -1253,25 +1264,25 @@ function applyExternalEditorSync({
         insert: nextContent,
       },
     }
-    if (cursorPosition !== null) {
+    if (safeCursorPosition !== null) {
       transaction.selection = {
-        anchor: cursorPosition,
-        head: cursorPosition,
+        anchor: safeCursorPosition,
+        head: safeCursorPosition,
       }
       transaction.scrollIntoView = pendingContentUpdateMeta.scrollIntoView
     }
     view.dispatch(transaction)
-  } else if (cursorPosition !== null) {
+  } else if (safeCursorPosition !== null) {
     view.dispatch({
       selection: {
-        anchor: cursorPosition,
-        head: cursorPosition,
+        anchor: safeCursorPosition,
+        head: safeCursorPosition,
       },
       scrollIntoView: pendingContentUpdateMeta.scrollIntoView,
     })
   }
 
-  if (cursorPosition !== null && pendingContentUpdateMeta.focus === true) {
+  if (safeCursorPosition !== null && pendingContentUpdateMeta.focus === true) {
     view.focus()
   }
 

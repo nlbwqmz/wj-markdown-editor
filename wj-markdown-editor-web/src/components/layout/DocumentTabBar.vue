@@ -1,11 +1,13 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
 import {
   requestDocumentActivateTab,
   requestDocumentCloseTab,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
+import { bindHorizontalWheelScroll } from '@/util/horizontalWheelScrollUtil.js'
+import { useOverlayScrollbar } from '@/util/useOverlayScrollbar.js'
 
 /**
  * 文档标签栏。
@@ -26,6 +28,13 @@ import {
  * - 标签 24px = 侧边栏 tab 按钮 / 工具栏 IconButton 的 h-6
  * - 分隔线 16px = 标题栏那条竖分隔线（LayoutTop 的 h-4 w-px）
  *
+ * 横向滚动：
+ * - 原生滚动条在 Chromium 里始终占位，做不到“浮在内容上方”，所以彻底隐藏，
+ *   改由自绘 overlay 滑块（`useOverlayScrollbar`）承担视觉反馈
+ * - 滑块是唯一使用绝对定位的元素：纯装饰、不参与布局，标签内部结构仍是纯 flex 流
+ * - 滑块只在宽度不够且鼠标在标签栏内时出现，没有滚动轨道
+ * - 垂直滚轮转横向滚动由 `bindHorizontalWheelScroll()` 接管，判定规则见该工具
+ *
  * 状态规则：
  * - 脏点只要有就一直显示，没有任何 hover 规则去隐藏它
  * - 关闭按钮只在 hover 时显示；槽位恒定，显隐不产生任何位移
@@ -40,6 +49,31 @@ const { t } = useI18n()
 
 const tabs = computed(() => store.documentSessionSnapshot?.tabs || [])
 const activeSessionId = computed(() => store.documentSessionSnapshot?.activeSessionId ?? null)
+
+const scrollerRef = ref(null)
+const thumbRef = ref(null)
+
+const {
+  thumbVisible,
+  thumbActive,
+  thumbStyle,
+  refresh: refreshOverlayScrollbar,
+  onPointerEnter: handleTabBarPointerEnter,
+  onPointerLeave: handleTabBarPointerLeave,
+  onThumbPointerDown: handleThumbPointerDown,
+} = useOverlayScrollbar({ scrollerRef, thumbRef })
+
+// 垂直滚轮转横向滚动：绑在真实滚动容器上，overlay 滑块不改变任何滚动语义。
+// 滚动容器可能晚于挂载才出现，所以监听 ref 而不是在 onMounted 里绑一次。
+watch(scrollerRef, (element, _previousElement, onCleanup) => {
+  if (!element) {
+    return
+  }
+  onCleanup(bindHorizontalWheelScroll(element))
+})
+
+// 标签增删会改变 scrollWidth，而 ResizeObserver 只观察 border-box、感知不到，需要显式重测。
+watch(tabs, () => refreshOverlayScrollbar(), { flush: 'post' })
 
 // 标签标题直接用会话文件名。
 // 未命名草稿在数据层就是固定的 `Untitled` 哨兵值，
@@ -164,56 +198,98 @@ function onMenuClick({ key }, tab) {
   <div
     v-if="tabs.length > 0"
     data-testid="document-tab-bar"
-    class="document-tab-bar flex shrink-0 items-center overflow-x-auto overflow-y-hidden border-t-1 border-t-border-primary border-t-solid bg-bg-primary px-2 py-1"
+    class="document-tab-bar relative flex shrink-0 items-center border-t-1 border-t-border-primary border-t-solid bg-bg-primary"
+    @mouseenter="handleTabBarPointerEnter"
+    @mouseleave="handleTabBarPointerLeave"
   >
-    <template v-for="(tab, index) in tabs" :key="tab.sessionId">
-      <!-- 独立分隔元素：真实 DOM 节点，数量恒为「标签数 − 1」 -->
-      <span
-        v-if="index > 0"
-        aria-hidden="true"
-        data-testid="document-tab-separator"
-        class="document-tab-separator mx-1 h-4 w-px shrink-0 self-center bg-border-primary"
-      />
+    <div
+      ref="scrollerRef"
+      data-testid="document-tab-scroller"
+      class="document-tab-bar__scroller min-w-0 flex flex-1 items-center overflow-x-auto overflow-y-hidden px-2 py-1"
+    >
+      <template v-for="(tab, index) in tabs" :key="tab.sessionId">
+        <!-- 独立分隔元素：真实 DOM 节点，数量恒为「标签数 − 1」 -->
+        <span
+          v-if="index > 0"
+          aria-hidden="true"
+          data-testid="document-tab-separator"
+          class="document-tab-separator mx-1 h-4 w-px shrink-0 self-center bg-border-primary"
+        />
 
-      <a-dropdown
-        :trigger="['contextmenu']"
-        :menu="{ items: getMenuItems(tab), onClick: info => onMenuClick(info, tab) }"
-      >
-        <div
-          :data-testid="`document-tab-${tab.sessionId}`"
-          :data-active="isActiveTab(tab) ? 'true' : 'false'"
-          :data-dirty="tab.dirty ? 'true' : 'false'"
-          class="document-tab group h-6 max-w-50 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1.5 text-sm transition-colors"
-          :class="getTabClassList(tab)"
-          @click="activateTab(tab)"
-          @auxclick.self.prevent="closeTab(tab)"
+        <a-dropdown
+          :trigger="['contextmenu']"
+          :menu="{ items: getMenuItems(tab), onClick: info => onMenuClick(info, tab) }"
         >
-          <!-- 脏点槽：与关闭槽等宽 14px，圆点在槽内居中；干净标签只是不渲染圆点，槽位仍然占位 -->
-          <span class="document-tab__dot-slot size-3.5 flex shrink-0 items-center justify-center">
-            <span
-              v-if="tab.dirty"
-              data-testid="document-tab-dirty-dot"
-              class="document-tab__dot h-1.5 w-1.5 rounded-full bg-text-secondary"
-            />
-          </span>
-          <span class="document-tab__label min-w-0 flex-1 truncate">{{ getTabLabel(tab) }}</span>
-          <button
-            type="button"
-            :aria-label="t('documentTab.close')"
-            data-testid="document-tab-close"
-            class="document-tab__close size-3.5 flex shrink-0 cursor-pointer items-center justify-center border-0 rounded bg-transparent p-0 color-text-secondary opacity-0 transition-opacity hover:bg-bg-primary hover:color-text-primary group-hover:opacity-100"
-            @click.stop="closeTab(tab)"
+          <div
+            :data-testid="`document-tab-${tab.sessionId}`"
+            :data-active="isActiveTab(tab) ? 'true' : 'false'"
+            :data-dirty="tab.dirty ? 'true' : 'false'"
+            class="document-tab group h-6 max-w-50 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1.5 text-sm transition-colors"
+            :class="getTabClassList(tab)"
+            @click="activateTab(tab)"
+            @auxclick.self.prevent="closeTab(tab)"
           >
-            <span class="i-tabler:x text-xs" />
-          </button>
-        </div>
-      </a-dropdown>
-    </template>
+            <!-- 脏点槽：与关闭槽等宽 14px，圆点在槽内居中；干净标签只是不渲染圆点，槽位仍然占位 -->
+            <span class="document-tab__dot-slot size-3.5 flex shrink-0 items-center justify-center">
+              <span
+                v-if="tab.dirty"
+                data-testid="document-tab-dirty-dot"
+                class="document-tab__dot h-1.5 w-1.5 rounded-full bg-text-secondary"
+              />
+            </span>
+            <span class="document-tab__label min-w-0 flex-1 truncate">{{ getTabLabel(tab) }}</span>
+            <button
+              type="button"
+              :aria-label="t('documentTab.close')"
+              data-testid="document-tab-close"
+              class="document-tab__close size-3.5 flex shrink-0 cursor-pointer items-center justify-center border-0 rounded bg-transparent p-0 color-text-secondary opacity-0 transition-opacity hover:bg-bg-primary hover:color-text-primary group-hover:opacity-100"
+              @click.stop="closeTab(tab)"
+            >
+              <span class="i-tabler:x text-xs" />
+            </button>
+          </div>
+        </a-dropdown>
+      </template>
+    </div>
+
+    <!-- 唯一使用绝对定位的元素：装饰性 overlay 滑块，不参与布局 -->
+    <div
+      v-show="thumbVisible"
+      ref="thumbRef"
+      data-testid="document-tab-scrollbar-thumb"
+      class="document-tab-bar__thumb absolute bottom-0.5 h-1 cursor-pointer rounded-full transition-opacity duration-150"
+      :class="thumbActive ? 'opacity-100' : 'opacity-0'"
+      :style="thumbStyle"
+      @pointerdown="handleThumbPointerDown"
+    />
   </div>
 </template>
 
 <style scoped lang="scss">
-.document-tab-bar {
-  scrollbar-width: thin;
+.document-tab-bar__scroller {
+  /*
+   * 原生滚动条在 Chromium 里始终占位，做不到“浮在内容上方”，
+   * 所以彻底隐藏，改由 overlay 滑块承担视觉反馈。
+   * `scrollbar-width` 在新版 Chromium 里会同时让 `::-webkit-scrollbar` 失效，
+   * 两者都写以覆盖旧内核。
+   */
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.document-tab-bar__thumb {
+  /* 与统一滚动条共用同一套颜色变量，避免自绘滑块另起一套配色 */
+  background-color: var(--wj-scrollbar-thumb-bg);
+
+  &:hover {
+    background-color: var(--wj-scrollbar-thumb-bg-hover);
+  }
+
+  &:active {
+    background-color: var(--wj-scrollbar-thumb-bg-active);
+  }
 }
 </style>
