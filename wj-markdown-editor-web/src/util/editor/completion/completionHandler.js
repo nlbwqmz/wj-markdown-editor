@@ -7,11 +7,11 @@ import tableCompletion from '@/util/editor/completion/tableCompletion.js'
 
 const handlerList = [CommonCompletion, tableCompletion, codeBlockCompletion, headingCompletion, containerCompletion, alertCompletion]
 
-function autocompletionHandler(context) {
+function autocompletionHandler(context, t = key => key) {
   const word = context.matchBefore(/\w*/)
   const suggestions = []
   handlerList.forEach((handler) => {
-    const itemSuggestions = handler(context)
+    const itemSuggestions = handler(context, t)
     if (itemSuggestions && Array.isArray(itemSuggestions) && itemSuggestions.length > 0) {
       suggestions.push(...itemSuggestions)
     }

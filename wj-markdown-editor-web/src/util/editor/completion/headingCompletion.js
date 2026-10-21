@@ -1,4 +1,4 @@
-function headingCompletion(context) {
+function headingCompletion(context, t = key => key) {
   const word = context.matchBefore(/^#{1,5}/)
   if (word) {
     const text = word.text
@@ -7,7 +7,7 @@ function headingCompletion(context) {
       suggestions.push({
         label: `${'#'.repeat(i)}`,
         type: 'text',
-        section: '标题',
+        section: t('editor.heading'),
         apply: (view, completion, from, to) => {
           const insert = `${'#'.repeat(i)} `
           view.dispatch({

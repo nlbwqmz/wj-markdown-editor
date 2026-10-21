@@ -1,7 +1,7 @@
 import hljs from 'highlight.js'
 
 const listLanguages = hljs.listLanguages().concat(['vue', 'mermaid'])
-function codeBlockCompletion(context) {
+function codeBlockCompletion(context, t = key => key) {
   const word = context.matchBefore(/^`{1,3}[a-z0-9]*/i)
   if (word) {
     const suggestions = []
@@ -12,22 +12,9 @@ function codeBlockCompletion(context) {
       suggestions.push({
         label: `${item}`,
         type: 'text',
-        section: '代码块',
+        section: t('editor.section.codeBlock'),
         apply: (view, completion, from, to) => {
           const insert = `\`\`\`${item}\n\n\`\`\``
-          view.dispatch({
-            changes: { from: from - offset, to, insert },
-            selection: { anchor: from - offset + 4 + item.length },
-          })
-        },
-      })
-      suggestions.push({
-        label: `${item}`,
-        detail: '非包围',
-        type: 'text',
-        section: '代码块',
-        apply: (view, completion, from, to) => {
-          const insert = `\`\`\`${item}`
           view.dispatch({
             changes: { from: from - offset, to, insert },
             selection: { anchor: from - offset + 4 + item.length },

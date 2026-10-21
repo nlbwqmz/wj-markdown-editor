@@ -190,7 +190,7 @@ const {
   reconfigureTheme,
   reconfigureExtensions,
   reconfigureKeymap,
-} = useEditorCore({ editorRef })
+} = useEditorCore({ editorRef, t })
 
 /**
  * 将外层传入的 snapshot 规范化后写入本地引用。
@@ -1616,7 +1616,7 @@ defineExpose({
           v-else-if="item.type === 'preview'"
           :ref="setPreviewElement"
           data-layout-item="preview"
-          class="wj-scrollbar allow-search markdown-edit-layout__preview h-full overflow-y-auto p-2"
+          class="allow-search wj-scrollbar markdown-edit-layout__preview h-full overflow-y-auto p-2"
           :style="previewContainerStyle"
           @scroll="syncPreviewToEditor"
           @click="onPreviewAreaClick"

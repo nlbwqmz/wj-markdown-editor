@@ -23,6 +23,7 @@ import {
   lineNumbers,
   rectangularSelection,
 } from '@codemirror/view'
+import i18n from '@/i18n/index.js'
 import completionHandler from '@/util/editor/completion/completionHandler.js'
 
 /**
@@ -67,13 +68,6 @@ const fixedExtension = [
       overflow: 'hidden',
     },
   }),
-  autocompletion({
-    override: [
-      completionHandler,
-    ],
-    tooltipClass: () => 'wj-completion-tooltip',
-    icons: false,
-  }),
   syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
   EditorState.allowMultipleSelections.of(true),
   highlightSpecialChars(),
@@ -81,10 +75,25 @@ const fixedExtension = [
   crosshairCursor(),
 ]
 
+// 默认翻译器：调用时读取当前 locale，切换语言后无需重建编辑器
+const defaultTranslate = key => i18n.global.t(key)
+
+// 补全文案依赖当前语言，因此每次创建编辑器时按 t 生成
+function createCompletionExtension(t) {
+  return autocompletion({
+    override: [
+      context => completionHandler(context, t),
+    ],
+    tooltipClass: () => 'wj-completion-tooltip',
+    icons: false,
+  })
+}
+
 const editorExtensionUtil = {
-  getDefault: () => {
+  getDefault: ({ t = defaultTranslate } = {}) => {
     return [
       ...fixedExtension,
+      createCompletionExtension(t),
     ]
   },
   getDynamicExtension: () => {

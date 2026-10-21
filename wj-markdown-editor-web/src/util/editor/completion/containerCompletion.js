@@ -15,7 +15,7 @@ function checkLineStart(context) {
 }
 
 const listLanguages = ['Info', 'Tip', 'Important', 'Warning', 'Danger', 'Detail']
-function containerCompletion(context) {
+function containerCompletion(context, t = key => key) {
   if (checkLineStart(context) === false) {
     return []
   }
@@ -29,24 +29,12 @@ function containerCompletion(context) {
       suggestions.push({
         label: `${item}`,
         type: 'text',
-        section: '容器',
+        section: t('editor.container'),
         apply: (view, completion, from, to) => {
           const insert = `::: ${item}\n\n:::`
           view.dispatch({
             changes: { from: to - offset, to, insert },
             selection: { anchor: to - offset + 5 + item.length },
-          })
-        },
-      })
-      suggestions.push({
-        label: `${item}`,
-        detail: '非包围',
-        type: 'text',
-        section: '容器',
-        apply: (view, completion, from, to) => {
-          const insert = `::: ${item}`
-          view.dispatch({
-            changes: { from: to - offset, to, insert },
           })
         },
       })

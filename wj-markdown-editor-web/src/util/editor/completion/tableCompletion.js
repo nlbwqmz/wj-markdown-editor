@@ -15,7 +15,7 @@ function checkLineStart(context) {
   }
   return word.text === lineText
 }
-function tableCompletion(context) {
+function tableCompletion(context, t = key => key) {
   if (checkLineStart(context) === false) {
     return []
   }
@@ -37,7 +37,7 @@ function tableCompletion(context) {
       suggestions.push({
         label: `${rows}${symbol}${cols + i}`,
         type: 'text',
-        section: '表格（行x列）',
+        section: t('editor.section.tableSize'),
         apply: (view, completion, from, to) => {
           editorUtil.insertTable(view, rows, cols + i, from, to)
         },

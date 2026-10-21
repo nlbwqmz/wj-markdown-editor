@@ -9,7 +9,7 @@ import editorExtensionUtil from '@/util/editor/editorExtensionUtil.js'
  * 编辑器核心初始化与重配置
  * 统一管理 EditorView 生命周期，避免业务组件直接处理底层细节
  */
-export function useEditorCore({ editorRef }) {
+export function useEditorCore({ editorRef, t }) {
   const editorView = shallowRef(null)
   const domCompositionActive = ref(false)
   const compositionIdlePending = ref(false)
@@ -78,7 +78,7 @@ export function useEditorCore({ editorRef }) {
         themeCompartment.of(theme === 'dark' ? [oneDark] : []),
         keymapCompartment.of(keymap.of(keymapList)),
         ...extraExtensions,
-        ...editorExtensionUtil.getDefault(),
+        ...editorExtensionUtil.getDefault({ t }),
         ...dynamicExtensionList,
         EditorView.updateListener.of((update) => {
           if (update.docChanged && isCompositionActive() === false) {

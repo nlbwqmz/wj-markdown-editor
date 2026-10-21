@@ -28,6 +28,18 @@ export default {
     goToEdit: 'Go to edit',
     outlineTip: 'Please open preview first',
     prettier: 'Prettier',
+    command: {
+      date: 'Date',
+      time: 'Time',
+      link: 'Link',
+      chart: 'Chart',
+      taskList: 'Task list',
+    },
+    section: {
+      general: 'General',
+      codeBlock: 'Code block',
+      tableSize: 'Table (rows x cols)',
+    },
   },
   closeModal: {
     closePrompt: ' has unsaved changes. Please choose how to exit. Automatic saving is recommended to avoid data loss.',

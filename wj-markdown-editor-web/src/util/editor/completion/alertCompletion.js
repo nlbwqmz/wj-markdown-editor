@@ -15,7 +15,7 @@ function checkLineStart(context) {
 }
 
 const listLanguages = ['Note', 'Tip', 'Important', 'Warning', 'Caution']
-function alertCompletion(context) {
+function alertCompletion(context, t = key => key) {
   if (checkLineStart(context) === false) {
     return []
   }
@@ -28,7 +28,7 @@ function alertCompletion(context) {
       suggestions.push({
         label: `${item}`,
         type: 'text',
-        section: '提示',
+        section: t('editor.alert'),
         apply: (view, completion, from, to) => {
           const insert = `> [!${item}]\n> `
           view.dispatch({

@@ -28,6 +28,18 @@ export default {
     goToEdit: '去编辑',
     outlineTip: '请先打开预览',
     prettier: '美化',
+    command: {
+      date: '日期',
+      time: '时间',
+      link: '链接',
+      chart: '图表',
+      taskList: '任务列表',
+    },
+    section: {
+      general: '通用',
+      codeBlock: '代码块',
+      tableSize: '表格（行x列）',
+    },
   },
   closeModal: {
     closePrompt: '存在未保存的修改，请选择退出方式。建议启用自动保存功能以避免数据丢失。',
