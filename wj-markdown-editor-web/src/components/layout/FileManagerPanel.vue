@@ -204,7 +204,7 @@ async function handleFocusCurrentDocumentDirectory() {
 
 <template>
   <div ref="panelRootRef" class="file-manager-panel h-full min-w-0 flex flex-col overflow-hidden bg-bg-primary text-text-primary">
-    <div class="file-manager-panel__toolbar flex items-center gap-2 border-b border-b-border-primary border-b-solid p-1 p-l-2">
+    <div class="file-manager-panel__toolbar flex items-center gap-2 border-b border-b-border-primary border-b-solid p-1">
       <div
         data-testid="file-manager-breadcrumb"
         :title="resolvedDirectoryPath || undefined"
@@ -263,12 +263,13 @@ async function handleFocusCurrentDocumentDirectory() {
         />
       </div>
     </div>
-    <div v-if="hasDirectory" class="file-manager-panel__search border-b border-b-border-primary border-b-solid px-2 py-2">
+    <div v-if="hasDirectory" class="file-manager-panel__search border-b border-b-border-primary border-b-solid p-1">
       <AInput
         v-model:value="searchQuery"
         allow-clear
         :placeholder="t('message.fileManagerSearchPlaceholder')"
         class="file-manager-panel__search-input w-full"
+        size="small"
       />
     </div>
     <div class="h-0 min-h-0 flex-1 overflow-hidden">
@@ -281,7 +282,7 @@ async function handleFocusCurrentDocumentDirectory() {
       </div>
       <div
         v-else-if="filteredEntryList.length > 0"
-        class="wj-scrollbar file-manager-panel__list h-full min-h-0 overflow-y-auto px-2 py-2"
+        class="wj-scrollbar file-manager-panel__list h-full min-h-0 overflow-y-auto p-1"
       >
         <template v-for="entry in filteredEntryList" :key="entry.path">
           <ADropdown
@@ -343,7 +344,7 @@ async function handleFocusCurrentDocumentDirectory() {
       <div
         v-else
         data-testid="file-manager-empty-state"
-        class="file-manager-panel__empty h-full flex items-center justify-center px-4"
+        class="file-manager-panel__empty h-full flex items-center justify-center p-1"
       >
         <AEmpty>
           <template #description>
@@ -378,13 +379,14 @@ async function handleFocusCurrentDocumentDirectory() {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: none;
-  border-radius: 10px;
+  border-radius: 6px;
   background: transparent;
-  padding: 8px 10px;
+  padding: 4px 8px;
   text-align: left;
   color: inherit;
+  font-size: 13px;
   cursor: pointer;
 
   &:hover {
@@ -401,12 +403,13 @@ async function handleFocusCurrentDocumentDirectory() {
 
 .file-manager-panel__entry-icon {
   flex: 0 0 auto;
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .file-manager-panel__entry-name {
   min-width: 0;
   flex: 1 1 auto;
-  line-height: 1.5;
+  line-height: 20px;
 }
 </style>
