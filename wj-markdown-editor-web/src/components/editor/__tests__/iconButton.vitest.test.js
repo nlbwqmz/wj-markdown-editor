@@ -81,6 +81,36 @@ function mountIconButton(props = {}) {
 }
 
 describe('iconButton', () => {
+  it('默认应渲染 tooltip', () => {
+    const wrapper = mountIconButton()
+
+    expect(wrapper.find('[data-testid="tooltip-stub"]').exists()).toBe(true)
+    expect(wrapper.find('i').exists()).toBe(true)
+  })
+
+  it('showTooltip 为 false 时普通按钮与下拉按钮均不应渲染 tooltip，但图标与菜单仍然可用', async () => {
+    const menuAction = vi.fn()
+    const plainButton = mountIconButton({ showTooltip: false })
+    expect(plainButton.find('[data-testid="tooltip-stub"]').exists()).toBe(false)
+    expect(plainButton.find('i').exists()).toBe(true)
+
+    const dropdownButton = mountIconButton({
+      showTooltip: false,
+      menuList: [
+        {
+          key: 'sort-name',
+          label: '名称排序',
+          action: menuAction,
+        },
+      ],
+    })
+    expect(dropdownButton.find('[data-testid="tooltip-stub"]').exists()).toBe(false)
+    expect(dropdownButton.findComponent(DropdownStub).exists()).toBe(true)
+
+    await dropdownButton.get('[data-testid="menu-item-sort-name"]').trigger('click')
+    expect(menuAction).toHaveBeenCalledTimes(1)
+  })
+
   it('下拉按钮应透传 trigger 与 selectedKeys，并按菜单 key 执行动作', async () => {
     const menuAction = vi.fn()
     const wrapper = mountIconButton({

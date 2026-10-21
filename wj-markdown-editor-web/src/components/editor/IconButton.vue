@@ -38,6 +38,11 @@ const props = defineProps({
     type: Object,
     required: false,
   },
+  // 关闭后只渲染图标，不再挂载 a-tooltip；用于 hover 弹出菜单/popover 的按钮，避免浮层互相干扰
+  showTooltip: {
+    type: Boolean,
+    default: true,
+  },
 })
 
 const resolvedMenuList = computed(() => {
@@ -69,7 +74,7 @@ function handleMenuClick(menuInfo) {
     <div
       class="h-6 w-6 flex cursor-pointer items-center justify-center border-rd p-0.5 font-size-4.5 text-text-secondary hover:bg-bg-hover"
     >
-      <a-tooltip placement="topLeft" color="#1677ff">
+      <a-tooltip v-if="showTooltip" placement="topLeft" color="#1677ff">
         <template #title>
           <div v-if="shortcutKey" class="flex gap-2">
             <div>{{ label }}</div>
@@ -81,6 +86,7 @@ function handleMenuClick(menuInfo) {
         </template>
         <i :class="props.icon" />
       </a-tooltip>
+      <i v-else :class="props.icon" />
     </div>
   </a-popover>
   <a-dropdown
@@ -93,7 +99,7 @@ function handleMenuClick(menuInfo) {
     <div
       class="h-6 w-6 flex cursor-pointer items-center justify-center border-rd p-0.5 font-size-4.5 text-text-secondary hover:bg-bg-hover"
     >
-      <a-tooltip placement="topLeft" color="#1677ff">
+      <a-tooltip v-if="showTooltip" placement="topLeft" color="#1677ff">
         <template #title>
           <div v-if="shortcutKey" class="flex gap-2">
             <div>{{ label }}</div>
@@ -105,6 +111,7 @@ function handleMenuClick(menuInfo) {
         </template>
         <i :class="props.icon" />
       </a-tooltip>
+      <i v-else :class="props.icon" />
     </div>
     <template #overlay>
       <a-menu
@@ -120,7 +127,7 @@ function handleMenuClick(menuInfo) {
     class="h-6 w-6 flex cursor-pointer items-center justify-center border-rd p-0.5 font-size-4.5 text-text-secondary hover:bg-bg-hover"
     @click="action"
   >
-    <a-tooltip placement="topLeft" color="#1677ff">
+    <a-tooltip v-if="showTooltip" placement="topLeft" color="#1677ff">
       <template #title>
         <div v-if="shortcutKey" class="flex gap-2">
           <div>{{ label }}</div>
@@ -132,5 +139,6 @@ function handleMenuClick(menuInfo) {
       </template>
       <i :class="props.icon" />
     </a-tooltip>
+    <i v-else :class="props.icon" />
   </div>
 </template>

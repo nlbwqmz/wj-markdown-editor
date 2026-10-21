@@ -119,6 +119,7 @@ export function useToolbarBuilder({
       heading: {
         label: t('editor.heading'),
         icon: 'i-tabler:heading',
+        showTooltip: false,
         menuList: [
           {
             label: getKeymapByShortcutKeyId('editor-heading-1')
@@ -221,6 +222,7 @@ export function useToolbarBuilder({
       table: {
         label: t('editor.table'),
         icon: 'i-tabler:table',
+        showTooltip: false,
         popover: createVNode(TableShape, {
           col: 6,
           row: 6,
@@ -235,6 +237,7 @@ export function useToolbarBuilder({
       alert: {
         label: t('editor.alert'),
         icon: 'i-tabler:alert-square',
+        showTooltip: false,
         menuList: [
           { label: 'note', action: () => runWithEditor(view => editorUtil.alertContainer(view, 'note')) },
           { label: 'tip', action: () => runWithEditor(view => editorUtil.alertContainer(view, 'tip')) },
@@ -246,6 +249,7 @@ export function useToolbarBuilder({
       container: {
         label: t('editor.container'),
         icon: 'i-tabler:container',
+        showTooltip: false,
         menuList: [
           { label: 'info', action: () => runWithEditor(view => editorUtil.container(view, 'info')) },
           { label: 'tip', action: () => runWithEditor(view => editorUtil.container(view, 'tip')) },
@@ -258,6 +262,7 @@ export function useToolbarBuilder({
       image: {
         label: t('editor.image'),
         icon: 'i-tabler:photo',
+        showTooltip: false,
         menuList: [
           {
             label: getKeymapByShortcutKeyId('editor-image-template')
@@ -311,6 +316,7 @@ export function useToolbarBuilder({
       video: {
         label: t('editor.video'),
         icon: 'i-tabler:video',
+        showTooltip: false,
         menuList: [
           {
             label: t('editor.insertTemplate'),
@@ -325,6 +331,7 @@ export function useToolbarBuilder({
       audio: {
         label: t('editor.audio'),
         icon: 'i-tabler:device-audio-tape',
+        showTooltip: false,
         menuList: [
           {
             label: t('editor.insertTemplate'),
@@ -351,6 +358,7 @@ export function useToolbarBuilder({
       textColor: {
         label: t('editor.textColor'),
         icon: 'i-tabler:color-picker',
+        showTooltip: false,
         popover: createVNode(ColorPicker, {
           'is-widget': true,
           'picker-type': 'chrome',

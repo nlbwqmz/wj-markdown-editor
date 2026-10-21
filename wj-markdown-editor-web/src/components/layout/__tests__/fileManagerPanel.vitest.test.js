@@ -470,7 +470,8 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     const openParentButton = wrapper.get('[data-testid="file-manager-open-parent"]')
-    expect(openParentButton.attributes('title')).toBe('translated:message.fileManagerOpenParentDirectory')
+    // 按钮说明统一由 IconButton 的 a-tooltip 承担，不再输出原生 title
+    expect(openParentButton.attributes('title')).toBeUndefined()
     expect(openParentButton.attributes('disabled')).toBeUndefined()
 
     await openParentButton.trigger('click')
@@ -531,7 +532,7 @@ describe('fileManagerPanel 组件', () => {
     await flushFileManagerPanel()
 
     const focusCurrentDirectoryButton = wrapper.get('[data-testid="file-manager-focus-current-file-directory"]')
-    expect(focusCurrentDirectoryButton.attributes('title')).toBe('translated:message.fileManagerFocusCurrentFileDirectory')
+    expect(focusCurrentDirectoryButton.attributes('title')).toBeUndefined()
     expect(focusCurrentDirectoryButton.attributes('disabled')).toBeUndefined()
 
     await focusCurrentDirectoryButton.trigger('click')
@@ -1023,6 +1024,11 @@ describe('fileManagerPanel 组件', () => {
     expect(createEntryButton?.props('menuTrigger')).toEqual(['click'])
     expect(sortEntryButton?.props('menuTrigger')).toEqual(['hover'])
     expect(sortEntryButton?.props('menuSelectedKeys')).toEqual([])
+    // 排序按钮 hover 即出菜单，不再叠加 a-tooltip；新建按钮仍保留 a-tooltip
+    expect(createEntryButton?.props('label')).toBe('translated:message.fileManagerCreateEntry')
+    expect(createEntryButton?.props('showTooltip')).toBe(true)
+    expect(sortEntryButton?.props('label')).toBe('translated:message.fileManagerSort')
+    expect(sortEntryButton?.props('showTooltip')).toBe(false)
 
     const sortMenuList = resolveSetupStateBinding(wrapper.vm.$.setupState.sortMenuList)
     const selectedItem = sortMenuList.find(item => item.key === 'modifiedTime-desc')

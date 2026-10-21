@@ -222,7 +222,6 @@ async function handleFocusCurrentDocumentDirectory() {
           data-testid="file-manager-open-parent"
           icon="i-tabler:arrow-up"
           :label="t('message.fileManagerOpenParentDirectory')"
-          :title="t('message.fileManagerOpenParentDirectory')"
           :action="canOpenParentDirectory ? openParentDirectory : undefined"
           :disabled="!canOpenParentDirectory ? true : undefined"
           :class="!canOpenParentDirectory ? disabledToolbarButtonClass : undefined"
@@ -231,7 +230,6 @@ async function handleFocusCurrentDocumentDirectory() {
           data-testid="file-manager-focus-current-file-directory"
           icon="i-tabler:focus-2"
           :label="t('message.fileManagerFocusCurrentFileDirectory')"
-          :title="t('message.fileManagerFocusCurrentFileDirectory')"
           :action="canFocusCurrentDocumentDirectory ? handleFocusCurrentDocumentDirectory : undefined"
           :disabled="!canFocusCurrentDocumentDirectory ? true : undefined"
           :class="!canFocusCurrentDocumentDirectory ? disabledToolbarButtonClass : undefined"
@@ -240,14 +238,12 @@ async function handleFocusCurrentDocumentDirectory() {
           data-testid="file-manager-open-directory"
           icon="i-tabler:folder-open"
           :label="t('message.fileManagerSelectDirectory')"
-          :title="t('message.fileManagerSelectDirectory')"
           :action="pickDirectory"
         />
         <IconButton
           data-testid="file-manager-create-entry"
           icon="i-tabler:square-plus"
           :label="t('message.fileManagerCreateEntry')"
-          :title="t('message.fileManagerCreateEntry')"
           :menu-list="hasDirectory ? createMenuList : []"
           :menu-trigger="['click']"
           :disabled="!hasDirectory ? true : undefined"
@@ -257,9 +253,9 @@ async function handleFocusCurrentDocumentDirectory() {
           data-testid="file-manager-sort-entry"
           icon="i-tabler:arrows-sort"
           :label="t('message.fileManagerSort')"
-          :title="t('message.fileManagerSort')"
           :menu-list="sortMenuList"
           :menu-trigger="['hover']"
+          :show-tooltip="false"
         />
       </div>
     </div>

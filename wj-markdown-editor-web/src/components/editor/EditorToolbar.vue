@@ -22,6 +22,7 @@ defineProps({
       :menu-list="item.menuList"
       :action="item.action"
       :popover="item.popover"
+      :show-tooltip="item.showTooltip"
     />
   </div>
 </template>
