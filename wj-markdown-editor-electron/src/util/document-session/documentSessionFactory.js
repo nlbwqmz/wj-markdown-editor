@@ -278,7 +278,7 @@ export function createBoundFileSession({
  * 工厂只负责把这个分支的默认值稳定地写死。
  *
  * 之所以保留 `missingPath`，是为了让渲染层能提示用户移除哪一条 recent；
- * 之所以后续仍会把 `fileName` 推导成 `Unnamed`，是为了避免把一个并未成功绑定的路径伪装成当前文档身份。
+ * 之所以后续仍会把 `fileName` 推导成 `Untitled`，是为了避免把一个并未成功绑定的路径伪装成当前文档身份。
  */
 export function createRecentMissingSession({ sessionId, kind, missingPath }) {
   assertNonEmptyString(sessionId, 'sessionId')

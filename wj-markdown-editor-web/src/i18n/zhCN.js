@@ -52,7 +52,6 @@ export default {
     directClose: '直接关闭',
   },
   documentTab: {
-    untitled: '未命名',
     close: '关闭',
     closeOthers: '关闭其它',
     closeToRight: '关闭右侧',

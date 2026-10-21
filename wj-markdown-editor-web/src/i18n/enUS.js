@@ -52,7 +52,6 @@ export default {
     directClose: 'Close without saving',
   },
   documentTab: {
-    untitled: 'Untitled',
     close: 'Close',
     closeOthers: 'Close others',
     closeToRight: 'Close to the right',

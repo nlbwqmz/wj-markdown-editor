@@ -2158,7 +2158,7 @@ function createEmptyDocumentContext() {
     exists: false,
     content: '',
     saved: false,
-    fileName: 'Unnamed',
+    fileName: 'Untitled',
   }
 }
 
@@ -2178,7 +2178,7 @@ function getDocumentContext(windowId) {
     exists: snapshot?.exists ?? Boolean(session?.documentSource?.exists),
     content: snapshot?.content ?? session?.editorSnapshot?.content ?? '',
     saved: snapshot?.saved === true,
-    fileName: snapshot?.fileName || 'Unnamed',
+    fileName: snapshot?.fileName || 'Untitled',
   }
 }
 

@@ -858,7 +858,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
       exists: false,
       content: '',
       saved: false,
-      fileName: 'Unnamed',
+      fileName: 'Untitled',
     })
   })
 
@@ -875,7 +875,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
       exists: false,
       content: '',
       saved: false,
-      fileName: 'Unnamed',
+      fileName: 'Untitled',
     })
   })
 
@@ -894,7 +894,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
       exists: false,
       content: '',
       saved: false,
-      fileName: 'Unnamed',
+      fileName: 'Untitled',
     })
 
     expect(winInfoUtil.deleteEditorWin(winInfo.id)).toBe(true)

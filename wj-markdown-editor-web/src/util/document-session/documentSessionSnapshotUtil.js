@@ -12,7 +12,7 @@ export function createDefaultDocumentSessionSnapshot() {
     sessionId: null,
     kind: 'markdown',
     content: '',
-    fileName: 'Unnamed',
+    fileName: 'Untitled',
     displayPath: null,
     recentMissingPath: null,
     windowTitle: 'wj-markdown-editor',
@@ -108,7 +108,7 @@ function normalizeTabList(tabs) {
       return {
         sessionId: tab.sessionId,
         kind: typeof tab.kind === 'string' && tab.kind ? tab.kind : 'markdown',
-        fileName: typeof tab.fileName === 'string' && tab.fileName ? tab.fileName : 'Unnamed',
+        fileName: typeof tab.fileName === 'string' && tab.fileName ? tab.fileName : 'Untitled',
         displayPath: tab.displayPath ?? null,
         dirty: tab.dirty === true,
         isRecentMissing: tab.isRecentMissing === true,
@@ -127,7 +127,7 @@ function normalizeExternalPrompt(externalPrompt, fallbackFileName) {
     version: Number.isInteger(externalPrompt.version) ? externalPrompt.version : 0,
     localContent: typeof externalPrompt.localContent === 'string' ? externalPrompt.localContent : '',
     externalContent: typeof externalPrompt.externalContent === 'string' ? externalPrompt.externalContent : '',
-    fileName: externalPrompt.fileName || fallbackFileName || 'Unnamed',
+    fileName: externalPrompt.fileName || fallbackFileName || 'Untitled',
   }
 }
 
@@ -135,7 +135,7 @@ function normalizeExternalPrompt(externalPrompt, fallbackFileName) {
  * 把主进程快照归一化成 renderer 可直接消费的稳定结构。
  *
  * 注意 recent-missing 的展示语义：
- * - 文档身份仍然是 Unnamed
+ * - 文档身份仍然是 Untitled
  * - 展示路径需要回退到缺失的 recent 路径
  */
 export function normalizeDocumentSessionSnapshot(snapshot) {
@@ -145,7 +145,7 @@ export function normalizeDocumentSessionSnapshot(snapshot) {
   }
 
   const isRecentMissing = snapshot.isRecentMissing === true
-  const fileName = snapshot.fileName || (isRecentMissing ? 'Unnamed' : defaultSnapshot.fileName)
+  const fileName = snapshot.fileName || (isRecentMissing ? 'Untitled' : defaultSnapshot.fileName)
   const recentMissingPath = snapshot.recentMissingPath ?? null
   const displayPath = snapshot.displayPath ?? (isRecentMissing ? recentMissingPath : null)
   const saved = snapshot.saved == null ? defaultSnapshot.saved : snapshot.saved === true
@@ -160,7 +160,7 @@ export function normalizeDocumentSessionSnapshot(snapshot) {
     fileName,
     displayPath,
     recentMissingPath,
-    windowTitle: snapshot.windowTitle || (fileName === 'Unnamed' ? 'wj-markdown-editor' : fileName),
+    windowTitle: snapshot.windowTitle || (fileName === 'Untitled' ? 'wj-markdown-editor' : fileName),
     saved,
     dirty,
     exists,

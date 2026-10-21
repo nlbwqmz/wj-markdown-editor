@@ -20,7 +20,7 @@ function createFallbackDocumentContext(snapshot) {
     exists: snapshot?.exists === true,
     content: snapshot?.content || '',
     saved: snapshot?.saved === true,
-    fileName: snapshot?.fileName || 'Unnamed',
+    fileName: snapshot?.fileName || 'Untitled',
   }
 }
 

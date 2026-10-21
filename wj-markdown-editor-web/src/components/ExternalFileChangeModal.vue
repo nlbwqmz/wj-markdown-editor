@@ -41,7 +41,7 @@ const diffHtml = computed(() => {
     return ''
   }
   const { createPatch, diff2html } = diffLibs.value
-  const fileName = externalFileChange.value.fileName || 'Unnamed'
+  const fileName = externalFileChange.value.fileName || 'Untitled'
   const diffString = createPatch(
     fileName,
     externalFileChange.value.localContent || '',
@@ -130,7 +130,7 @@ async function applyExternalChange() {
   >
     <div class="mb-4">
       <div class="text-3.5 color-[var(--wj-markdown-text-secondary)]">
-        {{ t('externalFileChangeModal.description', { fileName: externalFileChange.fileName || 'Unnamed' }) }}
+        {{ t('externalFileChangeModal.description', { fileName: externalFileChange.fileName || 'Untitled' }) }}
       </div>
     </div>
     <div class="wj-scrollbar relative max-h-60vh overflow-auto" v-html="diffHtml" />

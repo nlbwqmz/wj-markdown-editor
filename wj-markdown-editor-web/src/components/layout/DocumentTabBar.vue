@@ -41,11 +41,13 @@ const { t } = useI18n()
 const tabs = computed(() => store.documentSessionSnapshot?.tabs || [])
 const activeSessionId = computed(() => store.documentSessionSnapshot?.activeSessionId ?? null)
 
+// 标签标题直接用会话文件名。
+// 未命名草稿在数据层就是固定的 `Untitled` 哨兵值，
+// 展示层不再做国际化，保证所有语言下看到同一个标识。
+const UNTITLED_FILE_NAME = 'Untitled'
+
 function getTabLabel(tab) {
-  if (!tab) {
-    return t('documentTab.untitled')
-  }
-  return tab.fileName === 'Unnamed' ? t('documentTab.untitled') : tab.fileName
+  return tab?.fileName || UNTITLED_FILE_NAME
 }
 
 function isActiveTab(tab) {

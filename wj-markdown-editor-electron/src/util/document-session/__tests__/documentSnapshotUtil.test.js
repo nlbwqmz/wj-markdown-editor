@@ -95,7 +95,7 @@ describe('documentSnapshotUtil', () => {
     })
 
     expect(snapshot.isRecentMissing).toBe(true)
-    expect(snapshot.fileName).toBe('Unnamed')
+    expect(snapshot.fileName).toBe('Untitled')
     expect(snapshot.displayPath).toBe('C:/docs/missing.md')
     expect(snapshot.recentMissingPath).toBe('C:/docs/missing.md')
     expect(snapshot.saved).toBe(true)

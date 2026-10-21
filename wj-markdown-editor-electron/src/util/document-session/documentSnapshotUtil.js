@@ -17,11 +17,11 @@ function isWindowsLikePath(targetPath) {
  *
  * `missingPath` 只用于 recent-missing 的提示路径，
  * 不能把它当成当前已经绑定的文档身份来参与标题计算。
- * 因此只要 `documentSource.path` 为空，就统一回退为 `Unnamed`。
+ * 因此只要 `documentSource.path` 为空，就统一回退为 `Untitled`。
  */
 function getDisplayFileName(documentPath) {
   if (!documentPath) {
-    return 'Unnamed'
+    return 'Untitled'
   }
 
   if (isWindowsLikePath(documentPath)) {
@@ -80,7 +80,7 @@ export function deriveDocumentSnapshot(session) {
     // 这里直接来自 editorSnapshot，代表“用户眼下正在编辑的版本”。
     content: editorSnapshot.content || '',
     // 当前文档用于标题栏、标签页等位置展示的文件名。
-    // 当没有正式文档路径时，统一回退为 Unnamed。
+    // 当没有正式文档路径时，统一回退为 Untitled。
     fileName,
     // 当前文档对外展示的路径。
     // 正常文件优先展示正式 documentPath；recent-missing 场景下退回显示缺失路径，便于用户识别是哪条 recent 失效了。
@@ -90,7 +90,7 @@ export function deriveDocumentSnapshot(session) {
     recentMissingPath: recentMissing ? documentSource.missingPath : null,
     // 窗口标题使用的最终文案。
     // 未命名草稿统一显示应用名，其余情况显示文件名，保持桌面端标题行为稳定。
-    windowTitle: fileName === 'Unnamed' ? 'wj-markdown-editor' : fileName,
+    windowTitle: fileName === 'Untitled' ? 'wj-markdown-editor' : fileName,
     // 当前编辑内容是否已经与磁盘基线一致。
     // 只有正文内容一致，且“文件存在性”也一致时，才认为这份快照处于已保存状态。
     saved,

@@ -35,7 +35,7 @@ describe('documentSessionFactory', () => {
     const snapshot = deriveDocumentSnapshot(session)
 
     expect(snapshot.saved).toBe(true)
-    expect(snapshot.fileName).toBe('Unnamed')
+    expect(snapshot.fileName).toBe('Untitled')
   })
 
   it('createRecentMissingSession 应只构造 startup recent-missing 会话数据，不在这里判断 trigger', () => {
@@ -61,7 +61,7 @@ describe('documentSessionFactory', () => {
     expect(snapshot.isRecentMissing).toBe(true)
     expect(snapshot.displayPath).toBe('C:/docs/missing.md')
     expect(snapshot.recentMissingPath).toBe('C:/docs/missing.md')
-    expect(snapshot.fileName).toBe('Unnamed')
+    expect(snapshot.fileName).toBe('Untitled')
   })
 
   it('createBoundFileSession 应为已绑定文件保留路径、内容和存在态', () => {

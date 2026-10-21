@@ -21,7 +21,7 @@ test('默认空 store 快照且当前生命周期也不需要补拉时，激活�
     needsBootstrapOnActivate: false,
     storeSnapshot: {
       sessionId: null,
-      fileName: 'Unnamed',
+      fileName: 'Untitled',
       displayPath: null,
       recentMissingPath: null,
       exists: false,
@@ -63,7 +63,7 @@ test('当前视图还没有任何可重放真快照时，激活策略必须要�
     needsBootstrapOnActivate: true,
     storeSnapshot: {
       sessionId: null,
-      fileName: 'Unnamed',
+      fileName: 'Untitled',
       displayPath: null,
       recentMissingPath: null,
       exists: false,

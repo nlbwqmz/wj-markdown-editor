@@ -1078,7 +1078,7 @@ describe('documentSessionRuntime', () => {
           exists: false,
           content: '',
           saved: true,
-          fileName: 'Unnamed',
+          fileName: 'Untitled',
         }
       }
       if (windowId === 18) {
@@ -1196,7 +1196,7 @@ describe('documentSessionRuntime', () => {
           exists: false,
           content: '',
           saved: true,
-          fileName: 'Unnamed',
+          fileName: 'Untitled',
         }
       }
       if (windowId === 18) {
@@ -1450,7 +1450,7 @@ describe('documentSessionRuntime', () => {
           exists: false,
           content: '',
           saved: true,
-          fileName: 'Unnamed',
+          fileName: 'Untitled',
         }
       }
       return {
@@ -1527,7 +1527,7 @@ describe('documentSessionRuntime', () => {
           exists: false,
           content: '',
           saved: true,
-          fileName: 'Unnamed',
+          fileName: 'Untitled',
         }
       }
       if (windowId === 18) {

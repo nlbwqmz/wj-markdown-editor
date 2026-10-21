@@ -14,7 +14,7 @@ test('recent-missing 快照应只保留当前 store 仍在消费的派生字段�
     revision: 2,
     sessionId: 'session-1',
     content: '# current',
-    fileName: 'Unnamed',
+    fileName: 'Untitled',
     displayPath: 'C:/docs/missing.md',
     recentMissingPath: 'C:/docs/missing.md',
     windowTitle: 'wj-markdown-editor',
@@ -30,7 +30,7 @@ test('recent-missing 快照应只保留当前 store 仍在消费的派生字段�
     externalPrompt: {
       visible: true,
       version: 3,
-      fileName: 'Unnamed',
+      fileName: 'Untitled',
       localContent: '# local',
       externalContent: '# disk',
     },
@@ -41,7 +41,7 @@ test('recent-missing 快照应只保留当前 store 仍在消费的派生字段�
     },
   })
 
-  assert.equal(storeState.fileName, 'Unnamed')
+  assert.equal(storeState.fileName, 'Untitled')
   assert.equal(storeState.saved, false)
   assert.equal('displayPath' in storeState, false)
   assert.equal('recentMissingPath' in storeState, false)
@@ -143,7 +143,7 @@ test('缺省快照也应被归一化为稳定结构，避免 renderer 再自行�
     sessionId: null,
     kind: 'markdown',
     content: '',
-    fileName: 'Unnamed',
+    fileName: 'Untitled',
     displayPath: null,
     recentMissingPath: null,
     windowTitle: 'wj-markdown-editor',

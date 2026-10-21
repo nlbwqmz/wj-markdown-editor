@@ -49,7 +49,7 @@ const {
     exists: false,
     content: '',
     saved: false,
-    fileName: 'Unnamed',
+    fileName: 'Untitled',
   }
 
   function normalizeWindowId(windowId) {
