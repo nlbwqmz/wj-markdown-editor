@@ -1,6 +1,6 @@
 <script setup>
 import { message } from 'ant-design-vue'
-import { computed, onBeforeMount, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import log from '@/assets/img/logo.png'
 import { useCommonStore } from '@/stores/counter.js'
@@ -32,6 +32,20 @@ const shortcutKeyMap = computed(() => {
   }
   return map
 })
+
+// 侧边栏开关：与 LayoutMenu 中“打开/关闭侧边栏”菜单项共用同一 store 状态
+const sidebarVisible = computed(() => store.sidebarVisible === true)
+const sidebarToggleLabel = computed(() => t(sidebarVisible.value
+  ? 'topMenu.view.children.closeSidebar'
+  : 'topMenu.view.children.openSidebar'))
+
+function toggleSidebar() {
+  if (typeof store.setSidebarVisible === 'function') {
+    store.setSidebarVisible(!sidebarVisible.value)
+    return
+  }
+  store.sidebarVisible = !sidebarVisible.value
+}
 
 function selectViewMode(mode) {
   store.setViewMode(mode)
@@ -102,33 +116,74 @@ async function switchLanguage(lang) {
   }
 }
 
-const appInfo = ref({ name: 'wj-markdown-editor', version: '' })
-
 const hasNewVersion = computed(() => store.hasNewVersion)
-
-onBeforeMount(async () => {
-  const info = await channelUtil.send({ event: 'app-info' })
-  appInfo.value.name = info.name
-  appInfo.value.version = `v${info.version}`
-})
 </script>
 
 <template>
-  <div class="w-full flex items-center overflow-hidden">
-    <div class="electron-drag flex items-center gap-1 p-2">
+  <div class="w-full flex items-center overflow-hidden py-0.5">
+    <div class="electron-drag flex items-center pl-2 pr-2">
       <img :src="log" alt="logo" class="h-4 w-4">
-      <div class="flex items-center justify-center font-size-3.5">
-        <span>{{ appInfo.name }}</span>
-      </div>
-      <div class="flex items-center justify-center font-size-3.5">
-        <span>{{ appInfo.version }}</span>
-      </div>
+    </div>
+    <div
+      data-testid="layout-top-brand-divider"
+      class="h-4 w-px shrink-0"
+      style="background-color: var(--wj-markdown-border-primary)"
+    />
+    <div class="electron-no-drag flex items-center">
+      <a-tooltip placement="bottomRight" color="#1677ff">
+        <template #title>
+          <div v-if="shortcutKeyMap.toggleFileManagerPanel" class="flex gap-2">
+            <div>{{ sidebarToggleLabel }}</div>
+            <div class="color-[rgb(200,200,200)]">
+              {{ shortcutKeyMap.toggleFileManagerPanel }}
+            </div>
+          </div>
+          <span v-else>{{ sidebarToggleLabel }}</span>
+        </template>
+        <div
+          data-testid="layout-top-toggle-sidebar"
+          :data-active="String(sidebarVisible)"
+          :aria-pressed="sidebarVisible"
+          class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer"
+          @click="toggleSidebar"
+        >
+          <div
+            class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover"
+          >
+            <div :class="sidebarVisible ? 'i-tabler:layout-sidebar-left-collapse' : 'i-tabler:layout-sidebar-left-expand'" />
+          </div>
+        </div>
+      </a-tooltip>
+    </div>
+    <div
+      data-testid="layout-top-menu-divider"
+      class="h-4 w-px shrink-0"
+      style="background-color: var(--wj-markdown-border-primary)"
+    />
+    <div class="electron-no-drag flex shrink-0 items-center">
+      <slot name="menu" />
     </div>
     <div class="electron-drag h-full flex flex-1 items-center justify-center overflow-hidden font-bold line-height-normal">
       <span class="overflow-hidden text-ellipsis whitespace-nowrap">{{ fileName }}</span>
       <span v-if="!saved" class="color-red">*</span>
     </div>
     <div class="flex items-center">
+      <a-tooltip v-if="hasNewVersion" placement="bottom" color="#1677ff">
+        <template #title>
+          <span>{{ $t('top.newVersion') }}</span>
+        </template>
+        <div class="group bouncing h-8 w-8 flex items-center justify-center color-red hover:cursor-pointer" @click="openAbout">
+          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
+            <div class="i-tabler:arrow-bar-up" />
+          </div>
+        </div>
+      </a-tooltip>
+      <div
+        v-if="hasNewVersion"
+        data-testid="layout-top-view-group-divider"
+        class="h-4 w-px shrink-0"
+        style="background-color: var(--wj-markdown-border-primary)"
+      />
       <a-tooltip
         v-for="item in VIEW_MODE_ITEMS"
         :key="item.mode"
@@ -148,38 +203,38 @@ onBeforeMount(async () => {
           :data-testid="`layout-top-view-mode-${item.mode}`"
           :data-active="String(store.viewMode === item.mode)"
           :aria-pressed="store.viewMode === item.mode"
-          class="h-8 w-8 flex items-center justify-center hover:cursor-pointer"
-          :class="store.viewMode === item.mode ? 'bg-bg-hover' : 'hover:bg-bg-hover'"
+          class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer"
           @click="selectViewMode(item.mode)"
         >
-          <div :class="item.icon" />
+          <div
+            class="h-7 w-7 flex items-center justify-center rounded-1"
+            :class="store.viewMode === item.mode ? 'bg-bg-hover' : 'group-hover:bg-bg-hover'"
+          >
+            <div :class="item.icon" />
+          </div>
         </div>
       </a-tooltip>
       <div
         data-testid="layout-top-view-group-divider"
-        class="mx-1 h-4 w-px shrink-0"
+        class="h-4 w-px shrink-0"
         style="background-color: var(--wj-markdown-border-primary)"
       />
-      <a-tooltip v-if="hasNewVersion" placement="bottom" color="#1677ff">
-        <template #title>
-          <span>{{ $t('top.newVersion') }}</span>
-        </template>
-        <div class="bouncing h-8 w-8 flex items-center justify-center color-red hover:cursor-pointer hover:bg-bg-hover" @click="openAbout">
-          <div class="i-tabler:arrow-bar-up" />
-        </div>
-      </a-tooltip>
       <a-tooltip placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.switchTheme') }}</span>
         </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="switchThemes">
-          <div v-if="theme === 'light'" class="i-tabler:moon" />
-          <div v-else class="i-tabler:sun" />
+        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="switchThemes">
+          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
+            <div v-if="theme === 'light'" class="i-tabler:moon" />
+            <div v-else class="i-tabler:sun" />
+          </div>
         </div>
       </a-tooltip>
       <a-dropdown placement="bottom" :trigger="['hover', 'click']" arrow>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover">
-          <div class="i-tabler:language" />
+        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer">
+          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
+            <div class="i-tabler:language" />
+          </div>
         </div>
         <template #overlay>
           <a-menu>
@@ -202,37 +257,51 @@ onBeforeMount(async () => {
         <template #title>
           <span>{{ $t('top.openInExplorer') }}</span>
         </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="openFolder">
-          <div class="i-tabler:folder-open" />
+        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="openFolder">
+          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
+            <div class="i-tabler:folder-open" />
+          </div>
         </div>
       </a-tooltip>
       <a-tooltip v-if="!isAlwaysOnTop" placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.pinTop') }}</span>
         </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="alwaysOnTop(true)">
-          <div class="i-tabler:pin" />
+        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="alwaysOnTop(true)">
+          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
+            <div class="i-tabler:pin" />
+          </div>
         </div>
       </a-tooltip>
       <a-tooltip v-if="isAlwaysOnTop" placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.cancelPinTop') }}</span>
         </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="alwaysOnTop(false)">
-          <div class="i-tabler:pinned-off" />
+        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="alwaysOnTop(false)">
+          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
+            <div class="i-tabler:pinned-off" />
+          </div>
         </div>
       </a-tooltip>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="minimize">
-        <div class="i-tabler:minus" />
+      <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="minimize">
+        <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
+          <div class="i-tabler:minus" />
+        </div>
       </div>
-      <div v-show="!isMaximize" class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="maximize">
-        <div class="i-tabler:crop-1-1" />
+      <div v-show="!isMaximize" class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="maximize">
+        <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
+          <div class="i-tabler:crop-1-1" />
+        </div>
       </div>
-      <div v-show="isMaximize" class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="restore">
-        <div class="i-tabler:layers-subtract" />
+      <div v-show="isMaximize" class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="restore">
+        <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
+          <div class="i-tabler:layers-subtract" />
+        </div>
       </div>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-red" @click="close">
-        <div class="i-tabler:x" />
+      <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="close">
+        <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-red">
+          <div class="i-tabler:x" />
+        </div>
       </div>
     </div>
   </div>

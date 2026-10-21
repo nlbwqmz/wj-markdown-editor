@@ -339,7 +339,7 @@ function handleMenuClick({ item }) {
 
 <template>
   <div
-    class="w-full flex select-none p-b-1.5 p-l-1"
+    class="flex select-none items-center"
   >
     <a-dropdown
       v-for="(item, index) in menuList"
@@ -348,8 +348,8 @@ function handleMenuClick({ item }) {
       arrow
       placement="bottomLeft"
     >
-      <div class="cursor-pointer font-size-3.5">
-        <div class="m-r-1 rounded-1 p-1 hover:bg-bg-hover">
+      <div class="group h-8 flex cursor-pointer items-center px-0.5 font-size-3.5">
+        <div class="h-7 flex items-center rounded-1 px-2 group-hover:bg-bg-hover">
           {{ item.label }}
         </div>
       </div>

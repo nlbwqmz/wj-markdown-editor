@@ -4,6 +4,12 @@
   -webkit-user-select: none;
 }
 
+// 顶部栏内需要响应鼠标事件的区域（菜单、按钮）必须显式声明为非拖拽区，
+// 否则点击会被父级 -webkit-app-region: drag 吞掉。
+.electron-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 .mermaid-cache,
 .mermaid {
   display: flex;

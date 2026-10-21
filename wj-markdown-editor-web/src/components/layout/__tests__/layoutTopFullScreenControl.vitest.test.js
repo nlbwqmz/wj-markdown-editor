@@ -17,6 +17,8 @@ const store = reactive({
   hasNewVersion: false,
   viewMode: 'split',
   setViewMode: vi.fn(),
+  sidebarVisible: true,
+  setSidebarVisible: vi.fn(),
   config: {
     language: 'zh-CN',
     theme: {
@@ -105,7 +107,7 @@ const MenuItemStub = {
   },
 }
 
-function mountLayoutTop() {
+function mountLayoutTop(options = {}) {
   return mount(LayoutTop, {
     global: {
       mocks: {
@@ -118,6 +120,7 @@ function mountLayoutTop() {
         'a-menu-item': MenuItemStub,
       },
     },
+    ...options,
   })
 }
 
@@ -138,21 +141,14 @@ describe('layoutTop full screen control', () => {
     store.isAlwaysOnTop = false
     store.hasNewVersion = false
     store.viewMode = 'split'
+    store.sidebarVisible = true
     store.config.language = 'zh-CN'
     store.config.theme.global = 'light'
     store.config.shortcutKeyList = []
     mocked.channelSend.mockReset()
     store.setViewMode.mockReset()
-    mocked.channelSend.mockImplementation(async ({ event }) => {
-      if (event === 'app-info') {
-        return {
-          name: 'wj-markdown-editor',
-          version: '2.17.0',
-        }
-      }
-
-      return undefined
-    })
+    store.setSidebarVisible.mockReset()
+    mocked.channelSend.mockImplementation(async () => undefined)
   })
 
   afterEach(() => {
@@ -350,5 +346,121 @@ describe('layoutTop full screen control', () => {
       },
     })
     expect(mocked.channelSend.mock.calls.some(([payload]) => payload?.event === 'user-update-language')).toBe(false)
+  })
+
+  it('侧边栏开关按钮应位于品牌竖线之后、菜单竖线之前', () => {
+    const wrapper = mountLayoutTop()
+    const html = wrapper.html()
+
+    expect(wrapper.find('[data-testid="layout-top-toggle-sidebar"]').exists()).toBe(true)
+    expect(html.indexOf('layout-top-brand-divider')).toBeLessThan(html.indexOf('layout-top-toggle-sidebar'))
+    expect(html.indexOf('layout-top-toggle-sidebar')).toBeLessThan(html.indexOf('layout-top-menu-divider'))
+  })
+
+  it('侧边栏可见时按钮应渲染收起图标与可见态标记', () => {
+    store.sidebarVisible = true
+    const wrapper = mountLayoutTop()
+    const button = wrapper.get('[data-testid="layout-top-toggle-sidebar"]')
+
+    expect(button.find('.i-tabler\\:layout-sidebar-left-collapse').exists()).toBe(true)
+    expect(button.attributes('data-active')).toBe('true')
+  })
+
+  it('侧边栏隐藏时按钮应渲染展开图标与隐藏态标记', () => {
+    store.sidebarVisible = false
+    const wrapper = mountLayoutTop()
+    const button = wrapper.get('[data-testid="layout-top-toggle-sidebar"]')
+
+    expect(button.find('.i-tabler\\:layout-sidebar-left-expand').exists()).toBe(true)
+    expect(button.attributes('data-active')).toBe('false')
+  })
+
+  it('点击侧边栏开关按钮应按当前可见态切换 store.setSidebarVisible', async () => {
+    store.sidebarVisible = true
+    const visibleWrapper = mountLayoutTop()
+
+    await visibleWrapper.get('[data-testid="layout-top-toggle-sidebar"]').trigger('click')
+
+    expect(store.setSidebarVisible).toHaveBeenNthCalledWith(1, false)
+
+    store.sidebarVisible = false
+    const hiddenWrapper = mountLayoutTop()
+
+    await hiddenWrapper.get('[data-testid="layout-top-toggle-sidebar"]').trigger('click')
+
+    expect(store.setSidebarVisible).toHaveBeenNthCalledWith(2, true)
+  })
+
+  it('侧边栏开关的外层只做触发、内层背景层仅承载 hover', () => {
+    store.sidebarVisible = false
+    const hiddenWrapper = mountLayoutTop()
+    const hiddenButton = hiddenWrapper.get('[data-testid="layout-top-toggle-sidebar"]')
+    const hiddenSurface = hiddenButton.find('div')
+
+    // 外层：32×32 仅作 hover 触发区，不承载背景
+    expect(hiddenButton.classes()).toContain('group')
+    expect(hiddenButton.classes()).toContain('h-8')
+    expect(hiddenButton.classes()).toContain('w-8')
+    expect(hiddenButton.classes()).not.toContain('bg-bg-hover')
+    expect(hiddenButton.classes()).not.toContain('hover:bg-bg-hover')
+
+    // 内层：28×28 圆角背景层，只有 group-hover 背景，没有选中态
+    expect(hiddenSurface.classes()).toContain('h-7')
+    expect(hiddenSurface.classes()).toContain('w-7')
+    expect(hiddenSurface.classes()).toContain('rounded-1')
+    expect(hiddenSurface.classes()).toContain('group-hover:bg-bg-hover')
+    expect(hiddenSurface.classes()).not.toContain('bg-bg-hover')
+
+    store.sidebarVisible = true
+    const visibleWrapper = mountLayoutTop()
+    const visibleButton = visibleWrapper.get('[data-testid="layout-top-toggle-sidebar"]')
+    const visibleSurface = visibleButton.find('div')
+
+    // 可见态同样不渲染选中背景，仅保留 hover
+    expect(visibleButton.classes()).toContain('group')
+    expect(visibleButton.classes()).toContain('h-8')
+    expect(visibleButton.classes()).toContain('w-8')
+    expect(visibleButton.classes()).not.toContain('bg-bg-hover')
+    expect(visibleButton.classes()).not.toContain('hover:bg-bg-hover')
+
+    expect(visibleSurface.classes()).toContain('h-7')
+    expect(visibleSurface.classes()).toContain('w-7')
+    expect(visibleSurface.classes()).toContain('rounded-1')
+    expect(visibleSurface.classes()).toContain('group-hover:bg-bg-hover')
+    expect(visibleSurface.classes()).not.toContain('bg-bg-hover')
+  })
+
+  it('配置了侧边栏快捷键时 tooltip 应展示文案与快捷键', () => {
+    store.config.shortcutKeyList = [{ id: 'toggleFileManagerPanel', keymap: 'Ctrl+Shift+S', enabled: true }]
+    const wrapper = mountLayoutTop()
+    const title = wrapper
+      .findAll('[data-testid="tooltip-stub"]')
+      .find(item => item.find('[data-testid="layout-top-toggle-sidebar"]').exists())
+      .attributes('data-tooltip-title')
+
+    expect(title).toContain('topMenu.view.children.closeSidebar')
+    expect(title).toContain('Ctrl+Shift+S')
+  })
+
+  it('品牌竖线、侧边栏按钮、菜单竖线、菜单 slot 与视图模式按钮应顺序排列', () => {
+    const wrapper = mountLayoutTop({ slots: { menu: '<div data-testid="menu-slot-content" />' } })
+    const html = wrapper.html()
+
+    expect(wrapper.find('[data-testid="layout-top-brand-divider"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="layout-top-menu-divider"]').exists()).toBe(true)
+
+    expect(html.indexOf('layout-top-brand-divider')).toBeLessThan(html.indexOf('layout-top-toggle-sidebar'))
+    expect(html.indexOf('layout-top-toggle-sidebar')).toBeLessThan(html.indexOf('layout-top-menu-divider'))
+    expect(html.indexOf('layout-top-menu-divider')).toBeLessThan(html.indexOf('menu-slot-content'))
+    expect(html.indexOf('menu-slot-content')).toBeLessThan(html.indexOf('layout-top-view-mode-source'))
+  })
+
+  it('menu slot 内容应渲染在菜单竖线之后、视图模式按钮之前', () => {
+    const wrapper = mountLayoutTop({ slots: { menu: '<div data-testid="menu-slot-content" />' } })
+    const html = wrapper.html()
+
+    expect(wrapper.find('[data-testid="menu-slot-content"]').exists()).toBe(true)
+    expect(html.indexOf('layout-top-menu-divider')).toBeLessThan(html.indexOf('menu-slot-content'))
+    expect(html.indexOf('menu-slot-content')).toBeLessThan(html.indexOf('layout-top-view-mode-source'))
   })
 })

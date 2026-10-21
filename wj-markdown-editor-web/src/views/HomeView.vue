@@ -172,8 +172,11 @@ watch(() => route.name, () => {
 
 <template>
   <div class="h-full w-full flex flex-col overflow-hidden bg-bg-primary text-text-primary">
-    <LayoutTop />
-    <LayoutMenu />
+    <LayoutTop>
+      <template #menu>
+        <LayoutMenu />
+      </template>
+    </LayoutTop>
     <div class="h-0 flex-1 overflow-hidden">
       <div
         v-if="shouldShowFileManagerShell"
