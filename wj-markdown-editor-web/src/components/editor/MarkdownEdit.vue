@@ -1,4 +1,5 @@
 <script setup>
+import { EditorView } from '@codemirror/view'
 import Split from 'split-grid'
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -40,14 +41,14 @@ import keymapUtil from '@/util/editor/keymap/keymapUtil.js'
 import {
   captureEditorLineAnchor,
   capturePreviewLineAnchor,
-  resolveEditorLineAnchorScrollTop,
+  resolveEditorAnchorLineNumber,
   resolvePreviewLineAnchorScrollTop,
   resolvePreviewLineElement,
   resolvePreviewLineNumberOffsetRatio,
 } from '@/util/editor/viewScrollAnchorMathUtil.js'
 import {
+  clearSessionAnchorRecords,
   createViewScrollAnchorSessionStore,
-  pruneAnchorRecords,
   saveAnchorRecord,
 } from '@/util/editor/viewScrollAnchorSessionUtil.js'
 import { viewScrollHandoff } from '@/util/editor/viewScrollHandoffUtil.js'
@@ -158,6 +159,12 @@ const pendingExternalSync = ref(null)
 // 仅在当前 keep-alive 编辑页实例内存活的滚动锚点缓存。
 // 不做全局单例，避免不同编辑页实例之间互相污染。
 const viewScrollAnchorStore = createViewScrollAnchorSessionStore()
+// 每个文档会话各自的编辑器状态（正文 + 选区 + undo 历史）。
+// 标签切换时换入换出，这样“切回某个标签”能连撤销历史一起回来。
+const editorStateBySessionId = new Map()
+// 上一次看到的标签列表，用于识别“哪些标签被关掉了”，
+// 从而清理已关闭会话的编辑器状态与滚动锚点缓存。
+let lastKnownDocumentTabList = []
 
 const BOTTOM_GAP = '40vh'
 const EDITOR_EMIT_DEBOUNCE_MS = 160
@@ -190,6 +197,7 @@ const {
   reconfigureTheme,
   reconfigureExtensions,
   reconfigureKeymap,
+  reapplyLiveConfiguration,
 } = useEditorCore({ editorRef, t })
 
 /**
@@ -452,58 +460,19 @@ function findPreviewElementByAnchor(container, anchor) {
 }
 
 /**
- * 调度恢复后的编辑区位置校正。
- * CodeMirror 对离屏或刚挂载的行块可能仍返回估算高度，
- * 首轮恢复写入的位置需要等真实测量完成后反复复算，
- * 直到位置稳定或达到最大尝试次数。
- * 只有滚动位置仍停留在上一轮写入结果上时才校正，避免覆盖用户操作。
+ * 按行号取回文档里的对应行。
+ * CodeMirror 在行号越界时会直接抛 RangeError，这里统一收成 null。
  *
- * @param {{ view: any, anchor: any, scrollElement: any, expectedScrollTop: number }} options
+ * @param {any} view
+ * @param {number} lineNumber
+ * @returns {{ from: number } | null} 返回命中的行；无法解析时返回 null。
  */
-function scheduleEditorRestoreCorrection(options) {
-  const { view, anchor, scrollElement, expectedScrollTop } = options
-  const MAX_CORRECTION_ATTEMPTS = 3
-  let lastExpectedScrollTop = expectedScrollTop
-
-  const runCorrection = (remainingAttempts) => {
-    if (editorView.value !== view) {
-      return
-    }
-    if (Math.abs(scrollElement.scrollTop - lastExpectedScrollTop) >= 1) {
-      return
-    }
-
-    const correctedScrollTop = resolveEditorLineAnchorScrollTop({
-      view,
-      anchor,
-      fallbackScrollTop: lastExpectedScrollTop,
-    })
-
-    if (Number.isFinite(correctedScrollTop) && Math.abs(correctedScrollTop - lastExpectedScrollTop) >= 1) {
-      setScrollElementScrollTop(scrollElement, correctedScrollTop)
-      lastExpectedScrollTop = scrollElement.scrollTop
-    }
-
-    if (remainingAttempts > 1) {
-      scheduleNextAnimationFrame(() => runCorrection(remainingAttempts - 1))
-    }
+function resolveEditorLineByNumber(view, lineNumber) {
+  try {
+    return view?.state?.doc?.line(lineNumber) ?? null
+  } catch {
+    return null
   }
-
-  scheduleNextAnimationFrame(() => runCorrection(MAX_CORRECTION_ATTEMPTS))
-}
-
-/**
- * 调度下一帧回调，并在非浏览器环境回退到定时器。
- *
- * @param {() => void} callback
- */
-function scheduleNextAnimationFrame(callback) {
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(callback)
-    return
-  }
-
-  setTimeout(callback, 16)
 }
 
 /**
@@ -549,32 +518,37 @@ const editorCodeScrollAnchor = useViewScrollAnchor({
       scrollTop: scrollElement.scrollTop,
     })
   },
-  restoreAnchor: ({ record, scrollElement }) => {
+  restoreAnchor: ({ record }) => {
     const view = editorView.value
-    if (!view || !scrollElement) {
+    if (!view) {
       return false
     }
-    // 交接锚点带公共行号与行内像素比例，这里换算成本区域的 editor-line 锚点后再复用现有几何工具。
-    const anchor = record?.anchor?.type === 'line-handoff'
-      ? {
-          type: 'editor-line',
-          lineNumber: record.anchor.lineNumber,
-          lineOffsetRatio: record.anchor.lineOffsetRatio ?? 0,
-        }
-      : record?.anchor
-    const targetScrollTop = resolveEditorLineAnchorScrollTop({
-      view,
-      anchor,
-      fallbackScrollTop: record?.fallbackScrollTop,
-    })
-    setScrollElementScrollTop(scrollElement, targetScrollTop)
-    scheduleEditorRestoreCorrection({
-      view,
-      anchor,
-      scrollElement,
-      expectedScrollTop: scrollElement.scrollTop,
-    })
-    return true
+
+    // 编辑区恢复只认行号：把记录里的那一行滚到视口顶部，不做任何像素换算。
+    //
+    // 像素方案（行高 × 行内比例）依赖 CodeMirror 的高度测量，
+    // 而换入 `EditorState` 后整份 height map 会被重建，
+    // 未渲染区域只有估算高度，往返一次就会系统性偏移。
+    //
+    // 这里交给 `EditorView.scrollIntoView`：它会把 `scrollTarget` 一直保留到
+    // 目标行真正进入视口并完成测量为止（跨帧迭代），因此估算高度不影响结果。
+    const lineNumber = resolveEditorAnchorLineNumber(record?.anchor)
+    const line = lineNumber === null ? null : resolveEditorLineByNumber(view, lineNumber)
+
+    if (line) {
+      view.dispatch({
+        effects: EditorView.scrollIntoView(line.from, { y: 'start' }),
+      })
+      return true
+    }
+
+    // 没有行号可依据时（旧记录 / 空文档），退回记录的原始滚动值。
+    if (Number.isFinite(record?.fallbackScrollTop)) {
+      setScrollElementScrollTop(editorView.value?.scrollDOM ?? null, record.fallbackScrollTop)
+      return true
+    }
+
+    return false
   },
 })
 
@@ -976,19 +950,108 @@ async function scheduleRestoreForCurrentSnapshot(snapshot, options = {}) {
 }
 
 /**
- * 处理“同一视图内切换到另一文档”时的滚动位置。
+ * 把当前编辑器状态存到它所属的文档会话名下。
+ *
+ * `EditorState` 自带正文、选区与 undo 历史，而且不可变，直接存引用即可。
+ */
+function saveCurrentEditorStateForSession() {
+  const view = editorView.value
+  const sessionId = currentScrollSnapshot.value.sessionId
+  if (!view || !sessionId) {
+    return
+  }
+  editorStateBySessionId.set(sessionId, view.state)
+}
+
+/**
+ * 把目标会话的编辑器状态换回来。
+ *
+ * 换入后正文已经与快照一致，后续的 modelValue 同步会因为“内容没变”而自动跳过，
+ * 不会把刚换回来的 undo 历史重新抹掉。
+ */
+function restoreEditorStateForSession(sessionId) {
+  const view = editorView.value
+  if (!view || !sessionId) {
+    return false
+  }
+
+  const savedState = editorStateBySessionId.get(sessionId)
+  if (!savedState) {
+    return false
+  }
+
+  view.setState(savedState)
+  // 存档状态里冻结的是它被保存那一刻的 compartment 内容（主题、快捷键、扩展开关），
+  // 所以换回存档后必须把当前生效的配置重放一次，
+  // 否则在 A 标签里改过的主题切到 B 标签会退回旧值。
+  reapplyLiveConfiguration()
+  return true
+}
+
+/**
+ * 标签被关掉时，清理它的编辑器状态与滚动锚点缓存。
+ *
+ * 这里用“上一次看到的标签列表”与当前列表做差集，
+ * 因为快照里只会有仍然打开的标签，已关闭的标签需要靠差集识别。
+ */
+function pruneClosedDocumentTabCaches() {
+  const tabList = Array.isArray(store.documentSessionSnapshot?.tabs)
+    ? store.documentSessionSnapshot.tabs
+    : []
+
+  if (tabList.length === 0) {
+    return
+  }
+
+  const openSessionIdSet = new Set(tabList.map(tab => tab.sessionId))
+  for (const closedTab of lastKnownDocumentTabList) {
+    if (openSessionIdSet.has(closedTab.sessionId)) {
+      continue
+    }
+    editorStateBySessionId.delete(closedTab.sessionId)
+    // 滚动锚点按文档身份索引；没有正式路径时用 session 前缀兵底，与恢复侧保持一致。
+    const documentKey = closedTab.displayPath || `session:${closedTab.sessionId}`
+    clearSessionAnchorRecords(viewScrollAnchorStore, documentKey)
+  }
+
+  lastKnownDocumentTabList = tabList.map(tab => ({
+    sessionId: tab.sessionId,
+    displayPath: tab.displayPath ?? null,
+  }))
+}
+
+// 标签列表变化时清理已关闭标签的缓存。
+// 缓存生命周期跟随标签，而不是靠一个数量上限兜底。
+watch(
+  () => store.documentSessionSnapshot?.tabs,
+  () => pruneClosedDocumentTabCaches(),
+)
+
+/**
+ * 处理“同一视图内切换到另一文档”时的滚动位置与编辑器状态。
  * 与激活恢复不同，这里按 documentKey 跨 session 复用锚点：
- * 1. 先按新文档身份裁剪缓存，避免切换次数多时无限增长
- * 2. 按 document 模式恢复，允许新 session 的 revision 从 0 开始
+ * 1. 先按「当前（即将离开的）身份」采集滚动位置，再存档上一个会话的编辑器状态
+ * 2. 再尝试换回目标会话的存档，并按 document 模式恢复（允许新 session 的 revision 从 0 开始）
  * 3. 没有记录的区域显式归零，避免沿用上一篇文档的 scrollTop
  * 恢复与归零都复用 scheduleRestoreForCurrentSnapshot 的联动冻结窗口。
+ *
+ * 注意顺序：采集必须在 updateCurrentScrollSnapshot 之前。
+ * `EditorState` 只带正文 / 选区 / undo，**不含 scrollTop**（滚动是 DOM 状态），
+ * 滚动位置只能靠锚点缓存传递；一旦先把身份切到目标标签，
+ * 采集就会写进目标标签的 bucket，离开的那个标签位置直接丢失。
  *
  * @param {object | null | undefined} snapshot
  * @returns {Promise<{ editorCode: boolean, editorPreview: boolean }>} 返回左右区域本轮是否实际完成恢复。
  */
 async function handleDocumentContextSwitch(snapshot) {
+  // 按当前身份采集即将离开的标签的滚动位置（不传 snapshot 即不切身份）。
+  captureViewScrollAnchors()
+  // 再把上一个会话的编辑器状态（正文 + 选区 + undo 历史）存档，
+  // 然后尝试把目标会话的存档换回来；换不回来就走整篇替换的常规路径。
+  saveCurrentEditorStateForSession()
+
   updateCurrentScrollSnapshot(snapshot)
-  pruneAnchorRecords(viewScrollAnchorStore, currentScrollSnapshot.value.documentKey)
+  restoreEditorStateForSession(currentScrollSnapshot.value.sessionId)
 
   // 按文档身份恢复（新 session 的 revision 从 0 开始，不能用严格模式）
   const restoreResult = await scheduleRestoreForCurrentSnapshot(snapshot, { mode: 'document' })

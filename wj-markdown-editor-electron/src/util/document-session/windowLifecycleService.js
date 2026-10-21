@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog, screen, shell, webContents } from 'electron
 import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
+import tabGroup from '../../data/tabGroup.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
 import fileWatchUtil from '../fileWatchUtil.js'
@@ -328,13 +329,31 @@ function checkWinList() {
   }
 }
 
-function getExternalWatchState(windowId) {
-  return getHostWindowState(windowId)?.externalWatch || null
+/**
+ * 把“可能没传 sessionId”的调用收敛成具体会话 id。
+ *
+ * 多标签下外部监听必须按会话隔离，所以每个监听入口都需要明确自己服务于哪个会话；
+ * 不传时一律回退到窗口当前活动会话，保持既有调用点语义不变。
+ */
+function resolveWatchSessionId(windowId, sessionId) {
+  if (typeof sessionId === 'string' && sessionId.trim() !== '') {
+    return sessionId.trim()
+  }
+  return getSessionByWindowId(windowId)?.sessionId || null
 }
 
-function ensureExternalWatchState(windowId) {
+function getExternalWatchState(windowId, sessionId) {
+  const resolvedSessionId = resolveWatchSessionId(windowId, sessionId)
+  if (!resolvedSessionId) {
+    return null
+  }
+  return getHostWindowState(windowId)?.externalWatchMap?.get(resolvedSessionId) || null
+}
+
+function ensureExternalWatchState(windowId, sessionId) {
   const normalizedWindowId = normalizeWindowId(windowId)
-  if (!normalizedWindowId) {
+  const resolvedSessionId = resolveWatchSessionId(normalizedWindowId, sessionId)
+  if (!normalizedWindowId || !resolvedSessionId) {
     return null
   }
 
@@ -343,11 +362,17 @@ function ensureExternalWatchState(windowId) {
     return null
   }
 
-  if (!windowState.externalWatch) {
-    windowState.externalWatch = createExternalWatchState()
+  if (!windowState.externalWatchMap) {
+    windowState.externalWatchMap = new Map()
   }
 
-  return windowState.externalWatch
+  let watchState = windowState.externalWatchMap.get(resolvedSessionId)
+  if (!watchState) {
+    watchState = createExternalWatchState()
+    windowState.externalWatchMap.set(resolvedSessionId, watchState)
+  }
+
+  return watchState
 }
 
 function isAllowImmediateClose(windowId) {
@@ -391,7 +416,7 @@ function createExternalWatchState() {
   return fileWatchUtil.createWatchState()
 }
 
-function getExternalWatchBridge(windowId) {
+function getExternalWatchBridge(windowId, sessionId) {
   const normalizedWindowId = normalizeWindowId(windowId)
   if (!normalizedWindowId) {
     return null
@@ -402,11 +427,21 @@ function getExternalWatchBridge(windowId) {
     return null
   }
 
-  if (windowState.externalWatchBridge) {
-    return windowState.externalWatchBridge
+  const resolvedSessionId = resolveWatchSessionId(normalizedWindowId, sessionId)
+  if (!resolvedSessionId) {
+    return null
   }
 
-  const externalWatchState = ensureExternalWatchState(normalizedWindowId)
+  if (!windowState.externalWatchBridgeMap) {
+    windowState.externalWatchBridgeMap = new Map()
+  }
+
+  const cachedBridge = windowState.externalWatchBridgeMap.get(resolvedSessionId)
+  if (cachedBridge) {
+    return cachedBridge
+  }
+
+  const externalWatchState = ensureExternalWatchState(normalizedWindowId, resolvedSessionId)
   if (!externalWatchState) {
     return null
   }
@@ -415,13 +450,27 @@ function getExternalWatchBridge(windowId) {
     watch,
     watchState: externalWatchState,
     dispatchCommand: (command, payload, options = {}) => {
-      return dispatchCommand(normalizedWindowId, command, payload, options)
+      // 监听事件必须定向回它自己的会话：
+      // 后台标签的外部变更不能打到窗口当前活动标签上。
+      return dispatchCommand(normalizedWindowId, command, payload, {
+        ...options,
+        sessionId: options.sessionId || resolvedSessionId,
+      })
     },
-    getCurrentBindingToken: () => getCurrentWatchBindingToken(normalizedWindowId),
-    getCurrentObservedFloor: () => getCurrentWatchObservedFloor(normalizedWindowId),
+    getCurrentBindingToken: () => getCurrentWatchBindingToken(normalizedWindowId, resolvedSessionId),
+    getCurrentObservedFloor: () => getCurrentWatchObservedFloor(normalizedWindowId, resolvedSessionId),
   })
-  windowState.externalWatchBridge = externalWatchBridge
+  windowState.externalWatchBridgeMap.set(resolvedSessionId, externalWatchBridge)
   return externalWatchBridge
+}
+
+function peekExternalWatchBridge(windowId, sessionId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const resolvedSessionId = resolveWatchSessionId(normalizedWindowId, sessionId)
+  if (!normalizedWindowId || !resolvedSessionId) {
+    return null
+  }
+  return getHostWindowState(normalizedWindowId)?.externalWatchBridgeMap?.get(resolvedSessionId) || null
 }
 
 function getSessionByWindowId(windowId) {
@@ -729,35 +778,79 @@ async function rebindDirectoryWatchForSession(windowId, session) {
   return rebindResult
 }
 
-function stopExternalWatch(windowId) {
-  if (!normalizeWindowId(windowId)) {
+function stopExternalWatch(windowId, sessionId = null) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
     return true
   }
-  return getExternalWatchBridge(windowId)?.stop?.() ?? true
+
+  if (sessionId) {
+    return peekExternalWatchBridge(normalizedWindowId, sessionId)?.stop?.() ?? true
+  }
+
+  // 不指定会话时停掉该窗口的全部监听（关窗、回滚等场景）。
+  const bridgeMap = getHostWindowState(normalizedWindowId)?.externalWatchBridgeMap
+  if (!bridgeMap) {
+    return true
+  }
+
+  let stopped = true
+  for (const bridge of bridgeMap.values()) {
+    try {
+      stopped = (bridge?.stop?.() ?? true) && stopped
+    }
+    catch {
+      stopped = false
+    }
+  }
+  return stopped
 }
 
-function getCurrentWatchBindingToken(windowId) {
-  const session = getSessionByWindowId(windowId)
+function getCurrentWatchBindingToken(windowId, sessionId) {
+  const resolvedSessionId = resolveWatchSessionId(windowId, sessionId)
+  const session = resolvedSessionId
+    ? ensureSessionRuntimeInitialized().store.getSession(resolvedSessionId)
+    : null
   return Number.isFinite(session?.watchRuntime?.bindingToken)
     ? session.watchRuntime.bindingToken
     : null
 }
 
-function getCurrentWatchObservedFloor(windowId) {
-  const session = getSessionByWindowId(windowId)
+function getCurrentWatchObservedFloor(windowId, sessionId) {
+  const resolvedSessionId = resolveWatchSessionId(windowId, sessionId)
+  const session = resolvedSessionId
+    ? ensureSessionRuntimeInitialized().store.getSession(resolvedSessionId)
+    : null
   return Number.isFinite(session?.watchRuntime?.eventFloorObservedAt)
     ? session.watchRuntime.eventFloorObservedAt
     : 0
 }
 
-function startExternalWatch(windowId, options = {}) {
+/**
+ * 启动某个会话的外部文件监听。
+ *
+ * 第二个参数既可以是会话 id，也可以是 options：
+ * 单会话时代的 `startExternalWatch(windowId, options)` 调用点保持原语义，
+ * 多标签新增的调用点直接传会话 id。
+ */
+function startExternalWatch(windowId, sessionIdOrOptions = null, options = {}) {
   const normalizedWindowId = normalizeWindowId(windowId)
-  const session = getSessionByWindowId(normalizedWindowId)
-  const requestedPath = typeof options?.watchingPath === 'string' && options.watchingPath.trim() !== ''
-    ? options.watchingPath
+  const isSessionIdArgument = typeof sessionIdOrOptions === 'string' && sessionIdOrOptions.trim() !== ''
+  const resolvedSessionId = isSessionIdArgument
+    ? sessionIdOrOptions.trim()
+    : resolveWatchSessionId(normalizedWindowId, null)
+  const startOptions = isSessionIdArgument
+    ? options
+    : (sessionIdOrOptions || {})
+
+  const session = resolvedSessionId
+    ? ensureSessionRuntimeInitialized().store.getSession(resolvedSessionId)
+    : null
+  const requestedPath = typeof startOptions?.watchingPath === 'string' && startOptions.watchingPath.trim() !== ''
+    ? startOptions.watchingPath
     : session?.watchRuntime?.watchingPath || session?.documentSource?.path || null
-  return getExternalWatchBridge(normalizedWindowId)?.start?.({
-    ...options,
+  return getExternalWatchBridge(normalizedWindowId, resolvedSessionId)?.start?.({
+    ...startOptions,
     watchingPath: requestedPath,
   }) || {
     ok: false,
@@ -813,6 +906,83 @@ async function refreshRecentOrderAfterOpen(documentPath) {
     // recent 只是打开成功后的附属持久化，失败时不能回滚真实开窗。
     return false
   }
+}
+
+/**
+ * 把窗口当前的标签组写盘。
+ *
+ * 只记有磁盘路径的标签：草稿没有路径，重启后无法恢复成“同一个文档”，
+ * 强行记一个空路径只会让恢复逻辑多一个分支。
+ */
+async function persistCurrentTabGroup(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  const { store } = ensureSessionRuntimeInitialized()
+  const sessionIds = store.getSessionIdsByWindowId?.(normalizedWindowId) || []
+  const activeSessionId = store.getActiveSessionIdByWindowId?.(normalizedWindowId) || null
+
+  const tabPathList = []
+  let activeIndex = 0
+  for (const sessionId of sessionIds) {
+    const session = store.getSession(sessionId)
+    const documentPath = session?.documentSource?.path || null
+    if (!documentPath) {
+      continue
+    }
+    if (sessionId === activeSessionId) {
+      activeIndex = tabPathList.length
+    }
+    tabPathList.push(documentPath)
+  }
+
+  return await tabGroup.save({
+    tabs: tabPathList,
+    activeIndex,
+  })
+}
+
+/**
+ * 启动时按上次的标签组恢复窗口。
+ *
+ * 第一个存在的路径直接用来开窗，其余路径逐个挂成标签；
+ * 缺失的文件静默跳过，不走 recent-missing 提示流程。
+ */
+async function restoreTabGroup(pathList) {
+  const candidatePathList = Array.isArray(pathList)
+    ? pathList.filter(item => typeof item === 'string' && item.trim() !== '')
+    : []
+
+  if (candidatePathList.length === 0) {
+    return await createNew(null)
+  }
+
+  const [firstPath, ...restPathList] = candidatePathList
+  const windowId = await createNew(firstPath)
+  if (!windowId || restPathList.length === 0) {
+    return windowId
+  }
+
+  for (const targetPath of restPathList) {
+    try {
+      if (!await fs.pathExists(targetPath)) {
+        continue
+      }
+      const content = await fs.readFile(targetPath, 'utf-8')
+      await switchSessionInCurrentWindow(windowId, {
+        documentPath: targetPath,
+        content,
+        trigger: 'startup',
+      })
+    }
+    catch {
+      // 单个标签恢复失败不能影响其他标签。
+    }
+  }
+
+  return windowId
 }
 
 function createOpenTargetReadFailedResult(documentPath) {
@@ -1262,21 +1432,22 @@ async function rollbackCurrentWindowSessionSwitch(windowId, {
   try {
     await stopDirectoryWatch(normalizedWindowId)
   } catch {}
+  // 只停新会话的监听：上一个会话的监听必须继续活着，它已经变成后台标签。
   try {
-    stopExternalWatch(normalizedWindowId)
+    stopExternalWatch(normalizedWindowId, nextSession?.sessionId)
   } catch {}
-
-  bindSessionForWindow(normalizedWindowId, previousSession)
 
   if (nextSession?.sessionId && runtime.store.getSession(nextSession.sessionId)) {
     runtime.store.destroySession(nextSession.sessionId)
   }
 
+  bindSessionForWindow(normalizedWindowId, previousSession)
+
   try {
     await rebindDirectoryWatchForSession(normalizedWindowId, previousSession)
   } catch {}
   try {
-    assertExternalWatchStarted(startExternalWatch(normalizedWindowId))
+    assertExternalWatchStarted(startExternalWatch(normalizedWindowId, previousSession?.sessionId))
   } catch {}
 
   return true
@@ -1296,11 +1467,9 @@ async function switchSessionInCurrentWindow(windowId, {
     }
   }
 
-  const runtime = ensureSessionRuntimeInitialized()
   const previousSession = getSessionByWindowId(normalizedWindowId)
 
   await stopDirectoryWatch(normalizedWindowId)
-  stopExternalWatch(normalizedWindowId)
 
   const nextSession = createInitialSession({
     sessionId: commonUtil.createId(),
@@ -1316,7 +1485,7 @@ async function switchSessionInCurrentWindow(windowId, {
     if (directoryRebindResult?.ok === false) {
       throw directoryRebindResult.error || new Error(directoryRebindResult.reason || 'directory watch rebind failed')
     }
-    assertExternalWatchStarted(startExternalWatch(normalizedWindowId))
+    assertExternalWatchStarted(startExternalWatch(normalizedWindowId, nextSession.sessionId))
 
     const reconcileResult = await reconcileOpenedDocumentAgainstDisk(normalizedWindowId, documentPath)
     if (reconcileResult === false) {
@@ -1330,11 +1499,10 @@ async function switchSessionInCurrentWindow(windowId, {
     return createOpenCurrentWindowSwitchFailedResult(documentPath)
   }
 
-  if (previousSession?.sessionId) {
-    runtime.store.destroySession(previousSession.sessionId)
-  }
-
+  // 多标签：“在当前窗口打开”不再替换会话，上一个文档留在标签栏里，
+  // 它的外部监听也继续活着（后台标签同样要响应外部变更）。
   await refreshRecentOrderAfterOpen(documentPath)
+  await persistCurrentTabGroup(normalizedWindowId)
 
   return {
     ok: true,
@@ -1439,6 +1607,8 @@ function dispatchCommandStateOnly(windowId, command, payload, options = {}) {
     : null
   const result = commandService.dispatch({
     windowId: normalizedWindowId,
+    // 后台标签的外部变更等事件需要把命令定向到自己的会话。
+    sessionId: options.sessionId || null,
     command,
     payload,
   })
@@ -1540,17 +1710,175 @@ function createCloseHostController(windowId) {
   }
 }
 
-function createExternalWatchController(windowId) {
+/**
+ * 把窗口的活动会话切到指定标签。
+ *
+ * 标签切换不只是换 store 指针：窗口注册表、文件管理目录监听、
+ * 以及推给渲染层的快照都必须跟着换，否则侧边栏和标题栏会停留在旧文档上。
+ */
+async function activateTabInWindow(windowId, sessionId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const { store } = ensureSessionRuntimeInitialized()
+  const session = sessionId ? store.getSession(sessionId) : null
+  if (!normalizedWindowId || !session) {
+    return false
+  }
+
+  store.activateSession({
+    windowId: normalizedWindowId,
+    sessionId,
+  })
+  getWindowRegistry().activateSession?.({
+    windowId: normalizedWindowId,
+    sessionId,
+  })
+  syncWindowStateFromSession(normalizedWindowId, session)
+
+  try {
+    await rebindDirectoryWatchForSession(normalizedWindowId, session)
+  }
+  catch {}
+
+  publishSnapshotChanged(normalizedWindowId)
+  // 活动标签属于标签组的一部分，切标签也要写盘。
+  await persistCurrentTabGroup(normalizedWindowId)
+  return true
+}
+
+/**
+ * 关掉一个标签页。
+ *
+ * 关标签只销毁这个会话，其他标签原封不动；活动指针交给相邻标签。
+ * 如果关掉的是最后一个标签，按“关最后一个标签 = 关窗口”的约定关窗口。
+ */
+async function closeTabInWindow(windowId, sessionId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const { store } = ensureSessionRuntimeInitialized()
+  const session = sessionId ? store.getSession(sessionId) : null
+  if (!normalizedWindowId || !session) {
+    return false
+  }
+
+  stopExternalWatch(normalizedWindowId, sessionId)
+
+  // 关标签也写 recent：刚关掉的文件应该浮到“最近文件”顶部，
+  // 因为那一刻正是用户最想从菜单里把它找回来的时候。
+  const closingDocumentPath = session.documentSource?.path || null
+  if (closingDocumentPath) {
+    try {
+      await recent.add(closingDocumentPath)
+    }
+    catch {}
+  }
+
+  store.destroySession(sessionId)
+  getWindowRegistry().removeSession?.({
+    windowId: normalizedWindowId,
+    sessionId,
+  })
+
+  const nextActiveSession = store.getSessionByWindowId(normalizedWindowId)
+  if (!nextActiveSession) {
+    return await continueWindowClose(normalizedWindowId)
+  }
+
+  getWindowRegistry().activateSession?.({
+    windowId: normalizedWindowId,
+    sessionId: nextActiveSession.sessionId,
+  })
+  syncWindowStateFromSession(normalizedWindowId, nextActiveSession)
+
+  try {
+    await rebindDirectoryWatchForSession(normalizedWindowId, nextActiveSession)
+  }
+  catch {}
+
+  publishSnapshotChanged(normalizedWindowId)
+  await persistCurrentTabGroup(normalizedWindowId)
+  return true
+}
+
+function createTabHostController(windowId) {
   return {
-    start: (options = {}) => startExternalWatch(windowId, options),
-    stop: () => stopExternalWatch(windowId),
+    activateTab: sessionId => activateTabInWindow(windowId, sessionId),
+    closeTab: sessionId => closeTabInWindow(windowId, sessionId),
+    saveAllTabsAndClose: () => saveAllTabsAndClose(windowId),
+    isSessionDirty: (sessionId) => {
+      const { store } = ensureSessionRuntimeInitialized()
+      const session = sessionId ? store.getSession(sessionId) : null
+      return session ? deriveDocumentSnapshot(session).dirty : false
+    },
+  }
+}
+
+/**
+ * 在当前窗口新建一个草稿标签。
+ *
+ * “新建”不再开新窗口：新窗口保留给“并排查看”这个独立入口。
+ */
+async function createDraftTab(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const win = getWindowById(normalizedWindowId)
+  if (!normalizedWindowId || !isWindowAlive(win)) {
+    return false
+  }
+
+  const draftSession = createInitialSession({
+    sessionId: commonUtil.createId(),
+    filePath: null,
+    exists: false,
+    content: '',
+    isRecent: false,
+  })
+
+  registerSessionForWindow(normalizedWindowId, draftSession)
+  publishSnapshotChanged(normalizedWindowId)
+  await persistCurrentTabGroup(normalizedWindowId)
+  return true
+}
+
+/**
+ * “保存并退出”遇到多个脏标签时，逐个会话保存完再关窗。
+ *
+ * 保存链路本身是按“当前活动会话”工作的，所以这里先切到目标标签，
+ * 再复用同一套保存状态机；任何一个会话保存失败或用户取消，都立即中止关窗。
+ */
+async function saveAllTabsAndClose(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const { store } = ensureSessionRuntimeInitialized()
+  const sessionIds = store.getSessionIdsByWindowId?.(normalizedWindowId) || []
+
+  for (const sessionId of sessionIds) {
+    const targetSession = store.getSession(sessionId)
+    if (!targetSession || deriveDocumentSnapshot(targetSession).dirty !== true) {
+      continue
+    }
+
+    await dispatchCommand(normalizedWindowId, 'document.activate-tab', { sessionId })
+    const saveResult = await executeDocumentSaveCommandWithDispatcherDetailed(
+      normalizedWindowId,
+      createRuntimeDispatchAdapter(normalizedWindowId, ensureSessionRuntimeInitialized()),
+    )
+    if (saveResult.saved !== true) {
+      return false
+    }
+  }
+
+  return await continueWindowClose(normalizedWindowId)
+}
+
+function createExternalWatchController(windowId) {
+  const resolveActiveSessionId = () => getSessionByWindowId(windowId)?.sessionId || null
+  return {
+    start: (options = {}) => startExternalWatch(windowId, resolveActiveSessionId(), options),
+    stop: () => stopExternalWatch(windowId, resolveActiveSessionId()),
     getContext: () => ({
       ...getExternalWatchContext(windowId),
       shouldRebindAfterSave: shouldRebindExternalWatchAfterSave(windowId),
     }),
-    markInternalSave: content => getExternalWatchBridge(windowId)?.markInternalSave?.(content),
-    settlePendingChange: versionHash => getExternalWatchBridge(windowId)?.settlePendingChange?.(versionHash),
-    ignorePendingChange: () => getExternalWatchBridge(windowId)?.ignorePendingChange?.(),
+    markInternalSave: content => getExternalWatchBridge(windowId, resolveActiveSessionId())?.markInternalSave?.(content),
+    settlePendingChange: versionHash => getExternalWatchBridge(windowId, resolveActiveSessionId())?.settlePendingChange?.(versionHash),
+    ignorePendingChange: () => getExternalWatchBridge(windowId, resolveActiveSessionId())?.ignorePendingChange?.(),
   }
 }
 
@@ -1586,6 +1914,7 @@ function buildEffectContextForWindow(windowId, { dispatchCommand }) {
       }
     },
     externalWatchController: createExternalWatchController(windowId),
+    tabHostController: createTabHostController(windowId),
     windowMessageController: createWindowMessageController(windowId),
     focusWindow: () => focusWindow(windowId),
   }
@@ -2008,8 +2337,8 @@ async function createNew(filePath, isRecent = false) {
       windowId: id,
       state: {
         win,
-        externalWatch: createExternalWatchState(),
-        externalWatchBridge: null,
+        externalWatchMap: new Map(),
+        externalWatchBridgeMap: new Map(),
         allowImmediateClose: false,
         forceClose: false,
         lastClosedManualRequestCompletions: [],
@@ -2123,7 +2452,7 @@ async function createNew(filePath, isRecent = false) {
     })
 
     if (exists) {
-      startExternalWatch(id)
+      startExternalWatch(id, session?.sessionId)
     }
 
     try {
@@ -2163,6 +2492,9 @@ async function createNew(filePath, isRecent = false) {
 Object.assign(windowLifecycleService, {
   deleteEditorWin,
   createNew,
+  createDraftTab,
+  persistCurrentTabGroup,
+  restoreTabGroup,
   configure: configureWindowLifecycleService,
   getDocumentSessionRuntimeHostDeps,
   getWindowById,

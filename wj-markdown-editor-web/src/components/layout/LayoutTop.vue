@@ -74,8 +74,8 @@ function openAbout() {
   channelUtil.send({ event: 'open-about' })
 }
 
-const fileName = computed(() => store.fileName)
-const saved = computed(() => store.saved)
+// 标题栏不再显示文件名：标签栏里的活动标签已经承担了“当前是哪个文档”，
+// 标题栏居中区只保留为窗口拖拽热区。
 const isMaximize = computed(() => store.isMaximize)
 const isAlwaysOnTop = computed(() => store.isAlwaysOnTop)
 const theme = computed(() => store.config.theme.global)
@@ -163,10 +163,7 @@ const hasNewVersion = computed(() => store.hasNewVersion)
     <div class="electron-no-drag flex shrink-0 items-center">
       <slot name="menu" />
     </div>
-    <div class="electron-drag h-full flex flex-1 items-center justify-center overflow-hidden font-bold line-height-normal">
-      <span class="overflow-hidden text-ellipsis whitespace-nowrap">{{ fileName }}</span>
-      <span v-if="!saved" class="color-red">*</span>
-    </div>
+    <div class="electron-drag h-full flex flex-1 items-center justify-center overflow-hidden" />
     <div class="flex items-center">
       <a-tooltip v-if="hasNewVersion" placement="bottom" color="#1677ff">
         <template #title>

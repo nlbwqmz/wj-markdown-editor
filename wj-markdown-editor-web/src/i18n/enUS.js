@@ -43,9 +43,20 @@ export default {
   },
   closeModal: {
     closePrompt: ' has unsaved changes. Please choose how to exit. Automatic saving is recommended to avoid data loss.',
+    closeTabPrompt: 'The current tab has unsaved changes. Please choose how to proceed.',
+    closePromptMultiple: '{count} tabs have unsaved changes. Please choose how to proceed.',
     openSetting: 'Open settings',
     saveAndExit: 'Save and exit',
+    saveAndClose: 'Save and close',
     directExit: 'Exit directly',
+    directClose: 'Close without saving',
+  },
+  documentTab: {
+    untitled: 'Untitled',
+    close: 'Close',
+    closeOthers: 'Close others',
+    closeToRight: 'Close to the right',
+    copyPath: 'Copy path',
   },
   previewAssetMenu: {
     copyAbsolutePath: 'Copy absolute path',
@@ -97,6 +108,7 @@ export default {
       name: 'File',
       children: {
         createNew: 'Create New',
+        createNewWindow: 'New Window',
         recentFiles: {
           name: 'Recent',
           noHistory: 'No Recent History',

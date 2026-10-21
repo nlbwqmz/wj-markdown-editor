@@ -32,11 +32,18 @@ export function createMarkdownEditScrollAnchorCapture(options = {}) {
    * 右侧预览隐藏时必须完全跳过 editor-preview 控制器，
    * 这样才能保留上一轮已存在的预览记录，而不是把它覆盖成空值。
    *
+   * 未传 snapshot（即 `undefined`）时保持当前文档身份不变，按当前身份采集。
+   * 标签切换需要这个语义：必须在把身份切到目标标签之前，
+   * 先把即将离开的标签的滚动位置写进它自己的 bucket。
+   * 显式传入 `null` 仍然会把身份重置，与旧行为保持一致。
+   *
    * @param {object | null | undefined} snapshot 完整 snapshot 或已解析的文档身份，会原样透传给 updateCurrentScrollSnapshot。
    * @returns {{ editorCode: object | null, editorPreview: object | null }} 返回本轮左右区域采集结果。
    */
   return function captureViewScrollAnchors(snapshot) {
-    updateCurrentScrollSnapshot?.(snapshot)
+    if (snapshot !== undefined) {
+      updateCurrentScrollSnapshot?.(snapshot)
+    }
 
     return {
       editorCode: editorCodeScrollAnchor?.captureCurrentAnchor?.() ?? null,

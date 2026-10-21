@@ -81,31 +81,6 @@ function resolveOptionsDocumentKey(options) {
 }
 
 /**
- * 解析一个 bucket 中最新的 savedAt。
- * 裁剪时需要按新旧程度淘汰 bucket；完全没有有效 savedAt 的 bucket 视为最旧。
- *
- * @param {unknown} bucket
- * @returns {number} 返回 bucket 内最新的 savedAt；没有有效值时返回 Number.NEGATIVE_INFINITY。
- */
-function resolveBucketLatestSavedAt(bucket) {
-  if (!isReadableObject(bucket)) {
-    return Number.NEGATIVE_INFINITY
-  }
-
-  let latestSavedAt = Number.NEGATIVE_INFINITY
-
-  for (const record of Object.values(bucket)) {
-    const savedAt = record?.savedAt
-
-    if (Number.isFinite(savedAt) && savedAt > latestSavedAt) {
-      latestSavedAt = savedAt
-    }
-  }
-
-  return latestSavedAt
-}
-
-/**
  * 按 documentKey 与 scrollAreaKey 保存一条滚动锚点记录。
  * 同一文档下相同滚动区域的记录会被最新值覆盖，不同区域之间互不影响。
  * 未显式传入 documentKey 时回退 sessionId，并把最终文档键写回记录，
@@ -186,47 +161,6 @@ export function clearSessionAnchorRecords(store, documentKey) {
   }
 
   delete store[documentKey]
-}
-
-/**
- * 裁剪滚动锚点缓存，避免文档切换场景下记录无限增长。
- * 规则：优先保留 activeDocumentKey，其余 bucket 按最新 savedAt 从新到旧保留，
- * 直到总条目数不超过 maxEntries；没有有效 savedAt 的 bucket 按最旧处理。
- *
- * @param {Record<string, Record<string, any>>} store
- * @param {string | null} activeDocumentKey
- * @param {number} [maxEntries]
- */
-export function pruneAnchorRecords(store, activeDocumentKey, maxEntries = 20) {
-  if (!isNullPrototypeDictionary(store)) {
-    return
-  }
-
-  const limit = Number.isInteger(maxEntries) && maxEntries >= 0 ? maxEntries : 20
-  const activeKey = typeof activeDocumentKey === 'string' ? activeDocumentKey : ''
-  const bucketKeys = Object.keys(store)
-
-  if (bucketKeys.length <= limit) {
-    return
-  }
-
-  const removableKeys = bucketKeys
-    .filter(bucketKey => bucketKey !== activeKey)
-    .sort((leftKey, rightKey) => resolveBucketLatestSavedAt(store[leftKey]) - resolveBucketLatestSavedAt(store[rightKey]))
-
-  let removeCount = bucketKeys.length - limit
-  let removableIndex = 0
-
-  while (removeCount > 0 && removableIndex < removableKeys.length) {
-    delete store[removableKeys[removableIndex]]
-    removableIndex++
-    removeCount--
-  }
-
-  if (removeCount > 0 && activeKey !== '' && Object.hasOwn(store, activeKey)) {
-    // maxEntries 小于 1 时连活动文档也不得不裁掉，保证总条目数不超过上限。
-    delete store[activeKey]
-  }
 }
 
 /**

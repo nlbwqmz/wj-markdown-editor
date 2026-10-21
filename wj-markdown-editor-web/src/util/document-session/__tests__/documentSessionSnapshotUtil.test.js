@@ -56,6 +56,8 @@ test('recent-missing 快照应只保留当前 store 仍在消费的派生字段�
     visible: true,
     reason: 'unsaved-changes',
     allowForceClose: true,
+    scope: 'window',
+    unsavedTabCount: 0,
   })
   assert.equal(storeState.documentSessionSnapshot.revision, 2)
 })
@@ -139,6 +141,7 @@ test('缺省快照也应被归一化为稳定结构，避免 renderer 再自行�
 
   assert.deepEqual(snapshot, {
     sessionId: null,
+    kind: 'markdown',
     content: '',
     fileName: 'Unnamed',
     displayPath: null,
@@ -148,6 +151,8 @@ test('缺省快照也应被归一化为稳定结构，避免 renderer 再自行�
     dirty: false,
     exists: false,
     isRecentMissing: false,
+    tabs: [],
+    activeSessionId: null,
     closePrompt: null,
     externalPrompt: null,
     revision: 0,

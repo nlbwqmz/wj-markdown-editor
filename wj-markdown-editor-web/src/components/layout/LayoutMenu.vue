@@ -127,6 +127,15 @@ function updateMenuList() {
           },
         },
         {
+          // “新建窗口”是并排查看的入口，与“新建标签”分开：
+          // 它不再绑定快捷键，避免 Ctrl+N 同时承担两种语义。
+          key: commonUtil.createId(),
+          label: t('topMenu.file.children.createNewWindow'),
+          click: () => {
+            channelUtil.send({ event: 'create-new-window' }).then(() => {}).catch(() => {})
+          },
+        },
+        {
           key: commonUtil.createId(),
           label: t('topMenu.file.children.recentFiles.name'),
           children: recentList,

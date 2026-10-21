@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   captureEditorLineAnchor,
   capturePreviewLineAnchor,
-  resolveEditorLineAnchorScrollTop,
+  resolveEditorAnchorLineNumber,
   resolvePreviewLineAnchorScrollTop,
   resolvePreviewLineElement,
   resolvePreviewLineNumberFromAnchor,
@@ -123,50 +123,6 @@ test('captureEditorLineAnchor 能从顶部行块计算行号与行内偏移比�
     type: 'editor-line',
     lineNumber: 3,
     lineOffsetRatio: 0.5,
-  })
-})
-
-test('resolveEditorLineAnchorScrollTop 能按行号与行内偏移比例还原 scrollTop', () => {
-  const view = createEditorView({
-    lineBlocks: [
-      { lineNumber: 5, from: 50, top: 90, height: 60 },
-      { lineNumber: 6, from: 60, top: 150, height: 60 },
-      { lineNumber: 7, from: 70, top: 210, height: 60 },
-    ],
-  })
-
-  const targetScrollTop = resolveEditorLineAnchorScrollTop({
-    view,
-    anchor: {
-      type: 'editor-line',
-      lineNumber: 6,
-      lineOffsetRatio: 0.02,
-    },
-    fallbackScrollTop: 0,
-  })
-
-  assert.equal(targetScrollTop, 151.2)
-})
-
-test('resolveEditorLineAnchorScrollTop 在锚点行号越界时应回退 fallbackScrollTop 且不抛异常', () => {
-  const view = createEditorView({
-    lineBlocks: [
-      { lineNumber: 5, from: 50, top: 90, height: 60 },
-      { lineNumber: 6, from: 60, top: 150, height: 60 },
-      { lineNumber: 7, from: 70, top: 210, height: 60 },
-    ],
-  })
-
-  assert.doesNotThrow(() => {
-    assert.equal(resolveEditorLineAnchorScrollTop({
-      view,
-      anchor: {
-        type: 'editor-line',
-        lineNumber: 99,
-        lineOffsetRatio: 0.3,
-      },
-      fallbackScrollTop: 44,
-    }), 44)
   })
 })
 
@@ -331,4 +287,20 @@ test('resolvePreviewLineNumberFromAnchor 对非法锚点应返回 null', () => {
   assert.equal(resolvePreviewLineNumberFromAnchor(null), null)
   assert.equal(resolvePreviewLineNumberFromAnchor({ type: 'editor-line', lineNumber: 3 }), null)
   assert.equal(resolvePreviewLineNumberFromAnchor({ type: 'preview-line', lineStart: null }), null)
+})
+
+test('resolveEditorAnchorLineNumber 对编辑区锚点与交接锚点都应取出行号', () => {
+  // 编辑区锚点
+  assert.equal(resolveEditorAnchorLineNumber({ type: 'editor-line', lineNumber: 42, lineOffsetRatio: 0.5 }), 42)
+  // 跨视图交接锚点：恢复只看行号，不再做像素换算
+  assert.equal(resolveEditorAnchorLineNumber({ type: 'line-handoff', lineNumber: 8, lineOffsetRatio: 0.2 }), 8)
+})
+
+test('resolveEditorAnchorLineNumber 对非法行号必须返回 null', () => {
+  assert.equal(resolveEditorAnchorLineNumber({ type: 'editor-line', lineNumber: 0 }), null)
+  assert.equal(resolveEditorAnchorLineNumber({ type: 'editor-line', lineNumber: -3 }), null)
+  assert.equal(resolveEditorAnchorLineNumber({ type: 'editor-line', lineNumber: 1.5 }), null)
+  assert.equal(resolveEditorAnchorLineNumber({ type: 'editor-line' }), null)
+  assert.equal(resolveEditorAnchorLineNumber(null), null)
+  assert.equal(resolveEditorAnchorLineNumber(), null)
 })

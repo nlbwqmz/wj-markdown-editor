@@ -264,8 +264,18 @@ const handlerList = {
   'document.confirm-force-close': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.confirm-force-close', null),
   'document.external.apply': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.external.apply', data),
   'document.external.ignore': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.external.ignore', data),
-  'create-new': () => {
-    windowLifecycleService.createNew().then(() => {})
+  'create-new': async (windowContext) => {
+    // “新建”现在只新建当前窗口的草稿标签；
+    // 没有可用窗口时（例如从菜单触发）才回退成新开窗口。
+    const created = windowContext?.windowId != null
+      ? await windowLifecycleService.createDraftTab(windowContext.windowId)
+      : false
+    if (!created) {
+      await windowLifecycleService.createNew()
+    }
+  },
+  'create-new-window': async () => {
+    await windowLifecycleService.createNew()
   },
   'document.request-open-dialog': async (windowContext) => {
     return await executeRuntimeUiCommand(windowContext, 'document.request-open-dialog', null)
@@ -281,6 +291,15 @@ const handlerList = {
   },
   'document.open-path-in-current-window': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'document.open-path-in-current-window', data)
+  },
+  'document.activate-tab': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.activate-tab', data)
+  },
+  'document.close-tab': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.close-tab', data)
+  },
+  'document.reorder-tabs': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.reorder-tabs', data)
   },
   'get-config': () => {
     return configUtil.getConfig()

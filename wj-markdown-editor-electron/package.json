@@ -42,6 +42,7 @@
       "!.vscode/**",
       "!eslint.config.mjs",
       "!recent.json",
+      "!tab-group.json",
       "!installer.nsh",
       "!scripts/**",
       "!icon/1024x1024.png",

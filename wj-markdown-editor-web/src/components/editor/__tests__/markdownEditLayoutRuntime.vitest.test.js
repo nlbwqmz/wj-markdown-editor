@@ -296,7 +296,12 @@ vi.mock('@/util/editor/viewScrollAnchorSessionUtil.js', () => ({
     scrollAnchorSessionState.store = Object.create(null)
     return scrollAnchorSessionState.store
   },
-  pruneAnchorRecords() {},
+  clearSessionAnchorRecords(store, documentKey) {
+    if (store == null || typeof documentKey !== 'string' || documentKey === '') {
+      return
+    }
+    delete store[documentKey]
+  },
   saveAnchorRecord(store, record) {
     if (store == null || typeof record?.sessionId !== 'string' || typeof record?.scrollAreaKey !== 'string') {
       return null

@@ -107,6 +107,9 @@ const DOCUMENT_STATE_COMMAND_SET = new Set([
   'document.request-close',
   'document.cancel-close',
   'document.confirm-force-close',
+  'document.activate-tab',
+  'document.close-tab',
+  'document.reorder-tabs',
   'document.external.apply',
   'document.external.ignore',
 ])
@@ -351,6 +354,9 @@ export function createDocumentSessionRuntime(deps = {}) {
   async function dispatch(windowId, command, payload, options = {}) {
     return await commandRunner.run({
       windowId,
+      // 多标签后，后台会话的事件（例如外部变更）需要定向到自己的会话，
+      // 不能一律打到窗口当前活动会话上。
+      sessionId: options.sessionId || null,
       command,
       payload,
       publishSnapshotMode: options.publishSnapshotChanged || 'always',

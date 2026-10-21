@@ -104,38 +104,20 @@ export function captureEditorLineAnchor({ view, scrollTop }) {
 }
 
 /**
- * 根据编辑区行锚点还原目标 scrollTop。
- * 若锚点无效、行块丢失或 view 接口不完整，则直接回退到调用方给定的滚动值。
+ * 从编辑区锚点里取出用于恢复的行号。
+ *
+ * 编辑区锚点（editor-line）与跨视图交接锚点（line-handoff）都带公共行号，
+ * 恢复时只需要行号，不再做任何像素换算：
+ * 像素值依赖行高测量，而换入 `EditorState` 后 CodeMirror 会丢掉全部测量，
+ * 未渲染区域只有估算高度，任何基于它的像素换算都会产生系统性偏差。
+ *
+ * @param {{ lineNumber?: unknown } | null | undefined} anchor
+ * @returns {number | null} 返回正整数行号；无法解析时返回 null。
  */
-export function resolveEditorLineAnchorScrollTop({ view, anchor, fallbackScrollTop }) {
-  const safeFallbackScrollTop = normalizeFallbackScrollTop(fallbackScrollTop)
-  if (!view || typeof view.lineBlockAt !== 'function' || typeof view.state?.doc?.line !== 'function') {
-    return safeFallbackScrollTop
-  }
-  if (anchor?.type !== 'editor-line' || !Number.isInteger(anchor.lineNumber) || anchor.lineNumber <= 0) {
-    return safeFallbackScrollTop
-  }
+export function resolveEditorAnchorLineNumber(anchor) {
+  const lineNumber = anchor?.lineNumber
 
-  let line
-  try {
-    /**
-     * 真实 CodeMirror 在行号越界时会直接抛出 RangeError。
-     * 本工具的契约是任何无法解析的锚点都优先回退，而不是把异常继续抛给调用方。
-     */
-    line = view.state.doc.line(anchor.lineNumber)
-  } catch {
-    return safeFallbackScrollTop
-  }
-  if (!line || !Number.isFinite(line.from)) {
-    return safeFallbackScrollTop
-  }
-
-  const lineBlock = view.lineBlockAt(line.from)
-  if (!lineBlock || !Number.isFinite(lineBlock.top) || !Number.isFinite(lineBlock.height)) {
-    return safeFallbackScrollTop
-  }
-
-  return lineBlock.top + (lineBlock.height * clampRatio(anchor.lineOffsetRatio))
+  return Number.isInteger(lineNumber) && lineNumber > 0 ? lineNumber : null
 }
 
 /**

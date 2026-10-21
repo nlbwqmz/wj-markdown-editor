@@ -4,7 +4,6 @@ import {
   clearSessionAnchorRecords,
   createViewScrollAnchorSessionStore,
   getAnchorRecord,
-  pruneAnchorRecords,
   saveAnchorRecord,
   shouldRestoreAnchorRecord,
 } from '../viewScrollAnchorSessionUtil.js'
@@ -233,7 +232,6 @@ test('导出 API 遇到异常入参时应保持安全返回或 no-op', () => {
   }), null)
   assert.equal(getAnchorRecord({}, undefined), null)
   assert.doesNotThrow(() => clearSessionAnchorRecords(null, 'session-1'))
-  assert.doesNotThrow(() => pruneAnchorRecords(null, 'session-1'))
   assert.equal(shouldRestoreAnchorRecord(undefined), false)
 })
 
@@ -256,7 +254,6 @@ test('普通对象 store 应视为 invalid，避免继续读写并触发原型�
     scrollAreaKey: 'x',
   }), null)
   assert.doesNotThrow(() => clearSessionAnchorRecords(plainStore, 'session-1'))
-  assert.doesNotThrow(() => pruneAnchorRecords(plainStore, 'session-1'))
   assert.equal(Object.prototype[pollutedKey], undefined)
 })
 
@@ -281,46 +278,6 @@ test('clearSessionAnchorRecords 应只移除指定 documentKey 的记录', () =>
   })
 
   clearSessionAnchorRecords(store, 'session-1')
-
-  assert.equal(getAnchorRecord(store, {
-    sessionId: 'session-1',
-    scrollAreaKey: 'editor-code',
-  }), null)
-  assert.deepEqual(getAnchorRecord(store, {
-    sessionId: 'session-2',
-    scrollAreaKey: 'preview-page',
-  }), {
-    sessionId: 'session-2',
-    scrollAreaKey: 'preview-page',
-    documentKey: 'session-2',
-    revision: 2,
-    anchor: { type: 'preview-line', lineStart: 10, lineEnd: 12, elementOffsetRatio: 0.1 },
-    fallbackScrollTop: 240,
-    savedAt: 2,
-  })
-})
-
-test('pruneAnchorRecords 应只保留活动 documentKey 的记录', () => {
-  const store = createViewScrollAnchorSessionStore()
-
-  saveAnchorRecord(store, {
-    sessionId: 'session-1',
-    scrollAreaKey: 'editor-code',
-    revision: 1,
-    anchor: { type: 'editor-line', lineNumber: 1, lineOffsetRatio: 0 },
-    fallbackScrollTop: 0,
-    savedAt: 1,
-  })
-  saveAnchorRecord(store, {
-    sessionId: 'session-2',
-    scrollAreaKey: 'preview-page',
-    revision: 2,
-    anchor: { type: 'preview-line', lineStart: 10, lineEnd: 12, elementOffsetRatio: 0.1 },
-    fallbackScrollTop: 240,
-    savedAt: 2,
-  })
-
-  pruneAnchorRecords(store, 'session-2', 1)
 
   assert.equal(getAnchorRecord(store, {
     sessionId: 'session-1',
@@ -481,98 +438,27 @@ test('shouldRestoreAnchorRecord 应兼容只传 sessionId 的旧调用方', () =
   }), false)
 })
 
-test('pruneAnchorRecords 应保留活动文档，其余按 savedAt 从新到旧保留并限制总条目数', () => {
+test('滚动锚点缓存不再按数量上限裁剪，改由关闭标签时按 documentKey 清理', () => {
   const store = createViewScrollAnchorSessionStore()
-  const documents = [
-    { documentKey: '/docs/active.md', savedAt: 1 },
-    { documentKey: '/docs/newest.md', savedAt: 90 },
-    { documentKey: '/docs/middle.md', savedAt: 60 },
-    { documentKey: '/docs/oldest.md', savedAt: 30 },
-  ]
 
-  for (const document of documents) {
+  for (const documentKey of ['/docs/a.md', '/docs/b.md', '/docs/c.md']) {
     saveAnchorRecord(store, {
-      documentKey: document.documentKey,
-      sessionId: `session-${document.documentKey}`,
+      documentKey,
+      sessionId: `session-${documentKey}`,
       scrollAreaKey: 'editor-code',
       revision: 1,
       anchor: null,
       fallbackScrollTop: 0,
-      savedAt: document.savedAt,
+      savedAt: 1,
     })
   }
 
-  pruneAnchorRecords(store, '/docs/active.md', 3)
+  // 打开多少个文档就保留多少个桶：缓存生命周期由标签页控制，不需要数量上限兜底。
+  assert.equal(Object.keys(store).length, 3)
 
-  assert.equal(store['/docs/active.md'] != null, true)
-  assert.equal(store['/docs/newest.md'] != null, true)
-  assert.equal(store['/docs/middle.md'] != null, true)
-  assert.equal(store['/docs/oldest.md'], undefined)
-})
+  clearSessionAnchorRecords(store, '/docs/b.md')
 
-test('pruneAnchorRecords 应将无有效 savedAt 的文档按最旧优先淘汰', () => {
-  const store = createViewScrollAnchorSessionStore()
-
-  saveAnchorRecord(store, {
-    documentKey: '/docs/active.md',
-    sessionId: 'session-active',
-    scrollAreaKey: 'editor-code',
-    revision: 1,
-    anchor: null,
-    fallbackScrollTop: 0,
-    savedAt: 1,
-  })
-  saveAnchorRecord(store, {
-    documentKey: '/docs/undated.md',
-    sessionId: 'session-undated',
-    scrollAreaKey: 'editor-code',
-    revision: 1,
-    anchor: null,
-    fallbackScrollTop: 0,
-  })
-  saveAnchorRecord(store, {
-    documentKey: '/docs/dated.md',
-    sessionId: 'session-dated',
-    scrollAreaKey: 'editor-code',
-    revision: 1,
-    anchor: null,
-    fallbackScrollTop: 0,
-    savedAt: 50,
-  })
-
-  pruneAnchorRecords(store, '/docs/active.md', 2)
-
-  assert.equal(store['/docs/active.md'] != null, true)
-  assert.equal(store['/docs/dated.md'] != null, true)
-  assert.equal(store['/docs/undated.md'], undefined)
-})
-
-test('pruneAnchorRecords 在总条目数不超过上限时应原样保留', () => {
-  const store = createViewScrollAnchorSessionStore()
-
-  saveAnchorRecord(store, {
-    documentKey: '/docs/a.md',
-    sessionId: 'session-a',
-    scrollAreaKey: 'editor-code',
-    revision: 1,
-    anchor: null,
-    fallbackScrollTop: 0,
-    savedAt: 1,
-  })
-  saveAnchorRecord(store, {
-    documentKey: '/docs/b.md',
-    sessionId: 'session-b',
-    scrollAreaKey: 'editor-code',
-    revision: 1,
-    anchor: null,
-    fallbackScrollTop: 0,
-    savedAt: 2,
-  })
-
-  pruneAnchorRecords(store, '/docs/a.md', 2)
-
-  assert.equal(store['/docs/a.md'] != null, true)
-  assert.equal(store['/docs/b.md'] != null, true)
+  assert.deepEqual(Object.keys(store).sort(), ['/docs/a.md', '/docs/c.md'])
 })
 
 test('clearSessionAnchorRecords 应按 documentKey 删除，不影响其他文档', () => {

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { normalizeDocumentSessionKind } from './documentSessionKind.js'
 
 function createContentVersion(content = '') {
   return crypto.createHash('sha256').update(content, 'utf8').digest('hex')
@@ -54,6 +55,7 @@ function createWatchRuntime({ exists }) {
 
 function createBaseSession({
   sessionId,
+  kind,
   documentPath,
   content,
   exists,
@@ -69,6 +71,10 @@ function createBaseSession({
     // 当前会话的唯一标识。
     // 主进程、渲染层和各类协调器都会依赖它来确认正在操作的是哪一个文档会话。
     sessionId,
+    // 当前会话的类型。
+    // 它描述的是“这个文档是什么”，而不是“它在标签栏里长什么样”；
+    // 标签页只是会话的视图外壳，类型属于会话本身。
+    kind: normalizeDocumentSessionKind(kind),
     documentSource: {
       // 当前会话绑定的真实文档路径。
       // 对未命名草稿或 recent-missing 场景，这里会是 null，表示尚未建立可写磁盘身份。
@@ -187,7 +193,8 @@ function createBaseSession({
     watchRuntime: createWatchRuntime({ exists }),
     closeRuntime: {
       // 当前关闭流程的意图来源。
-      // 例如用户主动关闭窗口、退出应用或切换文档时，都会通过这里区分语义。
+      // close 表示关窗口，close-tab 表示只关当前标签页；
+      // 两个作用域共用同一套脏判断与保存链路，但落地动作不同。
       intent: null,
       // 关闭前弹窗当前对应的原因。
       // 用于渲染层展示是“有未保存内容”还是其他阻塞原因。
@@ -218,11 +225,12 @@ function createBaseSession({
  * 后续通过 `deriveDocumentSnapshot(session)` 推导时，
  * 空白草稿会得到 `saved = true`，与现有产品的“新建后未编辑不算脏”保持一致。
  */
-export function createDraftSession({ sessionId }) {
+export function createDraftSession({ sessionId, kind }) {
   assertNonEmptyString(sessionId, 'sessionId')
 
   return createBaseSession({
     sessionId,
+    kind,
     documentPath: null,
     content: '',
     exists: false,
@@ -241,6 +249,7 @@ export function createDraftSession({ sessionId }) {
  */
 export function createBoundFileSession({
   sessionId,
+  kind,
   path,
   content,
   stat,
@@ -250,6 +259,7 @@ export function createBoundFileSession({
 
   return createBaseSession({
     sessionId,
+    kind,
     documentPath: path,
     content: content ?? '',
     exists: true,
@@ -270,12 +280,13 @@ export function createBoundFileSession({
  * 之所以保留 `missingPath`，是为了让渲染层能提示用户移除哪一条 recent；
  * 之所以后续仍会把 `fileName` 推导成 `Unnamed`，是为了避免把一个并未成功绑定的路径伪装成当前文档身份。
  */
-export function createRecentMissingSession({ sessionId, missingPath }) {
+export function createRecentMissingSession({ sessionId, kind, missingPath }) {
   assertNonEmptyString(sessionId, 'sessionId')
   assertNonEmptyString(missingPath, 'missingPath')
 
   return createBaseSession({
     sessionId,
+    kind,
     documentPath: null,
     content: '',
     exists: false,

@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import ExternalFileChangeModal from '@/components/ExternalFileChangeModal.vue'
+import DocumentTabBar from '@/components/layout/DocumentTabBar.vue'
 import {
   clampFileManagerPanelWidth,
   createHomeViewFilePanelLayoutController,
@@ -198,9 +199,19 @@ watch(() => route.name, () => {
           data-testid="home-file-manager-gutter"
           class="wj-sash wj-sash--vertical h-full"
         />
-        <LayoutContainer />
+        <div class="h-full min-w-0 flex flex-col overflow-hidden">
+          <DocumentTabBar />
+          <div class="h-0 flex-1 overflow-hidden">
+            <LayoutContainer />
+          </div>
+        </div>
       </div>
-      <LayoutContainer v-else />
+      <div v-else class="h-full min-w-0 flex flex-col overflow-hidden">
+        <DocumentTabBar />
+        <div class="h-0 flex-1 overflow-hidden">
+          <LayoutContainer />
+        </div>
+      </div>
     </div>
     <ExternalFileChangeModal />
   </div>

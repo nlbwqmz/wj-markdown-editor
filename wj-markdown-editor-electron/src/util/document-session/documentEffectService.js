@@ -743,6 +743,7 @@ export function createDocumentEffectService({
     showUnsavedPrompt,
     showSaveFailedMessage,
     externalWatchController,
+    tabHostController,
     windowMessageController,
     focusWindow,
   }) {
@@ -904,6 +905,39 @@ export function createDocumentEffectService({
         // 真正继续执行关闭窗口。
         // 命令层已经完成所有保存/确认裁决，这里只负责落地动作。
         return await closeHostController?.continueWindowClose?.()
+
+      case 'activate-tab':
+      {
+        // 标签切换的落地动作：换活动指针、重绑目录监听、广播快照。
+        const activated = await tabHostController?.activateTab?.(effect.sessionId)
+        return activated ?? null
+      }
+
+      case 'close-tab':
+      {
+        // 关标签：只销毁这个会话，其他标签保持不变。
+        const closed = await tabHostController?.closeTab?.(effect.sessionId)
+        return closed ?? null
+      }
+
+      case 'close-tab-after-save':
+      {
+        // “保存并关闭标签”的收尾：只有确认会话已经不脏才真的关，
+        // 保存失败、用户取消选路径时标签必须留下来。
+        const stillDirty = tabHostController?.isSessionDirty?.(effect.sessionId) !== false
+        if (stillDirty) {
+          return null
+        }
+        const closedAfterSave = await tabHostController?.closeTab?.(effect.sessionId)
+        return closedAfterSave ?? null
+      }
+
+      case 'save-all-and-close':
+      {
+        // 多个脏标签的“保存并退出”：逐个保存，任一失败就中止关窗。
+        const closed = await tabHostController?.saveAllTabsAndClose?.()
+        return closed ?? null
+      }
 
       case 'notify-save-failed':
         // 统一展示保存失败消息，文案由 trigger 和语言配置共同决定。

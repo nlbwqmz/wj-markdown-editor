@@ -17,6 +17,22 @@ export function useEditorCore({ editorRef, t }) {
   const themeCompartment = new Compartment()
   const dynamicExtension = editorExtensionUtil.getDynamicExtension()
 
+  /**
+   * 当前生效的动态配置快照。
+   *
+   * Compartment 的重配置效果只会作用到「被 dispatch 的那个 EditorState」上，
+   * 而多标签下每个会话都持有一份自己保存的 EditorState。
+   * 如果主题 / 快捷键 / 扩展开关在 A 标签里改过，B 标签保存的状态里仍然是旧配置，
+   * 换回去时就会渲染成旧主题。
+   *
+   * 所以这里把“最后一次生效的配置”记下来，换回任何存档状态后再重放一次。
+   */
+  const liveConfig = {
+    theme: 'light',
+    extensionOptions: null,
+    keymapList: [],
+  }
+
   function isCompositionActive() {
     return isEditorCompositionActive({
       view: editorView.value,
@@ -71,6 +87,9 @@ export function useEditorCore({ editorRef, t }) {
     }
 
     const dynamicExtensionList = getDynamicExtensionList(extensionOptions)
+    liveConfig.theme = theme === 'dark' ? 'dark' : 'light'
+    liveConfig.extensionOptions = extensionOptions || null
+    liveConfig.keymapList = Array.isArray(keymapList) ? keymapList : []
     editorView.value = new EditorView({
       doc,
       lineWrapping: true,
@@ -129,20 +148,22 @@ export function useEditorCore({ editorRef, t }) {
   }
 
   function reconfigureTheme(theme) {
+    liveConfig.theme = theme === 'dark' ? 'dark' : 'light'
     if (!editorView.value) {
       return
     }
     editorView.value.dispatch({
-      effects: themeCompartment.reconfigure(theme === 'dark' ? [oneDark] : []),
+      effects: themeCompartment.reconfigure(liveConfig.theme === 'dark' ? [oneDark] : []),
     })
   }
 
   function reconfigureExtensions(extensionOptions) {
+    liveConfig.extensionOptions = extensionOptions || null
     if (!editorView.value) {
       return
     }
     for (const key in dynamicExtension) {
-      if (!extensionOptions || extensionOptions[key] !== false) {
+      if (!liveConfig.extensionOptions || liveConfig.extensionOptions[key] !== false) {
         editorView.value.dispatch({
           effects: dynamicExtension[key].compartment.reconfigure(dynamicExtension[key].extension),
         })
@@ -155,12 +176,44 @@ export function useEditorCore({ editorRef, t }) {
   }
 
   function reconfigureKeymap(keymapList) {
+    liveConfig.keymapList = Array.isArray(keymapList) ? keymapList : []
     if (!editorView.value) {
       return
     }
     editorView.value.dispatch({
-      effects: keymapCompartment.reconfigure(keymap.of(keymapList)),
+      effects: keymapCompartment.reconfigure(keymap.of(liveConfig.keymapList)),
     })
+  }
+
+  /**
+   * 把当前生效的配置重新应用到当前 EditorState。
+   *
+   * 多标签换回某个会话的存档状态后必须调一次：
+   * 存档状态里冻结的是它被保存那一刻的 compartment 内容，
+   * 不重放就会把主题、快捷键、扩展开关全部退回到旧值。
+   *
+   * @returns {boolean} 是否成功下发重配置。
+   */
+  function reapplyLiveConfiguration() {
+    const view = editorView.value
+    if (!view) {
+      return false
+    }
+
+    const effects = [
+      themeCompartment.reconfigure(liveConfig.theme === 'dark' ? [oneDark] : []),
+      keymapCompartment.reconfigure(keymap.of(liveConfig.keymapList)),
+    ]
+
+    for (const key in dynamicExtension) {
+      const enabled = !liveConfig.extensionOptions || liveConfig.extensionOptions[key] !== false
+      effects.push(dynamicExtension[key].compartment.reconfigure(
+        enabled ? dynamicExtension[key].extension : [],
+      ))
+    }
+
+    view.dispatch({ effects })
+    return true
   }
 
   return {
@@ -171,5 +224,6 @@ export function useEditorCore({ editorRef, t }) {
     reconfigureTheme,
     reconfigureExtensions,
     reconfigureKeymap,
+    reapplyLiveConfiguration,
   }
 }

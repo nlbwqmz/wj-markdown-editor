@@ -43,9 +43,20 @@ export default {
   },
   closeModal: {
     closePrompt: '存在未保存的修改，请选择退出方式。建议启用自动保存功能以避免数据丢失。',
+    closeTabPrompt: '当前标签页存在未保存的修改，请选择处理方式。',
+    closePromptMultiple: '有 {count} 个标签页存在未保存的修改，请选择处理方式。',
     openSetting: '打开设置',
     saveAndExit: '保存并退出',
+    saveAndClose: '保存并关闭',
     directExit: '直接退出',
+    directClose: '直接关闭',
+  },
+  documentTab: {
+    untitled: '未命名',
+    close: '关闭',
+    closeOthers: '关闭其它',
+    closeToRight: '关闭右侧',
+    copyPath: '复制路径',
   },
   previewAssetMenu: {
     copyAbsolutePath: '复制绝对路径',
@@ -97,6 +108,7 @@ export default {
       name: '文件',
       children: {
         createNew: '新建文件',
+        createNewWindow: '新建窗口',
         recentFiles: {
           name: '最近',
           noHistory: '暂无最近历史',

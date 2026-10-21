@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { normalizeDocumentSessionKind } from './documentSessionKind.js'
 
 /**
  * 判断输入是否更像 Windows 本地路径。
@@ -72,6 +73,9 @@ export function deriveDocumentSnapshot(session) {
     // 当前文档快照所属的会话 id。
     // 渲染层通过它判断收到的快照是否仍对应当前打开的那一个文档会话。
     sessionId: session?.sessionId || null,
+    // 当前会话的类型。
+    // 渲染层据此决定用哪种方式展示这份文档；类型属于会话，不属于标签页。
+    kind: normalizeDocumentSessionKind(session?.kind),
     // 当前编辑器应展示的正文内容。
     // 这里直接来自 editorSnapshot，代表“用户眼下正在编辑的版本”。
     content: editorSnapshot.content || '',
@@ -106,6 +110,10 @@ export function deriveDocumentSnapshot(session) {
           // 是否显示关闭提示。
           // 这里在生成对象时固定为 true，让渲染层只关心“对象是否存在”与“需要展示什么”。
           visible: true,
+          // 当前关闭流程的作用域。
+          // tab 表示只关当前标签页，window 表示关整个窗口；
+          // 两个作用域共用同一个弹窗，但“保存并退出 / 直接退出”的落地动作不同。
+          scope: closeRuntime.intent === 'close-tab' ? 'tab' : 'window',
           // 当前触发关闭拦截的原因。
           // 例如存在未保存内容，渲染层会用它匹配对应提示文案。
           reason: closeRuntime.promptReason,
@@ -152,6 +160,59 @@ export function deriveDocumentSnapshot(session) {
   }
 }
 
+/**
+ * 生成标签栏需要的精简快照。
+ *
+ * 标签页只是文档会话的视图外壳，所以标签栏只需要“它是谁、叫什么、是否脏、是否缺失”，
+ * 不需要携带正文内容。把正文留给活动会话的完整快照，避免每次推送都把 N 份正文传进渲染层。
+ */
+export function deriveDocumentTabSnapshot(session) {
+  const snapshot = deriveDocumentSnapshot(session)
+
+  return {
+    sessionId: snapshot.sessionId,
+    kind: snapshot.kind,
+    fileName: snapshot.fileName,
+    displayPath: snapshot.displayPath,
+    dirty: snapshot.dirty,
+    isRecentMissing: snapshot.isRecentMissing,
+  }
+}
+
+/**
+ * 把窗口级标签信息挂到文档快照上。
+ *
+ * 渲染层只消费 `document.snapshot.changed` 一个真相源，所以标签列表与活动标签
+ * 必须跟着同一份快照下发，不能另开一条“标签列表事件”形成第二套状态出口。
+ */
+export function attachWindowTabsSnapshot({
+  snapshot,
+  tabs = [],
+  activeSessionId = null,
+}) {
+  if (!snapshot) {
+    return snapshot
+  }
+
+  // 关闭确认弹窗要能“笼统地”说清楚有多少个标签页没保存，
+  // 所以脏标签数量由标签列出现场统计，而不是让渲染层自己算。
+  const closePrompt = snapshot.closePrompt
+    ? {
+        ...snapshot.closePrompt,
+        unsavedTabCount: tabs.filter(tab => tab.dirty).length,
+      }
+    : null
+
+  return {
+    ...snapshot,
+    closePrompt,
+    activeSessionId: activeSessionId || snapshot.sessionId || null,
+    tabs,
+  }
+}
+
 export default {
+  attachWindowTabsSnapshot,
   deriveDocumentSnapshot,
+  deriveDocumentTabSnapshot,
 }

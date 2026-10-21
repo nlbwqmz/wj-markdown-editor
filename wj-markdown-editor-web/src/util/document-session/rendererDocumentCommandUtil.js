@@ -27,10 +27,16 @@ export function requestDocumentSave() {
  * 保存与关闭由主进程作为一个文档会话命令裁决，
  * 避免 renderer 在保存期间被取消后仍发送迟到的 close 请求。
  */
-export function requestDocumentSaveAndClose() {
-  return channelUtil.send({
+export function requestDocumentSaveAndClose(options = {}) {
+  const event = {
     event: 'document.save-and-close',
-  })
+  }
+  // 不传 scope 时保持旧协议外形（不带 data），
+  // 只有“只关当前标签”才需要显式声明作用域。
+  if (options?.scope === 'tab') {
+    event.data = { scope: 'tab' }
+  }
+  return channelUtil.send(event)
 }
 
 /**
@@ -182,6 +188,49 @@ export function requestDocumentOpenPathInCurrentWindow(targetPath, options = {})
 }
 
 /**
+ * 请求主进程把活动标签页切到指定会话。
+ *
+ * 标签切换是窗口级动作：主进程负责重绑目录监听、同步窗口状态并广播快照，
+ * renderer 只表达“我要看哪个标签”。
+ */
+export function requestDocumentActivateTab(sessionId) {
+  return channelUtil.send({
+    event: 'document.activate-tab',
+    data: {
+      sessionId,
+    },
+  })
+}
+
+/**
+ * 请求主进程关闭指定标签页。
+ *
+ * 脏标签由主进程进入确认流程，renderer 不做脏判断。
+ */
+export function requestDocumentCloseTab(sessionId) {
+  return channelUtil.send({
+    event: 'document.close-tab',
+    data: {
+      sessionId,
+    },
+  })
+}
+
+/**
+ * 请求主进程重排标签顺序。
+ *
+ * 顺序本身会被持久化，所以必须由主进程收口，不能在渲染层只改一份本地副本。
+ */
+export function requestDocumentReorderTabs(sessionIds) {
+  return channelUtil.send({
+    event: 'document.reorder-tabs',
+    data: {
+      sessionIds: Array.isArray(sessionIds) ? sessionIds : [],
+    },
+  })
+}
+
+/**
  * 请求主进程返回当前窗口对应的 document session snapshot。
  *
  * 导出页等只读页面不再依赖旧的兼容返回形状，
@@ -248,6 +297,9 @@ export default {
   requestPrepareOpenPathInCurrentWindow,
   requestDocumentOpenPath,
   requestDocumentOpenPathInCurrentWindow,
+  requestDocumentActivateTab,
+  requestDocumentCloseTab,
+  requestDocumentReorderTabs,
   requestDocumentSessionSnapshot,
   requestRecentClear,
   requestRecentRemove,

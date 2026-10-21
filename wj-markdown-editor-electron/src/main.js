@@ -1,6 +1,7 @@
 import { app, Menu, protocol, shell } from 'electron'
 import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
+import tabGroup from './data/tabGroup.js'
 import { applyWindowsAppIdentity } from './util/appIdentityUtil.js'
 import { handleSecondInstanceOpenRequest, handleStartupOpenRequest, resolveSecondInstanceOpenTarget } from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
@@ -158,6 +159,7 @@ if (!lock) {
     await recent.initRecent(configUtil.getConfig().recentMax, (recentList) => {
       runtime.publishRecentListChanged(recentList)
     })
+    await tabGroup.initTabGroup()
 
     // 初始化协议处理器，捕获可能的错误
     try {
@@ -179,12 +181,12 @@ if (!lock) {
         createDraftWindow: () => windowLifecycleService.createNew(null),
       })
     } else if (configUtil.getConfig().openRecent) {
-      const recentList = recent.get()
-      if (recentList && recentList.length > 0) {
-        const openRecentResult = await runtime.openRecent(recentList[0].path, {
-          trigger: 'startup',
-        })
-        if (openRecentResult?.ok !== true) {
+      // 重启恢复的是“上次打开的标签组”，而不是最近文件列表：
+      // 两者是不同的事实，标签组不套 recentMax 上限。
+      const savedTabGroup = tabGroup.get()
+      if (savedTabGroup.tabs.length > 0) {
+        const restoredWindowId = await windowLifecycleService.restoreTabGroup(savedTabGroup.tabs)
+        if (!restoredWindowId) {
           await windowLifecycleService.createNew(null)
         }
       } else {

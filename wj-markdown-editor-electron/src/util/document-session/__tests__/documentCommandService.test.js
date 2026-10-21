@@ -1160,6 +1160,8 @@ describe('documentCommandService', () => {
       visible: true,
       reason: 'unsaved-changes',
       allowForceClose: true,
+      scope: 'window',
+      unsavedTabCount: 1,
     })
     expect(saveSucceeded.snapshot.externalPrompt).toMatchObject({
       version: 1,
@@ -2469,5 +2471,220 @@ describe('documentCommandService', () => {
         },
       },
     ])
+  })
+  describe('多标签命令', () => {
+    function createTwoTabContext(config = []) {
+      const { store, service } = createTestContext(config)
+      const firstSession = createBoundFileSession({
+        sessionId: 'tab-first',
+        path: 'C:/docs/first.md',
+        content: '# first',
+        stat: null,
+        now: 1700000003001,
+      })
+      const secondSession = createBoundFileSession({
+        sessionId: 'tab-second',
+        path: 'C:/docs/second.md',
+        content: '# second',
+        stat: null,
+        now: 1700000003002,
+      })
+      const windowId = bindSession(store, firstSession)
+      store.createSession(secondSession)
+      store.addSessionToWindow({
+        windowId,
+        sessionId: secondSession.sessionId,
+      })
+
+      return {
+        store,
+        service,
+        windowId,
+        firstSession,
+        secondSession,
+      }
+    }
+
+    it('document.activate-tab 应切换活动会话并派发 activate-tab effect', () => {
+      const { store, service, windowId } = createTwoTabContext()
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.activate-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-second')
+      expect(result.effects).toEqual([
+        {
+          type: 'activate-tab',
+          sessionId: 'tab-second',
+        },
+      ])
+      expect(result.snapshot.activeSessionId).toBe('tab-second')
+      expect(result.snapshot.tabs.map(tab => tab.sessionId)).toEqual(['tab-first', 'tab-second'])
+    })
+
+    it('document.activate-tab 切换回已激活的标签时不应重复派发 effect', () => {
+      const { service, windowId } = createTwoTabContext()
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.activate-tab',
+        payload: { sessionId: 'tab-first' },
+      })
+
+      expect(result.effects).toEqual([])
+    })
+
+    it('document.activate-tab 必须拒绝不属于该窗口的会话', () => {
+      const { service, windowId } = createTwoTabContext()
+
+      expect(() => {
+        service.dispatch({
+          windowId,
+          command: 'document.activate-tab',
+          payload: { sessionId: 'missing-session' },
+        })
+      }).toThrow(/sessionId|会话/i)
+    })
+
+    it('document.reorder-tabs 应改写标签顺序，并要求集合一致', () => {
+      const { store, service, windowId } = createTwoTabContext()
+
+      service.dispatch({
+        windowId,
+        command: 'document.reorder-tabs',
+        payload: { sessionIds: ['tab-second', 'tab-first'] },
+      })
+
+      expect(store.getSessionIdsByWindowId(windowId)).toEqual(['tab-second', 'tab-first'])
+      expect(() => {
+        service.dispatch({
+          windowId,
+          command: 'document.reorder-tabs',
+          payload: { sessionIds: ['tab-first'] },
+        })
+      }).toThrow(/sessionIds/i)
+    })
+
+    it('document.close-tab 关闭未修改标签时应直接派发 close-tab effect', () => {
+      const { service, windowId } = createTwoTabContext()
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'activate-tab',
+          sessionId: 'tab-second',
+        },
+        {
+          type: 'close-tab',
+          sessionId: 'tab-second',
+        },
+      ])
+    })
+
+    it('document.close-tab 遇到脏标签时必须先激活再进入标签作用域的确认弹窗', () => {
+      const { store, service, windowId, secondSession } = createTwoTabContext()
+      secondSession.editorSnapshot.content = '# 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-second')
+      expect(result.effects).toEqual([
+        {
+          type: 'activate-tab',
+          sessionId: 'tab-second',
+        },
+        {
+          type: 'show-unsaved-prompt',
+        },
+      ])
+      expect(result.snapshot.closePrompt).toMatchObject({
+        visible: true,
+        scope: 'tab',
+        reason: 'unsaved-changes',
+        unsavedTabCount: 1,
+      })
+    })
+
+    it('关闭窗口时多个脏标签必须走一次笼统确认，而不是逐个静默保存', () => {
+      const { store, service, windowId, firstSession, secondSession } = createTwoTabContext(['close'])
+      firstSession.editorSnapshot.content = '# first 已修改'
+      firstSession.editorSnapshot.revision = 1
+      secondSession.editorSnapshot.content = '# second 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.request-close',
+        payload: null,
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'hold-window-close',
+        },
+        {
+          type: 'show-unsaved-prompt',
+        },
+      ])
+      expect(result.snapshot.closePrompt).toMatchObject({
+        visible: true,
+        scope: 'window',
+        unsavedTabCount: 2,
+      })
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-first')
+    })
+
+    it('窗口关闭时如果只有后台标签脏，也必须进入确认而不是直接关窗', () => {
+      const { service, windowId, secondSession } = createTwoTabContext(['close'])
+      secondSession.editorSnapshot.content = '# second 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.request-close',
+        payload: null,
+      })
+
+      expect(result.effects).toContainEqual({
+        type: 'show-unsaved-prompt',
+      })
+      expect(result.snapshot.closePrompt).toMatchObject({
+        scope: 'window',
+        unsavedTabCount: 1,
+      })
+    })
+
+    it('多个脏标签时 document.save-and-close 必须交给 save-all-and-close 收口', () => {
+      const { service, windowId, firstSession, secondSession } = createTwoTabContext()
+      firstSession.editorSnapshot.content = '# first 已修改'
+      firstSession.editorSnapshot.revision = 1
+      secondSession.editorSnapshot.content = '# second 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.save-and-close',
+        payload: null,
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'save-all-and-close',
+        },
+      ])
+    })
   })
 })

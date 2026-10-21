@@ -10,6 +10,7 @@ export function createDefaultDocumentSessionSnapshot() {
   return {
     revision: 0,
     sessionId: null,
+    kind: 'markdown',
     content: '',
     fileName: 'Unnamed',
     displayPath: null,
@@ -19,6 +20,10 @@ export function createDefaultDocumentSessionSnapshot() {
     dirty: false,
     exists: false,
     isRecentMissing: false,
+    // 当前窗口的标签页列表，顺序就是标签栏里的顺序。
+    tabs: [],
+    // 当前活动标签页对应的会话 id。
+    activeSessionId: null,
     closePrompt: null,
     externalPrompt: null,
     resourceContext: {
@@ -74,7 +79,42 @@ function normalizeClosePrompt(closePrompt) {
     visible: true,
     reason: closePrompt.reason || null,
     allowForceClose: closePrompt.allowForceClose === true,
+    // 关闭作用域：tab 表示只关当前标签页，window 表示关整个窗口。
+    scope: closePrompt.scope === 'tab' ? 'tab' : 'window',
+    // 未保存标签页数量，供弹窗做“笼统提示”。
+    unsavedTabCount: Number.isInteger(closePrompt.unsavedTabCount) && closePrompt.unsavedTabCount >= 0
+      ? closePrompt.unsavedTabCount
+      : 0,
   }
+}
+
+/**
+ * 归一化标签栏数据。
+ *
+ * 标签页只承载展示信息，正文永远只从活动会话的完整快照里取，
+ * 因此这里严格丢弃任何多余字段，避免渲染层误把标签项当成第二份文档真相。
+ */
+function normalizeTabList(tabs) {
+  if (!Array.isArray(tabs)) {
+    return []
+  }
+
+  return tabs
+    .map((tab) => {
+      if (!tab || typeof tab !== 'object' || typeof tab.sessionId !== 'string' || !tab.sessionId) {
+        return null
+      }
+
+      return {
+        sessionId: tab.sessionId,
+        kind: typeof tab.kind === 'string' && tab.kind ? tab.kind : 'markdown',
+        fileName: typeof tab.fileName === 'string' && tab.fileName ? tab.fileName : 'Unnamed',
+        displayPath: tab.displayPath ?? null,
+        dirty: tab.dirty === true,
+        isRecentMissing: tab.isRecentMissing === true,
+      }
+    })
+    .filter(Boolean)
 }
 
 function normalizeExternalPrompt(externalPrompt, fallbackFileName) {
@@ -114,6 +154,7 @@ export function normalizeDocumentSessionSnapshot(snapshot) {
   const revision = normalizeRevision(snapshot.revision)
   const normalizedSnapshot = {
     sessionId: snapshot.sessionId ?? null,
+    kind: typeof snapshot.kind === 'string' && snapshot.kind ? snapshot.kind : 'markdown',
     content: typeof snapshot.content === 'string' ? snapshot.content : '',
     revision,
     fileName,
@@ -124,6 +165,10 @@ export function normalizeDocumentSessionSnapshot(snapshot) {
     dirty,
     exists,
     isRecentMissing,
+    tabs: normalizeTabList(snapshot.tabs),
+    activeSessionId: typeof snapshot.activeSessionId === 'string' && snapshot.activeSessionId
+      ? snapshot.activeSessionId
+      : (snapshot.sessionId ?? null),
     closePrompt: normalizeClosePrompt(snapshot.closePrompt),
     externalPrompt: normalizeExternalPrompt(snapshot.externalPrompt, fileName),
     resourceContext: {

@@ -15,11 +15,15 @@ describe('windowRegistry', () => {
     const registry = createWindowRegistry()
 
     expect(Object.keys(registry).sort()).toEqual([
+      'activateSession',
+      'addSession',
       'bindSession',
       'getAllWindows',
       'getSessionIdByWindowId',
+      'getSessionIdsByWindowId',
       'getWindowById',
       'registerWindow',
+      'removeSession',
       'unregisterWindow',
     ])
     expect('getWinInfo' in registry).toBe(false)
@@ -146,5 +150,75 @@ describe('windowRegistry', () => {
         win: { name: 'duplicated-window' },
       })
     }).toThrow(/windowId/i)
+  })
+
+  it('同一窗口应能持有多个会话，且只有被激活的那个是活动会话', () => {
+    const registry = createWindowRegistry()
+    registry.registerWindow({ windowId: 1001, win: { name: 'tab-window' } })
+
+    registry.addSession({ windowId: 1001, sessionId: 'session-1' })
+    registry.addSession({ windowId: 1001, sessionId: 'session-2' })
+    registry.activateSession({ windowId: 1001, sessionId: 'session-1' })
+
+    expect(registry.getSessionIdsByWindowId(1001)).toEqual(['session-1', 'session-2'])
+    expect(registry.getSessionIdByWindowId(1001)).toBe('session-1')
+
+    registry.activateSession({ windowId: 1001, sessionId: 'session-2' })
+    expect(registry.getSessionIdByWindowId(1001)).toBe('session-2')
+  })
+
+  it('addSession 不应因为重复挂载而产生第二个标签', () => {
+    const registry = createWindowRegistry()
+    registry.registerWindow({ windowId: 1001, win: { name: 'dedupe-window' } })
+
+    registry.addSession({ windowId: 1001, sessionId: 'session-1' })
+    registry.addSession({ windowId: 1001, sessionId: 'session-1' })
+
+    expect(registry.getSessionIdsByWindowId(1001)).toEqual(['session-1'])
+  })
+
+  it('removeSession 摘掉活动会话时，应把活动指针交给相邻标签', () => {
+    const registry = createWindowRegistry()
+    registry.registerWindow({ windowId: 1001, win: { name: 'remove-window' } })
+    registry.addSession({ windowId: 1001, sessionId: 'session-1' })
+    registry.addSession({ windowId: 1001, sessionId: 'session-2' })
+    registry.addSession({ windowId: 1001, sessionId: 'session-3' })
+    registry.activateSession({ windowId: 1001, sessionId: 'session-2' })
+
+    registry.removeSession({ windowId: 1001, sessionId: 'session-2' })
+
+    expect(registry.getSessionIdsByWindowId(1001)).toEqual(['session-1', 'session-3'])
+    expect(registry.getSessionIdByWindowId(1001)).toBe('session-3')
+  })
+
+  it('removeSession 摘掉最后一个会话后，窗口不应残留活动指针', () => {
+    const registry = createWindowRegistry()
+    registry.registerWindow({ windowId: 1001, win: { name: 'empty-window' } })
+    registry.bindSession({ windowId: 1001, sessionId: 'session-1' })
+
+    registry.removeSession({ windowId: 1001, sessionId: 'session-1' })
+
+    expect(registry.getSessionIdsByWindowId(1001)).toEqual([])
+    expect(registry.getSessionIdByWindowId(1001)).toBeNull()
+  })
+
+  it('activateSession 不能激活未挂载到该窗口的会话', () => {
+    const registry = createWindowRegistry()
+    registry.registerWindow({ windowId: 1001, win: { name: 'guard-window' } })
+
+    expect(() => {
+      registry.activateSession({ windowId: 1001, sessionId: 'session-x' })
+    }).toThrow(/sessionId/i)
+  })
+
+  it('unregisterWindow 应同时清理标签列表', () => {
+    const registry = createWindowRegistry()
+    registry.registerWindow({ windowId: 1001, win: { name: 'cleanup-window' } })
+    registry.addSession({ windowId: 1001, sessionId: 'session-1' })
+    registry.addSession({ windowId: 1001, sessionId: 'session-2' })
+
+    registry.unregisterWindow(1001)
+
+    expect(registry.getSessionIdsByWindowId(1001)).toEqual([])
   })
 })

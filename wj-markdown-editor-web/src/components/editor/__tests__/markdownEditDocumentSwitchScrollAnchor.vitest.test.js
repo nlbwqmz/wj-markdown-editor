@@ -430,8 +430,6 @@ describe('markdownEdit 文档切换滚动锚点', () => {
     })
 
     // 先切到无记录的 B：两个区域都必须归零，不沿用 A 的位置。
-    editorScrollElement.scrollTop = 900
-    previewElement.scrollTop = 900
     await wrapper.vm.handleDocumentContextSwitch({
       sessionId: 'session-b',
       revision: 0,
@@ -439,6 +437,10 @@ describe('markdownEdit 文档切换滚动锚点', () => {
     })
     expect(editorScrollElement.scrollTop).toBe(0)
     expect(previewElement.scrollTop).toBe(0)
+
+    // 在 B 里滚到别处：只能写进 B 自己的 bucket，不得覆盖 A 的记录。
+    editorScrollElement.scrollTop = 900
+    previewElement.scrollTop = 900
 
     // 再切回 A：新 sessionId / revision 从 0 开始，仍应按 documentKey 恢复。
     const result = await wrapper.vm.handleDocumentContextSwitch({
@@ -453,6 +455,51 @@ describe('markdownEdit 文档切换滚动锚点', () => {
     })
     expect(editorScrollElement.scrollTop).toBe(260)
     expect(previewElement.scrollTop).toBe(420)
+  })
+
+  it('标签切换时未显式采集，离开的标签也必须记住自己的滚动位置', async () => {
+    const wrapper = await mountMarkdownEdit()
+    const editorScrollElement = { scrollTop: 0 }
+    editorCoreState.editorView.value = { scrollDOM: editorScrollElement }
+    const previewElement = wrapper.get('[data-layout-item="preview"]').element
+
+    // 模拟标签 A 已被激活：激活恢复只负责建立文档身份，本身不做采集。
+    await wrapper.vm.scheduleRestoreForCurrentSnapshot({
+      sessionId: 'session-a',
+      revision: 1,
+      resourceContext: { documentPath: 'D:/docs/a.md' },
+    })
+
+    // 用户在标签 A 里滚到 300 / 500。
+    editorScrollElement.scrollTop = 300
+    previewElement.scrollTop = 500
+
+    // 切到标签 B：离开 A 时采集必须自动发生，而不是靠外部显式调用。
+    await wrapper.vm.handleDocumentContextSwitch({
+      sessionId: 'session-b',
+      revision: 0,
+      resourceContext: { documentPath: 'D:/docs/b.md' },
+    })
+    expect(editorScrollElement.scrollTop).toBe(0)
+    expect(previewElement.scrollTop).toBe(0)
+
+    // 在 B 里滚到别的位置，不得污染 A 的记录。
+    editorScrollElement.scrollTop = 120
+    previewElement.scrollTop = 90
+
+    // 切回 A：必须回到离开时的 300 / 500。
+    const result = await wrapper.vm.handleDocumentContextSwitch({
+      sessionId: 'session-a',
+      revision: 0,
+      resourceContext: { documentPath: 'D:/docs/a.md' },
+    })
+
+    expect(result).toEqual({
+      editorCode: true,
+      editorPreview: true,
+    })
+    expect(editorScrollElement.scrollTop).toBe(300)
+    expect(previewElement.scrollTop).toBe(500)
   })
 
   it('预览区不可见时不触发预览区归零，也不会抛错', async () => {
@@ -579,8 +626,9 @@ describe('markdownEdit 文档切换滚动锚点', () => {
         .map(call => call.documentKey),
     )]
 
-    // 采集写入的 bucket 键 === 切回时查询命中的 bucket 键 === 真实路径。
-    expect(savedBucketKeys).toEqual(['D:/docs/a.md'])
+    // 采集写入的 bucket 键必须包含真实路径；切到 B 时还会按 B 自己的身份额外写一条。
+    // 切回时命中的 bucket 必须正是 A 的真实路径。
+    expect(savedBucketKeys).toContain('D:/docs/a.md')
     expect(hitBucketKeys).toEqual(['D:/docs/a.md'])
     expect(savedBucketKeys[0]).toBe(hitBucketKeys[0])
     // 恢复侧不允许再出现退化的 session:xxx 查询。

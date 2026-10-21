@@ -2985,7 +2985,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(otherWinInfo.win.focus).toHaveBeenCalledTimes(1)
   })
 
-  it('document.open-path-in-current-window 切换文档时，必须新建 session、重绑窗口、重绑目录 watcher 并销毁旧 session', async () => {
+  it('document.open-path-in-current-window 切换文档时，必须新建 session、重绑目录 watcher，并把旧 session 留作后台标签', async () => {
     pathExistsMock.mockImplementation(async targetPath => ['D:/current.md', 'D:/next.md'].includes(targetPath))
     readFileMock.mockImplementation(async (targetPath) => {
       if (targetPath === 'D:/current.md') {
@@ -3052,7 +3052,19 @@ describe('windowLifecycleService 生命周期 facade', () => {
       snapshot: nextSnapshot,
     })
     expect(nextSnapshot.sessionId).not.toBe(previousSnapshot.sessionId)
-    expect(runtime.store.getSession(previousSnapshot.sessionId)).toBeNull()
+    // 多标签：旧会话不再被销毁，而是继续作为标签留在窗口里，
+    // 外部监听也要继续为它服务（后台标签同样响应外部变更）。
+    expect(runtime.store.getSession(previousSnapshot.sessionId)).not.toBeNull()
+    expect(runtime.store.getSessionIdsByWindowId(winInfo.id)).toEqual([
+      previousSnapshot.sessionId,
+      nextSnapshot.sessionId,
+    ])
+    expect(runtime.store.getActiveSessionIdByWindowId(winInfo.id)).toBe(nextSnapshot.sessionId)
+    expect(nextSnapshot.tabs.map(tab => tab.sessionId)).toEqual([
+      previousSnapshot.sessionId,
+      nextSnapshot.sessionId,
+    ])
+    expect(nextSnapshot.activeSessionId).toBe(nextSnapshot.sessionId)
     expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBe('D:/next.md')
     expect(winInfoUtil.getDocumentContext(winInfo.id).content).toBe('# 新文档内容')
     expect(writeFileMock).not.toHaveBeenCalled()
@@ -3066,6 +3078,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(stopWatchingMock.mock.calls.length).toBeGreaterThanOrEqual(1)
     expect(startWatchingMock).toHaveBeenCalledTimes(1)
     expect(stopWatchingMock.mock.invocationCallOrder[0]).toBeLessThan(startWatchingMock.mock.invocationCallOrder[0])
+    // 旧标签的监听不能被关掉：只允许停掉目录监听，会话监听要各自独立。
+    expect(stopWatchingMock.mock.calls.every(([targetPath]) => targetPath !== 'D:/current.md')).toBe(true)
     expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
       event: 'window.effect.file-manager-directory-changed',
       data: reboundDirectoryState,

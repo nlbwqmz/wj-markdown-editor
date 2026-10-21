@@ -22,6 +22,7 @@ export function createDocumentCommandRunner({
 
   async function run({
     windowId,
+    sessionId = null,
     command,
     payload,
     publishSnapshotMode = 'always',
@@ -32,6 +33,7 @@ export function createDocumentCommandRunner({
       : null
     const result = await commandService.dispatch({
       windowId,
+      sessionId,
       command,
       payload,
     })
@@ -53,6 +55,7 @@ export function createDocumentCommandRunner({
         dispatchCommand: (nextCommand, nextPayload, options = {}) => {
           return run({
             windowId,
+            sessionId: options.sessionId ?? sessionId,
             command: nextCommand,
             payload: nextPayload,
             publishSnapshotMode: options.publishSnapshotMode || 'always',

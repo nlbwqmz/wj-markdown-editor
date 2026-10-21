@@ -1,4 +1,4 @@
-import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
+import { deriveWindowDocumentSnapshot, deriveWindowTabsSnapshot } from './documentWindowSnapshotUtil.js'
 
 function isWindowUsable(win) {
   if (!win) {
@@ -35,8 +35,19 @@ export function createWindowSessionBridge({
   let lastRecentListSignature = null
 
   function getSessionSnapshot(windowId) {
-    const session = store?.getSessionByWindowId(windowId)
-    return session ? deriveDocumentSnapshot(session) : null
+    return deriveWindowDocumentSnapshot({
+      store,
+      windowId,
+    })
+  }
+
+  /**
+   * 按窗口当前持有的会话顺序生成标签列表。
+   *
+   * 标签顺序就是用户在标签栏里看到的顺序，必须与 store 里记录的标签顺序一致。
+   */
+  function getWindowTabsSnapshot(windowId) {
+    return deriveWindowTabsSnapshot({ store, windowId })
   }
 
   function publishSnapshotChanged({ windowId, snapshot = getSessionSnapshot(windowId) }) {
@@ -44,12 +55,23 @@ export function createWindowSessionBridge({
     if (!snapshot || !isWindowUsable(win)) {
       return snapshot
     }
-    lastSnapshotMap.set(windowId, snapshot)
+
+    // 命令层直接传进来的快照可能只有单个会话的信息，
+    // 这里统一补齐窗口级标签列表，保证任何推送路径下渲染层拿到的结构一致。
+    const windowSnapshot = Array.isArray(snapshot.tabs)
+      ? snapshot
+      : {
+          ...snapshot,
+          activeSessionId: store?.getActiveSessionIdByWindowId?.(windowId) || snapshot.sessionId || null,
+          tabs: getWindowTabsSnapshot(windowId),
+        }
+
+    lastSnapshotMap.set(windowId, windowSnapshot)
     sendToRenderer(win, {
       event: 'document.snapshot.changed',
-      data: snapshot,
+      data: windowSnapshot,
     })
-    return snapshot
+    return windowSnapshot
   }
 
   function publishMessage({ windowId, data, snapshot }) {
@@ -107,6 +129,7 @@ export function createWindowSessionBridge({
 
   return {
     getSessionSnapshot,
+    getWindowTabsSnapshot,
     publishFileManagerDirectoryChanged,
     publishSnapshotChanged,
     publishMessage,

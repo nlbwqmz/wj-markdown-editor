@@ -139,4 +139,99 @@ describe('documentSessionStore', () => {
 
     expect(store.getSessionByWindowId(1003)).toBeNull()
   })
+
+  it('同一窗口应能持有多个会话，getSessionByWindowId 只返回活动会话', () => {
+    const store = createDocumentSessionStore()
+    store.createSession(createDraftSession({ sessionId: 'tab-a' }))
+    store.createSession(createDraftSession({ sessionId: 'tab-b' }))
+
+    store.addSessionToWindow({ windowId: 2001, sessionId: 'tab-a' })
+    store.addSessionToWindow({ windowId: 2001, sessionId: 'tab-b' })
+    store.activateSession({ windowId: 2001, sessionId: 'tab-a' })
+
+    expect(store.getSessionIdsByWindowId(2001)).toEqual(['tab-a', 'tab-b'])
+    expect(store.getActiveSessionIdByWindowId(2001)).toBe('tab-a')
+    expect(store.getSessionByWindowId(2001)?.sessionId).toBe('tab-a')
+    expect(store.getSessionsByWindowId(2001).map(session => session.sessionId))
+      .toEqual(['tab-a', 'tab-b'])
+  })
+
+  it('addSessionToWindow 应支持在指定位置插入标签', () => {
+    const store = createDocumentSessionStore()
+    store.createSession(createDraftSession({ sessionId: 'insert-a' }))
+    store.createSession(createDraftSession({ sessionId: 'insert-b' }))
+    store.createSession(createDraftSession({ sessionId: 'insert-c' }))
+
+    store.addSessionToWindow({ windowId: 2002, sessionId: 'insert-a' })
+    store.addSessionToWindow({ windowId: 2002, sessionId: 'insert-c' })
+    store.addSessionToWindow({ windowId: 2002, sessionId: 'insert-b', index: 1 })
+
+    expect(store.getSessionIdsByWindowId(2002)).toEqual(['insert-a', 'insert-b', 'insert-c'])
+  })
+
+  it('removeSessionFromWindow 摘掉活动会话时，应把活动指针交给相邻标签', () => {
+    const store = createDocumentSessionStore()
+    for (const sessionId of ['close-a', 'close-b', 'close-c']) {
+      store.createSession(createDraftSession({ sessionId }))
+      store.addSessionToWindow({ windowId: 2003, sessionId })
+    }
+    store.activateSession({ windowId: 2003, sessionId: 'close-b' })
+
+    store.removeSessionFromWindow({ windowId: 2003, sessionId: 'close-b' })
+
+    expect(store.getSessionIdsByWindowId(2003)).toEqual(['close-a', 'close-c'])
+    expect(store.getActiveSessionIdByWindowId(2003)).toBe('close-c')
+  })
+
+  it('destroySession 应同时从窗口标签列表里摘除该会话', () => {
+    const store = createDocumentSessionStore()
+    store.createSession(createDraftSession({ sessionId: 'destroy-a' }))
+    store.createSession(createDraftSession({ sessionId: 'destroy-b' }))
+    store.bindWindowToSession({ windowId: 2004, sessionId: 'destroy-a' })
+    store.addSessionToWindow({ windowId: 2004, sessionId: 'destroy-b' })
+
+    store.destroySession('destroy-a')
+
+    expect(store.getSessionIdsByWindowId(2004)).toEqual(['destroy-b'])
+    expect(store.getSessionByWindowId(2004)?.sessionId).toBe('destroy-b')
+  })
+
+  it('同一个会话不能同时挂到两个窗口上', () => {
+    const store = createDocumentSessionStore()
+    store.createSession(createDraftSession({ sessionId: 'exclusive-session' }))
+    store.addSessionToWindow({ windowId: 2005, sessionId: 'exclusive-session' })
+
+    expect(() => {
+      store.addSessionToWindow({ windowId: 2006, sessionId: 'exclusive-session' })
+    }).toThrow(/sessionId/i)
+  })
+
+  it('getWindowIdBySessionId 应能反查会话所属窗口', () => {
+    const store = createDocumentSessionStore()
+    store.createSession(createDraftSession({ sessionId: 'owner-session' }))
+    store.bindWindowToSession({ windowId: 2007, sessionId: 'owner-session' })
+
+    expect(store.getWindowIdBySessionId('owner-session')).toBe(2007)
+    expect(store.getWindowIdBySessionId('unknown-session')).toBeNull()
+  })
+
+  it('reorderWindowSessions 只接受与当前标签集合一致的顺序', () => {
+    const store = createDocumentSessionStore()
+    for (const sessionId of ['order-a', 'order-b']) {
+      store.createSession(createDraftSession({ sessionId }))
+      store.addSessionToWindow({ windowId: 2008, sessionId })
+    }
+
+    expect(store.reorderWindowSessions({
+      windowId: 2008,
+      sessionIds: ['order-b', 'order-a'],
+    })).toEqual(['order-b', 'order-a'])
+
+    expect(() => {
+      store.reorderWindowSessions({
+        windowId: 2008,
+        sessionIds: ['order-a'],
+      })
+    }).toThrow(/sessionIds/i)
+  })
 })

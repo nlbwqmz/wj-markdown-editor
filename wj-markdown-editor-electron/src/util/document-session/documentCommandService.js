@@ -1,4 +1,5 @@
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
+import { deriveWindowDocumentSnapshot } from './documentWindowSnapshotUtil.js'
 import { createWatchCoordinator } from './watchCoordinator.js'
 
 // 为旧会话结构补齐 closeRuntime。
@@ -81,9 +82,23 @@ function isDirty(session) {
   return deriveDocumentSnapshot(session).dirty
 }
 
-// 命令服务按窗口维度分发，因此每次进入都要先定位活动会话。
-// 找不到会话说明窗口状态已经失联，这是必须中断的编程错误。
-function getSessionByWindowIdOrThrow(store, windowId) {
+// 命令服务按窗口维度分发，默认定位窗口的活动会话。
+//
+// 多标签之后，命令也可以定向到指定会话（例如后台标签的外部变更回流），
+// 此时必须校验该会话确实属于这个窗口，避免跨窗口误改。
+function resolveSessionOrThrow(store, windowId, sessionId) {
+  if (sessionId) {
+    const session = store.getSession(sessionId)
+    if (!session) {
+      throw new Error(`sessionId 对应的会话不存在: ${sessionId}`)
+    }
+    const ownerWindowId = store.getWindowIdBySessionId?.(sessionId)
+    if (ownerWindowId != null && ownerWindowId !== windowId) {
+      throw new Error(`sessionId 不属于该窗口: ${sessionId}`)
+    }
+    return session
+  }
+
   const session = store.getSessionByWindowId(windowId)
   if (!session) {
     throw new Error(`windowId 对应的 active session 不存在: ${windowId}`)
@@ -116,8 +131,8 @@ export function createDocumentCommandService({
    * `effects` 交给副作用层执行，
    * 两者都从同一份 session 真相推导，避免状态分叉。
    */
-  function dispatch({ windowId, command, payload }) {
-    const session = getSessionByWindowIdOrThrow(store, windowId)
+  function dispatch({ windowId, sessionId = null, command, payload }) {
+    const session = resolveSessionOrThrow(store, windowId, sessionId)
     // 先为可能来自旧 store 的 session 做结构修补，避免后续命令走到 undefined 分支。
     ensureSaveRuntime(session)
     ensureCloseRuntime(session)
@@ -172,15 +187,31 @@ export function createDocumentCommandService({
         {
           // 保存并退出必须把“保存”与“关闭意图”绑定在同一条状态机里，
           // 不能由 renderer 先保存、再单独发送 close，否则保存期间取消会留下迟到关窗竞态。
+          const closeScope = payload?.scope === 'tab' ? 'tab' : 'window'
+          const isTabScope = closeScope === 'tab'
+
+          // 关窗口时如果还有多个脏标签，不能只保存活动会话就关窗，
+          // 这里改成逐个会话保存完再关，任一失败就中止。
+          if (!isTabScope) {
+            const windowSessionList = store.getSessionsByWindowId?.(windowId) || [session]
+            const dirtyTabCount = windowSessionList.filter(candidate => isDirty(candidate)).length
+            if (dirtyTabCount > 1) {
+              effects.push({
+                type: 'save-all-and-close',
+              })
+              break
+            }
+          }
+
           if (!session.saveRuntime.inFlightJobId && !isDirty(session)) {
             resetCloseRuntime(session)
-            effects.push({
-              type: 'close-window',
-            })
+            effects.push(isTabScope
+              ? { type: 'close-tab', sessionId: session.sessionId }
+              : { type: 'close-window' })
             break
           }
 
-          session.closeRuntime.intent = 'close'
+          session.closeRuntime.intent = isTabScope ? 'close-tab' : 'close'
           session.closeRuntime.promptReason = 'unsaved-changes'
           session.closeRuntime.forceClose = false
           session.closeRuntime.awaitingPathSelection = false
@@ -199,11 +230,18 @@ export function createDocumentCommandService({
           }
 
           effects.push(
-            {
-              type: 'hold-window-close',
-            },
+            // 关标签不需要拦住窗口关闭，只有关窗口才需要 hold。
+            ...(isTabScope ? [] : [{ type: 'hold-window-close' }]),
             ...saveRequested.effects,
           )
+
+          if (isTabScope) {
+            // 保存链路跑完后才收尾关标签；effect 层会先确认会话确实已经不脏。
+            effects.push({
+              type: 'close-tab-after-save',
+              sessionId: session.sessionId,
+            })
+          }
         }
         break
 
@@ -227,7 +265,91 @@ export function createDocumentCommandService({
         }
         break
 
+      case 'document.activate-tab':
+        {
+          // 切换标签是窗口级动作：只改变活动会话指针，
+          // 真正的窗口注册、目录监听重绑和快照广播交给 activate-tab effect 完成。
+          const targetSessionId = payload?.sessionId || null
+          const windowSessionIds = store.getSessionIdsByWindowId?.(windowId) || []
+          if (!targetSessionId || !windowSessionIds.includes(targetSessionId)) {
+            throw new Error(`activate-tab 目标会话不属于该窗口: ${targetSessionId}`)
+          }
+          if (store.getActiveSessionIdByWindowId?.(windowId) !== targetSessionId) {
+            store.activateSession({ windowId, sessionId: targetSessionId })
+            effects.push({
+              type: 'activate-tab',
+              sessionId: targetSessionId,
+            })
+          }
+        }
+        break
+
+      case 'document.reorder-tabs':
+        {
+          // 标签顺序本身就是持久化对象，所以排序直接落在 store 里，
+          // 不需要额外 effect；广播快照时标签栏自然拿到新顺序。
+          const nextSessionIds = Array.isArray(payload?.sessionIds) ? payload.sessionIds : null
+          if (!nextSessionIds) {
+            throw new Error('reorder-tabs 需要 sessionIds 数组')
+          }
+          store.reorderWindowSessions({
+            windowId,
+            sessionIds: nextSessionIds,
+          })
+        }
+        break
+
+      case 'document.close-tab':
+        {
+          // 关标签先把目标标签激活：脏判断、保存链路、关闭确认弹窗
+          // 全部按“当前活动会话”工作，这样用户看到弹窗时看到的就是要关掉的那份文档。
+          const targetSessionId = payload?.sessionId || null
+          const windowSessionIds = store.getSessionIdsByWindowId?.(windowId) || []
+          if (!targetSessionId || !windowSessionIds.includes(targetSessionId)) {
+            throw new Error(`close-tab 目标会话不属于该窗口: ${targetSessionId}`)
+          }
+
+          if (store.getActiveSessionIdByWindowId?.(windowId) !== targetSessionId) {
+            store.activateSession({ windowId, sessionId: targetSessionId })
+            effects.push({
+              type: 'activate-tab',
+              sessionId: targetSessionId,
+            })
+          }
+
+          const targetSession = store.getSession(targetSessionId)
+          if (!targetSession) {
+            throw new Error(`close-tab 目标会话不存在: ${targetSessionId}`)
+          }
+          ensureSaveRuntime(targetSession)
+          ensureCloseRuntime(targetSession)
+          watchCoordinator.prepareSession(targetSession)
+
+          if (!isDirty(targetSession)) {
+            resetCloseRuntime(targetSession)
+            effects.push({
+              type: 'close-tab',
+              sessionId: targetSessionId,
+            })
+            break
+          }
+
+          // 关标签故意不做“关闭自动保存”：
+          // 关掉一个后台标签时静默写盘比弹一次确认更危险，
+          // 所以脏标签一律走确认弹窗，由用户选“保存并关闭”或“直接关闭”。
+          targetSession.closeRuntime.intent = 'close-tab'
+          targetSession.closeRuntime.promptReason = 'unsaved-changes'
+          targetSession.closeRuntime.forceClose = false
+          targetSession.closeRuntime.awaitingPathSelection = false
+          targetSession.closeRuntime.waitingSaveJobId = null
+          effects.push({
+            type: 'show-unsaved-prompt',
+          })
+        }
+        break
+
       case 'document.request-close':
+      {
         // forceClose 表示关闭流程已经明确拿到“可直接关闭”的结论，
         // 此时不再做任何额外拦截，直接给出关闭窗口 effect。
         if (session.closeRuntime.forceClose === true) {
@@ -252,12 +374,32 @@ export function createDocumentCommandService({
           break
         }
 
+        // 多标签：窗口关闭必须看到全部标签的脏状态，不能只看活动会话。
+        const windowSessionList = store.getSessionsByWindowId?.(windowId) || [session]
+        const dirtySessionList = windowSessionList.filter(candidate => isDirty(candidate))
+
         // 没有脏内容时，关闭链路直接放行，同时把 closeRuntime 清空，避免残留旧状态。
-        if (!isDirty(session)) {
+        if (dirtySessionList.length === 0) {
           resetCloseRuntime(session)
           effects.push({
             type: 'close-window',
           })
+          break
+        }
+
+        // 多个标签都脏，或唯一脏的不是活动标签时，不做自动保存：
+        // 逐个静默写盘风险太高，交给用户在确认弹窗里明确选择。
+        if (dirtySessionList.length > 1 || dirtySessionList[0] !== session) {
+          session.closeRuntime.intent = 'close'
+          session.closeRuntime.promptReason = 'unsaved-changes'
+          effects.push(
+            {
+              type: 'hold-window-close',
+            },
+            {
+              type: 'show-unsaved-prompt',
+            },
+          )
           break
         }
 
@@ -302,6 +444,7 @@ export function createDocumentCommandService({
           },
         )
         break
+      }
 
       case 'document.cancel-close':
         // 用户取消关闭后，整个关闭状态机应完全回退，不保留任何等待态。
@@ -310,12 +453,17 @@ export function createDocumentCommandService({
 
       case 'document.confirm-force-close':
         // 用户明确要求强制关闭后，后续 document.request-close 可以直接放行。
-        // 这里同时立即返回 close-window effect，避免还要再走一轮确认链路。
-        session.closeRuntime.intent = 'close'
+        // 这里同时立即返回 close-window / close-tab effect，避免还要再走一轮确认链路。
+        session.closeRuntime.intent = session.closeRuntime.intent === 'close-tab' ? 'close-tab' : 'close'
         session.closeRuntime.forceClose = true
-        effects.push({
-          type: 'close-window',
-        })
+        effects.push(session.closeRuntime.intent === 'close-tab'
+          ? {
+              type: 'close-tab',
+              sessionId: session.sessionId,
+            }
+          : {
+              type: 'close-window',
+            })
         break
 
       case 'dialog.save-target-selected': {
@@ -432,8 +580,13 @@ export function createDocumentCommandService({
 
     return {
       session,
-      // snapshot 是渲染层消费的只读派生结果，始终基于最新 session 现场重新推导。
-      snapshot: deriveDocumentSnapshot(session),
+      // snapshot 是渲染层消费的只读派生结果，始终基于窗口当前活动会话重新推导。
+      // 后台会话的命令也会返回窗口快照（活动会话 + 最新标签列表），
+      // 因为渲染层只认“这个窗口现在该显示什么”，不认“刚才是哪个后台会话变了”。
+      snapshot: deriveWindowDocumentSnapshot({
+        store,
+        windowId,
+      }),
       // effects 交给上层副作用执行器处理，例如写盘、弹窗、关闭窗口、绑定 watcher 等。
       effects,
       // 仅在本次命令触发了手动保存时返回 request id，否则为 null。

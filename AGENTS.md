@@ -6,13 +6,18 @@
 
 和旧版本相比，当前代码主线已经明显收口到“文档会话”模型：
 
+- 一个编辑窗口持有**多个文档会话（标签页）**，同一时刻只有一个是活动会话。
+- 标签页只是文档会话的**视图外壳**，一个标签页恒等于一个文档会话；会话类型（`kind`）属于会话，不属于标签页。
 - Web 端不再依赖零散的文件状态镜像，而是以 `Pinia store.documentSessionSnapshot` 作为渲染层真相。
 - Electron 端通过 `documentSessionRuntime`、`windowLifecycleService`、`documentCommandService`、`documentEffectService` 统一处理打开、编辑、保存、关闭、外部变更、最近文件与资源操作。
 - Renderer 与主进程之间围绕 `document.*` 命令和 `document.snapshot.changed` 事件通信，资源打开/删除也统一经 runtime 裁决。
 
+多标签相关的两个核心决定记录在 `docs/adr/0001-tab-is-view-shell-of-document-session.md` 与 `docs/adr/0002-single-editor-instance-per-window.md`。
+
 ### 当前核心特性
 
 - 支持本地 Markdown 文件打开、编辑、另存为副本
+- 支持**单窗口多标签页**：新建/打开默认进当前窗口的新标签，可关闭、切换、右键菜单与标签组重启恢复；保留“新窗口”作为并排查看入口
 - 支持最近文件恢复、缺失最近文件提示、单实例文件打开
 - 支持本地图片、网络图片、本地附件、音频、视频插入
 - 支持截图上传、隐藏窗口截图、图片上传图床（GitHub / SM.MS）
@@ -23,7 +28,7 @@
 - 支持外部文件变更监听，可配置为直接应用或弹出 diff 对比确认
 - 支持全文搜索、编辑区搜索、设置页搜索定位
 - 支持导出 PDF、PNG、JPEG
-- 支持水印、自定义快捷键、自动保存、启动页切换
+- 支持水印、自定义快捷键、自动保存、启动视图模式切换
 
 ## 项目结构
 
@@ -46,7 +51,7 @@ wj-markdown-editor/
 │   │   │   ├── editor/                # 编辑器行为、滚动、补全、资源操作
 │   │   │   ├── guide/                 # 引导页文案
 │   │   │   └── markdown-it/           # Markdown 解析扩展
-│   │   ├── views/                     # 编辑、预览、设置、导出、关于、引导页
+│   │   ├── views/                     # 编辑、设置、导出、关于、引导页
 │   │   └── main.js
 │   ├── vite.config.js
 │   └── package.json
@@ -69,12 +74,12 @@ wj-markdown-editor/
 
 - 路由定义位于 `wj-markdown-editor-web/src/router/index.js`
 - 主路由结构：
-  - `/#/editor` 编辑页
-  - `/#/preview` 预览页
+  - `/#/editor` 编辑页（`HomeView` 的子路由）
   - `/#/setting` 设置页
   - `/#/export` 导出页
   - `/#/about` 关于页
   - `/#/guide` 引导页
+- **不存在独立的预览页**：预览是编辑页内的一栏，由视图模式 `source` / `split` / `preview` 控制（见 `wj-markdown-editor-web/src/components/editor/markdownEditLayoutMode.js`）。历史上曾有的 `PreviewView.vue` 与 `/#/preview` 路由已移除。
 - `wj-markdown-editor-web/src/stores/counter.js` 是当前全局 store 入口，维护：
   - `config`
   - `documentSessionSnapshot`
@@ -98,7 +103,7 @@ wj-markdown-editor/
   - 初始化 `documentSessionRuntime`
   - 注册 `wj://` 自定义协议
   - 配置单实例锁
-  - 启动时打开文件、恢复最近文件或创建草稿窗口
+  - 启动时打开文件、按上次标签组恢复或创建草稿窗口
 - `wj-markdown-editor-electron/src/util/document-session/documentSessionRuntime.js` 是统一 runtime 入口：
   - `document.edit`
   - `document.save`
@@ -112,6 +117,16 @@ wj-markdown-editor/
   - `document.resource.delete-local`
   - `resource.get-info`
 - `wj-markdown-editor-electron/src/util/document-session/windowLifecycleService.js` 负责窗口创建、关闭链路、外部文件监听、保存等待、最近文件维护与 BrowserWindow 生命周期。
+
+### 多标签主线
+
+- **会话持有**：`documentSessionStore` 用 `sessionMap`（全局会话注册表）、`windowTabMap`（窗口→有序标签列表 + 活动会话指针）、`sessionWindowMap`（会话→窗口反查）三张表描述。`getSessionByWindowId` 保持“取活动会话”语义，既有按窗口取文档的链路不需要改写。
+- **快照**：`documentWindowSnapshotUtil.deriveWindowDocumentSnapshot` 是唯一入口，产出“活动会话完整快照 + `tabs[]` + `activeSessionId`”。命令层、窗口桥、同步查询必须共用它，否则 `if-changed` 判断会永远认为快照变了。
+- **标签命令**：`document.activate-tab`、`document.close-tab`、`document.reorder-tabs`。`document.open-path-in-current-window` 已改为“新增标签并激活”，不再替换并销毁上一个会话。
+- **外部监听按会话隔离**：`windowLifecycleService` 的 `externalWatchMap` / `externalWatchBridgeMap` 以 `sessionId` 为键；监听事件回流时带 `sessionId`，保证后台标签的外部变更不会打到活动标签上。命令层 `dispatch` 因此支持可选 `sessionId`。
+- **关闭作用域**：`closeRuntime.intent` 取 `close`（关窗口）或 `close-tab`（关单个标签），快照里暴露为 `closePrompt.scope`，并用 `closePrompt.unsavedTabCount` 做“笼统提示”。
+- **编辑器状态**：`MarkdownEdit` 按会话保存 `EditorState`（正文 + 选区 + undo 历史），切标签时换入换出；滚动位置仍走按文档路径索引的锚点缓存，缓存生命周期跟随标签（关标签即删桶，不设数量上限）。
+- **标签组持久化**：`wj-markdown-editor-electron/src/data/tabGroup.js` 写入 `tab-group.json`，只记有磁盘路径的标签顺序与活动下标，**不套 `recentMax`**；启动时 `windowLifecycleService.restoreTabGroup` 按它恢复。
 
 ### 资源操作主线
 
@@ -272,8 +287,10 @@ npm run test:run
 - `wj-markdown-editor-web/src/views/EditorView.vue`
   - 编辑页主入口
   - 负责会话快照加载、编辑器内容同步、预览资源右键菜单与资源删除流程
-- `wj-markdown-editor-web/src/views/PreviewView.vue`
-  - 预览页
+- `wj-markdown-editor-web/src/views/HomeView.vue`
+  - 编辑窗口的壳：标题栏 `LayoutTop` + 侧边栏 + 标签栏 `DocumentTabBar` + `LayoutContainer`（路由 + keep-alive）
+- `wj-markdown-editor-web/src/components/layout/DocumentTabBar.vue`
+  - 文档标签栏：展示标签列表、切换、关闭、右键菜单；所有动作都发命令给主进程，渲染层不做脏判断、不改顺序
 - `wj-markdown-editor-web/src/views/SettingView.vue`
   - 设置页，涵盖通用配置、字体、视图、编辑器、文件、图片、图床、快捷键、水印、导出
 - `wj-markdown-editor-web/src/views/ExportView.vue`
@@ -316,7 +333,13 @@ npm run test:run
 - `wj-markdown-editor-electron/src/util/document-session/documentEffectService.js`
   - 打开、保存、提示、recent、snapshot 查询等副作用执行
 - `wj-markdown-editor-electron/src/util/document-session/windowLifecycleService.js`
-  - 窗口创建、关闭、外部监听、保存等待、window -> session 绑定
+  - 窗口创建、关闭、外部监听（按会话隔离）、保存等待、window -> 多会话标签组绑定、标签组持久化与启动恢复
+- `wj-markdown-editor-electron/src/util/document-session/documentSessionKind.js`
+  - 文档会话类型（`kind`）枚举与归一化，未知类型回退 `markdown`
+- `wj-markdown-editor-electron/src/util/document-session/documentWindowSnapshotUtil.js`
+  - 窗口级快照唯一构造入口：活动会话完整快照 + `tabs[]` + `activeSessionId`
+- `wj-markdown-editor-electron/src/data/tabGroup.js`
+  - 上次标签组持久化（`tab-group.json`），只记路径顺序与活动下标，不套 `recentMax`
 - `wj-markdown-editor-electron/src/util/document-session/documentResourceService.js`
   - 文档资源信息、删除、本地资源路径能力
 
@@ -341,8 +364,9 @@ npm run test:run
 
 默认配置位于 `wj-markdown-editor-electron/src/data/defaultConfig.js`，当前重要配置包括：
 
-- 启动页：`editor` / `preview`
-- 最近文件恢复与最近记录数量
+- 启动视图模式 `startView`：`source` / `split` / `preview`（只决定窗口打开时的视图模式，不决定打开哪个页面）
+- 最近文件恢复与最近记录数量（`openRecent` / `recentMax`，只管最近文件菜单）
+- 标签组重启恢复（`tab-group.json`，独立于 `recentMax`）
 - 自动保存时机：失焦 / 关闭窗口
 - 外部文件变更策略：`apply` / `prompt`
 - 编辑器扩展：行号、自动换行、当前行高亮、匹配文本高亮、括号匹配、自动补全括号
@@ -410,6 +434,10 @@ npm run test:run
 7. **外部文件监听**：外部文件变更处理由 `windowLifecycleService + externalWatchBridge + document.external.apply/ignore` 主导，Web 端只负责展示与发命令。
 8. **最近文件缺失**：当前支持 recent-missing 会话，不存在的最近文件不是普通已保存文档，处理逻辑要区别对待。
 9. **设置页字体列表**：设置页通过 `window.queryLocalFonts()` 读取系统字体，相关能力只应在 Electron 渲染环境中使用。
+10. **多标签不变量**：一个标签页恒等于一个文档会话，会话类型（`kind`）属于会话不属于标签页；不要在渲染层另存一份“标签状态”，标签列表与活动标签一律来自 `documentSessionSnapshot.tabs` / `activeSessionId`。
+11. **外部监听按会话隔离**：`externalWatchMap` / `externalWatchBridgeMap` 以 `sessionId` 为键，后台标签的变更必须带 `sessionId` 回流；不要回退成“一个窗口一份监听”。
+12. **缓存生命周期跟随标签**：滚动锚点缓存与编辑器 `EditorState` 都在关标签时清理，不要重新引入数量上限或全局单例。
+13. **运行时状态文件不得进包**：`config.json` / `recent.json` / `tab-group.json` 是应用运行时写到工作目录的用户数据，必须在 `package.json` 的 `build.files` 里保持 `!` 排除。
 
 ## 代码评审豁免项
 

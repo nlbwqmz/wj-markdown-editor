@@ -124,4 +124,20 @@ describe('documentSnapshotUtil', () => {
 
     expect(snapshot.revision).toBe(0)
   })
+
+  it('新建会话默认是 markdown 类型，并把类型透传到快照', () => {
+    const session = createDraftSession({ sessionId: 'kind-default-session' })
+
+    expect(session.kind).toBe('markdown')
+    expect(deriveDocumentSnapshot(session).kind).toBe('markdown')
+  })
+
+  it('未知会话类型应回退到 markdown，避免渲染层落到没有类型的分支', () => {
+    const session = {
+      ...createDraftSession({ sessionId: 'kind-unknown-session' }),
+      kind: 'pdf',
+    }
+
+    expect(deriveDocumentSnapshot(session).kind).toBe('markdown')
+  })
 })
