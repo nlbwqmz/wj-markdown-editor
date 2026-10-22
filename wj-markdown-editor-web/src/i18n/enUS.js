@@ -183,6 +183,11 @@ export default {
       watermark: 'Watermark',
       export: 'Export',
       fontFamily: 'Font Family',
+      appearance: 'Appearance',
+      fileAndImage: 'Files & Images',
+      exportAndWatermark: 'Export & Watermark',
+      globalShortcut: 'Global Shortcuts',
+      editorShortcut: 'Editor Shortcuts',
     },
     general: {
       language: 'Language',

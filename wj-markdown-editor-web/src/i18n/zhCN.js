@@ -183,6 +183,11 @@ export default {
       watermark: '水印',
       export: '导出',
       fontFamily: '字体',
+      appearance: '外观',
+      fileAndImage: '文件与图片',
+      exportAndWatermark: '导出与水印',
+      globalShortcut: '全局快捷键',
+      editorShortcut: '编辑器快捷键',
     },
     general: {
       language: '语言',
