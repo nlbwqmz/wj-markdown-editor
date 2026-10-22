@@ -391,7 +391,7 @@ function reset() {
         <div class="i-tabler:x" />
       </div>
     </template>
-    <div v-if="config" ref="settingContainerRef" class="allow-search h-full w-full flex">
+    <div v-if="config" ref="settingContainerRef" class="allow-search setting-root h-full w-full flex">
       <nav class="setting-tabs wj-scrollbar shrink-0" role="tablist" aria-orientation="vertical">
         <div class="setting-tabs__inner" :class="{ 'is-ready': tabIndicatorReady }">
           <div class="setting-tabs__indicator" :style="tabIndicatorStyle" aria-hidden="true" />
@@ -1113,12 +1113,16 @@ function reset() {
 </template>
 
 <style scoped lang="scss">
+.setting-root {
+  border-top: 1px solid var(--wj-markdown-border-primary);
+}
+
 .setting-tabs {
   width: 180px;
   overflow-x: hidden;
   overflow-y: auto;
   border-right: 1px solid var(--wj-markdown-border-primary);
-  background: var(--wj-markdown-bg-secondary);
+  background: var(--wj-markdown-bg-primary);
   user-select: none;
 }
 
@@ -1137,10 +1141,7 @@ function reset() {
   left: 10px;
   z-index: 0;
   border-radius: 8px;
-  background: var(--wj-markdown-bg-elevated);
-  box-shadow:
-    0 1px 2px rgba(16, 24, 40, 0.06),
-    0 1px 3px rgba(16, 24, 40, 0.1);
+  background: var(--wj-markdown-bg-secondary);
   pointer-events: none;
   will-change: transform, height;
 }
@@ -1194,7 +1195,6 @@ function reset() {
 
 .setting-tab__icon {
   font-size: 17px;
-  opacity: 0.85;
 }
 
 .setting-tab__label {
