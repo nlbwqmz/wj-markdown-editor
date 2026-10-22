@@ -1141,7 +1141,7 @@ function reset() {
   left: 10px;
   z-index: 0;
   border-radius: 8px;
-  background: var(--wj-markdown-bg-secondary);
+  background: var(--wj-markdown-bg-hover);
   pointer-events: none;
   will-change: transform, height;
 }
