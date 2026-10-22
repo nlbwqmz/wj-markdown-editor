@@ -206,6 +206,9 @@ vi.mock('@/components/editor/composables/useEditorCore.js', () => ({
       editorView: editorCoreState.editorView,
       isCompositionActive: () => false,
       initEditor: vi.fn(),
+      activateEditorView: vi.fn(),
+      destroyEditorView: vi.fn(),
+      hasEditorView: () => false,
       destroyEditor: vi.fn(),
       reconfigureTheme: vi.fn(),
       reconfigureExtensions: vi.fn(),
@@ -337,6 +340,11 @@ function createStore() {
     editorSearchBarVisible: false,
     searchBarVisible: false,
     viewMode: 'split',
+    // 每个标签一个 EditorView 后，模板需要从快照里拿到标签列表来渲染容器
+    documentSessionSnapshot: {
+      activeSessionId: 'test-session',
+      tabs: [{ sessionId: 'test-session', fileName: 'test.md', displayPath: null, dirty: false }],
+    },
     setViewMode: vi.fn(),
     setOutlineScrollContainer: vi.fn(),
     setOutlineActiveLine: vi.fn(),

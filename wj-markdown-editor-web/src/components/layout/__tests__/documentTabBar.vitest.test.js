@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, reactive } from 'vue'
 
+import { requestDocumentCloseTab } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import DocumentTabBar from '../DocumentTabBar.vue'
 
 const store = reactive({
@@ -34,15 +35,38 @@ beforeEach(() => {
   store.documentSessionSnapshot.activeSessionId = 'session-1'
 })
 
+// store 是模块级 reactive，测试之间必须重置，否则上一条用例改过的 activeSessionId 会污染下一条
+beforeEach(() => {
+  store.documentSessionSnapshot.activeSessionId = 'session-1'
+  vi.clearAllMocks()
+})
+
 /**
- * 标签栏只需要 dropdown 的默认插槽内容；右键菜单不是本测试的关注点，
- * 所以用最小桩替代 ant-design-vue 的全局组件。
+ * 标签栏只需要 dropdown 的默认插槽内容。
+ *
+ * 但 overlay 插槽必须一起渲染：ant-design-vue 的 Dropdown 只从 overlay 插槽取菜单内容，
+ * 丢掉插槽的桩会让「右键菜单根本没挂上」这类缺陷完全不可见。
  */
 function mountTabBar() {
   return mount(DocumentTabBar, {
     global: {
       stubs: {
-        ADropdown: { template: '<div><slot /></div>' },
+        ADropdown: { template: '<div class="dropdown-stub"><slot /><slot name="overlay" /></div>' },
+        AMenu: {
+          name: 'AMenu',
+          props: { items: { type: Array, default: () => [] } },
+          template: `
+            <div class="menu-stub">
+              <span
+                v-for="item in items"
+                :key="item.key"
+                class="menu-stub__item"
+                :data-menu-key="item.key"
+                :data-disabled="item.disabled ? 'true' : 'false'"
+              >{{ item.label }}</span>
+            </div>
+          `,
+        },
       },
     },
   })
@@ -184,6 +208,51 @@ describe('documentTabBar overlay 滚动条', () => {
 
     expect(scroller.scrollLeft).toBe(0)
     expect(event.defaultPrevented).toBe(false)
+
+    wrapper.unmount()
+  })
+})
+
+describe('documentTabBar 右键菜单', () => {
+  it('菜单必须挂到 dropdown 的 overlay 插槽上，且四项全部存在', () => {
+    const wrapper = mountTabBar()
+
+    // 每个标签一份菜单：ant-design-vue 的 Dropdown 只从 overlay 插槽取内容，
+    // 用已失效的 `menu` prop 传菜单时这里会是 0
+    const menuList = wrapper.findAll('.menu-stub')
+    expect(menuList).toHaveLength(2)
+
+    const firstMenuKeys = menuList[0]
+      .findAll('.menu-stub__item')
+      .map(item => item.attributes('data-menu-key'))
+    expect(firstMenuKeys).toEqual(['close', 'close-others', 'close-right', 'copy-path'])
+
+    // 有 displayPath 的标签不禁止复制路径
+    expect(menuList[0].get('[data-menu-key="copy-path"]').attributes('data-disabled')).toBe('false')
+
+    wrapper.unmount()
+  })
+
+  it('点击菜单项必须作用在被右键的那个标签上，而不是活动标签', async () => {
+    const wrapper = mountTabBar()
+
+    // 第二个标签（session-2）是后台标签，活动标签是 session-1
+    const secondMenu = wrapper.findAllComponents({ name: 'AMenu' })[1]
+    await secondMenu.vm.$emit('click', { key: 'close' })
+
+    expect(requestDocumentCloseTab).toHaveBeenCalledWith('session-2')
+
+    wrapper.unmount()
+  })
+
+  it('关闭其它必须跳过脏标签，不得把它们批量关掉', async () => {
+    const wrapper = mountTabBar()
+
+    // session-2 是脏标签，对 session-1 执行「关闭其它」时它必须被保留
+    const firstMenu = wrapper.findAllComponents({ name: 'AMenu' })[0]
+    await firstMenu.vm.$emit('click', { key: 'close-others' })
+
+    expect(requestDocumentCloseTab).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

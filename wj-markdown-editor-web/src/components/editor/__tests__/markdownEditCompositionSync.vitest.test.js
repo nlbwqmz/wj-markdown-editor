@@ -13,6 +13,10 @@ function createFakeRef(value) {
 function createFakeEditorView(initialContent = '# start') {
   const docState = {
     text: initialContent,
+    // 与 CodeMirror 的 Text 保持同一口径：length 与 toString().length 相同
+    get length() {
+      return this.text.length
+    },
     toString() {
       return this.text
     },
@@ -30,10 +34,9 @@ function createFakeEditorView(initialContent = '# start') {
     state: {
       doc: docState,
       selection: {
-        main: {
-          from: 0,
-          to: 0,
-        },
+        main: { from: 0, to: 0, anchor: 0, head: 0 },
+        // 编辑器状态守卫靠 ranges 判断选区是否落在文档内
+        ranges: [{ from: 0, to: 0 }],
       },
     },
     dispatch: vi.fn((transaction) => {
@@ -44,7 +47,13 @@ function createFakeEditorView(initialContent = '# start') {
         view.state.selection.main = {
           from: transaction.selection.anchor,
           to: transaction.selection.head,
+          anchor: transaction.selection.anchor,
+          head: transaction.selection.head,
         }
+        view.state.selection.ranges = [{
+          from: transaction.selection.anchor,
+          to: transaction.selection.head,
+        }]
       }
     }),
     focus: vi.fn(),
@@ -184,6 +193,9 @@ vi.mock('@/components/editor/composables/useEditorCore.js', () => ({
       editorView: editorCoreState.editorViewRef,
       isCompositionActive: editorCoreState.isCompositionActive,
       initEditor: editorCoreState.initEditor,
+      activateEditorView: vi.fn(),
+      destroyEditorView: vi.fn(),
+      hasEditorView: () => false,
       destroyEditor: editorCoreState.destroyEditor,
       reconfigureTheme: editorCoreState.reconfigureTheme,
       reconfigureExtensions: editorCoreState.reconfigureExtensions,
@@ -291,6 +303,11 @@ function createStore() {
     editorSearchBarVisible: false,
     searchBarVisible: false,
     viewMode: 'split',
+    // 每个标签一个 EditorView 后，模板需要从快照里拿到标签列表来渲染容器
+    documentSessionSnapshot: {
+      activeSessionId: 'test-session',
+      tabs: [{ sessionId: 'test-session', fileName: 'test.md', displayPath: null, dirty: false }],
+    },
     setViewMode: vi.fn(),
     setOutlineScrollContainer: vi.fn(),
     setOutlineActiveLine: vi.fn(),
@@ -380,6 +397,53 @@ describe('markdownEdit 组合输入外部同步', () => {
   afterEach(() => {
     storeState.current = null
     editorCoreState.domCompositionActive = false
+  })
+
+  it('整篇替换时必须显式给出新选区，不得依赖 CodeMirror 映射旧选区', async () => {
+    const { wrapper, fakeView } = await mountMarkdownEdit({
+      modelValue: 'x'.repeat(821),
+    })
+
+    // 模拟视图里残留一个越界选区：1224 落在只有 821 字符的文档上。
+    // 这正是 `Position 1224 is out of range for changeset of length 821` 的现场。
+    fakeView.state.selection.main = { from: 1224, to: 1224, anchor: 1224, head: 1224 }
+    fakeView.state.selection.ranges = [{ from: 1224, to: 1224 }]
+
+    await wrapper.setProps({
+      modelValue: 'y'.repeat(300),
+      // 父层不指定光标：文档切换、外部变更推快照都走这条路
+      contentUpdateMeta: { token: 1, cursorPosition: null, focus: false, scrollIntoView: false },
+    })
+    await flushRender()
+
+    const replaceCall = fakeView.dispatch.mock.calls.find(([transaction]) => transaction?.changes)
+    expect(replaceCall).toBeTruthy()
+
+    // 只要事务带 selection，CodeMirror 就不会去映射旧选区，
+    // 越界位置也就不会走到 ChangeDesc.mapPos。
+    expect(replaceCall[0].selection).toEqual({ anchor: 300, head: 300 })
+  })
+
+  it('正文未变但残留选区越界时，不得发出多余事务', async () => {
+    const { wrapper, fakeView } = await mountMarkdownEdit({
+      modelValue: 'z'.repeat(120),
+    })
+
+    fakeView.state.selection.main = { from: 900, to: 900, anchor: 900, head: 900 }
+    fakeView.state.selection.ranges = [{ from: 900, to: 900 }]
+
+    await wrapper.setProps({
+      modelValue: 'z'.repeat(120),
+      contentUpdateMeta: { token: 2, cursorPosition: null, focus: false, scrollIntoView: false },
+    })
+    await flushRender()
+
+    // 正文相同且父层不指定光标时，不应该额外发事务：
+    // 只改选区的事务会走一遍 LanguageState.apply，一旦语法树状态不自洽就会把错提前引爆。
+    const dispatchedWithSelectionOnly = fakeView.dispatch.mock.calls.some(([transaction]) => {
+      return transaction?.selection && !transaction?.changes
+    })
+    expect(dispatchedWithSelectionOnly).toBe(false)
   })
 
   it('compositionstart 空窗仅靠 DOM fallback 仍活跃时，也必须挂起外部正文回放', async () => {

@@ -75,7 +75,9 @@ test('MarkdownEdit 的布局切换仍只重置 Split，不会重新初始化或�
 
   assert.ok(source.includes('watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {'))
   assert.ok(source.includes('resetSplitLayout()'))
-  assert.ok(source.includes('initEditor({'))
+  // 创建 view 的入口现在是 ensureEditorViewForSession -> initEditor(createEditorViewOptions(...))，
+  // 这里只关心「布局切换路径里不会碰编辑器实例」，所以匹配函数调用本身即可。
+  assert.ok(source.includes('initEditor('))
   assert.ok(source.includes('destroyEditor()'))
   assert.equal(source.includes('watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {\r\n  initEditor('), false)
   assert.equal(source.includes('watch(layoutMode, (nextLayoutMode, previousLayoutMode) => {\r\n  destroyEditor('), false)

@@ -561,22 +561,34 @@ export function usePreviewSync({
     }
   }
 
+  // 记录当前绑定了滚动监听的元素。
+  //
+  // 每标签一个 EditorView 后，切换标签会换掉 `editorViewRef.value`，
+  // 必须记住旧元素才能正确解绑，否则新旧两份监听会并存，
+  // 而新标签的滚动根本没人监听。
+  let boundScrollElement = null
+
   function bindEvents() {
     const view = getEditorView()
     if (!view) {
       return
     }
-    view.scrollDOM.addEventListener('wheel', onEditorWheel)
-    view.scrollDOM.addEventListener('scroll', syncEditorToPreview)
+
+    // 先解绑旧 view 的监听，再绑新的
+    unbindEvents()
+    boundScrollElement = view.scrollDOM
+    boundScrollElement.addEventListener('wheel', onEditorWheel)
+    boundScrollElement.addEventListener('scroll', syncEditorToPreview)
   }
 
   function unbindEvents() {
-    const view = getEditorView()
-    if (!view) {
+    if (!boundScrollElement) {
       return
     }
-    view.scrollDOM.removeEventListener('wheel', onEditorWheel)
-    view.scrollDOM.removeEventListener('scroll', syncEditorToPreview)
+
+    boundScrollElement.removeEventListener('wheel', onEditorWheel)
+    boundScrollElement.removeEventListener('scroll', syncEditorToPreview)
+    boundScrollElement = null
   }
 
   return {

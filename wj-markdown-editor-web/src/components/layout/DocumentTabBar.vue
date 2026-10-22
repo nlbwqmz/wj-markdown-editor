@@ -290,10 +290,7 @@ function onMenuClick({ key }, tab) {
           class="document-tab-separator mx-1 h-4 w-px shrink-0 self-center bg-border-primary"
         />
 
-        <a-dropdown
-          :trigger="['contextmenu']"
-          :menu="{ items: getMenuItems(tab), onClick: info => onMenuClick(info, tab) }"
-        >
+        <a-dropdown :trigger="['contextmenu']" placement="bottomLeft">
           <div
             :data-testid="`document-tab-${tab.sessionId}`"
             :data-session-id="tab.sessionId"
@@ -323,6 +320,13 @@ function onMenuClick({ key }, tab) {
               <span class="i-tabler:x text-xs" />
             </button>
           </div>
+          <!--
+            菜单必须走 overlay 插槽。ant-design-vue 4.x 的 Dropdown 虽然声明了 `menu` prop，
+            但 renderOverlay() 只读 props.overlay 与 slots.overlay，传 menu 会静默失效（右键弹不出任何东西）。
+          -->
+          <template #overlay>
+            <a-menu :items="getMenuItems(tab)" @click="info => onMenuClick(info, tab)" />
+          </template>
         </a-dropdown>
       </template>
     </div>

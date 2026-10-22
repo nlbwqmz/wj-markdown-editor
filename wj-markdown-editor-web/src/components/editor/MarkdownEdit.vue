@@ -118,6 +118,11 @@ const editorSearchBarVisible = computed(() => store.editorSearchBarVisible)
 const themeRef = computed(() => store.config.theme.global)
 
 const gutterRef = ref()
+// 每个标签一个 CodeMirror 挂载容器，由模板的 v-for 渲染。
+// 切换标签只切 v-show，编辑器实例与它自己的 DOM 都不会被销毁。
+const editorContainers = new Map()
+// 保留给 useEditorCore 作为默认容器兵底；
+// 实际创建 view 时总是显式传 container，所以它不会承载任何标签。
 const editorRef = ref()
 const previewRef = ref()
 const scrolling = ref({ editor: false, preview: false })
@@ -133,6 +138,14 @@ const isEditorVisible = computed(() => viewMode.value !== 'preview')
 // 其余模式一律停用，避免无效的装饰更新与 CodeMirror 事务。
 const associationHighlightEnabled = computed(() => props.associationHighlight === true && viewMode.value === 'split')
 const previewController = ref(true)
+// 当前活动标签的 sessionId。模板用它决定显示哪个编辑器容器，
+// `setEditorElement` 用它判断是否需要补建 view。
+const activeEditorSessionId = computed(() => store.documentSessionSnapshot?.activeSessionId ?? null)
+// 标签顺序由主进程决定，这里只做映射，不排序。
+const editorTabSessionIds = computed(() => {
+  const tabList = store.documentSessionSnapshot?.tabs
+  return Array.isArray(tabList) ? tabList.map(tab => tab.sessionId) : []
+})
 // 仅在预览从“未渲染”重新挂载为“已渲染”时，延后首轮同步到 refreshComplete。
 const pendingPreviewResyncAfterRefresh = ref(false)
 const layoutMode = computed(() => resolveMarkdownEditLayoutMode({
@@ -159,11 +172,8 @@ const pendingExternalSync = ref(null)
 // 仅在当前 keep-alive 编辑页实例内存活的滚动锚点缓存。
 // 不做全局单例，避免不同编辑页实例之间互相污染。
 const viewScrollAnchorStore = createViewScrollAnchorSessionStore()
-// 每个文档会话各自的编辑器状态（正文 + 选区 + undo 历史）。
-// 标签切换时换入换出，这样“切回某个标签”能连撤销历史一起回来。
-const editorStateBySessionId = new Map()
 // 上一次看到的标签列表，用于识别“哪些标签被关掉了”，
-// 从而清理已关闭会话的编辑器状态与滚动锚点缓存。
+// 从而销毁它们的 EditorView 并清理滚动锚点缓存。
 let lastKnownDocumentTabList = []
 
 const BOTTOM_GAP = '40vh'
@@ -193,11 +203,13 @@ const {
   editorView,
   isCompositionActive,
   initEditor,
+  activateEditorView,
+  destroyEditorView,
+  hasEditorView,
   destroyEditor,
   reconfigureTheme,
   reconfigureExtensions,
   reconfigureKeymap,
-  reapplyLiveConfiguration,
 } = useEditorCore({ editorRef, t })
 
 /**
@@ -950,41 +962,115 @@ async function scheduleRestoreForCurrentSnapshot(snapshot, options = {}) {
 }
 
 /**
- * 把当前编辑器状态存到它所属的文档会话名下。
+ * 组装创建某个标签 EditorView 所需的全部参数。
  *
- * `EditorState` 自带正文、选区与 undo 历史，而且不可变，直接存引用即可。
+ * 回调对所有标签共用：它们内部只操作「事务自己的 view」或「当前活动 view」，
+ * 不会把后台标签的内容写到前台。
+ *
+ * @param {string} sessionId
+ * @param {string} [content] 首次创建 view 时使用的正文
+ * @returns {object} 可直接传给 initEditor 的选项
  */
-function saveCurrentEditorStateForSession() {
-  const view = editorView.value
-  const sessionId = currentScrollSnapshot.value.sessionId
-  if (!view || !sessionId) {
-    return
+function createEditorViewOptions(sessionId, content) {
+  return {
+    sessionId,
+    container: editorContainers.get(sessionId) ?? null,
+    doc: typeof content === 'string' ? content : props.modelValue,
+    theme: props.theme,
+    extensionOptions: props.extension,
+    keymapList: refreshKeymap(),
+    extraExtensions: [linkedSourceHighlightField],
+    onDocChange: scheduleModelSync,
+    // scroll 监听随 view 一起创建：每个标签自带自己的监听，
+    // 切换标签天然生效，不再依赖外部重新绑定的时机。
+    onScroll: () => scheduleOutlineActiveLineSync(),
+    onSelectionChange: (update) => {
+      if (isPointerSelectionUpdate(update)) {
+        return
+      }
+      // 组合输入期间完全跳过联动高亮，避免输入法仍在占用 DOM 时再触发额外读写。
+      if (isCompositionActive() === true) {
+        return
+      }
+      // 普通输入会同时带来 docChanged + selectionSet。
+      // 这类原生输入尚未稳定时，只刷新预览侧联动高亮；
+      // 编辑区装饰统一延后到正文上浮阶段补做一次，避免在 DOMObserver 仍处理输入变更时追加第二次编辑器事务。
+      if (update.docChanged === true) {
+        highlightByEditorCursor(update.state, { previewOnly: true })
+        return
+      }
+      highlightByEditorCursor(update.state)
+    },
+    onCompositionIdle: () => {
+      const handledExternalSync = flushPendingExternalSync()
+      if (handledExternalSync !== true) {
+        scheduleModelSync()
+      }
+      highlightByEditorCursor()
+    },
+    onPaste: (event, view) => {
+      const clipboardData = event.clipboardData
+      if (!clipboardData) {
+        return
+      }
+      pasteOrDrop(event, view, clipboardData.types, clipboardData.files)
+    },
+    onClick: (view) => {
+      if (isCompositionActive() === true) {
+        return
+      }
+      highlightByEditorCursor(view.state)
+    },
+    onDrop: (event, view) => {
+      const dataTransfer = event.dataTransfer
+      if (!dataTransfer) {
+        return false
+      }
+      // 拖入 Markdown 文档时按“打开文档”处理，不能落入资源插入链路；
+      // 返回 true 让 CodeMirror 阻止内建处理，同时通知 window 级监听无需重复接管。
+      if (requestOpenDroppedMarkdownDocument(dataTransfer.files)) {
+        return true
+      }
+      pasteOrDrop(event, view, dataTransfer.types, dataTransfer.files)
+      return false
+    },
   }
-  editorStateBySessionId.set(sessionId, view.state)
 }
 
 /**
- * 把目标会话的编辑器状态换回来。
+ * 确保某个标签已经有自己的 EditorView，并把它设为活动 view。
  *
- * 换入后正文已经与快照一致，后续的 modelValue 同步会因为“内容没变”而自动跳过，
- * 不会把刚换回来的 undo 历史重新抹掉。
+ * 容器由模板的 v-for 渲染，所以首次激活某个标签时才创建它的 view；
+ * 之后切换只改引用，view 自带的正文、选区、undo 历史与滚动位置全部保留。
+ *
+ * @param {string} sessionId
+ * @param {string} [content] 首次创建 view 时使用的正文
+ * @returns {boolean} 是否可用
  */
-function restoreEditorStateForSession(sessionId) {
-  const view = editorView.value
-  if (!view || !sessionId) {
+function ensureEditorViewForSession(sessionId, content) {
+  if (!sessionId) {
     return false
   }
 
-  const savedState = editorStateBySessionId.get(sessionId)
-  if (!savedState) {
+  if (hasEditorView(sessionId) === true) {
+    activateEditorView(sessionId)
+    // 切回来时立即刷新一次高亮：DOM 保留所以不会触发 scroll，
+    // 但行号可能已经因为别的标签的编辑而失效。
+    syncOutlineActiveLine()
+    // 滚动监听跟着当前 view 走，否则新标签的编辑器滚动不会驱动预览。
+    bindEvents()
+    return true
+  }
+
+  const container = editorContainers.get(sessionId)
+  if (!container) {
+    // 容器还没挂载（新标签刚插入），交给下一次快照或 nextTick 重试
     return false
   }
 
-  view.setState(savedState)
-  // 存档状态里冻结的是它被保存那一刻的 compartment 内容（主题、快捷键、扩展开关），
-  // 所以换回存档后必须把当前生效的配置重放一次，
-  // 否则在 A 标签里改过的主题切到 B 标签会退回旧值。
-  reapplyLiveConfiguration()
+  initEditor(createEditorViewOptions(sessionId, content))
+  syncOutlineActiveLine()
+  bindEvents()
   return true
 }
 
@@ -1008,8 +1094,10 @@ function pruneClosedDocumentTabCaches() {
     if (openSessionIdSet.has(closedTab.sessionId)) {
       continue
     }
-    editorStateBySessionId.delete(closedTab.sessionId)
-    // 滚动锚点按文档身份索引；没有正式路径时用 session 前缀兵底，与恢复侧保持一致。
+    // 标签关闭：销毁它自己的 EditorView，并释放容器引用
+    destroyEditorView(closedTab.sessionId)
+    editorContainers.delete(closedTab.sessionId)
+    // 滚动锚点按文档身份索引；没有正式路径时用 session 前缀兜底，与恢复侧保持一致。
     const documentKey = closedTab.displayPath || `session:${closedTab.sessionId}`
     clearSessionAnchorRecords(viewScrollAnchorStore, documentKey)
   }
@@ -1020,25 +1108,26 @@ function pruneClosedDocumentTabCaches() {
   }))
 }
 
-// 标签列表变化时清理已关闭标签的缓存。
-// 缓存生命周期跟随标签，而不是靠一个数量上限兜底。
+// 标签列表变化时销毁已关闭标签的 view 并清理锚点缓存。
+// 生命周期跟随标签，而不是靠一个数量上限兜底。
 watch(
   () => store.documentSessionSnapshot?.tabs,
   () => pruneClosedDocumentTabCaches(),
 )
 
 /**
- * 处理“同一视图内切换到另一文档”时的滚动位置与编辑器状态。
- * 与激活恢复不同，这里按 documentKey 跨 session 复用锚点：
- * 1. 先按「当前（即将离开的）身份」采集滚动位置，再存档上一个会话的编辑器状态
- * 2. 再尝试换回目标会话的存档，并按 document 模式恢复（允许新 session 的 revision 从 0 开始）
- * 3. 没有记录的区域显式归零，避免沿用上一篇文档的 scrollTop
- * 恢复与归零都复用 scheduleRestoreForCurrentSnapshot 的联动冻结窗口。
+ * 处理“同一视图内切换到另一文档”。
+ *
+ * 每标签一个 EditorView 后，这里不再需要换入换出 EditorState：
+ * 每个标签的 view 自带正文、选区、undo 历史，DOM 也一直保留，
+ * 所以滚动位置天然跟随标签。这里只负责：
+ * 1. 采集即将离开的标签的滚动位置（供 keep-alive 失活等跨视图场景复用）
+ * 2. 把活动 view 切到目标标签（首次进入时创建）
+ * 3. 按 document 模式恢复滚动锚点（新 session 的 revision 从 0 开始，不能用严格模式）
  *
  * 注意顺序：采集必须在 updateCurrentScrollSnapshot 之前。
- * `EditorState` 只带正文 / 选区 / undo，**不含 scrollTop**（滚动是 DOM 状态），
- * 滚动位置只能靠锚点缓存传递；一旦先把身份切到目标标签，
- * 采集就会写进目标标签的 bucket，离开的那个标签位置直接丢失。
+ * 一旦先把身份切到目标标签，采集就会写进目标标签的 bucket，
+ * 离开的那个标签位置直接丢失。
  *
  * @param {object | null | undefined} snapshot
  * @returns {Promise<{ editorCode: boolean, editorPreview: boolean }>} 返回左右区域本轮是否实际完成恢复。
@@ -1049,12 +1138,10 @@ async function handleDocumentContextSwitch(snapshot) {
   // 挂起的外部同步带着上一份文档的光标坐标，换文档后一律作废，
   // 否则会把旧坐标应用到新文档上，产生越界选区。
   pendingExternalSync.value = null
-  // 再把上一个会话的编辑器状态（正文 + 选区 + undo 历史）存档，
-  // 然后尝试把目标会话的存档换回来；换不回来就走整篇替换的常规路径。
-  saveCurrentEditorStateForSession()
 
   updateCurrentScrollSnapshot(snapshot)
-  restoreEditorStateForSession(currentScrollSnapshot.value.sessionId)
+  // 切换到目标标签自己的 view；首次进入某个标签时在这里创建。
+  ensureEditorViewForSession(currentScrollSnapshot.value.sessionId, snapshot?.content)
 
   // 按文档身份恢复（新 session 的 revision 从 0 开始，不能用严格模式）
   const restoreResult = await scheduleRestoreForCurrentSnapshot(snapshot, { mode: 'document' })
@@ -1115,6 +1202,16 @@ function unregisterSidebarBridges() {
   store.setOutlineNavigateHandler(null)
 }
 
+// 编辑页是否激活（keep-alive 场景下失活页面不参与联动）
+const isEditorPageActive = ref(false)
+
+// 是否需要编辑区行号上抛：页面激活 + 侧边栏可见 + 停留在大纲 tab
+const shouldSyncOutlineActiveLine = computed(() =>
+  isEditorPageActive.value === true
+  && store.sidebarVisible === true
+  && store.sidebarActiveTab === 'outline',
+)
+
 /**
  * 解析侧边栏大纲的滚动联动容器。
  * 有预览时交给预览容器做 DOM 测量；无预览时返回 null，改由编辑区滚动上抛行号驱动。
@@ -1141,10 +1238,13 @@ function resolveEditorTopLineNumber(view) {
 /**
  * 无预览时把编辑区顶部行号同步给侧边栏大纲，用于滚动联动高亮；
  * 有预览时清空，避免两套来源互相覆盖。
+ *
+ * scroll 监听现在随每个 view 一起创建（见 `useEditorCore` 的 `onScroll`），
+ * 所以后台标签滚不到这里；这里只需关心“当前该不该上抛”。
  */
 function syncOutlineActiveLine() {
   const view = editorView.value
-  if (!view || previewVisible.value === true) {
+  if (shouldSyncOutlineActiveLine.value !== true || !view || previewVisible.value === true) {
     store.setOutlineActiveLine(null)
     return
   }
@@ -1153,7 +1253,7 @@ function syncOutlineActiveLine() {
 }
 
 function scheduleOutlineActiveLineSync() {
-  if (outlineActiveLineRafId !== null) {
+  if (shouldSyncOutlineActiveLine.value !== true || outlineActiveLineRafId !== null) {
     return
   }
 
@@ -1163,35 +1263,20 @@ function scheduleOutlineActiveLineSync() {
   })
 }
 
-function bindOutlineActiveLineEvents() {
-  editorView.value?.scrollDOM?.addEventListener('scroll', scheduleOutlineActiveLineSync, { passive: true })
-}
-
-function unbindOutlineActiveLineEvents() {
-  editorView.value?.scrollDOM?.removeEventListener('scroll', scheduleOutlineActiveLineSync)
+/** 取消已排队的行号上抛（组件卸载时调用）。 */
+function cancelScheduledOutlineActiveLineSync() {
   if (outlineActiveLineRafId !== null) {
     window.cancelAnimationFrame(outlineActiveLineRafId)
     outlineActiveLineRafId = null
   }
 }
 
-// 编辑页是否激活（keep-alive 场景下失活页面不参与联动）
-const isEditorPageActive = ref(false)
-
-// 是否需要编辑区行号上抛：页面激活 + 侧边栏可见 + 停留在大纲 tab
-const shouldSyncOutlineActiveLine = computed(() =>
-  isEditorPageActive.value === true
-  && store.sidebarVisible === true
-  && store.sidebarActiveTab === 'outline',
-)
-
 watch(shouldSyncOutlineActiveLine, (enabled) => {
   if (enabled === true) {
-    bindOutlineActiveLineEvents()
     syncOutlineActiveLine()
     return
   }
-  unbindOutlineActiveLineEvents()
+  cancelScheduledOutlineActiveLineSync()
   store.setOutlineActiveLine(null)
 })
 
@@ -1203,8 +1288,32 @@ function onAssetOpen(assetInfo) {
   emits('assetOpen', assetInfo)
 }
 
-function setEditorElement(element) {
-  editorRef.value = element
+/**
+ * 记录某个标签的编辑器容器。
+ *
+ * 容器由模板的 v-for 渲染，可能在 view 创建之前就出现（新标签插入），
+ * 也可能在 view 创建之后才出现（首次挂载）。两种情况都要兼容：
+ * 如果当前正好需要这个标签的 view，就在这里补建。
+ *
+ * @param {string} sessionId
+ * @param {HTMLElement | null} element
+ */
+function setEditorElement(sessionId, element) {
+  if (!sessionId) {
+    return
+  }
+
+  if (!element) {
+    editorContainers.delete(sessionId)
+    return
+  }
+
+  editorContainers.set(sessionId, element)
+
+  // 容器晚于首次请求出现时补建 view（例如首次挂载、或新标签刚插入）
+  if (hasEditorView(sessionId) !== true && sessionId === activeEditorSessionId.value) {
+    ensureEditorViewForSession(sessionId, props.modelValue)
+  }
 }
 
 function setPreviewElement(element) {
@@ -1240,6 +1349,55 @@ function createPendingExternalSyncPayload({
   }
 }
 
+/**
+ * 把编辑器当前选区夹到指定长度内。
+ *
+ * 用于「整篇替换正文」时显式给出新选区：只要事务带上 selection，
+ * CodeMirror 就不会去映射旧选区，也就不会在旧选区越界时抛
+ * `Position X is out of range for changeset of length Y`。
+ *
+ * @param {any} view
+ * @param {number} targetLength
+ * @returns {{ anchor: number, head: number }} 夹到目标长度内的选区
+ */
+function resolveClampedSelectionRange(view, targetLength) {
+  const main = view?.state?.selection?.main
+  const anchor = Number.isInteger(main?.anchor) ? main.anchor : 0
+  const head = Number.isInteger(main?.head) ? main.head : 0
+
+  return {
+    anchor: Math.max(0, Math.min(targetLength, anchor)),
+    head: Math.max(0, Math.min(targetLength, head)),
+  }
+}
+
+/**
+ * 派发事务；失败时把视图状态的关键位置一并打出来。
+ *
+ * `Position X is out of range for changeset of length Y` 这类错误发生在 CodeMirror
+ * 内部（选区映射、语法解析上下文映射），堆栈里只看到 CodeMirror 自己的帧，
+ * 看不到是哪个字段越界，所以在这里统一补一份现场快照。
+ *
+ * @param {any} view
+ * @param {any} transaction
+ * @param {object} [context] 额外的排查上下文
+ */
+function dispatchEditorTransaction(view, transaction, context = {}) {
+  try {
+    view.dispatch(transaction)
+  } catch (error) {
+    // 越界错误发生在 CodeMirror 内部，堆栈里看不到具体字段，
+    // 这里补上文档长度与选区，便于排查。
+    console.error('[doc-state] 派发事务失败', {
+      error: error?.message,
+      ...context,
+      docLength: view.state.doc.length,
+      selection: view.state.selection.main,
+    })
+    throw error
+  }
+}
+
 function applyExternalEditorSync({
   view,
   nextContent,
@@ -1256,28 +1414,36 @@ function applyExternalEditorSync({
     ? Math.max(0, Math.min(nextContent.length, cursorPosition))
     : null
 
+  // 整篇替换时**必须**显式给出新选区，不能留空。
+  //
+  // 留空会让 CodeMirror 走 `Transaction.newSelection` 里的
+  // `startState.selection.map(changes)`，一旦视图里残留的选区越界，
+  // `ChangeDesc.mapPos` 就会抛
+  // `Position X is out of range for changeset of length Y`。
+  //
+  // 这条路径只在「父层不指定光标」时才会走到（例如文档切换、外部变更推快照），
+  // 所以只夹取 cursorPosition 是盖不住的：那时 cursorPosition 本来就是 null。
+  const selection = safeCursorPosition !== null
+    ? { anchor: safeCursorPosition, head: safeCursorPosition }
+    : resolveClampedSelectionRange(view, nextContent.length)
+
   if (currentValue !== nextContent) {
-    const transaction = {
+    dispatchEditorTransaction(view, {
       changes: {
         from: 0,
         to: currentValue.length,
         insert: nextContent,
       },
-    }
-    if (safeCursorPosition !== null) {
-      transaction.selection = {
-        anchor: safeCursorPosition,
-        head: safeCursorPosition,
-      }
-      transaction.scrollIntoView = pendingContentUpdateMeta.scrollIntoView
-    }
-    view.dispatch(transaction)
+      selection,
+      scrollIntoView: pendingContentUpdateMeta.scrollIntoView,
+    }, {
+      currentValueLength: currentValue.length,
+      nextContentLength: nextContent.length,
+      cursorPosition,
+    })
   } else if (safeCursorPosition !== null) {
     view.dispatch({
-      selection: {
-        anchor: safeCursorPosition,
-        head: safeCursorPosition,
-      },
+      selection,
       scrollIntoView: pendingContentUpdateMeta.scrollIntoView,
     })
   }
@@ -1551,64 +1717,9 @@ onMounted(() => {
     registerSidebarBridges()
   })
 
-  initEditor({
-    doc: props.modelValue,
-    theme: props.theme,
-    extensionOptions: props.extension,
-    keymapList: refreshKeymap(),
-    extraExtensions: [linkedSourceHighlightField],
-    onDocChange: scheduleModelSync,
-    onSelectionChange: (update) => {
-      if (isPointerSelectionUpdate(update)) {
-        return
-      }
-      // 组合输入期间完全跳过联动高亮，避免输入法仍在占用 DOM 时再触发额外读写。
-      if (isCompositionActive() === true) {
-        return
-      }
-      // 普通输入会同时带来 docChanged + selectionSet。
-      // 这类原生输入尚未稳定时，只刷新预览侧联动高亮；
-      // 编辑区装饰统一延后到正文上浮阶段补做一次，避免在 DOMObserver 仍处理输入变更时追加第二次编辑器事务。
-      if (update.docChanged === true) {
-        highlightByEditorCursor(update.state, { previewOnly: true })
-        return
-      }
-      highlightByEditorCursor(update.state)
-    },
-    onCompositionIdle: () => {
-      const handledExternalSync = flushPendingExternalSync()
-      if (handledExternalSync !== true) {
-        scheduleModelSync()
-      }
-      highlightByEditorCursor()
-    },
-    onPaste: (event, view) => {
-      const clipboardData = event.clipboardData
-      if (!clipboardData) {
-        return
-      }
-      pasteOrDrop(event, view, clipboardData.types, clipboardData.files)
-    },
-    onClick: (view) => {
-      if (isCompositionActive() === true) {
-        return
-      }
-      highlightByEditorCursor(view.state)
-    },
-    onDrop: (event, view) => {
-      const dataTransfer = event.dataTransfer
-      if (!dataTransfer) {
-        return false
-      }
-      // 拖入 Markdown 文档时按“打开文档”处理，不能落入资源插入链路；
-      // 返回 true 让 CodeMirror 阻止内建处理，同时通知 window 级监听无需重复接管。
-      if (requestOpenDroppedMarkdownDocument(dataTransfer.files)) {
-        return true
-      }
-      pasteOrDrop(event, view, dataTransfer.types, dataTransfer.files)
-      return false
-    },
-  })
+  // 首次挂载：为当前活动标签创建它的 EditorView。
+  // 容器由模板的 v-for 渲染，此时已经就绪。
+  ensureEditorViewForSession(activeEditorSessionId.value, props.modelValue)
 
   nextTick(() => {
     flushPendingExternalSync()
@@ -1648,7 +1759,7 @@ onBeforeUnmount(() => {
   cancelScheduledCursorHighlight()
   clearAllLinkedHighlight()
   unbindEvents()
-  unbindOutlineActiveLineEvents()
+  cancelScheduledOutlineActiveLineSync()
   clearScrollTimer()
   destroySplitLayout()
   destroyEditor()
@@ -1675,10 +1786,21 @@ defineExpose({
       <template v-for="item in layoutRenderItems" :key="item.key">
         <div
           v-if="item.type === 'editor'"
-          :ref="setEditorElement"
           data-layout-item="editor"
           class="markdown-edit-layout__editor h-full overflow-auto"
-        />
+        >
+          <!--
+            每个标签一个 CodeMirror 容器，用 v-show 切换。
+            不销毁 DOM：view 自带正文 / 选区 / undo 历史，滚动位置也随 DOM 保留。
+          -->
+          <div
+            v-for="sessionId in editorTabSessionIds"
+            v-show="sessionId === activeEditorSessionId"
+            :key="sessionId"
+            :ref="el => setEditorElement(sessionId, el)"
+            class="h-full"
+          />
+        </div>
         <div
           v-else-if="item.type === 'gutter-preview'"
           :ref="setPreviewGutterElement"
