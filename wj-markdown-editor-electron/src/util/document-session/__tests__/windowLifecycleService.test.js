@@ -2589,6 +2589,42 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
   })
 
+  it('关闭窗口必须销毁该窗口的全部会话，不能只销毁活动会话', async () => {
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startView: 'split' })
+    pathExistsMock.mockImplementation(async targetPath => ['D:/first.md', 'D:/second.md'].includes(targetPath))
+    readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
+
+    await winInfoUtil.createNew('D:/first.md')
+    const [winInfo] = listWindowRefs()
+    const runtime = getDocumentSessionRuntime()
+
+    const firstSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    await executeTestCommand(winInfo, 'document.open-path-in-current-window', {
+      path: 'D:/second.md',
+      switchPolicy: 'direct-switch',
+      expectedSessionId: firstSnapshot.sessionId,
+      expectedRevision: firstSnapshot.revision,
+    })
+
+    const windowSessionIds = runtime.store.getSessionIdsByWindowId(winInfo.id)
+    expect(windowSessionIds).toHaveLength(2)
+    // 第二个标签是活动会话，第一个是关窗时不会被选中的后台标签
+    const backgroundSessionId = windowSessionIds[0]
+    expect(runtime.store.getActiveSessionIdByWindowId(winInfo.id)).toBe(windowSessionIds[1])
+
+    winInfo.win.close()
+    await vi.waitFor(() => {
+      expect(listWindowRefs()).toHaveLength(0)
+    })
+
+    // 关窗后该窗口的所有会话都必须从 store 里消失：
+    // 残留会话会让下次打开同一文件被误判成“已打开”，
+    // 聚焦到一个已经不存在的窗口，用户看到的是“打开没任何反应”。
+    expect(runtime.store.getSession(backgroundSessionId)).toBeFalsy()
+    expect(runtime.store.getSession(windowSessionIds[1])).toBeFalsy()
+    expect(runtime.store.getSessionIdsByWindowId(winInfo.id)).toEqual([])
+  })
+
   it('多窗口按关闭顺序退出时，必须把最后关闭的文档重新顶到 recent 顶部', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)

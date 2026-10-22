@@ -879,6 +879,10 @@ function startExternalWatch(windowId, sessionIdOrOptions = null, options = {}) {
 
 function finalizeWindowClose(windowId) {
   const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return
+  }
+
   const closingSession = getSessionByWindowId(normalizedWindowId)
   setClosedManualRequestCompletions(
     normalizedWindowId,
@@ -888,10 +892,22 @@ function finalizeWindowClose(windowId) {
   )
   void stopDirectoryWatch(normalizedWindowId)
   stopExternalWatch(normalizedWindowId)
-  if (closingSession?.sessionId) {
-    const { store } = ensureSessionRuntimeInitialized()
-    store.destroySession(closingSession.sessionId)
+
+  // 关窗要销毁该窗口的**全部**会话，不能只销毁活动会话。
+  //
+  // 多标签下 `getSessionByWindowId` 只返回活动会话，其余标签会残留在
+  // `sessionMap` / `sessionWindowMap` 里。之后打开同一个文件时，
+  // `findOpenDocumentTab` 会命中残留会话并把打开请求当成“已打开”，
+  // 尝试聚焦一个已经不存在的窗口：用户看到的是“打开文件没任何反应”，
+  // 而且假聚焦会顺手把已关闭窗口的标签组写回 tab-group.json。
+  //
+  // 先拷贝列表再逐个销毁：`destroySession` 会改写窗口的 sessionIds。
+  const { store } = ensureSessionRuntimeInitialized()
+  const windowSessionIds = [...(store.getSessionIdsByWindowId?.(normalizedWindowId) || [])]
+  for (const sessionId of windowSessionIds) {
+    store.destroySession(sessionId)
   }
+
   deleteEditorWin(normalizedWindowId)
   checkWinList()
 }
