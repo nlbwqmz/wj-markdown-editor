@@ -901,6 +901,11 @@ describe('documentFileManagerService', () => {
     'nested\\dir',
     '.',
     '..',
+    'a:b',
+    'a*b',
+    'con',
+    'con.md',
+    'note.',
   ])('createFolder/createMarkdown 遇到非法名称 "%s" 时必须拒绝创建', async (name) => {
     const rootDirectory = await createTempDirectory()
     const directoryPath = path.join(rootDirectory, 'docs')
@@ -930,6 +935,78 @@ describe('documentFileManagerService', () => {
       ok: false,
       reason: 'invalid-file-manager-entry-name',
     })
+
+    expect(await fs.readdir(directoryPath)).toEqual(['current.md'])
+  })
+
+  it('createMarkdown 写盘抛非 EEXIST 错误时必须回流结构化失败，不能把异常穿过 IPC', async () => {
+    const rootDirectory = await createTempDirectory()
+    const directoryPath = path.join(rootDirectory, 'docs')
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    await fs.ensureDir(directoryPath)
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'create-markdown-failed-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    const writeFileSpy = vi.spyOn(fs, 'writeFile').mockRejectedValueOnce(
+      Object.assign(new Error('invalid file name'), { code: 'EINVAL' }),
+    )
+
+    try {
+      await expect(service.createMarkdown({
+        windowId: 9,
+        name: 'draft-note.md',
+      })).resolves.toEqual({
+        ok: false,
+        reason: 'file-manager-entry-create-failed',
+        path: path.join(directoryPath, 'draft-note.md'),
+        code: 'EINVAL',
+      })
+    } finally {
+      writeFileSpy.mockRestore()
+    }
+
+    expect(await fs.readdir(directoryPath)).toEqual(['current.md'])
+  })
+
+  it('createFolder 建目录抛非 EEXIST 错误时必须回流结构化失败', async () => {
+    const rootDirectory = await createTempDirectory()
+    const directoryPath = path.join(rootDirectory, 'docs')
+    const currentFilePath = path.join(directoryPath, 'current.md')
+    await fs.ensureDir(directoryPath)
+    await fs.writeFile(currentFilePath, '# current', 'utf8')
+
+    const { service } = await createServiceContext({
+      session: createBoundFileSession({
+        sessionId: 'create-folder-failed-session',
+        path: currentFilePath,
+        content: '# current',
+      }),
+    })
+
+    const mkdirSpy = vi.spyOn(fs, 'mkdir').mockRejectedValueOnce(
+      Object.assign(new Error('operation not permitted'), { code: 'EPERM' }),
+    )
+
+    try {
+      await expect(service.createFolder({
+        windowId: 9,
+        name: 'assets',
+      })).resolves.toEqual({
+        ok: false,
+        reason: 'file-manager-entry-create-failed',
+        path: path.join(directoryPath, 'assets'),
+        code: 'EPERM',
+      })
+    } finally {
+      mkdirSpy.mockRestore()
+    }
 
     expect(await fs.readdir(directoryPath)).toEqual(['current.md'])
   })

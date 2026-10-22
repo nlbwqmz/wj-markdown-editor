@@ -34,6 +34,22 @@ const settingContainerRef = ref()
 
 const systemFontList = ref([])
 
+/**
+ * 系统字体枚举不可用时的兜底候选。
+ *
+ * `window.queryLocalFonts()` 在部分 Linux 环境（fontconfig 字体缺失、local-fonts 权限被拒）
+ * 会返回空数组或直接报错；如果下拉一直为空，用户只能清空字体设置，没法回选。
+ * 这里不按平台区分：fontFamily 是 CSS 值，选了本机没装的字体只会正常回退，不会报错。
+ */
+const FALLBACK_FONT_FAMILY_LIST = [
+  'Microsoft YaHei',
+  'Segoe UI',
+  'Consolas',
+  'Noto Sans CJK SC',
+  'Noto Sans Mono',
+  'DejaVu Sans',
+]
+
 const imageBedUploaderList = ref([
   { value: 'github', name: 'GitHub' },
   { value: 'smms', name: 'SM.MS' },
@@ -309,21 +325,70 @@ function onTabKeydown(event, currentKey) {
   tabButtonMap.get(nextKey)?.focus()
 }
 
-function refreshSystemFontList() {
-  if (document.visibilityState === 'visible') {
-    window.queryLocalFonts().then((fonts) => {
-      const list = []
-      const familySet = new Set(fonts.map(font => font.family))
-      familySet.forEach((family) => {
-        const label = fonts.filter(font => font.family === family).sort((a, b) => a.fullName.length - b.fullName.length)[0].fullName
-        list.push({
-          value: family,
-          label: family === label ? family : `${family} (${label})`,
-        })
-      })
-      systemFontList.value = list
-    }).catch(() => {})
+function createFallbackFontOptionList() {
+  return FALLBACK_FONT_FAMILY_LIST.map(family => ({
+    value: family,
+    label: family,
+  }))
+}
+
+/**
+ * 把字体枚举结果转成下拉候选。
+ * 同一 family 可能对应多个 fullName，取最短的那个作为补充标签。
+ */
+function buildFontOptionList(fonts) {
+  const list = []
+  const familySet = new Set(fonts.map(font => font.family))
+  familySet.forEach((family) => {
+    const label = fonts.filter(font => font.family === family).sort((a, b) => a.fullName.length - b.fullName.length)[0].fullName
+    list.push({
+      value: family,
+      label: family === label ? family : `${family} (${label})`,
+    })
+  })
+  return list
+}
+
+/**
+ * 回落到兜底字体列表。
+ * 仅在当前候选为空时生效，避免把已经加载好的真实字体列表覆盖掉。
+ */
+function applyFallbackFontList() {
+  if (systemFontList.value.length === 0) {
+    systemFontList.value = createFallbackFontOptionList()
   }
+}
+
+function refreshSystemFontList() {
+  if (document.visibilityState !== 'visible') {
+    return
+  }
+
+  // 先做特性检测：某些环境根本没有这个 API，直接调用会同步抛 TypeError，
+  // 而调用方是 onMounted，后面的 syncTabIndicator / tabIndicatorReady 都会跟着不执行，
+  // 表现为左栏滑块停在 opacity: 0。
+  if (typeof window.queryLocalFonts !== 'function') {
+    applyFallbackFontList()
+    return
+  }
+
+  let fontQueryResult = null
+  try {
+    fontQueryResult = window.queryLocalFonts()
+  }
+  catch {
+    applyFallbackFontList()
+    return
+  }
+
+  fontQueryResult
+    .then((fonts) => {
+      const list = buildFontOptionList(Array.isArray(fonts) ? fonts : [])
+      systemFontList.value = list.length > 0 ? list : createFallbackFontOptionList()
+    })
+    .catch(() => {
+      applyFallbackFontList()
+    })
 }
 
 function systemFontSelectFilterOption(inputValue, option) {

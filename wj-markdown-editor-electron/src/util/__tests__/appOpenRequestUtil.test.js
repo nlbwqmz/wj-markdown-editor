@@ -1,7 +1,10 @@
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import {
   handleSecondInstanceOpenRequest,
   handleStartupOpenRequest,
+  resolveOpenTargetArg,
+  resolveOpenTargetFromArgs,
   resolveSecondInstanceOpenTarget,
 } from '../appOpenRequestUtil.js'
 
@@ -187,5 +190,84 @@ describe('resolveSecondInstanceOpenTarget', () => {
       additionalData: null,
       commandLine: undefined,
     })).toBeNull()
+  })
+
+  it('additionalData.filePath 是 file:// URI 时，必须转成本地路径', () => {
+    const markdownUrl = pathToFileURL('/home/user/notes/demo.md').href
+    const result = resolveSecondInstanceOpenTarget({
+      additionalData: { filePath: markdownUrl, baseDir: '/home/user' },
+      commandLine: [],
+    })
+
+    expect(result).toEqual({
+      targetPath: fileURLToPath(markdownUrl),
+      baseDir: '/home/user',
+    })
+  })
+
+  it('commandLine 只带 file:// URI 时，也必须解析出本地路径', () => {
+    const markdownUrl = pathToFileURL('/home/user/notes/demo.md').href
+    const result = resolveSecondInstanceOpenTarget({
+      additionalData: null,
+      commandLine: ['/opt/app/wj-markdown-editor', markdownUrl],
+    })
+
+    expect(result).toEqual({
+      targetPath: fileURLToPath(markdownUrl),
+      baseDir: null,
+    })
+  })
+})
+
+describe('resolveOpenTargetArg', () => {
+  it('普通本地路径必须原样返回', () => {
+    expect(resolveOpenTargetArg('/home/user/notes/demo.md')).toBe('/home/user/notes/demo.md')
+  })
+
+  it('linux 文件管理器通过 %U 传入的 file:// URI 必须转成本地路径', () => {
+    const markdownUrl = pathToFileURL('/home/user/notes/demo.md').href
+
+    expect(resolveOpenTargetArg(markdownUrl)).toBe(fileURLToPath(markdownUrl))
+  })
+
+  it('file:// URI 中的百分号编码必须解码，不能把 %20 留在路径里', () => {
+    const markdownUrl = pathToFileURL('/home/user/my notes/demo.md').href
+
+    expect(markdownUrl).toContain('%20')
+    expect(resolveOpenTargetArg(markdownUrl)).toBe(fileURLToPath(markdownUrl))
+  })
+
+  it('electron 附加开关、空白串、畸形 URI、非字符串必须返回 null', () => {
+    expect(resolveOpenTargetArg('--no-sandbox')).toBeNull()
+    expect(resolveOpenTargetArg('--ozone-platform=wayland')).toBeNull()
+    expect(resolveOpenTargetArg('   ')).toBeNull()
+    expect(resolveOpenTargetArg(42)).toBeNull()
+    expect(resolveOpenTargetArg('file://')).toBeNull()
+  })
+})
+
+describe('resolveOpenTargetFromArgs', () => {
+  it('必须从后往前命中 Markdown 目标，并跳过 Electron 附加开关', () => {
+    expect(resolveOpenTargetFromArgs([
+      '/opt/app/wj-markdown-editor',
+      '/home/user/notes/a.md',
+      '--ozone-platform=wayland',
+    ])).toBe('/home/user/notes/a.md')
+  })
+
+  it('%U 传入多个 URI 时必须命中其中的 Markdown 文件', () => {
+    const textUrl = pathToFileURL('/home/user/notes/a.txt').href
+    const markdownUrl = pathToFileURL('/home/user/notes/a.md').href
+
+    expect(resolveOpenTargetFromArgs([
+      '/opt/app/wj-markdown-editor',
+      textUrl,
+      markdownUrl,
+    ])).toBe(fileURLToPath(markdownUrl))
+  })
+
+  it('没有 Markdown 目标时必须返回 null', () => {
+    expect(resolveOpenTargetFromArgs(['/opt/app/wj-markdown-editor'])).toBeNull()
+    expect(resolveOpenTargetFromArgs(undefined)).toBeNull()
   })
 })

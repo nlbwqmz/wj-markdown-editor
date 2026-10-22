@@ -31,7 +31,6 @@ export function createWindowSessionBridge({
   resolveWindowById,
   getAllWindows = () => [],
 }) {
-  const lastSnapshotMap = new Map()
   let lastRecentListSignature = null
 
   function getSessionSnapshot(windowId) {
@@ -66,7 +65,6 @@ export function createWindowSessionBridge({
           tabs: getWindowTabsSnapshot(windowId),
         }
 
-    lastSnapshotMap.set(windowId, windowSnapshot)
     sendToRenderer(win, {
       event: 'document.snapshot.changed',
       data: windowSnapshot,

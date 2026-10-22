@@ -1,7 +1,7 @@
 import { Compartment } from '@codemirror/state'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView, keymap } from '@codemirror/view'
-import { ref, shallowRef } from 'vue'
+import { shallowRef } from 'vue'
 import { isEditorCompositionActive } from '@/util/editor/compositionStateUtil.js'
 import editorExtensionUtil from '@/util/editor/editorExtensionUtil.js'
 
@@ -46,10 +46,19 @@ export function useEditorCore({ editorRef, t }) {
    */
   const scrollHandlers = new Map()
 
-  const domCompositionActive = ref(false)
-  const compositionIdlePending = ref(false)
   const keymapCompartment = new Compartment()
   const themeCompartment = new Compartment()
+
+  /**
+   * view -> 组合输入兜底状态。
+   *
+   * 必须按 view 隔离，不能用单个 ref 覆盖全部标签：
+   * 每标签一个 EditorView 之后，任何一个 view 泄漏的 composition 状态
+   * 都会污染其它标签的正文同步判断（Linux 下 fcitx/ibus 在 view 被隐藏或销毁时
+   * 可能不投递 `compositionend`，一旦漏接就永久停在“组合输入中”）。
+   */
+  let compositionStates = new WeakMap()
+
   const dynamicExtension = editorExtensionUtil.getDynamicExtension()
 
   /**
@@ -64,10 +73,46 @@ export function useEditorCore({ editorRef, t }) {
     keymapList: [],
   }
 
+  /**
+   * 取（或懒建）某个 view 的兜底状态。
+   * 只有真正收到 composition 事件时才建条目，避免读路径把 WeakMap 填满。
+   */
+  function getCompositionState(view) {
+    if (!view) {
+      return null
+    }
+
+    let state = compositionStates.get(view)
+    if (!state) {
+      state = { active: false, idlePending: false }
+      compositionStates.set(view, state)
+    }
+    return state
+  }
+
+  /**
+   * 事件回调里拿不到 view 时（旧测试桩 / 非常规调用）退回活动 view，
+   * 保证与改造前单 view 语义等价。
+   */
+  function resolveCompositionView(view) {
+    return view ?? editorView.value ?? null
+  }
+
+  /** 清掉某个 view 的兜底标记（切走 / 销毁时调用）。 */
+  function resetCompositionState(view) {
+    const state = view ? compositionStates.get(view) : null
+    if (!state) {
+      return
+    }
+    state.active = false
+    state.idlePending = false
+  }
+
   function isCompositionActiveFor(view) {
+    const targetView = resolveCompositionView(view)
     return isEditorCompositionActive({
-      view: view ?? editorView.value,
-      fallbackActive: domCompositionActive.value,
+      view: targetView,
+      fallbackActive: compositionStates.get(targetView)?.active === true,
     })
   }
 
@@ -84,12 +129,14 @@ export function useEditorCore({ editorRef, t }) {
     Promise.resolve().then(callback)
   }
 
-  function tryFlushCompositionIdle(onCompositionIdle) {
-    if (compositionIdlePending.value !== true || isCompositionActive() === true) {
+  function tryFlushCompositionIdle(view, onCompositionIdle) {
+    const targetView = resolveCompositionView(view)
+    const state = targetView ? compositionStates.get(targetView) : null
+    if (state?.idlePending !== true || isCompositionActiveFor(targetView) === true) {
       return false
     }
 
-    compositionIdlePending.value = false
+    state.idlePending = false
     onCompositionIdle && onCompositionIdle()
     return true
   }
@@ -196,19 +243,26 @@ export function useEditorCore({ editorRef, t }) {
           if (update.selectionSet) {
             onSelectionChange && onSelectionChange(update)
           }
-          tryFlushCompositionIdle(onCompositionIdle)
+          tryFlushCompositionIdle(update.view, onCompositionIdle)
         }),
         EditorView.domEventHandlers({
-          compositionstart: () => {
+          compositionstart: (_event, view) => {
             // DOM composition 事件只作为兜底标记，真正的输入状态仍以 CodeMirror view 自身状态为准。
-            domCompositionActive.value = true
-            compositionIdlePending.value = false
+            const state = getCompositionState(resolveCompositionView(view))
+            if (state) {
+              state.active = true
+              state.idlePending = false
+            }
           },
-          compositionend: () => {
-            domCompositionActive.value = false
-            compositionIdlePending.value = true
+          compositionend: (_event, view) => {
+            const targetView = resolveCompositionView(view)
+            const state = getCompositionState(targetView)
+            if (state) {
+              state.active = false
+              state.idlePending = true
+            }
             queueCompositionIdleCheck(() => {
-              tryFlushCompositionIdle(onCompositionIdle)
+              tryFlushCompositionIdle(targetView, onCompositionIdle)
             })
           },
           paste: (event, view) => {
@@ -252,7 +306,13 @@ export function useEditorCore({ editorRef, t }) {
    * @returns {EditorView | null} 该标签的 view；尚未创建时返回 null
    */
   function activateEditorView(sessionId) {
+    const previousView = editorView.value
     const view = editorViews.get(sessionId) ?? null
+    // 切走时清掉旧 view 的兜底标记：切走后不可能继续在该 view 上组合输入，
+    // 若 compositionend 丢失，残留标记会让该标签的正文同步永久停摆。
+    if (previousView && previousView !== view) {
+      resetCompositionState(previousView)
+    }
     editorView.value = view
     // requestMeasure 会排到下一帧，那时 v-show 已经把容器切回可见。
     view?.requestMeasure?.()
@@ -272,6 +332,7 @@ export function useEditorCore({ editorRef, t }) {
     }
 
     releaseScrollHandler(sessionId)
+    resetCompositionState(view)
     if (editorView.value === view) {
       editorView.value = null
     }
@@ -289,12 +350,12 @@ export function useEditorCore({ editorRef, t }) {
       releaseScrollHandler(sessionId)
     }
     for (const view of editorViews.values()) {
+      resetCompositionState(view)
       view.destroy()
     }
     editorViews.clear()
     editorView.value = null
-    domCompositionActive.value = false
-    compositionIdlePending.value = false
+    compositionStates = new WeakMap()
   }
 
   function reconfigureTheme(theme) {

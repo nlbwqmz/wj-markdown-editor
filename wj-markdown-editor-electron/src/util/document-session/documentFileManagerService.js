@@ -31,13 +31,34 @@ function normalizeFileManagerEntryName(name) {
   return typeof name === 'string' ? name.trim() : ''
 }
 
+// Windows 不允许出现在文件名里的字符（含控制字符，用 Unicode Cc 类别表达）。
+const WINDOWS_INVALID_ENTRY_NAME_CHARACTER_PATTERN = /[<>:"|?*\p{Cc}]/u
+// Windows 设备保留名：CON / PRN / AUX / NUL / COM1-9 / LPT1-9，
+// 带扩展名的 `con.md` 同样不可用，所以后面要允许 `.` 或字符串结束。
+const WINDOWS_RESERVED_ENTRY_NAME_PATTERN = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu
+// Windows 会静默去掉名字结尾的点（输入 `note.` 实际会得到 `note`）。
+// 结尾空格不用单独拦：normalizeFileManagerEntryName 已经做过 trim。
+const TRAILING_DOT_PATTERN = /\.$/u
+
+/**
+ * 名称是否不可用。
+ *
+ * 统一按 Windows 规则校验：应用同时支持 Windows 与 Linux，
+ * Linux 上允许的 `a:b.md`、`con.md` 在 Windows 上无法创建也无法打开，
+ * 放行只会给跨平台文档埋坑。
+ */
 function isInvalidFileManagerEntryName(name) {
   const normalizedName = normalizeFileManagerEntryName(name)
+  if (!normalizedName || normalizedName === '.' || normalizedName === '..') {
+    return true
+  }
+  if (/[\\/]/u.test(normalizedName)) {
+    return true
+  }
 
-  return !normalizedName
-    || normalizedName === '.'
-    || normalizedName === '..'
-    || /[\\/]/u.test(normalizedName)
+  return WINDOWS_INVALID_ENTRY_NAME_CHARACTER_PATTERN.test(normalizedName)
+    || WINDOWS_RESERVED_ENTRY_NAME_PATTERN.test(normalizedName)
+    || TRAILING_DOT_PATTERN.test(normalizedName)
 }
 
 function createInvalidFileManagerEntryNameResult() {
@@ -52,6 +73,22 @@ function createFileManagerEntryAlreadyExistsResult(targetPath) {
     ok: false,
     reason: 'file-manager-entry-already-exists',
     path: targetPath || null,
+  }
+}
+
+/**
+ * 创建失败（非法名、保留名、路径超长、权限不足、磁盘异常等）。
+ *
+ * 必须以结构化结果回流，不能让异常穿过 IPC：
+ * 创建动作由菜单直接触发，renderer 侧没有任何地方 await 这个 Promise，
+ * 异常只会变成 unhandled rejection，界面表现为“点了没反应”。
+ */
+function createFileManagerEntryCreateFailedResult(targetPath, error) {
+  return {
+    ok: false,
+    reason: 'file-manager-entry-create-failed',
+    path: targetPath || null,
+    code: typeof error?.code === 'string' ? error.code : null,
   }
 }
 
@@ -545,7 +582,7 @@ export function createDocumentFileManagerService({
       if (error?.code === 'EEXIST') {
         return createFileManagerEntryAlreadyExistsResult(nextPath)
       }
-      throw error
+      return createFileManagerEntryCreateFailedResult(nextPath, error)
     }
 
     return await getDirectoryState({ windowId })
@@ -584,7 +621,7 @@ export function createDocumentFileManagerService({
       if (error?.code === 'EEXIST') {
         return createFileManagerEntryAlreadyExistsResult(nextPath)
       }
-      throw error
+      return createFileManagerEntryCreateFailedResult(nextPath, error)
     }
 
     return {

@@ -1097,9 +1097,13 @@ function pruneClosedDocumentTabCaches() {
     // 标签关闭：销毁它自己的 EditorView，并释放容器引用
     destroyEditorView(closedTab.sessionId)
     editorContainers.delete(closedTab.sessionId)
-    // 滚动锚点按文档身份索引；没有正式路径时用 session 前缀兜底，与恢复侧保持一致。
-    const documentKey = closedTab.displayPath || `session:${closedTab.sessionId}`
-    clearSessionAnchorRecords(viewScrollAnchorStore, documentKey)
+    // 滚动锚点按文档身份索引：必须走与采集侧同一个 key 生成函数，
+    // 不能在这里手拼 `displayPath || session:<id>`——
+    // 否则两边取值规则一旦分叉，桶就删不掉，内存泄漏。
+    clearSessionAnchorRecords(
+      viewScrollAnchorStore,
+      resolveDocumentScrollAnchorIdentity(closedTab).documentKey,
+    )
   }
 
   lastKnownDocumentTabList = tabList.map(tab => ({

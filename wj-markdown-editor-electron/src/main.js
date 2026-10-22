@@ -3,10 +3,9 @@ import configUtil from './data/configUtil.js'
 import recent from './data/recent.js'
 import tabGroup from './data/tabGroup.js'
 import { applyWindowsAppIdentity } from './util/appIdentityUtil.js'
-import { handleSecondInstanceOpenRequest, handleStartupOpenRequest, resolveSecondInstanceOpenTarget } from './util/appOpenRequestUtil.js'
+import { handleSecondInstanceOpenRequest, handleStartupOpenRequest, resolveOpenTargetFromArgs, resolveSecondInstanceOpenTarget } from './util/appOpenRequestUtil.js'
 import sendUtil from './util/channel/sendUtil.js'
 import { createDocumentOpenFailureNotificationPublisher } from './util/document-session/documentOpenFailureNotificationUtil.js'
-import { isMarkdownFilePath } from './util/document-session/documentOpenTargetUtil.js'
 import { initializeDocumentSessionRuntime } from './util/document-session/documentSessionRuntime.js'
 import { createDocumentSessionRuntimeComposition } from './util/document-session/documentSessionRuntimeComposition.js'
 import windowLifecycleService from './util/document-session/windowLifecycleService.js'
@@ -59,17 +58,14 @@ try {
 }
 
 /**
- * 是否通过文件打开
- */
-function isOpenOnFile() {
-  return Boolean(process.argv && process.argv.length > 0 && isMarkdownFilePath(process.argv[process.argv.length - 1]))
-}
-
-/**
- * 如果通过打开 获取文件路径
+ * 启动参数里的 Markdown 打开目标。
+ *
+ * Linux 上 electron-builder 生成的 .desktop 用 `%U` 传参，文件管理器双击 Markdown 时
+ * 拿到的是 `file:///home/u/a.md` 这样的 URI。必须在进入路径解析前就转成本地路径，
+ * 否则会被当成相对路径拼到 cwd 后面，表现为“应用起来了但只开了一个空白草稿”。
  */
 function getOpenOnFilePath() {
-  return isOpenOnFile() ? process.argv[process.argv.length - 1] : null
+  return resolveOpenTargetFromArgs(process.argv)
 }
 
 let documentSessionRuntime = null

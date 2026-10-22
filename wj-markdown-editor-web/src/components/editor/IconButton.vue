@@ -61,7 +61,13 @@ function resolveMenuAction(menuInfo) {
 function handleMenuClick(menuInfo) {
   const action = resolveMenuAction(menuInfo)
   if (typeof action === 'function') {
-    action()
+    // 动作可能返回 Promise（新建文件/文件夹要走 IPC）。
+    // 失败提示由动作自己负责，这里只兜住漏网的拒绝，
+    // 避免变成 unhandled rejection 而让界面看起来“点了没反应”。
+    const actionResult = action()
+    if (actionResult && typeof actionResult.catch === 'function') {
+      actionResult.catch(() => {})
+    }
   }
 }
 </script>

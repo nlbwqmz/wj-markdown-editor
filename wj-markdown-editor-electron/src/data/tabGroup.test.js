@@ -47,6 +47,21 @@ vi.mock('fs-extra', () => {
   }
 })
 
+/**
+ * 临时切换 `process.platform`，用于验证两套路径比较语义。
+ * `process.platform` 是可配置的自有属性，可以在用例结束后还原。
+ */
+async function withPlatform(platform, run) {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+  try {
+    return await run()
+  }
+  finally {
+    Object.defineProperty(process, 'platform', descriptor)
+  }
+}
+
 describe('tabGroup 数据存储', () => {
   let consoleErrorSpy
 
@@ -86,6 +101,48 @@ describe('tabGroup 数据存储', () => {
     expect(tabGroup.get()).toEqual({
       tabs: ['D:/docs/a.md', 'D:/docs/b.md'],
       activeIndex: 1,
+    })
+  })
+
+  it('pOSIX 平台不能把仅大小写不同的两个标签当成同一路径', async () => {
+    const tabGroup = (await import('./tabGroup.js')).default
+
+    const saved = await withPlatform('linux', () => tabGroup.save({
+      tabs: ['/home/user/README.md', '/home/user/readme.md'],
+      activeIndex: 1,
+    }))
+
+    expect(saved).toEqual({
+      tabs: ['/home/user/README.md', '/home/user/readme.md'],
+      activeIndex: 1,
+    })
+  })
+
+  it('pOSIX 平台不能把文件名里的反斜杠当成目录分隔符', async () => {
+    const tabGroup = (await import('./tabGroup.js')).default
+
+    const saved = await withPlatform('linux', () => tabGroup.save({
+      tabs: ['/home/user/a\\b.md', '/home/user/a/b.md'],
+      activeIndex: 1,
+    }))
+
+    expect(saved).toEqual({
+      tabs: ['/home/user/a\\b.md', '/home/user/a/b.md'],
+      activeIndex: 1,
+    })
+  })
+
+  it('windows 平台仍要折叠大小写与分隔符差异', async () => {
+    const tabGroup = (await import('./tabGroup.js')).default
+
+    const saved = await withPlatform('win32', () => tabGroup.save({
+      tabs: ['D:/docs/a.md', 'd:\\docs\\A.md'],
+      activeIndex: 1,
+    }))
+
+    expect(saved).toEqual({
+      tabs: ['D:/docs/a.md'],
+      activeIndex: 0,
     })
   })
 

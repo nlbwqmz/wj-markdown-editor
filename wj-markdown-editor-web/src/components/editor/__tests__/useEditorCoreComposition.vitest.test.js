@@ -114,10 +114,10 @@ describe('useEditorCore 组合输入时序', () => {
     const view = editorViewMockState.latestView
     expect(view).toBeTruthy()
 
-    view.domHandlers.compositionstart?.()
+    view.domHandlers.compositionstart?.({}, view)
     view.composing = false
     view.compositionStarted = false
-    view.domHandlers.compositionend?.()
+    view.domHandlers.compositionend?.({}, view)
 
     await Promise.resolve()
 
@@ -143,10 +143,10 @@ describe('useEditorCore 组合输入时序', () => {
     const view = editorViewMockState.latestView
     expect(view).toBeTruthy()
 
-    view.domHandlers.compositionstart?.()
+    view.domHandlers.compositionstart?.({}, view)
     view.composing = false
     view.compositionStarted = true
-    view.domHandlers.compositionend?.()
+    view.domHandlers.compositionend?.({}, view)
 
     await Promise.resolve()
     expect(onCompositionIdle).not.toHaveBeenCalled()
@@ -158,6 +158,76 @@ describe('useEditorCore 组合输入时序', () => {
     })
 
     expect(onCompositionIdle).toHaveBeenCalledTimes(1)
+  })
+
+  it('一个标签的 composition 兜底标记不得阻塞其它标签的正文同步', async () => {
+    const { activateEditorView, initEditor } = useEditorCore({
+      editorRef: {
+        value: {},
+      },
+    })
+
+    const firstDocChange = vi.fn()
+    const secondDocChange = vi.fn()
+
+    const firstView = initEditor({
+      sessionId: 'session-a',
+      doc: 'A',
+      theme: 'light',
+      keymapList: [],
+      onDocChange: firstDocChange,
+    })
+    const secondView = initEditor({
+      sessionId: 'session-b',
+      doc: 'B',
+      theme: 'light',
+      keymapList: [],
+      onDocChange: secondDocChange,
+    })
+
+    // 模拟 Linux 输入法：A 收到 compositionstart，view 被隐藏后却漏投 compositionend
+    firstView.domHandlers.compositionstart({}, firstView)
+
+    activateEditorView('session-b')
+    secondView.updateListener({ docChanged: true, selectionSet: false, view: secondView })
+
+    expect(secondDocChange).toHaveBeenCalledTimes(1)
+    expect(firstDocChange).not.toHaveBeenCalled()
+  })
+
+  it('切走标签时必须清掉旧 view 的兜底标记，切回后正文同步仍能继续', async () => {
+    const { activateEditorView, initEditor } = useEditorCore({
+      editorRef: {
+        value: {},
+      },
+    })
+
+    const firstDocChange = vi.fn()
+
+    const firstView = initEditor({
+      sessionId: 'session-a',
+      doc: 'A',
+      theme: 'light',
+      keymapList: [],
+      onDocChange: firstDocChange,
+    })
+    initEditor({
+      sessionId: 'session-b',
+      doc: 'B',
+      theme: 'light',
+      keymapList: [],
+    })
+
+    activateEditorView('session-a')
+    firstView.domHandlers.compositionstart({}, firstView)
+
+    // 组合输入未结束就切到 B，B 也不会投递 A 的 compositionend
+    activateEditorView('session-b')
+    activateEditorView('session-a')
+
+    firstView.updateListener({ docChanged: true, selectionSet: false, view: firstView })
+
+    expect(firstDocChange).toHaveBeenCalledTimes(1)
   })
 
   it('editorView 实例不得进入 Vue 深代理链，避免破坏 CodeMirror 内部对象身份', async () => {

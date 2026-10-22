@@ -1941,6 +1941,84 @@ describe('fileManagerPanelController', () => {
     scope.stop()
   })
 
+  it.each([
+    'a:b',
+    'a*b',
+    'con',
+    'con.md',
+    'note.',
+  ])('windows 不可用名称 "%s" 必须在前端拦住，不能落到写盘才失败', async (name) => {
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+    const openNameInputModal = vi.fn().mockResolvedValue(name)
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+        openNameInputModal,
+      })
+    })
+
+    await controller.requestCreateMarkdownFromInput()
+
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerInvalidEntryName')
+    expect(fileManagerPanelState.requestFileManagerCreateMarkdown).not.toHaveBeenCalled()
+
+    scope.stop()
+  })
+
+  it('新建请求被拒绝时必须提示创建失败，不能让异常变成未处理拒绝', async () => {
+    fileManagerPanelState.requestFileManagerCreateMarkdown.mockRejectedValueOnce(new Error('EINVAL'))
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+        openNameInputModal: vi.fn().mockResolvedValue('draft-note'),
+      })
+    })
+
+    await expect(controller.requestCreateMarkdownFromInput()).resolves.toBeNull()
+
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerCreateEntryFailed')
+
+    scope.stop()
+  })
+
+  it('主进程回流 file-manager-entry-create-failed 时必须提示，不能静默', async () => {
+    fileManagerPanelState.requestFileManagerCreateMarkdown.mockResolvedValueOnce({
+      ok: false,
+      reason: 'file-manager-entry-create-failed',
+      path: 'D:/docs/draft-note.md',
+      code: 'EINVAL',
+    })
+    const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
+
+    const scope = effectScope()
+    let controller = null
+
+    scope.run(() => {
+      controller = createFileManagerPanelController({
+        store: fileManagerPanelState.store,
+        t: value => `translated:${value}`,
+        openNameInputModal: vi.fn().mockResolvedValue('draft-note'),
+      })
+    })
+
+    await controller.requestCreateMarkdownFromInput()
+
+    expect(fileManagerPanelState.messageWarning).toHaveBeenCalledWith('translated:message.fileManagerCreateEntryFailed')
+
+    scope.stop()
+  })
+
   it('新建文件夹成功后应刷新当前目录列表', async () => {
     const { createFileManagerPanelController } = await import('@/util/file-manager/fileManagerPanelController.js')
     const openNameInputModal = vi.fn().mockResolvedValue('assets')

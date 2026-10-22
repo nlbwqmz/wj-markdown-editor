@@ -30,6 +30,29 @@ const EMPTY_TAB_GROUP = {
 
 let tabGroup = { ...EMPTY_TAB_GROUP }
 
+function isWindowsComparablePath(targetPath) {
+  return /^[a-z]:[\\/]/i.test(targetPath) || targetPath.startsWith('\\\\')
+}
+
+/**
+ * 标签组去重用的路径比较键。
+ *
+ * 只有 Windows（以及 Windows 形状的盘符 / UNC 路径）需要折叠大小写与分隔符：
+ * - NTFS 默认大小写不敏感，`C:/docs/A.md` 与 `c:\docs\a.md` 指向同一文件
+ * - Linux 上 `README.md` 与 `readme.md` 是两个不同文件，`\` 还是合法文件名字符，
+ *   无条件 `toLowerCase()` 或 `\`→`/` 替换都会把不同文档判成同一路径，
+ *   进而在写盘时静默丢掉一个标签
+ *
+ * 这里不复用 `toComparableDocumentPath()`：它的 POSIX 分支同样会执行 `\`→`/`，
+ * 对 Linux 上文件名含反斜杠的文档不安全。
+ */
+function toComparableTabPath(targetPath) {
+  if (isWindowsComparablePath(targetPath) || process.platform === 'win32') {
+    return path.win32.normalize(targetPath.replaceAll('/', '\\')).toLowerCase()
+  }
+  return targetPath
+}
+
 function normalizeTabGroup(rawTabGroup) {
   if (!rawTabGroup || typeof rawTabGroup !== 'object') {
     return { ...EMPTY_TAB_GROUP }
@@ -45,7 +68,7 @@ function normalizeTabGroup(rawTabGroup) {
         return false
       }
       // 同一路径只允许出现一次，避免恢复时出现两个指向同一文件的标签。
-      const comparableKey = item.toLowerCase()
+      const comparableKey = toComparableTabPath(item)
       if (seenPathKey.has(comparableKey)) {
         return false
       }

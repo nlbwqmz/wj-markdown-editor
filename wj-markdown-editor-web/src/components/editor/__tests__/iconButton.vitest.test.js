@@ -132,4 +132,33 @@ describe('iconButton', () => {
 
     expect(menuAction).toHaveBeenCalledTimes(1)
   })
+
+  it('菜单动作返回被拒绝的 Promise 时不能冒出未处理拒绝', async () => {
+    const unhandledRejectionList = []
+    const handleUnhandledRejection = (reason) => {
+      unhandledRejectionList.push(reason)
+    }
+    process.on('unhandledRejection', handleUnhandledRejection)
+
+    try {
+      const menuAction = vi.fn(() => Promise.reject(new Error('create failed')))
+      const wrapper = mountIconButton({
+        menuList: [
+          {
+            key: 'create-markdown',
+            label: '新建 Markdown',
+            action: menuAction,
+          },
+        ],
+      })
+
+      await wrapper.get('[data-testid="menu-item-create-markdown"]').trigger('click')
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(menuAction).toHaveBeenCalledTimes(1)
+      expect(unhandledRejectionList).toEqual([])
+    } finally {
+      process.off('unhandledRejection', handleUnhandledRejection)
+    }
+  })
 })

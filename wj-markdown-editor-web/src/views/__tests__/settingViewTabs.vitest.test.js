@@ -175,3 +175,54 @@ describe('settingView 左侧 tab 结构', () => {
     expect(getSetupBinding(wrapper, 'activeTabKey')).toBe('appearance')
   })
 })
+
+describe('settingView 系统字体枚举', () => {
+  function readSystemFontList(wrapper) {
+    return getSetupBinding(wrapper, 'systemFontList')
+  }
+
+  function stubQueryLocalFonts(queryLocalFonts) {
+    Object.defineProperty(window, 'queryLocalFonts', {
+      configurable: true,
+      value: queryLocalFonts,
+    })
+  }
+
+  it('枚举结果为空时应回落到兜底候选，不能留空下拉', async () => {
+    const wrapper = await mountSettingView()
+    const fontList = readSystemFontList(wrapper)
+
+    expect(fontList.length).toBeGreaterThan(0)
+    expect(fontList.every(item => typeof item.value === 'string' && item.value !== '')).toBe(true)
+  })
+
+  it('枚举被拒绝时应回落到兜底候选', async () => {
+    stubQueryLocalFonts(vi.fn().mockRejectedValue(new Error('local-fonts denied')))
+
+    const wrapper = await mountSettingView()
+
+    expect(readSystemFontList(wrapper).length).toBeGreaterThan(0)
+  })
+
+  it('环境缺少 queryLocalFonts 时不能中断 onMounted，滑块仍应可见', async () => {
+    stubQueryLocalFonts(undefined)
+
+    const wrapper = await mountSettingView()
+
+    expect(readSystemFontList(wrapper).length).toBeGreaterThan(0)
+    expect(getSetupBinding(wrapper, 'tabIndicatorStyle').opacity).toBe('1')
+  })
+
+  it('枚举成功时应优先使用真实字体，同一 family 只保留最短的 fullName', async () => {
+    stubQueryLocalFonts(vi.fn().mockResolvedValue([
+      { family: 'Example Sans', fullName: 'Example Sans Regular' },
+      { family: 'Example Sans', fullName: 'Example Sans' },
+    ]))
+
+    const wrapper = await mountSettingView()
+
+    expect(readSystemFontList(wrapper)).toEqual([
+      { value: 'Example Sans', label: 'Example Sans' },
+    ])
+  })
+})

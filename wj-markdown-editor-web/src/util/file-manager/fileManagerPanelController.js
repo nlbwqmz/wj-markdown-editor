@@ -21,6 +21,16 @@ import {
 const DRAFT_EMPTY_MESSAGE_KEY = 'message.fileManagerSelectDirectory'
 const DIRECTORY_EMPTY_MESSAGE_KEY = 'message.fileManagerDirectoryEmpty'
 const INVALID_ENTRY_NAME_MESSAGE_KEY = 'message.fileManagerInvalidEntryName'
+const CREATE_ENTRY_FAILED_MESSAGE_KEY = 'message.fileManagerCreateEntryFailed'
+
+// Windows 不允许出现在文件名里的字符（含控制字符，用 Unicode Cc 类别表达）。
+const WINDOWS_INVALID_ENTRY_NAME_CHARACTER_PATTERN = /[<>:"|?*\p{Cc}]/u
+// Windows 设备保留名：CON / PRN / AUX / NUL / COM1-9 / LPT1-9，
+// 带扩展名的 `con.md` 同样不可用，所以后面要允许 `.` 或字符串结束。
+const WINDOWS_RESERVED_ENTRY_NAME_PATTERN = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu
+// Windows 会静默去掉名字结尾的点（输入 `note.` 实际会得到 `note`）。
+// 结尾空格不用单独拦：normalizeFileManagerEntryName 已经做过 trim。
+const TRAILING_DOT_PATTERN = /\.$/u
 const FILE_MANAGER_SORT_FIELD_SET = new Set(['name', 'modifiedTime', 'type'])
 const FILE_MANAGER_SORT_DIRECTION_SET = new Set(['asc', 'desc'])
 const DEFAULT_FILE_MANAGER_SORT_CONFIG = Object.freeze({
@@ -131,11 +141,19 @@ function ensureMarkdownFileManagerEntryName(name) {
 
 function isInvalidFileManagerEntryName(name) {
   const normalizedName = normalizeFileManagerEntryName(name)
+  if (!normalizedName || normalizedName === '.' || normalizedName === '..') {
+    return true
+  }
+  if (/[\\/]/u.test(normalizedName)) {
+    return true
+  }
 
-  return !normalizedName
-    || normalizedName === '.'
-    || normalizedName === '..'
-    || /[\\/]/u.test(normalizedName)
+  // 统一按 Windows 规则校验：应用同时支持 Windows 与 Linux，
+  // Linux 上允许的 `a:b.md`、`con.md` 在 Windows 上无法创建也无法打开，
+  // 放行只会给跨平台文档埋坑。
+  return WINDOWS_INVALID_ENTRY_NAME_CHARACTER_PATTERN.test(normalizedName)
+    || WINDOWS_RESERVED_ENTRY_NAME_PATTERN.test(normalizedName)
+    || TRAILING_DOT_PATTERN.test(normalizedName)
 }
 
 function createInvalidFileManagerEntryNameResult() {
@@ -671,6 +689,10 @@ export function createFileManagerPanelController({
       showWarningMessage('message.fileManagerOpenDirectoryFailed')
     } else if (nextState.reason === 'file-manager-entry-already-exists') {
       showWarningMessage('message.fileManagerEntryAlreadyExists')
+    } else if (nextState.reason === 'invalid-file-manager-entry-name') {
+      showWarningMessage(INVALID_ENTRY_NAME_MESSAGE_KEY)
+    } else if (nextState.reason === 'file-manager-entry-create-failed') {
+      showWarningMessage(CREATE_ENTRY_FAILED_MESSAGE_KEY)
     }
 
     return nextState
@@ -829,23 +851,30 @@ export function createFileManagerPanelController({
       return createInvalidFileManagerEntryNameResult()
     }
 
-    return await runLatestDirectoryStateRequest(() => requestCreateFolder({
-      name: nextName,
-    }), (result) => {
-      const failureResult = resolveDirectoryFailureResult(result)
-      if (failureResult) {
-        return failureResult
-      }
+    try {
+      return await runLatestDirectoryStateRequest(() => requestCreateFolder({
+        name: nextName,
+      }), (result) => {
+        const failureResult = resolveDirectoryFailureResult(result)
+        if (failureResult) {
+          return failureResult
+        }
 
-      if (result) {
-        commitDirectoryState(result?.directoryState || result, {
-          emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-          includeModifiedTime: latestDirectoryBindingIncludeModifiedTime,
-        })
-      }
+        if (result) {
+          commitDirectoryState(result?.directoryState || result, {
+            emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+            includeModifiedTime: latestDirectoryBindingIncludeModifiedTime,
+          })
+        }
 
-      return result
-    })
+        return result
+      })
+    } catch {
+      // IPC / 写盘异常必须在这里落地成用户可见提示：
+      // 创建动作由菜单直接触发，没有任何上层会 await 这个 Promise。
+      showWarningMessage(CREATE_ENTRY_FAILED_MESSAGE_KEY)
+      return null
+    }
   }
 
   async function createMarkdown(name) {
@@ -861,28 +890,33 @@ export function createFileManagerPanelController({
     }
     const nextName = ensureMarkdownFileManagerEntryName(rawName)
 
-    return await runLatestDirectoryStateRequest(() => requestCreateMarkdown({
-      name: nextName,
-    }), async (result) => {
-      const failureResult = resolveDirectoryFailureResult(result)
-      if (failureResult) {
-        return failureResult
-      }
+    try {
+      return await runLatestDirectoryStateRequest(() => requestCreateMarkdown({
+        name: nextName,
+      }), async (result) => {
+        const failureResult = resolveDirectoryFailureResult(result)
+        if (failureResult) {
+          return failureResult
+        }
 
-      const nestedFailureResult = resolveDirectoryFailureResult(result?.directoryState)
-      if (nestedFailureResult) {
+        const nestedFailureResult = resolveDirectoryFailureResult(result?.directoryState)
+        if (nestedFailureResult) {
+          return result
+        }
+
+        if (result?.directoryState) {
+          commitDirectoryState(result.directoryState, {
+            emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
+            includeModifiedTime: latestDirectoryBindingIncludeModifiedTime,
+          })
+        }
+
         return result
-      }
-
-      if (result?.directoryState) {
-        commitDirectoryState(result.directoryState, {
-          emptyMessageKey: DIRECTORY_EMPTY_MESSAGE_KEY,
-          includeModifiedTime: latestDirectoryBindingIncludeModifiedTime,
-        })
-      }
-
-      return result
-    })
+      })
+    } catch {
+      showWarningMessage(CREATE_ENTRY_FAILED_MESSAGE_KEY)
+      return null
+    }
   }
 
   async function requestCreateFolderFromInput() {
