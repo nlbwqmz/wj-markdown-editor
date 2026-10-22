@@ -158,6 +158,21 @@ vi.mock('electron', () => {
   }
 })
 
+const fsExistsSync = vi.hoisted(() => vi.fn(() => true))
+
+// document.open-in-folder 的显式路径分支会做存在性检查，
+// 这里只替掉 existsSync，其余 fs 能力保持原样。
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    default: {
+      ...actual.default,
+      existsSync: fsExistsSync,
+    },
+  }
+})
+
 vi.mock('fs-extra', () => {
   return {
     default: {
@@ -557,6 +572,46 @@ describe('ipcMainUtil 文档与资源打开契约', () => {
       opened: false,
       reason: 'document-not-saved',
       path: null,
+    })
+  })
+
+  it('document.open-in-folder 带显式路径时必须按该路径定位，不依赖活动文档', async () => {
+    const { sender, sendToMainHandler } = await setupOpenFolderHandler()
+    // 活动文档是另一个文件：显式路径不能被它覆盖
+    setDocumentContext(1, {
+      path: 'D:\\docs\\other.md',
+      exists: true,
+    })
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.open-in-folder',
+      data: { path: 'D:\\docs\\target.md' },
+    })
+
+    expect(showItemInFolder).toHaveBeenCalledWith('D:\\docs\\target.md')
+    expect(result).toEqual({
+      ok: true,
+      opened: true,
+      reason: 'opened',
+      path: 'D:\\docs\\target.md',
+    })
+  })
+
+  it('document.open-in-folder 带显式路径但文件不存在时必须返回结构化失败，不得静默打开', async () => {
+    const { sender, sendToMainHandler } = await setupOpenFolderHandler()
+    fsExistsSync.mockReturnValueOnce(false)
+
+    const result = await sendToMainHandler({ sender }, {
+      event: 'document.open-in-folder',
+      data: { path: 'D:\\docs\\missing.md' },
+    })
+
+    expect(showItemInFolder).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: false,
+      opened: false,
+      reason: 'not-found',
+      path: 'D:\\docs\\missing.md',
     })
   })
 

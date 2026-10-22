@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import configUtil from '../../data/configUtil.js'
@@ -214,7 +215,31 @@ const handlerList = {
     windowLifecycleService.requestForceClose(windowContext.windowId)
     windowContext.win.close()
   },
-  'document.open-in-folder': async (windowContext) => {
+  'document.open-in-folder': async (windowContext, data) => {
+    // 标签右键菜单会显式给出目标路径：那个标签可能不是活动标签，
+    // 回退到“当前活动文档”会打开错误文件所在的目录。
+    const explicitPath = typeof data?.path === 'string' && data.path.trim() !== ''
+      ? data.path.trim()
+      : null
+
+    if (explicitPath) {
+      if (fs.existsSync(explicitPath) !== true) {
+        return {
+          ok: false,
+          opened: false,
+          reason: 'not-found',
+          path: explicitPath,
+        }
+      }
+      shell.showItemInFolder(explicitPath)
+      return {
+        ok: true,
+        opened: true,
+        reason: 'opened',
+        path: explicitPath,
+      }
+    }
+
     const documentContext = windowLifecycleService.getDocumentContext(windowContext.windowId)
     if (!documentContext.path || !documentContext.exists) {
       return {

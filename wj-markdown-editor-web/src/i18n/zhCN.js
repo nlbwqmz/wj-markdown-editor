@@ -54,8 +54,10 @@ export default {
   documentTab: {
     close: '关闭',
     closeOthers: '关闭其它',
+    closeToLeft: '关闭左侧',
     closeToRight: '关闭右侧',
     copyPath: '复制路径',
+    revealInExplorer: '在资源管理器中显示',
   },
   previewAssetMenu: {
     copyAbsolutePath: '复制绝对路径',
@@ -97,7 +99,7 @@ export default {
     exitFullScreen: '退出全屏',
     switchTheme: '切换主题',
     languageAuto: '自动',
-    openInExplorer: '在资源管理器中打开',
+    openInExplorer: '在资源管理器中显示',
     pinTop: '置顶',
     newVersion: '新版本',
     cancelPinTop: '取消置顶',
@@ -416,6 +418,7 @@ export default {
     noCopyableContent: '没有可复制的内容',
     copySucceeded: '复制成功',
     copyFailed: '复制失败',
+    fileNotFound: '文件不存在',
     previewAssetSourceTypeMismatch: '当前资源类型已变化，请重新打开菜单后再试。',
     previewAssetCopyImageTargetUnavailable: '当前图片位置已变化，请重新右键后再试。',
     previewAssetInvalidCopyImageTarget: '当前复制目标无效，请重新打开菜单后再试。',

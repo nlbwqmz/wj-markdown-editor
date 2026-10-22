@@ -1,4 +1,5 @@
 <script setup>
+import { message } from 'ant-design-vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
@@ -6,9 +7,11 @@ import {
   requestDocumentActivateTab,
   requestDocumentCloseTab,
   requestDocumentCloseTabs,
+  requestDocumentRevealInFolder,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import { bindHorizontalWheelScroll } from '@/util/horizontalWheelScrollUtil.js'
 import { resolveTabScrollLeftToReveal } from '@/util/overlayScrollbarMathUtil.js'
+import { copyTextWithFeedback } from '@/util/previewInlineCodeCopyUtil.js'
 import { useOverlayScrollbar } from '@/util/useOverlayScrollbar.js'
 
 /**
@@ -226,32 +229,101 @@ function closeTabsToRight(tab) {
   closeTabList(tabs.value.slice(targetIndex + 1))
 }
 
+function closeTabsToLeft(tab) {
+  const targetIndex = tabs.value.findIndex(item => item.sessionId === tab.sessionId)
+  if (targetIndex < 0) {
+    return
+  }
+  closeTabList(tabs.value.slice(0, targetIndex))
+}
+
 function copyTabPath(tab) {
   const targetPath = tab?.displayPath || ''
   if (!targetPath) {
     return
   }
-  navigator.clipboard?.writeText?.(targetPath).catch(() => {})
+  copyTextWithFeedback({
+    text: targetPath,
+    writeText: async text => await navigator.clipboard.writeText(text),
+    onEmpty() {
+      message.warning(t('message.noCopyableContent'))
+    },
+    onSuccess() {
+      message.success(t('message.copySucceeded'))
+    },
+    onError() {
+      message.error(t('message.copyFailed'))
+    },
+  })
+}
+
+function revealTabInExplorer(tab) {
+  const targetPath = tab?.displayPath || ''
+  if (!targetPath) {
+    return
+  }
+  requestDocumentRevealInFolder(targetPath)
+    .then((result) => {
+      if (result?.ok === true) {
+        return
+      }
+      if (result?.reason === 'not-found') {
+        message.warning(t('message.fileNotFound'))
+      }
+    })
+    .catch(() => {})
 }
 
 function getMenuItems(tab) {
+  const hasPath = Boolean(tab?.displayPath)
+  const tabIndex = tabs.value.findIndex(item => item.sessionId === tab?.sessionId)
+
+  // 批量关闭只会跳过脏标签（脏标签要逐个确认，不能批量弹窗），
+  // 所以禁用态看的是“位置上还有没有可批量关闭的干净标签”：
+  // 右侧只剩脏标签时，关闭右侧其实什么也不会发生，菜单必须置灰。
+  const isBatchClosable = item => Boolean(item?.sessionId) && item.dirty !== true
+  const leftTabs = tabIndex > 0 ? tabs.value.slice(0, tabIndex) : []
+  const rightTabs = tabIndex >= 0 ? tabs.value.slice(tabIndex + 1) : []
+  const otherTabs = tabs.value.filter(item => item.sessionId !== tab?.sessionId)
+
+  const hasClosableOthers = otherTabs.some(isBatchClosable)
+  const hasClosableLeft = leftTabs.some(isBatchClosable)
+  const hasClosableRight = rightTabs.some(isBatchClosable)
+
   return [
     {
       key: 'close',
       label: t('documentTab.close'),
     },
+    // 关闭类动作一组：它们都只影响标签存在性
     {
       key: 'close-others',
       label: t('documentTab.closeOthers'),
+      disabled: !hasClosableOthers,
+    },
+    {
+      key: 'close-left',
+      label: t('documentTab.closeToLeft'),
+      disabled: !hasClosableLeft,
     },
     {
       key: 'close-right',
       label: t('documentTab.closeToRight'),
+      disabled: !hasClosableRight,
+    },
+    // 分隔线把“关闭”与“文件操作”分开
+    {
+      type: 'divider',
     },
     {
       key: 'copy-path',
       label: t('documentTab.copyPath'),
-      disabled: !tab?.displayPath,
+      disabled: !hasPath,
+    },
+    {
+      key: 'reveal-in-explorer',
+      label: t('documentTab.revealInExplorer'),
+      disabled: !hasPath,
     },
   ]
 }
@@ -265,12 +337,20 @@ function onMenuClick({ key }, tab) {
     closeOtherTabs(tab)
     return
   }
+  if (key === 'close-left') {
+    closeTabsToLeft(tab)
+    return
+  }
   if (key === 'close-right') {
     closeTabsToRight(tab)
     return
   }
   if (key === 'copy-path') {
     copyTabPath(tab)
+    return
+  }
+  if (key === 'reveal-in-explorer') {
+    revealTabInExplorer(tab)
   }
 }
 </script>

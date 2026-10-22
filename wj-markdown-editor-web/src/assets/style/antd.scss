@@ -120,6 +120,28 @@
     background-color: var(--wj-markdown-bg-secondary);
   }
 
+  // 下拉菜单禁用项：
+  // 上面的“下拉菜单文字颜色”规则优先级高于 ant-design-vue 自带的
+  // .ant-dropdown-menu-item-disabled，会把禁用项刷成正常文字色，
+  // 不补这条的话暗色模式下禁用项和可用项看起来一模一样。
+  .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item-disabled,
+  .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-item-disabled,
+  .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-submenu-title-disabled,
+  .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-submenu-title-disabled {
+    // 用 opacity 而不是换色值：自动叠加在已有文字色上，无需为明暗各维护一份颜色
+    color: var(--wj-markdown-text-primary) !important;
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  // 禁用项不该有 hover 反馈
+  .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item-disabled:hover,
+  .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-item-disabled:hover,
+  .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-submenu-title-disabled:hover,
+  .ant-dropdown-menu-submenu .ant-dropdown-menu .ant-dropdown-menu-submenu-title-disabled:hover {
+    background-color: transparent !important;
+  }
+
   // 单选框组
   .ant-radio-button-wrapper {
     transition: none !important;

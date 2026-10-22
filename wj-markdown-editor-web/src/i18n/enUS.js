@@ -54,8 +54,10 @@ export default {
   documentTab: {
     close: 'Close',
     closeOthers: 'Close others',
+    closeToLeft: 'Close to the left',
     closeToRight: 'Close to the right',
     copyPath: 'Copy path',
+    revealInExplorer: 'Show in explorer',
   },
   previewAssetMenu: {
     copyAbsolutePath: 'Copy absolute path',
@@ -97,7 +99,7 @@ export default {
     exitFullScreen: 'Exit full screen',
     switchTheme: 'Switch theme',
     languageAuto: 'Auto',
-    openInExplorer: 'Open in explorer',
+    openInExplorer: 'Show in explorer',
     pinTop: 'Pin to top',
     newVersion: 'New version',
     cancelPinTop: 'Cancel pin to top',
@@ -416,6 +418,7 @@ export default {
     noCopyableContent: 'There is no content to copy.',
     copySucceeded: 'Copied successfully.',
     copyFailed: 'Copy failed.',
+    fileNotFound: 'The file does not exist.',
     previewAssetSourceTypeMismatch: 'The resource type has changed. Reopen the menu and try again.',
     previewAssetCopyImageTargetUnavailable: 'The image position has changed. Reopen the context menu and try again.',
     previewAssetInvalidCopyImageTarget: 'The copy target is invalid. Reopen the context menu and try again.',

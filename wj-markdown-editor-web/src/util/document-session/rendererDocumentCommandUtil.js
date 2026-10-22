@@ -234,6 +234,21 @@ export function requestDocumentCloseTabs(sessionIds) {
 }
 
 /**
+ * 请求主进程在系统资源管理器中定位某个本地文件。
+ *
+ * 标签右键菜单必须显式给出路径：目标标签可能不是活动标签，
+ * 不能依赖“当前活动文档”这条隐含语义。
+ */
+export function requestDocumentRevealInFolder(targetPath) {
+  return channelUtil.send({
+    event: 'document.open-in-folder',
+    data: {
+      path: targetPath,
+    },
+  })
+}
+
+/**
  * 请求主进程重排标签顺序。
  *
  * 顺序本身会被持久化，所以必须由主进程收口，不能在渲染层只改一份本地副本。
