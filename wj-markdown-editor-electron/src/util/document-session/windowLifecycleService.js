@@ -286,6 +286,14 @@ function buildRuntimeHostDeps() {
           }
           return dispatch(command, payload)
 
+        case 'document.reorder-tabs':
+          // 标签顺序本身是持久化对象，重排后必须同步 tab-group.json，
+          // 否则重启恢复会回到旧顺序。
+          return dispatch(command, payload).then(async (result) => {
+            await persistCurrentTabGroup(windowId)
+            return result
+          })
+
         default:
           return dispatch(command, payload)
       }

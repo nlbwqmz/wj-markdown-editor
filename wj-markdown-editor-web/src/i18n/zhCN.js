@@ -64,6 +64,7 @@ export default {
     copyFileName: '复制文件名',
     copyPath: '复制路径',
     revealInExplorer: '在资源管理器中显示',
+    reorderFailed: '调整标签顺序失败',
   },
   previewAssetMenu: {
     copyAbsolutePath: '复制绝对路径',

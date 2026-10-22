@@ -123,6 +123,8 @@ wj-markdown-editor/
 - **会话持有**：`documentSessionStore` 用 `sessionMap`（全局会话注册表）、`windowTabMap`（窗口→有序标签列表 + 活动会话指针）、`sessionWindowMap`（会话→窗口反查）三张表描述。`getSessionByWindowId` 保持“取活动会话”语义，既有按窗口取文档的链路不需要改写。
 - **快照**：`documentWindowSnapshotUtil.deriveWindowDocumentSnapshot` 是唯一入口，产出“活动会话完整快照 + `tabs[]` + `activeSessionId`”。命令层、窗口桥、同步查询必须共用它，否则 `if-changed` 判断会永远认为快照变了。
 - **标签命令**：`document.activate-tab`、`document.close-tab`、`document.reorder-tabs`。`document.open-path-in-current-window` 已改为“新增标签并激活”，不再替换并销毁上一个会话。
+- **拖拽重排**：`document.reorder-tabs` 由 `DocumentTabBar` 的拖拽交互触发，实现分两层：`documentTabDragUtil.js` 负责落点/让位/自动滚动等纯计算，`useDocumentTabDrag.js` 负责指针事件、跟手浮层与让位位移。拖拽过程零 IPC，只在松手且顺序真的变化时发一次命令；顺序没变时 `resolveReorderSessionIds` 返回 `null`，既不广播快照也不把这次 click 当成激活。重排后主进程必须调用 `persistCurrentTabGroup` 同步 `tab-group.json`，否则重启会回到旧顺序。
+- **落点判定用滞回**：`resolveDragTargetIndex` 用“虚拟中线 + 滞回宽度”判定插入位置，避免指针停在中线附近时让位动画反复反向；跨多格的快速拖动不受滞回影响。
 - **外部监听按会话隔离**：`windowLifecycleService` 的 `externalWatchMap` / `externalWatchBridgeMap` 以 `sessionId` 为键；监听事件回流时带 `sessionId`，保证后台标签的外部变更不会打到活动标签上。命令层 `dispatch` 因此支持可选 `sessionId`。
 - **关闭作用域**：`closeRuntime.intent` 取 `close`（关窗口）或 `close-tab`（关单个标签），快照里暴露为 `closePrompt.scope`，并用 `closePrompt.unsavedTabCount` 做“笼统提示”。
 - **编辑器状态**：`MarkdownEdit` 按会话保存 `EditorState`（正文 + 选区 + undo 历史），切标签时换入换出；滚动位置仍走按文档路径索引的锚点缓存，缓存生命周期跟随标签（关标签即删桶，不设数量上限）。
@@ -315,6 +317,10 @@ npm run test:run
 
 - `wj-markdown-editor-web/src/util/document-session/documentSessionEventUtil.js`
   - 统一事件名与命令名常量
+- `wj-markdown-editor-web/src/util/document-session/documentTabDragUtil.js`
+  - 标签拖拽的纯计算：落点（含滞回）、让位位移、自动滚动速度、重排结果
+- `wj-markdown-editor-web/src/util/useDocumentTabDrag.js`
+  - 标签拖拽交互：指针事件、跟手浮层、让位动画、提交与回弹收尾
 - `wj-markdown-editor-web/src/util/document-session/rendererDocumentCommandUtil.js`
   - Renderer 对 runtime 命令的调用封装
 - `wj-markdown-editor-web/src/util/document-session/rendererSessionSnapshotController.js`

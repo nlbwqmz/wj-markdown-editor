@@ -5,9 +5,11 @@ import { nextTick, reactive } from 'vue'
 
 import { requestCurrentWindowOpenPreparation } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
+  requestDocumentActivateTab,
   requestDocumentCloseTab,
   requestDocumentCloseTabs,
   requestDocumentMoveTabToNewWindow,
+  requestDocumentReorderTabs,
   requestDocumentRevealInFolder,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import DocumentTabBar from '../DocumentTabBar.vue'
@@ -39,6 +41,7 @@ vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
   requestDocumentCloseTab: vi.fn(() => Promise.resolve()),
   requestDocumentCloseTabs: vi.fn(() => Promise.resolve()),
   requestDocumentMoveTabToNewWindow: vi.fn(() => Promise.resolve('window-new')),
+  requestDocumentReorderTabs: vi.fn(() => Promise.resolve()),
   requestDocumentRevealInFolder: vi.fn(() => Promise.resolve({ ok: true })),
 }))
 
@@ -90,9 +93,13 @@ beforeEach(() => {
  *
  * 但 overlay 插槽必须一起渲染：ant-design-vue 的 Dropdown 只从 overlay 插槽取菜单内容，
  * 丢掉插槽的桩会让「右键菜单根本没挂上」这类缺陷完全不可见。
+ *
+ * 拖拽重排依赖挂在 `window` 上的指针监听，所以相关用例必须传 `attachTo`，
+ * 否则组件脱离文档，事件不会传播到 window。
  */
-function mountTabBar() {
+function mountTabBar({ attachTo = document.body } = {}) {
   return mount(DocumentTabBar, {
+    attachTo,
     global: {
       stubs: {
         ADropdown: { template: '<div class="dropdown-stub"><slot /><slot name="overlay" /></div>' },
@@ -124,12 +131,21 @@ function mountTabBar() {
  * jsdom 不做布局也不保证提供 PointerEvent，所以用普通 Event 补字段，
  * 只保留被测试代码真正读取的那几个。
  */
-function createPointerEvent(type, { clientX = 0, pointerId = 1, button = 0 } = {}) {
+function createPointerEvent(type, {
+  clientX = 0,
+  clientY = 0,
+  pointerId = 1,
+  button = 0,
+  pointerType = 'mouse',
+} = {}) {
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperties(event, {
     clientX: { value: clientX },
+    clientY: { value: clientY },
     pointerId: { value: pointerId },
     button: { value: button },
+    pointerType: { value: pointerType },
+    isPrimary: { value: true },
   })
   return event
 }
@@ -614,6 +630,221 @@ describe('documentTabBar 右键菜单', () => {
     // session-2 是脏标签必须排除，其余三个一次交出
     expect(requestDocumentCloseTabs).toHaveBeenCalledTimes(1)
     expect(requestDocumentCloseTabs).toHaveBeenCalledWith(['session-3', 'session-4'])
+
+    wrapper.unmount()
+  })
+})
+
+describe('documentTabBar 拖拽重排', () => {
+  /**
+   * 把标签与滚动容器固定在一条水平线上。
+   *
+   * jsdom 不做布局，`getBoundingClientRect` 恒返回 0，
+   * 不显式给尺寸的话拖拽永远算不出落点。
+   */
+  function applyDragLayout(wrapper, { tabLeftList, tabWidth = 100, viewWidth = 400 }) {
+    const scroller = wrapper.get('[data-testid="document-tab-scroller"]').element
+    Object.defineProperty(scroller, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: viewWidth,
+        bottom: 32,
+        width: viewWidth,
+        height: 32,
+      }),
+    })
+    Object.defineProperty(scroller, 'clientLeft', { configurable: true, value: 0 })
+    Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: viewWidth })
+    Object.defineProperty(scroller, 'scrollWidth', { configurable: true, value: viewWidth * 2 })
+    scroller.scrollLeft = 0
+
+    const tabElements = defaultTabs.map((tab, index) => {
+      const element = wrapper.get(`[data-testid="document-tab-${tab.sessionId}"]`).element
+      Object.defineProperty(element, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({
+          left: tabLeftList[index],
+          top: 4,
+          right: tabLeftList[index] + tabWidth,
+          bottom: 28,
+          width: tabWidth,
+          height: 24,
+        }),
+      })
+      return element
+    })
+
+    return { scroller, tabElements }
+  }
+
+  /** 等一帧，让拖拽的 rAF 重算真正执行。 */
+  function waitForFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()))
+  }
+
+  async function dragTab(wrapper, { fromIndex, fromX, toX }) {
+    const { tabElements } = applyDragLayout(wrapper, { tabLeftList: [0, 109] })
+    await nextTick()
+
+    const element = tabElements[fromIndex]
+    element.dispatchEvent(createPointerEvent('pointerdown', { clientX: fromX, clientY: 16 }))
+    // 第一次移动只用来越过阈值，此时才真正开始拖拽
+    element.dispatchEvent(createPointerEvent('pointermove', { clientX: fromX + 6, clientY: 16 }))
+    element.dispatchEvent(createPointerEvent('pointermove', { clientX: toX, clientY: 16 }))
+    await waitForFrame()
+
+    return { element, tabElements }
+  }
+
+  it('拖到右侧后松手必须发一次重排命令', async () => {
+    const wrapper = mountTabBar()
+    const tabBar = wrapper.get('[data-testid="document-tab-bar"]')
+    const { element } = await dragTab(wrapper, { fromIndex: 0, fromX: 50, toX: 200 })
+
+    // 先确认拖拽真的启动了，否则后面的断言会掩盖“根本没进入拖拽”的问题
+    expect(tabBar.classes()).toContain('is-dragging')
+
+    element.dispatchEvent(createPointerEvent('pointerup', { clientX: 200, clientY: 16 }))
+    await flushPromises()
+
+    expect(requestDocumentReorderTabs).toHaveBeenCalledTimes(1)
+    expect(requestDocumentReorderTabs).toHaveBeenCalledWith(['session-2', 'session-1'])
+
+    wrapper.unmount()
+  })
+
+  it('拖拽落回原位时不得发命令', async () => {
+    const wrapper = mountTabBar()
+    // 越过阈值但没越过第二个标签的中线（中心 159）
+    const { element } = await dragTab(wrapper, { fromIndex: 0, fromX: 50, toX: 90 })
+
+    element.dispatchEvent(createPointerEvent('pointerup', { clientX: 90, clientY: 16 }))
+    await flushPromises()
+
+    // 顺序没变就不该产生任何广播，否则整个标签栏会白重渲染一次
+    expect(requestDocumentReorderTabs).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('拖拽结束后那一次 click 必须被吞掉，不得激活标签', async () => {
+    const wrapper = mountTabBar()
+    const { element } = await dragTab(wrapper, { fromIndex: 0, fromX: 50, toX: 90 })
+
+    element.dispatchEvent(createPointerEvent('pointerup', { clientX: 90, clientY: 16 }))
+    // 浏览器会在 pointerup 后派发 click，这里补上
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await flushPromises()
+
+    expect(requestDocumentActivateTab).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('未超过阈值的按下仍然是一次普通点击', async () => {
+    const wrapper = mountTabBar()
+    const { tabElements } = applyDragLayout(wrapper, { tabLeftList: [0, 109] })
+    await nextTick()
+
+    const element = tabElements[1]
+    element.dispatchEvent(createPointerEvent('pointerdown', { clientX: 150, clientY: 16 }))
+    // 只移动 2px，属于手抖，不应该被当成拖拽
+    element.dispatchEvent(createPointerEvent('pointermove', { clientX: 152, clientY: 16 }))
+    element.dispatchEvent(createPointerEvent('pointerup', { clientX: 152, clientY: 16 }))
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await flushPromises()
+
+    expect(requestDocumentActivateTab).toHaveBeenCalledWith('session-2')
+    expect(requestDocumentReorderTabs).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('提交后必须等快照确认新顺序才解除拖拽态', async () => {
+    const wrapper = mountTabBar()
+    const tabBar = wrapper.get('[data-testid="document-tab-bar"]')
+    const { element } = await dragTab(wrapper, { fromIndex: 0, fromX: 50, toX: 200 })
+
+    element.dispatchEvent(createPointerEvent('pointerup', { clientX: 200, clientY: 16 }))
+    await flushPromises()
+
+    // 命令已经发出，但快照还没回来：
+    // 此时清掉拖拽态会让标签先弹回旧顺序、再跳到新顺序，必须有闪回
+    expect(requestDocumentReorderTabs).toHaveBeenCalledTimes(1)
+    expect(tabBar.classes()).toContain('is-dragging')
+
+    store.documentSessionSnapshot.tabs = [
+      { ...defaultTabs[1] },
+      { ...defaultTabs[0] },
+    ]
+    await nextTick()
+    await nextTick()
+
+    expect(tabBar.classes()).not.toContain('is-dragging')
+
+    wrapper.unmount()
+  })
+
+  it('拖拽中按右键不得打断拖拽，也不得关闭标签', async () => {
+    const wrapper = mountTabBar()
+    const tabBar = wrapper.get('[data-testid="document-tab-bar"]')
+    const { element } = await dragTab(wrapper, { fromIndex: 0, fromX: 50, toX: 90 })
+
+    // 右键完整一轮：按下 → 菜单 → 松开 → auxclick
+    element.dispatchEvent(createPointerEvent('pointerdown', { clientX: 90, clientY: 16, button: 2 }))
+    const contextMenuEvent = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 })
+    element.dispatchEvent(contextMenuEvent)
+    element.dispatchEvent(createPointerEvent('pointerup', { clientX: 90, clientY: 16, button: 2 }))
+    element.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 2 }))
+    await flushPromises()
+
+    // 菜单被拦掉、标签没被关、拖拽还在进行
+    expect(contextMenuEvent.defaultPrevented).toBe(true)
+    expect(requestDocumentCloseTab).not.toHaveBeenCalled()
+    expect(tabBar.classes()).toContain('is-dragging')
+
+    // 左键松开后仍然正常收尾
+    element.dispatchEvent(createPointerEvent('pointerup', { clientX: 90, clientY: 16 }))
+    await flushPromises()
+    expect(tabBar.classes()).not.toContain('is-dragging')
+
+    wrapper.unmount()
+  })
+
+  it('中键点击标签不做任何事，既不能关闭也不能拖拽', async () => {
+    const wrapper = mountTabBar()
+    const tabBar = wrapper.get('[data-testid="document-tab-bar"]')
+    const element = wrapper.get('[data-testid="document-tab-session-2"]').element
+
+    element.dispatchEvent(createPointerEvent('pointerdown', { clientX: 150, clientY: 16, button: 1 }))
+    element.dispatchEvent(createPointerEvent('pointermove', { clientX: 250, clientY: 16, button: 1 }))
+    element.dispatchEvent(createPointerEvent('pointerup', { clientX: 250, clientY: 16, button: 1 }))
+    element.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }))
+    await flushPromises()
+
+    // 标签栏不支持中键关闭，也不支持用中键拖拽
+    expect(requestDocumentCloseTab).not.toHaveBeenCalled()
+    expect(requestDocumentReorderTabs).not.toHaveBeenCalled()
+    expect(tabBar.classes()).not.toContain('is-dragging')
+
+    wrapper.unmount()
+  })
+
+  it('按下关闭按钮不得进入拖拽候选', async () => {
+    const wrapper = mountTabBar()
+    const { tabElements } = applyDragLayout(wrapper, { tabLeftList: [0, 109] })
+    await nextTick()
+
+    const closeButton = tabElements[0].querySelector('[data-testid="document-tab-close"]')
+    closeButton.dispatchEvent(createPointerEvent('pointerdown', { clientX: 10, clientY: 16 }))
+    closeButton.dispatchEvent(createPointerEvent('pointermove', { clientX: 200, clientY: 16 }))
+    closeButton.dispatchEvent(createPointerEvent('pointerup', { clientX: 200, clientY: 16 }))
+    await flushPromises()
+
+    // 关闭按钮有自己的点击语义，按住它拖不应该变成重排
+    expect(requestDocumentReorderTabs).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

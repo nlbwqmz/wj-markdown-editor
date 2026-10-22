@@ -9,11 +9,13 @@ import {
   requestDocumentCloseTab,
   requestDocumentCloseTabs,
   requestDocumentMoveTabToNewWindow,
+  requestDocumentReorderTabs,
   requestDocumentRevealInFolder,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import { bindHorizontalWheelScroll } from '@/util/horizontalWheelScrollUtil.js'
 import { resolveTabScrollLeftToReveal } from '@/util/overlayScrollbarMathUtil.js'
 import { copyTextWithFeedback } from '@/util/previewInlineCodeCopyUtil.js'
+import { useDocumentTabDrag } from '@/util/useDocumentTabDrag.js'
 import { useOverlayScrollbar } from '@/util/useOverlayScrollbar.js'
 
 /**
@@ -51,6 +53,11 @@ import { useOverlayScrollbar } from '@/util/useOverlayScrollbar.js'
  * - 例外：用户自己在标签栏里点的标签不补位移，因为他对位置本来就是知情的
  * - 首次（启动恢复标签组）无动画，之后平滑滚动
  *
+ * 拖拽重排：
+ * - 交互全部在 `useDocumentTabDrag` 里，这里只负责把目标顺序交给主进程
+ * - 拖拽过程不发任何 IPC，松手且顺序真的变了才发一次 `document.reorder-tabs`
+ * - 标签顺序仍然是主进程返回的数组顺序，渲染层不自己排序
+ *
  * 状态规则：
  * - 脏点只要有就一直显示，没有任何 hover 规则去隐藏它
  * - 关闭按钮只在 hover 时显示；槽位恒定，显隐不产生任何位移
@@ -85,6 +92,25 @@ const {
   onThumbPointerDown: handleThumbPointerDown,
 } = useOverlayScrollbar({ scrollerRef, thumbRef })
 
+/**
+ * 拖拽重排。
+ *
+ * `onCommit` 是唯一发 IPC 的地方：拖拽过程完全在渲染层完成，
+ * 主进程只负责裁决顺序并广播新快照。
+ * 顺序没变时 `useDocumentTabDrag` 不会调用它。
+ */
+const {
+  isDragging,
+  handlePointerDown: handleTabPointerDownRaw,
+  shouldSuppressClick,
+  notifyTabsChanged,
+} = useDocumentTabDrag({
+  scrollerRef,
+  getSessionIds: () => tabs.value.map(tab => tab.sessionId),
+  onCommit: nextSessionIds => requestDocumentReorderTabs(nextSessionIds),
+  onError: () => message.error(t('documentTab.reorderFailed')),
+})
+
 // 垂直滚轮转横向滚动：绑在真实滚动容器上，overlay 滑块不改变任何滚动语义。
 // 滚动容器可能晚于挂载才出现，所以监听 ref 而不是在 onMounted 里绑一次。
 watch(scrollerRef, (element, _previousElement, onCleanup) => {
@@ -95,7 +121,12 @@ watch(scrollerRef, (element, _previousElement, onCleanup) => {
 })
 
 // 标签增删会改变 scrollWidth，而 ResizeObserver 只观察 border-box、感知不到，需要显式重测。
-watch(tabs, () => refreshOverlayScrollbar(), { flush: 'post' })
+// 同时把最新顺序告诉拖拽层：提交后靠它确认“主进程已经换成目标顺序”，
+// 拖拽中被外部改动则直接取消，避免渲染层和主进程各执一份顺序。
+watch(tabs, (nextTabs) => {
+  refreshOverlayScrollbar()
+  notifyTabsChanged((nextTabs || []).map(tab => tab.sessionId))
+}, { flush: 'post' })
 
 /**
  * 把活动标签完整滚进可视区。
@@ -181,6 +212,26 @@ function getTabClassList(tab) {
     'color-text-secondary': !active && tab?.dirty !== true,
     'hover:bg-bg-hover': !active,
   }
+}
+
+function handleTabPointerDown(tab, event) {
+  if (!tab?.sessionId) {
+    return
+  }
+  handleTabPointerDownRaw(tab.sessionId, event)
+}
+
+/**
+ * 点击激活。
+ *
+ * 拖拽结束后那一次 click 必须吞掉：
+ * 用户已经表达了“我在拖动”，此时再顺手激活一个后台标签完全不符合预期。
+ */
+function handleTabClick(tab) {
+  if (shouldSuppressClick(tab?.sessionId)) {
+    return
+  }
+  activateTab(tab)
 }
 
 function activateTab(tab) {
@@ -445,6 +496,7 @@ function onMenuClick({ key }, tab) {
     v-if="tabs.length > 0"
     data-testid="document-tab-bar"
     class="document-tab-bar relative flex shrink-0 items-center border-t-1 border-t-border-primary border-t-solid bg-bg-primary"
+    :class="{ 'is-dragging': isDragging }"
     @mouseenter="handleTabBarPointerEnter"
     @mouseleave="handleTabBarPointerLeave"
   >
@@ -470,8 +522,8 @@ function onMenuClick({ key }, tab) {
             :data-dirty="tab.dirty ? 'true' : 'false'"
             class="document-tab group h-6 max-w-60 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1 text-sm transition-colors"
             :class="getTabClassList(tab)"
-            @click="activateTab(tab)"
-            @auxclick.self.prevent="closeTab(tab)"
+            @pointerdown="handleTabPointerDown(tab, $event)"
+            @click="handleTabClick(tab)"
           >
             <!-- 脏点槽：与关闭槽等宽 14px，圆点在槽内居中；干净标签只是不渲染圆点，槽位仍然占位 -->
             <span class="document-tab__dot-slot size-3.5 flex shrink-0 items-center justify-center">
@@ -517,6 +569,51 @@ function onMenuClick({ key }, tab) {
 </template>
 
 <style scoped lang="scss">
+.document-tab {
+  /*
+   * 常驻 transform 过渡：拖拽时的让位、以及“顺序没变”时的回弹都靠它。
+   * 提交成功后由 JS 临时设 `transition: none` 瞬清，
+   * 避免元素从旧位置的让位偏移滑向新位置的自然位置。
+   *
+   * 这里显式列出 color / background-color，是为了覆盖 UnoCSS 的
+   * `transition-colors` 时不把原有的颜色过渡一起丢掉。
+   */
+  transition:
+    transform 140ms cubic-bezier(0.2, 0.7, 0.3, 1),
+    color 150ms,
+    background-color 150ms;
+}
+
+.document-tab-bar.is-dragging {
+  cursor: grabbing;
+
+  .document-tab {
+    cursor: grabbing;
+    will-change: transform;
+  }
+
+  /*
+   * 拖拽期间禁用非活动标签的 hover 高亮，避免和让位动画打架。
+   * 活动标签保持原有背景，否则用户会以为拖拽把激活态弄丢了。
+   */
+  .document-tab[data-active='false']:hover {
+    background-color: transparent;
+  }
+
+  /*
+   * 分隔线只是 1px 的视觉元素，让位算法只按标签本身计算。
+   * 隐藏但保留占位，松手后主进程重排、DOM 重建时自然恢复。
+   */
+  .document-tab-separator {
+    opacity: 0;
+  }
+
+  /* 拖拽中关闭按钮不该看起来可点 */
+  .document-tab__close {
+    opacity: 0;
+  }
+}
+
 .document-tab-bar__scroller {
   /*
    * 原生滚动条在 Chromium 里始终占位，做不到“浮在内容上方”，

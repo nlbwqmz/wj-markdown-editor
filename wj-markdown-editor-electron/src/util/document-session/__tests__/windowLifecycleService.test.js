@@ -12,6 +12,7 @@ const openExternalMock = vi.fn()
 const showItemInFolderMock = vi.fn()
 const openLocalResourceInFolderMock = vi.fn()
 const recentAddMock = vi.fn()
+const tabGroupSaveMock = vi.fn()
 const createWatchStateMock = vi.fn(() => ({ pendingChange: null }))
 const startWatchingMock = vi.fn()
 const stopWatchingMock = vi.fn()
@@ -235,6 +236,15 @@ vi.mock('../../../data/configUtil.js', () => ({
 vi.mock('../../../data/recent.js', () => ({
   default: {
     add: recentAddMock,
+  },
+}))
+
+vi.mock('../../../data/tabGroup.js', () => ({
+  default: {
+    initTabGroup: vi.fn(),
+    get: vi.fn(() => ({ tabs: [], activeIndex: 0 })),
+    save: tabGroupSaveMock,
+    clear: vi.fn(),
   },
 }))
 
@@ -480,6 +490,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
     showItemInFolderMock.mockReset()
     openLocalResourceInFolderMock.mockReset()
     recentAddMock.mockReset()
+    tabGroupSaveMock.mockReset()
+    tabGroupSaveMock.mockImplementation(async nextTabGroup => nextTabGroup)
     createWatchStateMock.mockReset()
     startWatchingMock.mockReset()
     stopWatchingMock.mockReset()
@@ -3330,6 +3342,42 @@ describe('windowLifecycleService 生命周期 facade', () => {
       windowB.win.emit('focus')
 
       expect(getTargetEditorWindowId()).toBe(windowB.id)
+    })
+  })
+
+  it('document.reorder-tabs 重排标签后必须把新顺序同步写入 tab-group.json', async () => {
+    pathExistsMock.mockImplementation(async targetPath => ['D:/first.md', 'D:/second.md'].includes(targetPath))
+    readFileMock.mockImplementation(async (targetPath) => {
+      if (targetPath === 'D:/first.md' || targetPath === 'D:/second.md') {
+        return `# ${targetPath}`
+      }
+      throw new Error(`unexpected read path: ${targetPath}`)
+    })
+
+    await winInfoUtil.createNew('D:/first.md')
+    const [winInfo] = listWindowRefs()
+    const { openDocumentTabInWindow } = winInfoUtil.getDocumentSessionRuntimeHostDeps()
+    await openDocumentTabInWindow(winInfo.id, 'D:/second.md')
+
+    const beforeSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(beforeSnapshot.tabs.map(tab => tab.displayPath)).toEqual(['D:/first.md', 'D:/second.md'])
+    const [firstTab, secondTab] = beforeSnapshot.tabs
+
+    // 建窗与开标签本身也会持久化标签组，这里只关心重排这一次写盘。
+    tabGroupSaveMock.mockClear()
+
+    await executeTestCommand(winInfo, 'document.reorder-tabs', {
+      sessionIds: [secondTab.sessionId, firstTab.sessionId],
+    })
+
+    const afterSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(afterSnapshot.tabs.map(tab => tab.sessionId)).toEqual([secondTab.sessionId, firstTab.sessionId])
+
+    expect(tabGroupSaveMock).toHaveBeenCalledTimes(1)
+    expect(tabGroupSaveMock).toHaveBeenCalledWith({
+      tabs: ['D:/second.md', 'D:/first.md'],
+      // 重排前活动标签是第二个，重排后它落在下标 0。
+      activeIndex: 0,
     })
   })
 

@@ -64,6 +64,7 @@ export default {
     copyFileName: 'Copy file name',
     copyPath: 'Copy path',
     revealInExplorer: 'Show in explorer',
+    reorderFailed: 'Failed to reorder tabs',
   },
   previewAssetMenu: {
     copyAbsolutePath: 'Copy absolute path',
