@@ -110,6 +110,7 @@ const DOCUMENT_STATE_COMMAND_SET = new Set([
   'document.activate-tab',
   'document.close-tab',
   'document.close-tabs',
+  'document.move-tab-to-new-window',
   'document.reorder-tabs',
   'document.external.apply',
   'document.external.ignore',

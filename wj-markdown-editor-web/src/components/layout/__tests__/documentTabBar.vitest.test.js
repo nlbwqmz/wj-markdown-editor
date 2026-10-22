@@ -3,9 +3,11 @@ import { message } from 'ant-design-vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, reactive } from 'vue'
 
+import { requestCurrentWindowOpenPreparation } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
   requestDocumentCloseTab,
   requestDocumentCloseTabs,
+  requestDocumentMoveTabToNewWindow,
   requestDocumentRevealInFolder,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import DocumentTabBar from '../DocumentTabBar.vue'
@@ -36,7 +38,18 @@ vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
   requestDocumentActivateTab: vi.fn(() => Promise.resolve()),
   requestDocumentCloseTab: vi.fn(() => Promise.resolve()),
   requestDocumentCloseTabs: vi.fn(() => Promise.resolve()),
+  requestDocumentMoveTabToNewWindow: vi.fn(() => Promise.resolve('window-new')),
   requestDocumentRevealInFolder: vi.fn(() => Promise.resolve({ ok: true })),
+}))
+
+vi.mock('@/util/document-session/currentWindowOpenPreparationService.js', () => ({
+  requestCurrentWindowOpenPreparation: vi.fn(() => Promise.resolve({ ok: true })),
+}))
+
+// 确认弹窗的返回结果由用例控制：默认走 onOk，需要验证取消时改成 false。
+const modalState = vi.hoisted(() => ({
+  confirmResult: true,
+  confirm: vi.fn(),
 }))
 
 // 组件直接用 ant-design-vue 的 message 给复制/打开目录反馈，这里只保留提示入口。
@@ -46,6 +59,9 @@ vi.mock('ant-design-vue', () => ({
     error: vi.fn(),
     warning: vi.fn(),
   },
+  Modal: {
+    confirm: modalState.confirm,
+  },
 }))
 
 // store 是模块级 reactive，测试之间必须重置，否则上一条用例改过的状态会污染下一条
@@ -53,6 +69,16 @@ beforeEach(() => {
   store.documentSessionSnapshot.activeSessionId = 'session-1'
   store.documentSessionSnapshot.tabs = defaultTabs.map(tab => ({ ...tab }))
   vi.clearAllMocks()
+  modalState.confirmResult = true
+  modalState.confirm.mockImplementation((config) => {
+    if (modalState.confirmResult) {
+      config?.onOk?.()
+    }
+    else {
+      config?.onCancel?.()
+    }
+    return { destroy: vi.fn(), update: vi.fn() }
+  })
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: vi.fn(async () => {}) },
@@ -250,17 +276,93 @@ describe('documentTabBar 右键菜单', () => {
       'close-others',
       'close-left',
       'close-right',
+      'move-to-new-window',
       'copy-file-name',
       'copy-path',
       'reveal-in-explorer',
     ])
 
-    // 关闭类与文件类之间必须有一条分隔线
-    expect(menuList[0].findAll('[data-testid="document-tab-menu-divider"]')).toHaveLength(1)
+    // 关闭类 / 窗口动作 / 文件类三组之间各有一条分隔线
+    expect(menuList[0].findAll('[data-testid="document-tab-menu-divider"]')).toHaveLength(2)
+
+    // 两个标签时允许迁移到新窗口
+    expect(menuList[0].get('[data-menu-key="move-to-new-window"]').attributes('data-disabled')).toBe('false')
 
     // 有 displayPath 的标签不禁止复制路径 / 在资源管理器中显示
     expect(menuList[0].get('[data-menu-key="copy-path"]').attributes('data-disabled')).toBe('false')
     expect(menuList[0].get('[data-menu-key="reveal-in-explorer"]').attributes('data-disabled')).toBe('false')
+
+    wrapper.unmount()
+  })
+
+  it('移动到新窗口必须二次确认，取消时不得发命令', async () => {
+    modalState.confirmResult = false
+    const wrapper = mountTabBar()
+
+    const menu = wrapper.findAllComponents({ name: 'AMenu' })[0]
+    await menu.vm.$emit('click', { key: 'move-to-new-window' })
+    await flushPromises()
+
+    expect(modalState.confirm).toHaveBeenCalledTimes(1)
+    expect(modalState.confirm.mock.calls[0][0].content).toBe('documentTab.moveToNewWindowConfirmContent')
+    expect(requestDocumentMoveTabToNewWindow).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('迁移活动标签前必须先完成正文收敛，再发迁移命令', async () => {
+    const wrapper = mountTabBar()
+
+    // 第一个标签（session-1）是活动标签
+    const menu = wrapper.findAllComponents({ name: 'AMenu' })[0]
+    await menu.vm.$emit('click', { key: 'move-to-new-window' })
+    await flushPromises()
+
+    expect(requestCurrentWindowOpenPreparation).toHaveBeenCalledTimes(1)
+    expect(requestDocumentMoveTabToNewWindow).toHaveBeenCalledWith('session-1')
+    // flush 必须在迁移之前完成，否则防抖窗口里的输入会随旧窗口一起消失
+    expect(requestCurrentWindowOpenPreparation.mock.invocationCallOrder[0])
+      .toBeLessThan(requestDocumentMoveTabToNewWindow.mock.invocationCallOrder[0])
+
+    wrapper.unmount()
+  })
+
+  it('迁移后台标签不需要多余的正文收敛往返', async () => {
+    const wrapper = mountTabBar()
+
+    // 第二个标签（session-2）是后台标签
+    const menu = wrapper.findAllComponents({ name: 'AMenu' })[1]
+    await menu.vm.$emit('click', { key: 'move-to-new-window' })
+    await flushPromises()
+
+    expect(requestCurrentWindowOpenPreparation).not.toHaveBeenCalled()
+    expect(requestDocumentMoveTabToNewWindow).toHaveBeenCalledWith('session-2')
+
+    wrapper.unmount()
+  })
+
+  it('迁移成功后必须给出成功提示', async () => {
+    const wrapper = mountTabBar()
+
+    const menu = wrapper.findAllComponents({ name: 'AMenu' })[0]
+    await menu.vm.$emit('click', { key: 'move-to-new-window' })
+    await flushPromises()
+
+    expect(message.success).toHaveBeenCalledWith('documentTab.moveToNewWindowSucceeded')
+
+    wrapper.unmount()
+  })
+
+  it('迁移失败时必须给出错误提示', async () => {
+    requestDocumentMoveTabToNewWindow.mockResolvedValueOnce(null)
+    const wrapper = mountTabBar()
+
+    const menu = wrapper.findAllComponents({ name: 'AMenu' })[0]
+    await menu.vm.$emit('click', { key: 'move-to-new-window' })
+    await flushPromises()
+
+    expect(message.error).toHaveBeenCalledWith('documentTab.moveToNewWindowFailed')
+    expect(message.success).not.toHaveBeenCalledWith('documentTab.moveToNewWindowSucceeded')
 
     wrapper.unmount()
   })
@@ -396,6 +498,8 @@ describe('documentTabBar 右键菜单', () => {
     }
     // 关自己永远可用
     expect(menu.get('[data-menu-key="close"]').attributes('data-disabled')).toBe('false')
+    // 单标签迁移等于把整个窗口搬走，只会平白丢掉撤销历史
+    expect(menu.get('[data-menu-key="move-to-new-window"]').attributes('data-disabled')).toBe('true')
 
     wrapper.unmount()
   })

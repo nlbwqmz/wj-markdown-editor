@@ -1184,10 +1184,12 @@ function rollbackCreatedWindow({
   windowId,
   session,
   win,
+  preserveSession = false,
 }) {
   void stopDirectoryWatch(windowId)
   stopExternalWatch(windowId)
-  if (session?.sessionId) {
+  // 迁移场景的会话属于用户正在编辑的文档，只能解绑窗口，不能销毁。
+  if (session?.sessionId && !preserveSession) {
     const { store } = ensureSessionRuntimeInitialized()
     store.destroySession(session.sessionId)
   }
@@ -2016,11 +2018,135 @@ async function closeTabsInWindow(windowId, sessionIds) {
   return true
 }
 
+/**
+ * 把标签迁移到新窗口。
+ *
+ * 会话对象本身不销毁：正文、脏状态、保存基线、外部变更待处理态全部随 session 一起过去，
+ * 所以脏标签、未命名草稿、recent-missing 标签都能迁移。
+ *
+ * 唯一带不走的是渲染层的撤销历史（EditorState 在渲染进程里，主进程没有副本），
+ * 调用方必须在迁移前把这条限制告知用户。
+ *
+ * @returns {Promise<string|number|null>} 成功时返回新窗口 id，失败返回 null。
+ */
+async function moveTabToNewWindow(windowId, sessionId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const { store } = ensureSessionRuntimeInitialized()
+  const session = sessionId ? store.getSession(sessionId) : null
+  if (!normalizedWindowId || !session) {
+    return null
+  }
+
+  const sourceSessionIds = store.getSessionIdsByWindowId?.(normalizedWindowId) || []
+  if (!sourceSessionIds.includes(sessionId)) {
+    return null
+  }
+
+  const documentPath = session.documentSource?.path || null
+  // 必须在解绑前取活动指针：解绑后这个值就已经变了。
+  const previousActiveSessionId = store.getActiveSessionIdByWindowId?.(normalizedWindowId) ?? null
+
+  // 先从源窗口解绑。
+  // store 里一个会话只能属于一个窗口，不解绑就直接绑新窗口会被 addSessionToWindow 拦下。
+  stopExternalWatch(normalizedWindowId, sessionId)
+  store.removeSessionFromWindow({
+    windowId: normalizedWindowId,
+    sessionId,
+  })
+  getWindowRegistry().removeSession?.({
+    windowId: normalizedWindowId,
+    sessionId,
+  })
+
+  let createdWindowId = null
+  try {
+    createdWindowId = await createNew(documentPath, false, {
+      migrateSession: session,
+    })
+  }
+  catch (error) {
+    // 建窗口抛错时必须把会话还回源窗口，否则用户文档会凭空消失。
+    rebindMigratedSessionToSourceWindow(normalizedWindowId, session)
+    throw error
+  }
+
+  // 建窗口可能返回失败结果对象（窗口壳加载失败 / 读盘失败），
+  // 这种情况下会话还没有归属窗口，必须还回去。
+  if (!createdWindowId || !getWindowById(createdWindowId)) {
+    rebindMigratedSessionToSourceWindow(normalizedWindowId, session)
+    return null
+  }
+
+  // 源窗口落点：活动标签被移走时按就近规则换一个，
+  // 一个标签都不剩就按“关最后一个标签 = 关窗口”关掉源窗口。
+  const remainingSessionIds = sourceSessionIds.filter(id => id !== sessionId)
+  const nextActiveSessionId = resolveNextActiveSessionId({
+    windowSessionIds: sourceSessionIds,
+    remainingSessionIds,
+    previousActiveSessionId,
+  })
+
+  if (!nextActiveSessionId) {
+    publishSnapshotChanged(normalizedWindowId)
+    await continueWindowClose(normalizedWindowId)
+  }
+  else {
+    const nextActiveSession = store.getSession(nextActiveSessionId)
+    store.activateSession({
+      windowId: normalizedWindowId,
+      sessionId: nextActiveSessionId,
+    })
+    getWindowRegistry().activateSession?.({
+      windowId: normalizedWindowId,
+      sessionId: nextActiveSessionId,
+    })
+    syncWindowStateFromSession(normalizedWindowId, nextActiveSession)
+
+    try {
+      await rebindDirectoryWatchForSession(normalizedWindowId, nextActiveSession)
+    }
+    catch {}
+
+    publishSnapshotChanged(normalizedWindowId)
+    await persistCurrentTabGroup(normalizedWindowId)
+  }
+
+  // 新窗口侧的目录监听要按新窗口重建；
+  // 外部文件监听已经由 createNew 内部的 startExternalWatch 建好了。
+  try {
+    await rebindDirectoryWatchForSession(createdWindowId, session)
+  }
+  catch {}
+  publishSnapshotChanged(createdWindowId)
+  await persistCurrentTabGroup(createdWindowId)
+
+  focusWindow(createdWindowId)
+  return createdWindowId
+}
+
+/**
+ * 建窗口失败时把已迁移的会话还回源窗口。
+ *
+ * 这里必须同时恢复窗口绑定与外部文件监听，
+ * 否则用户会看到标签回来了、但外部修改不再被监听的半死状态。
+ */
+function rebindMigratedSessionToSourceWindow(sourceWindowId, session) {
+  if (!sourceWindowId || !session?.sessionId) {
+    return
+  }
+
+  bindSessionForWindow(sourceWindowId, session)
+  if (session.documentSource?.path) {
+    startExternalWatch(sourceWindowId, session.sessionId)
+  }
+}
+
 function createTabHostController(windowId) {
   return {
     activateTab: sessionId => activateTabInWindow(windowId, sessionId),
     closeTab: sessionId => closeTabInWindow(windowId, sessionId),
     closeTabs: sessionIds => closeTabsInWindow(windowId, sessionIds),
+    moveTabToNewWindow: sessionId => moveTabToNewWindow(windowId, sessionId),
     saveAllTabsAndClose: () => saveAllTabsAndClose(windowId),
     isSessionDirty: (sessionId) => {
       const { store } = ensureSessionRuntimeInitialized()
@@ -2495,13 +2621,17 @@ async function waitForManualSaveRequestCompletion(windowId, requestId, {
   }
 }
 
-async function createNew(filePath, isRecent = false) {
+async function createNew(filePath, isRecent = false, options = {}) {
   // 未显式初始化 runtime 时必须在这里直接失败，不能在内部自举。
   ensureSessionRuntimeInitialized()
   const windowRegistry = getWindowRegistry()
+  // 迁移场景：窗口壳建好后不创建新会话，而是把调用方给的会话绑到新窗口。
+  const migrateSession = options.migrateSession || null
   const normalizedFilePath = resolveDocumentOpenPath(filePath)
   const exists = Boolean(normalizedFilePath && await fs.pathExists(normalizedFilePath))
-  if (exists) {
+  // 迁移场景必须跳过“已打开文档”检查：
+  // 那个检查会把焦点拉回源窗口的标签，形成自指循环。
+  if (!migrateSession && exists) {
     // 复用统一的“已打开文档”判定：命中就聚焦窗口 + 激活标签，不再新建窗口。
     const existingTab = await focusOpenDocumentTab(normalizedFilePath)
     if (existingTab) {
@@ -2511,7 +2641,9 @@ async function createNew(filePath, isRecent = false) {
   }
 
   let content = ''
-  if (exists) {
+  // 迁移场景不读盘：正文以 session.editorSnapshot 为准，
+  // 用磁盘内容覆盖会把用户未保存的修改抹掉。
+  if (!migrateSession && exists) {
     try {
       content = await fs.readFile(normalizedFilePath, 'utf-8')
     } catch {
@@ -2561,14 +2693,21 @@ async function createNew(filePath, isRecent = false) {
       },
     })
 
-    session = createInitialSession({
-      sessionId: commonUtil.createId(),
-      filePath: normalizedFilePath,
-      exists,
-      content,
-      isRecent,
-    })
-    registerSessionForWindow(id, session)
+    if (migrateSession) {
+      // 迁移：会话对象已经存在于 store，只把归属窗口换成新窗口。
+      // 不能走 registerSessionForWindow，那会再 createSession 一次并覆盖现有状态。
+      session = migrateSession
+      bindSessionForWindow(id, session)
+    } else {
+      session = createInitialSession({
+        sessionId: commonUtil.createId(),
+        filePath: normalizedFilePath,
+        exists,
+        content,
+        isRecent,
+      })
+      registerSessionForWindow(id, session)
+    }
 
     win.once('ready-to-show', () => {
       win.show()
@@ -2673,7 +2812,9 @@ async function createNew(filePath, isRecent = false) {
       setLastActiveEditorWindowId(findRegisteredWindowIdByWin(win))
     })
 
-    if (exists) {
+    // 迁移场景的会话可能没有磁盘文件（草稿 / recent-missing），
+    // 是否启动监听由会话自己的路径状态决定，而不是源文件是否存在。
+    if (exists || migrateSession?.documentSource?.path) {
       startExternalWatch(id, session?.sessionId)
     }
 
@@ -2685,6 +2826,8 @@ async function createNew(filePath, isRecent = false) {
         windowId: id,
         session,
         win,
+        // 迁移场景绝不能销毁会话：那是用户正在编辑的文档。
+        preserveSession: Boolean(migrateSession),
       })
       if (shouldNotifyUser) {
         showWindowShellLoadFailureDialog(normalizedFilePath)
@@ -2692,7 +2835,9 @@ async function createNew(filePath, isRecent = false) {
       return createWindowShellLoadFailedResult(normalizedFilePath)
     }
 
-    if (exists) {
+    // 迁移场景不做磁盘对账：会话正文是用户视角的真相，
+    // 用磁盘重新校准会把未保存修改丢掉。
+    if (!migrateSession && exists) {
       await reconcileOpenedDocumentAgainstDisk(id, normalizedFilePath)
     }
 
@@ -2706,6 +2851,8 @@ async function createNew(filePath, isRecent = false) {
       windowId: id,
       session,
       win,
+      // 迁移场景绝不能销毁会话：那是用户正在编辑的文档。
+      preserveSession: Boolean(migrateSession),
     })
     throw error
   }

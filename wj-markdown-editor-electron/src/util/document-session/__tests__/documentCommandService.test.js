@@ -2672,6 +2672,85 @@ describe('documentCommandService', () => {
       expect(result.effects).toEqual([])
     })
 
+    it('document.move-tab-to-new-window 必须派发迁移 effect，且不改动活动标签', () => {
+      const { store, service, windowId } = createTwoTabContext()
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.move-tab-to-new-window',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'move-tab-to-new-window',
+          sessionId: 'tab-second',
+        },
+      ])
+      // 迁移只换归属窗口，活动指针由落地阶段处理，命令层不得先切过去
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-first')
+    })
+
+    it('document.move-tab-to-new-window 脏标签也必须允许迁移', () => {
+      const { service, windowId, secondSession } = createTwoTabContext()
+      secondSession.editorSnapshot.content = '# 未保存内容'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.move-tab-to-new-window',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      // 迁移搬的是整个会话，脏状态跟会话走，所以脏标签不应该被拦下
+      expect(result.effects).toEqual([
+        {
+          type: 'move-tab-to-new-window',
+          sessionId: 'tab-second',
+        },
+      ])
+    })
+
+    it('document.move-tab-to-new-window 单标签窗口不得迁移', () => {
+      const { store, service, windowId } = createTwoTabContext()
+      store.removeSessionFromWindow({ windowId, sessionId: 'tab-first' })
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.move-tab-to-new-window',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      // 单标签迁移等价于“关窗口 + 开新窗口”，没有任何收益，直接不派发
+      expect(result.effects).toEqual([])
+    })
+
+    it('document.move-tab-to-new-window 保存进行中的标签不得迁移', () => {
+      const { service, windowId, secondSession } = createTwoTabContext()
+      // 保存任务在飞时换窗口，回写结果会落到错误的窗口上
+      secondSession.saveRuntime.inFlightJobId = 'job-in-flight'
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.move-tab-to-new-window',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(result.effects).toEqual([])
+    })
+
+    it('document.move-tab-to-new-window 必须拒绝不属于本窗口的会话', () => {
+      const { service, windowId } = createTwoTabContext()
+
+      expect(() => {
+        service.dispatch({
+          windowId,
+          command: 'document.move-tab-to-new-window',
+          payload: { sessionId: 'not-in-window' },
+        })
+      }).toThrow(/move-tab-to-new-window|会话/i)
+    })
+
     it('document.close-tab 遇到脏标签时必须先激活再进入标签作用域的确认弹窗', () => {
       const { store, service, windowId, secondSession } = createTwoTabContext()
       secondSession.editorSnapshot.content = '# 已修改'

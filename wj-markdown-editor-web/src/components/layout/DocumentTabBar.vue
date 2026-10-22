@@ -1,12 +1,14 @@
 <script setup>
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
+import { requestCurrentWindowOpenPreparation } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
   requestDocumentActivateTab,
   requestDocumentCloseTab,
   requestDocumentCloseTabs,
+  requestDocumentMoveTabToNewWindow,
   requestDocumentRevealInFolder,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import { bindHorizontalWheelScroll } from '@/util/horizontalWheelScrollUtil.js'
@@ -281,6 +283,59 @@ function revealTabInExplorer(tab) {
     .catch(() => {})
 }
 
+/**
+ * 把标签移动到新窗口。
+ *
+ * 会话整体搬走：正文、脏状态、外部变更待处理态都保留，所以脏标签和未命名标签都能移。
+ * 但撤销历史存在渲染进程的 EditorState 里，新窗口拿不到，
+ * 所以必须二次确认并明确告知这条限制。
+ *
+ * 迁移前要先把挂起的正文同步进主进程：
+ * 活动标签的正文可能还在 160ms 防抖窗口里，不 flush 就迁移会让最后一次输入随旧窗口一起消失。
+ * 后台标签的正文在切走那一刻就已经同步过了，不需要多这一次往返。
+ */
+async function moveTabToNewWindow(tab) {
+  if (!tab?.sessionId) {
+    return
+  }
+
+  const confirmed = await new Promise((resolve) => {
+    Modal.confirm({
+      title: t('documentTab.moveToNewWindowConfirmTitle'),
+      content: t('documentTab.moveToNewWindowConfirmContent', {
+        fileName: getTabLabel(tab),
+      }),
+      okText: t('okText'),
+      cancelText: t('cancelText'),
+      centered: true,
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    })
+  })
+  if (!confirmed) {
+    return
+  }
+
+  if (isActiveTab(tab)) {
+    try {
+      await requestCurrentWindowOpenPreparation()
+    }
+    catch {}
+  }
+
+  try {
+    const movedWindowId = await requestDocumentMoveTabToNewWindow(tab.sessionId)
+    if (!movedWindowId) {
+      message.error(t('documentTab.moveToNewWindowFailed'))
+      return
+    }
+    message.success(t('documentTab.moveToNewWindowSucceeded'))
+  }
+  catch {
+    message.error(t('documentTab.moveToNewWindowFailed'))
+  }
+}
+
 function getMenuItems(tab) {
   const hasPath = Boolean(tab?.displayPath)
   const tabIndex = tabs.value.findIndex(item => item.sessionId === tab?.sessionId)
@@ -318,7 +373,18 @@ function getMenuItems(tab) {
       label: t('documentTab.closeToRight'),
       disabled: !hasClosableRight,
     },
-    // 分隔线把“关闭”与“文件操作”分开
+    // 分隔线把“关闭”与“窗口动作”分开
+    {
+      type: 'divider',
+    },
+    {
+      key: 'move-to-new-window',
+      label: t('documentTab.moveToNewWindow'),
+      // 只有一个标签时“移动到新窗口”等于把整个窗口搬走：
+      // 结果和“关窗口 + 开新窗口”一样，只会平白丢掉撤销历史。
+      disabled: tabs.value.length <= 1,
+    },
+    // 分隔线把“窗口动作”与“文件操作”分开
     {
       type: 'divider',
     },
@@ -354,6 +420,10 @@ function onMenuClick({ key }, tab) {
   }
   if (key === 'close-right') {
     closeTabsToRight(tab)
+    return
+  }
+  if (key === 'move-to-new-window') {
+    moveTabToNewWindow(tab)
     return
   }
   if (key === 'copy-file-name') {

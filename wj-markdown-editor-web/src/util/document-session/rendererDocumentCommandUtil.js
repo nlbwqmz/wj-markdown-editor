@@ -234,6 +234,24 @@ export function requestDocumentCloseTabs(sessionIds) {
 }
 
 /**
+ * 请求主进程把某个标签迁移到新窗口。
+ *
+ * 会话本身不销毁：正文、脏状态、外部变更待处理态都随 session 一起过去。
+ * 但渲染层的撤销历史带不走，所以调用方必须先向用户确认这条限制。
+ *
+ * 调用前必须先完成正文收敛（flush），否则防抖窗口里的最后一次输入
+ * 会留在旧窗口里，永远没有机会再同步给主进程。
+ */
+export function requestDocumentMoveTabToNewWindow(sessionId) {
+  return channelUtil.send({
+    event: 'document.move-tab-to-new-window',
+    data: {
+      sessionId,
+    },
+  })
+}
+
+/**
  * 请求主进程在系统资源管理器中定位某个本地文件。
  *
  * 标签右键菜单必须显式给出路径：目标标签可能不是活动标签，

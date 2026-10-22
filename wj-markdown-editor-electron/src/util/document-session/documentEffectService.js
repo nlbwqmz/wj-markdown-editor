@@ -952,6 +952,14 @@ export function createDocumentEffectService({
         return closedTabs ?? null
       }
 
+      case 'move-tab-to-new-window':
+      {
+        // 标签迁移到新窗口：session 不销毁，只换归属窗口。
+        // 正文、脏状态、外部变更待处理态、保存基线全部随 session 一起过去。
+        const movedWindowId = await tabHostController?.moveTabToNewWindow?.(effect.sessionId)
+        return movedWindowId ?? null
+      }
+
       case 'close-tab-after-save':
       {
         // “保存并关闭标签”的收尾：只有确认会话已经不脏才真的关，

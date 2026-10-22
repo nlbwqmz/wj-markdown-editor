@@ -328,6 +328,9 @@ const handlerList = {
   'document.close-tabs': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'document.close-tabs', data)
   },
+  'document.move-tab-to-new-window': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.move-tab-to-new-window', data)
+  },
   'document.reorder-tabs': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'document.reorder-tabs', data)
   },

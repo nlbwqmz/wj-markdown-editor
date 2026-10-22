@@ -394,6 +394,47 @@ export function createDocumentCommandService({
         }
         break
 
+      case 'document.move-tab-to-new-window':
+        {
+          // 把标签整体迁移到新窗口。
+          //
+          // 正文真相本来就存在 session 里（editorSnapshot.content），
+          // 所以这里不做任何内容搬运，只裁决“能不能移”；
+          // 解绑旧窗口、建新窗口、重新绑定同一份 session 交给 effect 落地。
+          const targetSessionId = payload?.sessionId || null
+          const windowSessionIds = store.getSessionIdsByWindowId?.(windowId) || []
+          if (!targetSessionId || !windowSessionIds.includes(targetSessionId)) {
+            throw new Error(`move-tab-to-new-window 目标会话不属于该窗口: ${targetSessionId}`)
+          }
+
+          // 单标签窗口不允许迁移：结果等价于“关窗口 + 开新窗口”，
+          // 只会平白丢掉撤销历史，渲染层也按同一规则置灰。
+          if (windowSessionIds.length <= 1) {
+            break
+          }
+
+          const targetSession = store.getSession(targetSessionId)
+          if (!targetSession) {
+            throw new Error(`move-tab-to-new-window 目标会话不存在: ${targetSessionId}`)
+          }
+
+          // 迁移前确保外部监听是就绪的：
+          // 新窗口接手后会立刻用这份 watchRuntime 重新绑定，缺了它新窗口就没有监听。
+          watchCoordinator.prepareSession(targetSession)
+
+          // 保存或关闭流程进行中的标签不允许迁移：
+          // 那两个流程持有 in-flight jobId，换窗口会让回写结果落到错误的窗口上。
+          if (targetSession.saveRuntime?.inFlightJobId || targetSession.closeRuntime?.intent) {
+            break
+          }
+
+          effects.push({
+            type: 'move-tab-to-new-window',
+            sessionId: targetSessionId,
+          })
+        }
+        break
+
       case 'document.request-close':
       {
         // forceClose 表示关闭流程已经明确拿到“可直接关闭”的结论，
