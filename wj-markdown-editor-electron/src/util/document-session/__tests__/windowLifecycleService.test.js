@@ -13,6 +13,7 @@ const showItemInFolderMock = vi.fn()
 const openLocalResourceInFolderMock = vi.fn()
 const recentAddMock = vi.fn()
 const tabGroupSaveMock = vi.fn()
+const tabGroupSaveSyncMock = vi.fn()
 const createWatchStateMock = vi.fn(() => ({ pendingChange: null }))
 const startWatchingMock = vi.fn()
 const stopWatchingMock = vi.fn()
@@ -244,6 +245,7 @@ vi.mock('../../../data/tabGroup.js', () => ({
     initTabGroup: vi.fn(),
     get: vi.fn(() => ({ tabs: [], activeIndex: 0 })),
     save: tabGroupSaveMock,
+    saveSync: tabGroupSaveSyncMock,
     clear: vi.fn(),
   },
 }))
@@ -492,6 +494,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
     recentAddMock.mockReset()
     tabGroupSaveMock.mockReset()
     tabGroupSaveMock.mockImplementation(async nextTabGroup => nextTabGroup)
+    tabGroupSaveSyncMock.mockReset()
+    tabGroupSaveSyncMock.mockImplementation(nextTabGroup => nextTabGroup)
     createWatchStateMock.mockReset()
     startWatchingMock.mockReset()
     stopWatchingMock.mockReset()
@@ -2623,6 +2627,84 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(runtime.store.getSession(backgroundSessionId)).toBeFalsy()
     expect(runtime.store.getSession(windowSessionIds[1])).toBeFalsy()
     expect(runtime.store.getSessionIdsByWindowId(winInfo.id)).toEqual([])
+  })
+
+  it('关闭窗口必须把该窗口的标签组同步写入 tab-group.json', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
+
+    await winInfoUtil.createNew('D:/first.md')
+    const [winInfo] = listWindowRefs()
+    const { openDocumentTabInWindow } = winInfoUtil.getDocumentSessionRuntimeHostDeps()
+    await openDocumentTabInWindow(winInfo.id, 'D:/second.md')
+
+    // 建窗与开标签本身也会写盘，这里只关心关窗这一次
+    tabGroupSaveSyncMock.mockClear()
+
+    winInfo.win.close()
+    await vi.waitFor(() => {
+      expect(listWindowRefs()).toHaveLength(0)
+    })
+
+    // 关窗必须同步写盘：最后一个窗口关闭时 checkWinList() 会立刻 app.exit()，
+    // 异步写盘会被进程退出截断。
+    expect(tabGroupSaveSyncMock).toHaveBeenCalledTimes(1)
+    expect(tabGroupSaveSyncMock).toHaveBeenCalledWith({
+      tabs: ['D:/first.md', 'D:/second.md'],
+      activeIndex: 1,
+    })
+  })
+
+  it('取消关闭窗口时不得改写 tab-group.json', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 内容')
+
+    await winInfoUtil.createNew('D:/first.md')
+    const [winInfo] = listWindowRefs()
+
+    winInfoUtil.updateTempContent(winInfo.id, '# 未保存内容')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 未保存内容')
+    })
+
+    tabGroupSaveSyncMock.mockClear()
+
+    const closeResult = await executeTestCommand(winInfo, 'document.request-close')
+    expect(closeResult?.snapshot?.closePrompt?.visible).toBe(true)
+
+    await executeTestCommand(winInfo, 'document.cancel-close')
+
+    // 用户取消后窗口还在，关窗写盘不得发生
+    expect(tabGroupSaveSyncMock).not.toHaveBeenCalled()
+    expect(listWindowRefs()).toHaveLength(1)
+  })
+
+  it('restoreTabGroup 必须按 activeIndex 把活动标签恢复到上次停留的位置', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
+
+    await winInfoUtil.restoreTabGroup(['D:/first.md', 'D:/second.md', 'D:/third.md'], 0)
+
+    const [winInfo] = listWindowRefs()
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(snapshot.tabs.map(tab => tab.displayPath)).toEqual(['D:/first.md', 'D:/second.md', 'D:/third.md'])
+    // 旧行为是“恢复后活动标签总是最后一个”，这里必须回到 activeIndex 指定的第一个
+    expect(snapshot.activeSessionId).toBe(snapshot.tabs[0].sessionId)
+  })
+
+  it('restoreTabGroup 在 activeIndex 指向的文件缺失时回退到最后一个成功恢复的标签', async () => {
+    pathExistsMock.mockImplementation(async targetPath => targetPath !== 'D:/second.md')
+    readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
+
+    await winInfoUtil.restoreTabGroup(['D:/first.md', 'D:/second.md', 'D:/third.md'], 1)
+
+    const [winInfo] = listWindowRefs()
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    expect(snapshot.tabs.map(tab => tab.displayPath)).toEqual(['D:/first.md', 'D:/third.md'])
+    // 目标标签缺失，回退到最后一个成功恢复的标签
+    expect(snapshot.activeSessionId).toBe(snapshot.tabs[1].sessionId)
   })
 
   it('多窗口按关闭顺序退出时，必须把最后关闭的文档重新顶到 recent 顶部', async () => {

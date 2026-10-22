@@ -103,6 +103,25 @@ async function save(nextTabGroup) {
   return get()
 }
 
+/**
+ * 同步写盘，只给关窗链路用。
+ *
+ * 最后一个窗口关闭时 `checkWinList()` 会立刻 `app.exit()`，
+ * 异步写盘会被进程退出截断，所以关窗必须同步落盘。
+ */
+function saveSync(nextTabGroup) {
+  tabGroup = normalizeTabGroup(nextTabGroup)
+  try {
+    fs.ensureDirSync(getDocumentsPath())
+    fs.writeFileSync(getTabGroupPath(), JSON.stringify(tabGroup, null, 2), 'utf-8')
+  }
+  catch (error) {
+    // 写盘失败只影响下次启动的恢复体验，不能阻塞关窗。
+    console.error('[tab-group] saveSync failed:', error)
+  }
+  return get()
+}
+
 async function clear() {
   return await save(EMPTY_TAB_GROUP)
 }
@@ -111,5 +130,6 @@ export default {
   initTabGroup,
   get,
   save,
+  saveSync,
   clear,
 }

@@ -883,6 +883,12 @@ function finalizeWindowClose(windowId) {
     return
   }
 
+  // 关窗时把该窗口的标签组写盘：
+  // 重启恢复的应该是“最后关闭的窗口”，而不是“最后一次操作标签的窗口”。
+  // 必须在销毁会话 / 注销窗口之前，否则拿不到完整标签列表；
+  // 必须同步写，checkWinList() 可能立刻 app.exit()，异步写盘会被截断。
+  persistCurrentTabGroupSync(normalizedWindowId)
+
   const closingSession = getSessionByWindowId(normalizedWindowId)
   setClosedManualRequestCompletions(
     normalizedWindowId,
@@ -942,20 +948,15 @@ async function refreshRecentOrderAfterOpen(documentPath) {
 }
 
 /**
- * 把窗口当前的标签组写盘。
+ * 把窗口当前标签组整理成待持久化结构。
  *
  * 只记有磁盘路径的标签：草稿没有路径，重启后无法恢复成“同一个文档”，
  * 强行记一个空路径只会让恢复逻辑多一个分支。
  */
-async function persistCurrentTabGroup(windowId) {
-  const normalizedWindowId = normalizeWindowId(windowId)
-  if (!normalizedWindowId) {
-    return null
-  }
-
+function buildTabGroupPayload(windowId) {
   const { store } = ensureSessionRuntimeInitialized()
-  const sessionIds = store.getSessionIdsByWindowId?.(normalizedWindowId) || []
-  const activeSessionId = store.getActiveSessionIdByWindowId?.(normalizedWindowId) || null
+  const sessionIds = store.getSessionIdsByWindowId?.(windowId) || []
+  const activeSessionId = store.getActiveSessionIdByWindowId?.(windowId) || null
 
   const tabPathList = []
   let activeIndex = 0
@@ -971,10 +972,37 @@ async function persistCurrentTabGroup(windowId) {
     tabPathList.push(documentPath)
   }
 
-  return await tabGroup.save({
+  return {
     tabs: tabPathList,
     activeIndex,
-  })
+  }
+}
+
+/**
+ * 把窗口当前的标签组写盘。
+ */
+async function persistCurrentTabGroup(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  return await tabGroup.save(buildTabGroupPayload(normalizedWindowId))
+}
+
+/**
+ * 关窗链路的同步版本。
+ *
+ * 最后一个窗口关闭时 `checkWinList()` 会立刻 `app.exit()`，
+ * 异步写盘会被进程退出截断，所以关窗必须同步落盘。
+ */
+function persistCurrentTabGroupSync(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  return tabGroup.saveSync(buildTabGroupPayload(normalizedWindowId))
 }
 
 /**
@@ -982,8 +1010,12 @@ async function persistCurrentTabGroup(windowId) {
  *
  * 第一个存在的路径直接用来开窗，其余路径逐个挂成标签；
  * 缺失的文件静默跳过，不走 recent-missing 提示流程。
+ *
+ * 恢复完后按 `activeIndex` 把活动标签落回上次的位置：
+ * 它记的是「有路径标签列表」里的下标，而缺失文件会被跳过，
+ * 所以必须按「原始下标 → 实际恢复的 sessionId」映射，不能直接当数组下标用。
  */
-async function restoreTabGroup(pathList) {
+async function restoreTabGroup(pathList, activeIndex = 0) {
   const candidatePathList = Array.isArray(pathList)
     ? pathList.filter(item => typeof item === 'string' && item.trim() !== '')
     : []
@@ -994,25 +1026,55 @@ async function restoreTabGroup(pathList) {
 
   const [firstPath, ...restPathList] = candidatePathList
   const windowId = await createNew(firstPath)
-  if (!windowId || restPathList.length === 0) {
+  if (typeof windowId !== 'string' || windowId === '') {
+    // 第一个文件读取失败时 createNew 会返回结构化失败结果，不能当窗口 id 用。
     return windowId
   }
 
-  for (const targetPath of restPathList) {
+  const restoredIndexList = []
+  const restoredSessionIdList = []
+
+  const firstSession = getSessionByWindowId(windowId)
+  if (firstSession?.sessionId && firstSession.documentSource?.path) {
+    restoredIndexList.push(0)
+    restoredSessionIdList.push(firstSession.sessionId)
+  }
+
+  for (let i = 0; i < restPathList.length; i++) {
+    const targetPath = restPathList[i]
     try {
       if (!await fs.pathExists(targetPath)) {
         continue
       }
       const content = await fs.readFile(targetPath, 'utf-8')
-      await switchSessionInCurrentWindow(windowId, {
+      const switchResult = await switchSessionInCurrentWindow(windowId, {
         documentPath: targetPath,
         content,
         trigger: 'startup',
       })
+      const restoredSessionId = switchResult?.snapshot?.sessionId || null
+      if (switchResult?.ok === true && restoredSessionId) {
+        restoredIndexList.push(i + 1)
+        restoredSessionIdList.push(restoredSessionId)
+      }
     }
     catch {
       // 单个标签恢复失败不能影响其他标签。
     }
+  }
+
+  const normalizedActiveIndex = Number.isInteger(activeIndex) && activeIndex >= 0
+    ? activeIndex
+    : 0
+  const targetPosition = restoredIndexList.indexOf(normalizedActiveIndex)
+  const targetSessionId = targetPosition >= 0
+    ? restoredSessionIdList[targetPosition]
+    // 目标标签缺失时回退到最后一个成功恢复的标签（与旧行为一致）
+    : restoredSessionIdList[restoredSessionIdList.length - 1]
+
+  const { store } = ensureSessionRuntimeInitialized()
+  if (targetSessionId && store.getActiveSessionIdByWindowId?.(windowId) !== targetSessionId) {
+    await activateTabInWindow(windowId, targetSessionId)
   }
 
   return windowId

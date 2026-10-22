@@ -191,7 +191,12 @@ if (!lock) {
       // 两者是不同的事实，标签组不套 recentMax 上限。
       const savedTabGroup = tabGroup.get()
       if (savedTabGroup.tabs.length > 0) {
-        const restoredWindowId = await windowLifecycleService.restoreTabGroup(savedTabGroup.tabs)
+        // 连 activeIndex 一起传：恢复后活动标签要回到上次停留的那个，
+        // 不能总是落在最后一个恢复的标签上。
+        const restoredWindowId = await windowLifecycleService.restoreTabGroup(
+          savedTabGroup.tabs,
+          savedTabGroup.activeIndex,
+        )
         if (!restoredWindowId) {
           await windowLifecycleService.createNew(null)
         }
