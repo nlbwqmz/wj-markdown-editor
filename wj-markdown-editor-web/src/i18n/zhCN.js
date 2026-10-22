@@ -292,6 +292,7 @@ export default {
       storagePath: '存储路径',
       branch: '分支',
       customDomain: '自定义域名',
+      token: 'Token',
     },
     watermark: {
       watermark: '水印',
@@ -310,6 +311,11 @@ export default {
       pdfPageNumber: 'PDF页码',
       pdfFooter: 'PDF页脚',
       pdfHeader: 'PDF页眉',
+    },
+    search: {
+      placeholder: '搜索设置项',
+      empty: '未找到匹配项',
+      emptyTip: '试试其它关键词',
     },
   },
   shortcutKey: {

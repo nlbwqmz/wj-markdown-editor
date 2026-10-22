@@ -292,6 +292,7 @@ export default {
       storagePath: 'Storage path',
       branch: 'Branch',
       customDomain: 'Custom domain',
+      token: 'Token',
     },
     watermark: {
       watermark: 'Watermark',
@@ -310,6 +311,11 @@ export default {
       pdfPageNumber: 'PDF page number',
       pdfFooter: 'PDF footer',
       pdfHeader: 'PDF header',
+    },
+    search: {
+      placeholder: 'Search settings',
+      empty: 'No match found',
+      emptyTip: 'Try another keyword',
     },
   },
   shortcutKey: {

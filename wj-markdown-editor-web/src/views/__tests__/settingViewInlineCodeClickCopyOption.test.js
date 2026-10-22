@@ -23,6 +23,6 @@ test('设置页中的行内代码点击行为应展示为标题加动作选项',
 
   assert.match(
     source,
-    /<a-descriptions-item :label="\$t\('config\.editor\.inlineCodeClickCopy'\)">[\s\S]*?<a-radio-button :value="true">[\s\S]*?\$t\('config\.editor\.inlineCodeClickCopyOption\.copy'\)[\s\S]*?<\/a-radio-button>[\s\S]*?<a-radio-button :value="false">[\s\S]*?\$t\('config\.saveOption\.noOperation'\)[\s\S]*?<\/a-radio-button>[\s\S]*?<\/a-radio-group>[\s\S]*?<\/a-descriptions-item>/u,
+    /<a-descriptions-item[^>]*:label="settingLabel\('editor\.inlineCodeClickCopy'\)"[^>]*>[\s\S]*?<a-radio-button :value="true">[\s\S]*?\$t\('config\.editor\.inlineCodeClickCopyOption\.copy'\)[\s\S]*?<\/a-radio-button>[\s\S]*?<a-radio-button :value="false">[\s\S]*?\$t\('config\.saveOption\.noOperation'\)[\s\S]*?<\/a-radio-button>[\s\S]*?<\/a-radio-group>[\s\S]*?<\/a-descriptions-item>/u,
   )
 })

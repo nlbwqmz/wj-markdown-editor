@@ -21,7 +21,7 @@ test('设置页中的编辑页预览位置应展示为左右选项并绑定配�
   assert.equal(enUS.config.view.editorPreviewPositionOption.left, 'Left')
   assert.equal(enUS.config.view.editorPreviewPositionOption.right, 'Right')
 
-  const sectionStart = source.indexOf(`<a-descriptions-item :label="$t('config.view.editorPreviewPosition')">`)
+  const sectionStart = source.indexOf(`:label="settingLabel('view.editorPreviewPosition')"`)
   assert.notEqual(sectionStart, -1)
 
   const sectionEnd = source.indexOf('</a-descriptions-item>', sectionStart)

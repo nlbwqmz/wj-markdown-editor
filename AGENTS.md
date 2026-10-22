@@ -26,7 +26,7 @@
 - 支持公式（KaTeX）、Mermaid、GitHub Alert、自定义 Container、脚注、图片尺寸、文字颜色
 - 支持预览区资源右键菜单、在资源所在目录中打开、删除当前引用、删除全部引用、按策略删除本地文件
 - 支持外部文件变更监听，可配置为直接应用或弹出 diff 对比确认
-- 支持全文搜索、编辑区搜索、设置页搜索定位
+- 支持全文搜索、编辑区搜索、设置页搜索过滤（左栏顶部搜索框，跨 tab 过滤内容区并高亮命中）
 - 支持导出 PDF、PNG、JPEG
 - 支持水印、自定义快捷键、自动保存、启动视图模式切换
 
@@ -298,6 +298,9 @@ npm run test:run
   - 文档标签栏：展示标签列表、切换、关闭、右键菜单；所有动作都发命令给主进程，渲染层不做脏判断、不改顺序
 - `wj-markdown-editor-web/src/views/SettingView.vue`
   - 设置页，涵盖通用配置、字体、视图、编辑器、文件、图片、图床、快捷键、水印、导出
+  - 左栏顶部为设置项搜索框：输入非空时取消 tab 选中标识，内容区跨 tab 只展示命中项并高亮 label 命中片段；点击 tab 会清空搜索，手动清空后回到搜索前的 tab
+  - 过滤与高亮全部是声明式条件（`isSettingPanelVisible` / `isSettingSectionVisible` / `isSettingItemVisible` + `settingLabel`），不依赖 DOM 定位
+  - `a-descriptions-item` 不透传 attrs，设置项 label 必须通过 label VNode 挂 `data-setting-id`；带 tooltip/popover 的项用局部组件 `SettingSearchLabel` 复用同一渲染
 - `wj-markdown-editor-web/src/views/ExportView.vue`
   - 导出窗口渲染页
 
@@ -314,7 +317,12 @@ npm run test:run
 - `wj-markdown-editor-web/src/util/editor/composables/`
   - 编辑器核心、同步滚动、视图锚点、工具栏构建等组合逻辑
 - `wj-markdown-editor-web/src/util/searchBarController.js`
-  - 设置页/预览区搜索控制器
+  - 预览区搜索控制器；设置页不注册该控制器，设置页使用独立的设置项搜索
+- `wj-markdown-editor-web/src/util/config/settingSearchIndex.js`
+  - 设置项搜索索引：分组元数据、静态设置项（labelKey + 手写 keywords）、快捷键项生成器
+  - 索引 id 必须与 `SettingView.vue` 中的 `isSettingItemVisible('<id>')` / `settingLabel('<id>')` 完全一致，由 `settingSearchIndexConsistency.test.js` 兜底
+- `wj-markdown-editor-web/src/util/config/settingSearchUtil.js`
+  - 设置项搜索纯函数：归一化（NFKC + 小写 + 空白折叠）、分词、加权匹配（label 双语 / keywords / keymap）、分组名与 tab 名完全相等展开、稳定排序、高亮区间合并
 
 ### Renderer 文档会话模块
 

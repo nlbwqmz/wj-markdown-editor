@@ -26,7 +26,7 @@ export default {
         frame: false,
         icon: path.resolve(__dirname, '../../../icon/favicon.ico'),
         title: '设置',
-        width: 800,
+        width: 900,
         height: 800,
         show: false,
         maximizable: false,

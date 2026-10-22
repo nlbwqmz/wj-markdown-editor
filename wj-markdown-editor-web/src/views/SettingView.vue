@@ -1,7 +1,7 @@
 <script setup>
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { computed, createVNode, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, createVNode, defineComponent, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ColorPicker from '@/components/AsyncColorPicker.js'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
@@ -14,12 +14,18 @@ import {
   normalizeRecentMaxInputValue,
 } from '@/util/config/settingConfigDraftUtil.js'
 import { createSettingConfigMutationController } from '@/util/config/settingConfigMutationController.js'
+import { resolveSettingSearchItemList } from '@/util/config/settingSearchIndex.js'
+import {
+  searchSettingItems,
+  splitSettingSearchHighlightSegments,
+  tokenizeSettingSearchQuery,
+} from '@/util/config/settingSearchUtil.js'
 import constant from '@/util/constant.js'
 import { resolveLanguagePreference } from '@/util/languagePreferenceUtil.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 import { notifyFirstScreenReady } from '@/util/startupLoadingUtil.js'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const store = useCommonStore()
 
@@ -93,6 +99,14 @@ const tabIndicatorReady = ref(false)
 const tabButtonMap = new Map()
 const tabScrollTopMap = new Map()
 
+/**
+ * 设置项搜索：搜索框位于左栏顶部，输入非空时右侧内容区按命中结果过滤。
+ * 搜索期间 activeTabKey 保持不变（只取消 tab 选中标识），因此退出搜索时天然回到原 tab。
+ */
+const settingSearchQuery = ref('')
+
+const isSettingSearchActive = computed(() => settingSearchQuery.value.trim().length > 0)
+
 // 快捷键按 type 拆成全局与编辑器两段；缺失 type 的旧配置按全局处理。
 const globalShortcutKeyList = computed(() => {
   const list = config.value?.shortcutKeyList ?? []
@@ -116,6 +130,12 @@ function setTabButtonRef(key, element) {
  * 滑块位置依赖真实 DOM 高度，字号变化、语言切换、窗口缩放后都要重算。
  */
 function syncTabIndicator() {
+  // 搜索态下左栏没有选中项，滑块隐藏。
+  if (isSettingSearchActive.value) {
+    tabIndicatorStyle.value = { opacity: '0' }
+    return
+  }
+
   const activeButton = tabButtonMap.get(activeTabKey.value)
   if (!activeButton) {
     tabIndicatorStyle.value = { opacity: '0' }
@@ -144,6 +164,137 @@ async function activateTab(key) {
   }
 }
 
+/**
+ * 搜索相关的派生状态与可见性判定。
+ */
+const settingSearchTokenList = computed(() => tokenizeSettingSearchQuery(settingSearchQuery.value))
+
+const settingSearchItemList = computed(() => {
+  const primaryLocale = locale.value
+  const altLocale = primaryLocale === 'zh-CN' ? 'en-US' : 'zh-CN'
+  // 浅拷贝快捷键字段，让 keymap 修改也能触发索引重建。
+  const shortcutKeyList = (config.value?.shortcutKeyList ?? []).map(item => ({
+    id: item.id,
+    keymap: item.keymap,
+    type: item.type,
+  }))
+
+  return resolveSettingSearchItemList({
+    resolvePrimaryText: key => t(key, {}, { locale: primaryLocale }),
+    resolveAltText: key => t(key, {}, { locale: altLocale }),
+    shortcutKeyList,
+  })
+})
+
+const settingSearchResultList = computed(() => searchSettingItems({
+  itemList: settingSearchItemList.value,
+  query: settingSearchQuery.value,
+}))
+
+const settingSearchHitIdSet = computed(() => new Set(settingSearchResultList.value.map(item => item.id)))
+const settingSearchHitSectionIdSet = computed(() => new Set(settingSearchResultList.value.map(item => item.sectionId)))
+const settingSearchHitTabKeySet = computed(() => new Set(settingSearchResultList.value.map(item => item.tabKey)))
+const settingSearchItemMap = computed(() => new Map(settingSearchItemList.value.map(item => [item.id, item])))
+
+function isSettingItemVisible(id) {
+  return !isSettingSearchActive.value || settingSearchHitIdSet.value.has(id)
+}
+
+function isSettingSectionVisible(sectionId) {
+  return !isSettingSearchActive.value || settingSearchHitSectionIdSet.value.has(sectionId)
+}
+
+function isSettingPanelVisible(tabKey) {
+  return isSettingSearchActive.value
+    ? settingSearchHitTabKeySet.value.has(tabKey)
+    : activeTabKey.value === tabKey
+}
+
+/**
+ * 生成设置项 label 节点：非搜索态为纯文本，搜索态按命中片段高亮。
+ * a-descriptions-item 不透传 attrs，只能通过 label VNode 挂载 data-setting-id。
+ */
+function settingLabelNode(id) {
+  const text = settingSearchItemMap.value.get(id)?.labelText ?? ''
+
+  if (!isSettingSearchActive.value) {
+    return h('span', { 'data-setting-id': id }, text)
+  }
+
+  const segmentList = splitSettingSearchHighlightSegments(text, settingSearchTokenList.value)
+  return h('span', { 'data-setting-id': id }, segmentList.map(segment => (
+    segment.hit
+      ? h('mark', { class: 'setting-search-hit' }, segment.text)
+      : segment.text
+  )))
+}
+
+// label 插槽内复用同一渲染逻辑，保证带 tooltip / popover 的设置项也能高亮。
+const SettingSearchLabel = defineComponent({
+  name: 'SettingSearchLabel',
+  props: {
+    id: { type: String, required: true },
+  },
+  setup(props) {
+    return () => settingLabelNode(props.id)
+  },
+})
+
+function settingLabel(id) {
+  return settingLabelNode(id)
+}
+
+async function scrollSettingContentToTop() {
+  await nextTick()
+  if (contentRef.value) {
+    contentRef.value.scrollTop = 0
+  }
+}
+
+watch(isSettingSearchActive, async (isActive, wasActive) => {
+  if (isActive && !wasActive) {
+    await scrollSettingContentToTop()
+  }
+
+  if (!isActive && wasActive) {
+    await nextTick()
+    syncTabIndicator()
+    if (contentRef.value) {
+      contentRef.value.scrollTop = tabScrollTopMap.get(activeTabKey.value) ?? 0
+    }
+    return
+  }
+
+  await nextTick()
+  syncTabIndicator()
+})
+
+// 搜索词变化时回到顶部，避免停在上一轮结果的位置。
+watch(settingSearchQuery, async (nextValue, previousValue) => {
+  if (!nextValue.trim() || !previousValue.trim()) {
+    return
+  }
+  await scrollSettingContentToTop()
+})
+
+function onSettingSearchEscape() {
+  settingSearchQuery.value = ''
+}
+
+/**
+ * 点击 tab：搜索态下先退出搜索并切到目标 tab，非搜索态维持原有切换逻辑。
+ * 先更新 activeTabKey，退出搜索的 watch 会按新 tab 恢复滚动位置。
+ */
+function onSettingTabClick(key) {
+  if (!isSettingSearchActive.value) {
+    activateTab(key)
+    return
+  }
+
+  activeTabKey.value = key
+  settingSearchQuery.value = ''
+}
+
 function onTabKeydown(event, currentKey) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
     return
@@ -154,7 +305,7 @@ function onTabKeydown(event, currentKey) {
   const currentIndex = keyList.indexOf(currentKey)
   const step = event.key === 'ArrowDown' ? 1 : -1
   const nextKey = keyList[(currentIndex + step + keyList.length) % keyList.length]
-  activateTab(nextKey)
+  onSettingTabClick(nextKey)
   tabButtonMap.get(nextKey)?.focus()
 }
 
@@ -387,34 +538,62 @@ function reset() {
       <TopBarActionButton icon="i-tabler:x" danger @click="settingClose" />
     </template>
     <div v-if="config" ref="settingContainerRef" class="allow-search setting-root h-full w-full flex">
-      <nav class="wj-scrollbar setting-tabs shrink-0" role="tablist" aria-orientation="vertical">
-        <div class="setting-tabs__inner" :class="{ 'is-ready': tabIndicatorReady }">
-          <div class="setting-tabs__indicator" :style="tabIndicatorStyle" aria-hidden="true" />
-          <button
-            v-for="tab in settingTabList"
-            :key="tab.key"
-            :ref="element => setTabButtonRef(tab.key, element)"
-            type="button"
-            role="tab"
-            class="setting-tab"
-            :class="{ 'is-active': activeTabKey === tab.key }"
-            :aria-selected="activeTabKey === tab.key"
-            @click="activateTab(tab.key)"
-            @keydown="onTabKeydown($event, tab.key)"
+      <nav class="setting-tabs shrink-0">
+        <div class="setting-tabs__search" @keydown.esc="onSettingSearchEscape">
+          <a-input
+            :value="settingSearchQuery"
+            :placeholder="$t('config.search.placeholder')"
+            allow-clear
+            class="setting-search-input"
+            @update:value="value => settingSearchQuery = value ?? ''"
           >
-            <span class="setting-tab__icon" :class="tab.icon" />
-            <span class="setting-tab__label">{{ tab.label }}</span>
-          </button>
+            <template #prefix>
+              <span class="setting-search-input__icon i-tabler:search" />
+            </template>
+          </a-input>
+        </div>
+        <div class="setting-tabs__list wj-scrollbar">
+          <div class="setting-tabs__inner" role="tablist" aria-orientation="vertical" :class="{ 'is-ready': tabIndicatorReady }">
+            <div class="setting-tabs__indicator" :style="tabIndicatorStyle" aria-hidden="true" />
+            <button
+              v-for="tab in settingTabList"
+              :key="tab.key"
+              :ref="element => setTabButtonRef(tab.key, element)"
+              type="button"
+              role="tab"
+              class="setting-tab"
+              :class="{ 'is-active': !isSettingSearchActive && activeTabKey === tab.key }"
+              :aria-selected="!isSettingSearchActive && activeTabKey === tab.key"
+              @click="onSettingTabClick(tab.key)"
+              @keydown="onTabKeydown($event, tab.key)"
+            >
+              <span class="setting-tab__icon" :class="tab.icon" />
+              <span class="setting-tab__label">{{ tab.label }}</span>
+            </button>
+          </div>
         </div>
       </nav>
 
-      <div ref="contentRef" class="wj-scrollbar setting-content min-w-0 flex-1 overflow-auto">
-        <section v-show="activeTabKey === 'general'" data-panel-key="general" class="setting-panel">
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+      <div ref="contentRef" class="wj-scrollbar setting-content min-w-0 flex-1 overflow-auto" :class="{ 'is-searching': isSettingSearchActive }">
+        <div
+          v-if="isSettingSearchActive && settingSearchResultList.length === 0"
+          class="setting-search-empty flex flex-col items-center justify-center"
+          role="status"
+        >
+          <div class="setting-search-empty__icon i-tabler:search-off" />
+          <div class="setting-search-empty__title">
+            {{ $t('config.search.empty') }}
+          </div>
+          <div class="setting-search-empty__tip">
+            {{ $t('config.search.emptyTip') }}
+          </div>
+        </div>
+        <section v-show="isSettingPanelVisible('general')" data-panel-key="general" class="setting-panel">
+          <a-descriptions v-show="isSettingSectionVisible('general')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="general">
             <template #title>
               <span id="general">{{ $t('config.title.general') }}</span>
             </template>
-            <a-descriptions-item :label="$t('config.general.language')">
+            <a-descriptions-item v-if="isSettingItemVisible('general.language')" :label="settingLabel('general.language')">
               <a-select
                 :value="config.language"
                 class="w-full"
@@ -431,12 +610,7 @@ function reset() {
                 </a-select-option>
               </a-select>
             </a-descriptions-item>
-            <a-descriptions-item>
-              <template #label>
-                <div class="flex items-center gap-1">
-                  <span>{{ $t('config.general.startupView') }}</span>
-                </div>
-              </template>
+            <a-descriptions-item v-if="isSettingItemVisible('general.startupView')" :label="settingLabel('general.startupView')">
               <a-radio-group :value="config.startView" button-style="solid" @update:value="value => submitSetPathMutation(['startView'], value)">
                 <a-radio-button value="source">
                   {{ $t('config.general.startupViewOption.source') }}
@@ -449,7 +623,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.general.openLastRecord')">
+            <a-descriptions-item v-if="isSettingItemVisible('general.openLastRecord')" :label="settingLabel('general.openLastRecord')">
               <a-radio-group :value="config.openRecent" button-style="solid" @update:value="value => submitSetPathMutation(['openRecent'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.yes') }}
@@ -459,7 +633,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.general.recentHistoryCount')">
+            <a-descriptions-item v-if="isSettingItemVisible('general.recentHistoryCount')" :label="settingLabel('general.recentHistoryCount')">
               <a-input-number
                 :value="config.recentMax"
                 :min="0"
@@ -471,10 +645,10 @@ function reset() {
                 @update:value="onRecentMaxUpdate"
               />
             </a-descriptions-item>
-            <a-descriptions-item>
+            <a-descriptions-item v-if="isSettingItemVisible('general.autoSave')">
               <template #label>
                 <div class="flex items-center gap-1">
-                  <span>{{ $t('config.general.autoSave') }}</span>
+                  <SettingSearchLabel id="general.autoSave" />
                   <a-tooltip placement="top" color="#1677ff" class="flex-shrink-0">
                     <template #title>
                       {{ $t('config.general.autoSaveOption.tip') }}
@@ -485,10 +659,10 @@ function reset() {
               </template>
               <a-checkbox-group :value="config.autoSave" :options="autoSaveOptionList" @update:value="onAutoSaveUpdate" />
             </a-descriptions-item>
-            <a-descriptions-item>
+            <a-descriptions-item v-if="isSettingItemVisible('general.externalFileChangeStrategy')">
               <template #label>
                 <div class="flex items-center gap-1">
-                  <span>{{ $t('config.general.externalFileChangeStrategy') }}</span>
+                  <SettingSearchLabel id="general.externalFileChangeStrategy" />
                   <a-tooltip placement="top" color="#1677ff" class="flex-shrink-0">
                     <template #title>
                       {{ $t('config.general.externalFileChangeStrategyTip') }}
@@ -504,11 +678,11 @@ function reset() {
               </a-radio-group>
             </a-descriptions-item>
           </a-descriptions>
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+          <a-descriptions v-show="isSettingSectionVisible('fileManager')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="fileManager">
             <template #title>
               <span id="fileManager">{{ $t('config.title.fileManager') }}</span>
             </template>
-            <a-descriptions-item :label="$t('config.fileManager.defaultView')">
+            <a-descriptions-item v-if="isSettingItemVisible('fileManager.defaultView')" :label="settingLabel('fileManager.defaultView')">
               <a-radio-group :value="config.sidebarDefaultView" button-style="solid" @update:value="value => submitSetPathMutation(['sidebarDefaultView'], value)">
                 <a-radio-button value="close">
                   {{ $t('config.fileManager.defaultViewOption.close') }}
@@ -521,7 +695,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.fileManager.defaultDirectory')">
+            <a-descriptions-item v-if="isSettingItemVisible('fileManager.defaultDirectory')" :label="settingLabel('fileManager.defaultDirectory')">
               <a-input
                 :value="config.fileDefaultDirectory"
                 readonly
@@ -544,7 +718,7 @@ function reset() {
                 </template>
               </a-input>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.fileManager.markdownLeftClickAction')">
+            <a-descriptions-item v-if="isSettingItemVisible('fileManager.markdownLeftClickAction')" :label="settingLabel('fileManager.markdownLeftClickAction')">
               <a-radio-group
                 :value="config.fileManagerLeftClickAction.markdown"
                 button-style="solid"
@@ -564,12 +738,12 @@ function reset() {
           </a-descriptions>
         </section>
 
-        <section v-show="activeTabKey === 'appearance'" data-panel-key="appearance" class="setting-panel">
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+        <section v-show="isSettingPanelVisible('appearance')" data-panel-key="appearance" class="setting-panel">
+          <a-descriptions v-show="isSettingSectionVisible('view')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="view">
             <template #title>
               <span id="view">{{ $t('config.title.view') }}</span>
             </template>
-            <a-descriptions-item :label="$t('config.view.editorPreviewPosition')">
+            <a-descriptions-item v-if="isSettingItemVisible('view.editorPreviewPosition')" :label="settingLabel('view.editorPreviewPosition')">
               <a-radio-group :value="config.editor.previewPosition" button-style="solid" @update:value="value => submitSetPathMutation(['editor', 'previewPosition'], value)">
                 <a-radio-button value="left">
                   {{ $t('config.view.editorPreviewPositionOption.left') }}
@@ -579,7 +753,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.view.globalTheme')">
+            <a-descriptions-item v-if="isSettingItemVisible('view.globalTheme')" :label="settingLabel('view.globalTheme')">
               <a-radio-group :value="config.theme.global" button-style="solid" @update:value="value => submitSetPathMutation(['theme', 'global'], value)">
                 <a-radio-button value="light">
                   {{ $t('config.view.globalThemeOption.light') }}
@@ -589,7 +763,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.view.codeTheme')">
+            <a-descriptions-item v-if="isSettingItemVisible('view.codeTheme')" :label="settingLabel('view.codeTheme')">
               <a-select
                 :value="config.theme.code"
                 class="w-full"
@@ -600,7 +774,7 @@ function reset() {
                 </a-select-option>
               </a-select>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.view.previewTheme')">
+            <a-descriptions-item v-if="isSettingItemVisible('view.previewTheme')" :label="settingLabel('view.previewTheme')">
               <a-select
                 :value="config.theme.preview"
                 class="w-full"
@@ -611,10 +785,10 @@ function reset() {
                 </a-select-option>
               </a-select>
             </a-descriptions-item>
-            <a-descriptions-item>
+            <a-descriptions-item v-if="isSettingItemVisible('view.previewImageShadow')">
               <template #label>
                 <div class="flex items-center gap-1">
-                  <span>{{ $t('config.view.previewImageShadow') }}</span>
+                  <SettingSearchLabel id="view.previewImageShadow" />
                   <a-tooltip placement="top" color="#1677ff" class="flex-shrink-0">
                     <template #title>
                       {{ $t('config.view.previewImageShadowTip') }}
@@ -632,7 +806,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.view.previewWidth')">
+            <a-descriptions-item v-if="isSettingItemVisible('view.previewWidth')" :label="settingLabel('view.previewWidth')">
               <a-slider
                 :value="config.previewWidth"
                 :min="20"
@@ -640,7 +814,7 @@ function reset() {
                 @update:value="value => submitSetPathMutation(['previewWidth'], value)"
               />
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.view.fontSize')">
+            <a-descriptions-item v-if="isSettingItemVisible('view.fontSize')" :label="settingLabel('view.fontSize')">
               <a-slider
                 :value="config.fontSize"
                 :min="14"
@@ -649,7 +823,7 @@ function reset() {
               />
             </a-descriptions-item>
           </a-descriptions>
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+          <a-descriptions v-show="isSettingSectionVisible('font')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="font">
             <template #title>
               <div id="font" class="flex items-center gap-1">
                 <span>{{ $t('config.title.fontFamily') }}</span>
@@ -661,27 +835,27 @@ function reset() {
                 </a-tooltip>
               </div>
             </template>
-            <a-descriptions-item :label="$t('config.fontFamily.editArea')">
+            <a-descriptions-item v-if="isSettingItemVisible('font.editArea')" :label="settingLabel('font.editArea')">
               <a-select v-model:value="config.fontFamily.editArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => onNormalizedStringFieldChange(['fontFamily', 'editArea'], value)" />
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.fontFamily.previewArea')">
+            <a-descriptions-item v-if="isSettingItemVisible('font.previewArea')" :label="settingLabel('font.previewArea')">
               <a-select v-model:value="config.fontFamily.previewArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => onNormalizedStringFieldChange(['fontFamily', 'previewArea'], value)" />
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.fontFamily.codeArea')">
+            <a-descriptions-item v-if="isSettingItemVisible('font.codeArea')" :label="settingLabel('font.codeArea')">
               <a-select v-model:value="config.fontFamily.codeArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" allow-clear show-search @change="value => onNormalizedStringFieldChange(['fontFamily', 'codeArea'], value)" />
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.fontFamily.otherArea')">
+            <a-descriptions-item v-if="isSettingItemVisible('font.otherArea')" :label="settingLabel('font.otherArea')">
               <a-select v-model:value="config.fontFamily.otherArea" :options="systemFontList" class="w-full" :filter-option="systemFontSelectFilterOption" show-search allow-clear @change="value => onNormalizedStringFieldChange(['fontFamily', 'otherArea'], value)" />
             </a-descriptions-item>
           </a-descriptions>
         </section>
 
-        <section v-show="activeTabKey === 'editor'" data-panel-key="editor" class="setting-panel">
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+        <section v-show="isSettingPanelVisible('editor')" data-panel-key="editor" class="setting-panel">
+          <a-descriptions v-show="isSettingSectionVisible('editor')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="editor">
             <template #title>
               <span id="editor">{{ $t('config.title.editor') }}</span>
             </template>
-            <a-descriptions-item :label="$t('config.editor.lineNumber')">
+            <a-descriptions-item v-if="isSettingItemVisible('editor.lineNumber')" :label="settingLabel('editor.lineNumber')">
               <a-radio-group :value="config.editorExtension.lineNumbers" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'lineNumbers'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.yes') }}
@@ -691,7 +865,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.editor.lineWrapping')">
+            <a-descriptions-item v-if="isSettingItemVisible('editor.lineWrapping')" :label="settingLabel('editor.lineWrapping')">
               <a-radio-group :value="config.editorExtension.lineWrapping" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'lineWrapping'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.yes') }}
@@ -701,7 +875,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.editor.highlightActiveLine')">
+            <a-descriptions-item v-if="isSettingItemVisible('editor.highlightActiveLine')" :label="settingLabel('editor.highlightActiveLine')">
               <a-radio-group :value="config.editorExtension.highlightActiveLine" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'highlightActiveLine'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.yes') }}
@@ -711,7 +885,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.editor.associationHighlight')">
+            <a-descriptions-item v-if="isSettingItemVisible('editor.associationHighlight')" :label="settingLabel('editor.associationHighlight')">
               <a-radio-group :value="config.editor.associationHighlight" button-style="solid" @update:value="value => submitSetPathMutation(['editor', 'associationHighlight'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.yes') }}
@@ -721,7 +895,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.editor.inlineCodeClickCopy')">
+            <a-descriptions-item v-if="isSettingItemVisible('editor.inlineCodeClickCopy')" :label="settingLabel('editor.inlineCodeClickCopy')">
               <a-radio-group :value="config.markdown.inlineCodeClickCopy" button-style="solid" @update:value="value => submitSetPathMutation(['markdown', 'inlineCodeClickCopy'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.editor.inlineCodeClickCopyOption.copy') }}
@@ -731,10 +905,10 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item>
+            <a-descriptions-item v-if="isSettingItemVisible('editor.highlightMatchingText')">
               <template #label>
                 <div class="flex items-center gap-1">
-                  <span>{{ $t('config.editor.highlightMatchingText') }}</span>
+                  <SettingSearchLabel id="editor.highlightMatchingText" />
                   <a-tooltip placement="top" color="#1677ff" class="flex-shrink-0">
                     <template #title>
                       {{ $t('config.editor.highlightMatchingTextOption.tip') }}
@@ -752,7 +926,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.editor.highlightMatchingBracket')">
+            <a-descriptions-item v-if="isSettingItemVisible('editor.highlightMatchingBracket')" :label="settingLabel('editor.highlightMatchingBracket')">
               <a-radio-group :value="config.editorExtension.bracketMatching" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'bracketMatching'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.yes') }}
@@ -762,7 +936,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.editor.autoCloseBracket')">
+            <a-descriptions-item v-if="isSettingItemVisible('editor.autoCloseBracket')" :label="settingLabel('editor.autoCloseBracket')">
               <a-radio-group :value="config.editorExtension.closeBrackets" button-style="solid" @update:value="value => submitSetPathMutation(['editorExtension', 'closeBrackets'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.yes') }}
@@ -772,10 +946,10 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item>
+            <a-descriptions-item v-if="isSettingItemVisible('editor.typographer')">
               <template #label>
                 <div class="flex items-center gap-1">
-                  <span>{{ $t('config.editor.typographer') }}</span>
+                  <SettingSearchLabel id="editor.typographer" />
                   <a-popover trigger="hover" placement="topRight" color="#1677ff">
                     <template #title>
                       <span class="color-white">{{ $t('config.editor.typographerOption.tipTitle') }}</span>
@@ -799,49 +973,53 @@ function reset() {
           </a-descriptions>
         </section>
 
-        <section v-show="activeTabKey === 'shortcut'" data-panel-key="shortcut" class="setting-panel">
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+        <section v-show="isSettingPanelVisible('shortcut')" data-panel-key="shortcut" class="setting-panel">
+          <a-descriptions v-show="isSettingSectionVisible('globalShortcut')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="globalShortcut">
             <template #title>
               <span id="shortcut">{{ $t('config.title.globalShortcut') }}</span>
             </template>
-            <a-descriptions-item v-for="item in globalShortcutKeyList" :key="item.id" :label="$t(`shortcutKey.${item.id}`)">
-              <a-input
-                :value="item.keymap"
-                readonly
-                class="select-none"
-                @focus="onShortcutKeyFocus($event, item)"
-              >
-                <template #addonAfter>
-                  <a-checkbox :checked="item.enabled" @update:checked="checked => onShortcutKeyEnabledUpdate(item, checked)" />
-                </template>
-              </a-input>
-            </a-descriptions-item>
-          </a-descriptions>
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
-            <template #title>
-              <span>{{ $t('config.title.editorShortcut') }}</span>
+            <template v-for="item in globalShortcutKeyList" :key="item.id">
+              <a-descriptions-item v-if="isSettingItemVisible(`shortcut.${item.id}`)" :label="settingLabel(`shortcut.${item.id}`)">
+                <a-input
+                  :value="item.keymap"
+                  readonly
+                  class="select-none"
+                  @focus="onShortcutKeyFocus($event, item)"
+                >
+                  <template #addonAfter>
+                    <a-checkbox :checked="item.enabled" @update:checked="checked => onShortcutKeyEnabledUpdate(item, checked)" />
+                  </template>
+                </a-input>
+              </a-descriptions-item>
             </template>
-            <a-descriptions-item v-for="item in editorShortcutKeyList" :key="item.id" :label="$t(`shortcutKey.${item.id}`)">
-              <a-input
-                :value="item.keymap"
-                readonly
-                class="select-none"
-                @focus="onShortcutKeyFocus($event, item)"
-              >
-                <template #addonAfter>
-                  <a-checkbox :checked="item.enabled" @update:checked="checked => onShortcutKeyEnabledUpdate(item, checked)" />
-                </template>
-              </a-input>
-            </a-descriptions-item>
+          </a-descriptions>
+          <a-descriptions v-show="isSettingSectionVisible('editorShortcut')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="editorShortcut">
+            <template #title>
+              <span id="editorShortcut">{{ $t('config.title.editorShortcut') }}</span>
+            </template>
+            <template v-for="item in editorShortcutKeyList" :key="item.id">
+              <a-descriptions-item v-if="isSettingItemVisible(`shortcut.${item.id}`)" :label="settingLabel(`shortcut.${item.id}`)">
+                <a-input
+                  :value="item.keymap"
+                  readonly
+                  class="select-none"
+                  @focus="onShortcutKeyFocus($event, item)"
+                >
+                  <template #addonAfter>
+                    <a-checkbox :checked="item.enabled" @update:checked="checked => onShortcutKeyEnabledUpdate(item, checked)" />
+                  </template>
+                </a-input>
+              </a-descriptions-item>
+            </template>
           </a-descriptions>
         </section>
 
-        <section v-show="activeTabKey === 'fileAndImage'" data-panel-key="fileAndImage" class="setting-panel">
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+        <section v-show="isSettingPanelVisible('fileAndImage')" data-panel-key="fileAndImage" class="setting-panel">
+          <a-descriptions v-show="isSettingSectionVisible('file')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="file">
             <template #title>
               <span id="file">{{ $t('config.title.file') }}</span>
             </template>
-            <a-descriptions-item :label="$t('config.file.file')">
+            <a-descriptions-item v-if="isSettingItemVisible('file.file')" :label="settingLabel('file.file')">
               <a-select
                 :value="config.fileMode"
                 class="w-full"
@@ -858,7 +1036,7 @@ function reset() {
                 </a-select-option>
               </a-select>
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.fileMode === '2'" :label="$t('config.file.absolutePath')">
+            <a-descriptions-item v-if="config.fileMode === '2' && isSettingItemVisible('file.absolutePath')" :label="settingLabel('file.absolutePath')">
               <a-input
                 v-model:value="config.fileAbsolutePath"
                 readonly
@@ -868,15 +1046,15 @@ function reset() {
                 </template>
               </a-input>
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.fileMode === '4'" :label="$t('config.file.relativePath')">
+            <a-descriptions-item v-if="config.fileMode === '4' && isSettingItemVisible('file.relativePath')" :label="settingLabel('file.relativePath')">
               <a-input :value="config.fileRelativePath" @update:value="value => submitSetPathMutation(['fileRelativePath'], value)" />
             </a-descriptions-item>
           </a-descriptions>
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+          <a-descriptions v-show="isSettingSectionVisible('image')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="image">
             <template #title>
               <span id="image">{{ $t('config.title.picture') }}</span>
             </template>
-            <a-descriptions-item :label="$t('config.picture.localPicture')">
+            <a-descriptions-item v-if="isSettingItemVisible('image.localPicture')" :label="settingLabel('image.localPicture')">
               <a-select
                 :value="config.imgLocal"
                 class="w-full"
@@ -896,7 +1074,7 @@ function reset() {
                 </a-select-option>
               </a-select>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.picture.networkPicture')">
+            <a-descriptions-item v-if="isSettingItemVisible('image.networkPicture')" :label="settingLabel('image.networkPicture')">
               <a-select
                 :value="config.imgNetwork"
                 class="w-full"
@@ -919,7 +1097,7 @@ function reset() {
                 </a-select-option>
               </a-select>
             </a-descriptions-item>
-            <a-descriptions-item v-if="showImgAbsolutePath" :label="$t('config.picture.absolutePath')">
+            <a-descriptions-item v-if="showImgAbsolutePath && isSettingItemVisible('image.absolutePath')" :label="settingLabel('image.absolutePath')">
               <a-input
                 v-model:value="config.imgAbsolutePath"
                 readonly
@@ -929,15 +1107,15 @@ function reset() {
                 </template>
               </a-input>
             </a-descriptions-item>
-            <a-descriptions-item v-if="showImgRelativePath" :label="$t('config.picture.relativePath')">
+            <a-descriptions-item v-if="showImgRelativePath && isSettingItemVisible('image.relativePath')" :label="settingLabel('image.relativePath')">
               <a-input :value="config.imgRelativePath" @update:value="value => submitSetPathMutation(['imgRelativePath'], value)" />
             </a-descriptions-item>
           </a-descriptions>
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+          <a-descriptions v-show="isSettingSectionVisible('imageBed')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="imageBed">
             <template #title>
               <span id="imageBed">{{ $t('config.title.pictureBed') }}</span>
             </template>
-            <a-descriptions-item :label="$t('config.pictureBed.pictureBed')">
+            <a-descriptions-item v-if="isSettingItemVisible('imageBed.pictureBed')" :label="settingLabel('imageBed.pictureBed')">
               <a-select
                 :value="config.imageBed.uploader"
                 class="w-full"
@@ -950,38 +1128,38 @@ function reset() {
             </a-descriptions-item>
 
             <!-- smms -->
-            <a-descriptions-item v-if="config.imageBed.uploader === 'smms'" label="Token">
+            <a-descriptions-item v-if="config.imageBed.uploader === 'smms' && isSettingItemVisible('imageBed.smms.token')" :label="settingLabel('imageBed.smms.token')">
               <a-input-password :value="config.imageBed.smms.token" @update:value="value => submitSetPathMutation(['imageBed', 'smms', 'token'], value)" />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.imageBed.uploader === 'smms'" :label="$t('config.pictureBed.customDomain')">
+            <a-descriptions-item v-if="config.imageBed.uploader === 'smms' && isSettingItemVisible('imageBed.smms.customDomain')" :label="settingLabel('imageBed.smms.customDomain')">
               <a-input :value="config.imageBed.smms.backupDomain" @update:value="value => submitSetPathMutation(['imageBed', 'smms', 'backupDomain'], value)" />
             </a-descriptions-item>
 
             <!-- github -->
-            <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.repository')">
+            <a-descriptions-item v-if="config.imageBed.uploader === 'github' && isSettingItemVisible('imageBed.github.repo')" :label="settingLabel('imageBed.github.repo')">
               <a-input :value="config.imageBed.github.repo" placeholder="owner/repo" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'repo'], value)" />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.imageBed.uploader === 'github'" label="Token">
+            <a-descriptions-item v-if="config.imageBed.uploader === 'github' && isSettingItemVisible('imageBed.github.token')" :label="settingLabel('imageBed.github.token')">
               <a-input-password :value="config.imageBed.github.token" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'token'], value)" />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.storagePath')">
+            <a-descriptions-item v-if="config.imageBed.uploader === 'github' && isSettingItemVisible('imageBed.github.path')" :label="settingLabel('imageBed.github.path')">
               <a-input :value="config.imageBed.github.path" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'path'], value)" />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.branch')">
+            <a-descriptions-item v-if="config.imageBed.uploader === 'github' && isSettingItemVisible('imageBed.github.branch')" :label="settingLabel('imageBed.github.branch')">
               <a-input :value="config.imageBed.github.branch" placeholder="main" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'branch'], value)" />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.imageBed.uploader === 'github'" :label="$t('config.pictureBed.customDomain')">
+            <a-descriptions-item v-if="config.imageBed.uploader === 'github' && isSettingItemVisible('imageBed.github.customUrl')" :label="settingLabel('imageBed.github.customUrl')">
               <a-input :value="config.imageBed.github.customUrl" @update:value="value => submitSetPathMutation(['imageBed', 'github', 'customUrl'], value)" />
             </a-descriptions-item>
           </a-descriptions>
         </section>
 
-        <section v-show="activeTabKey === 'exportAndWatermark'" data-panel-key="exportAndWatermark" class="setting-panel">
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+        <section v-show="isSettingPanelVisible('exportAndWatermark')" data-panel-key="exportAndWatermark" class="setting-panel">
+          <a-descriptions v-show="isSettingSectionVisible('export')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="export">
             <template #title>
               <span id="export">{{ $t('config.title.export') }}</span>
             </template>
-            <a-descriptions-item :label="$t('config.export.pdfPageNumber')">
+            <a-descriptions-item v-if="isSettingItemVisible('export.pdfPageNumber')" :label="settingLabel('export.pdfPageNumber')">
               <a-radio-group :value="config.export.pdf.footer.pageNumber" button-style="solid" @update:value="value => submitSetPathMutation(['export', 'pdf', 'footer', 'pageNumber'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.yes') }}
@@ -991,7 +1169,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.export.pdfFooter')">
+            <a-descriptions-item v-if="isSettingItemVisible('export.pdfFooter')" :label="settingLabel('export.pdfFooter')">
               <a-textarea
                 :value="config.export.pdf.footer.content"
                 spellcheck="false"
@@ -1000,7 +1178,7 @@ function reset() {
                 @update:value="value => submitSetPathMutation(['export', 'pdf', 'footer', 'content'], value)"
               />
             </a-descriptions-item>
-            <a-descriptions-item :label="$t('config.export.pdfHeader')">
+            <a-descriptions-item v-if="isSettingItemVisible('export.pdfHeader')" :label="settingLabel('export.pdfHeader')">
               <a-textarea
                 :value="config.export.pdf.header.content"
                 spellcheck="false"
@@ -1010,11 +1188,11 @@ function reset() {
               />
             </a-descriptions-item>
           </a-descriptions>
-          <a-descriptions bordered :column="1" size="small" class="setting-descriptions">
+          <a-descriptions v-show="isSettingSectionVisible('watermark')" bordered :column="1" size="small" class="setting-descriptions" data-setting-section="watermark">
             <template #title>
               <span id="watermark">{{ $t('config.title.watermark') }}</span>
             </template>
-            <a-descriptions-item :label="$t('config.watermark.watermark')">
+            <a-descriptions-item v-if="isSettingItemVisible('watermark.watermark')" :label="settingLabel('watermark.watermark')">
               <a-radio-group :value="config.watermark.enabled" button-style="solid" @update:value="value => submitSetPathMutation(['watermark', 'enabled'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.enable') }}
@@ -1024,7 +1202,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.previewWatermark')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.previewWatermark')" :label="settingLabel('watermark.previewWatermark')">
               <a-radio-group :value="config.watermark.previewEnabled" button-style="solid" @update:value="value => submitSetPathMutation(['watermark', 'previewEnabled'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.enable') }}
@@ -1034,7 +1212,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.watermarkTime')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.watermarkTime')" :label="settingLabel('watermark.watermarkTime')">
               <a-radio-group :value="config.watermark.dateEnabled" button-style="solid" @update:value="value => submitSetPathMutation(['watermark', 'dateEnabled'], value)">
                 <a-radio-button :value="true">
                   {{ $t('config.enable') }}
@@ -1044,7 +1222,7 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.timeFormat')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.timeFormat')" :label="settingLabel('watermark.timeFormat')">
               <a-select :value="config.watermark.datePattern" class="w-full" @update:value="value => submitSetPathMutation(['watermark', 'datePattern'], value)">
                 <a-select-option value="YYYY-MM-DD">
                   YYYY-MM-DD
@@ -1054,10 +1232,10 @@ function reset() {
                 </a-select-option>
               </a-select>
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.content')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.content')" :label="settingLabel('watermark.content')">
               <a-input :value="config.watermark.content" @update:value="value => submitSetPathMutation(['watermark', 'content'], value)" />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.angle')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.angle')" :label="settingLabel('watermark.angle')">
               <a-slider
                 :value="config.watermark.rotate"
                 :min="-180"
@@ -1065,7 +1243,7 @@ function reset() {
                 @update:value="value => submitSetPathMutation(['watermark', 'rotate'], value)"
               />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.intervalWidth')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.intervalWidth')" :label="settingLabel('watermark.intervalWidth')">
               <a-slider
                 :value="config.watermark.gap[0]"
                 :min="10"
@@ -1073,7 +1251,7 @@ function reset() {
                 @update:value="value => submitSetPathMutation(['watermark', 'gap', 0], value)"
               />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.intervalHeight')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.intervalHeight')" :label="settingLabel('watermark.intervalHeight')">
               <a-slider
                 :value="config.watermark.gap[1]"
                 :min="10"
@@ -1081,7 +1259,7 @@ function reset() {
                 @update:value="value => submitSetPathMutation(['watermark', 'gap', 1], value)"
               />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.fontSize')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.fontSize')" :label="settingLabel('watermark.fontSize')">
               <a-slider
                 :value="config.watermark.font.fontSize"
                 :min="12"
@@ -1089,7 +1267,7 @@ function reset() {
                 @update:value="value => submitSetPathMutation(['watermark', 'font', 'fontSize'], value)"
               />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.fontWeight')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.fontWeight')" :label="settingLabel('watermark.fontWeight')">
               <a-slider
                 :value="config.watermark.font.fontWeight"
                 :min="200"
@@ -1097,7 +1275,7 @@ function reset() {
                 @update:value="value => submitSetPathMutation(['watermark', 'font', 'fontWeight'], value)"
               />
             </a-descriptions-item>
-            <a-descriptions-item v-if="config.watermark.enabled" :label="$t('config.watermark.fontColor')">
+            <a-descriptions-item v-if="config.watermark.enabled && isSettingItemVisible('watermark.fontColor')" :label="settingLabel('watermark.fontColor')">
               <ColorPicker :pure-color="config.watermark.font.color" format="rgb" shape="square" picker-type="chrome" @update:pure-color="value => submitSetPathMutation(['watermark', 'font', 'color'], value)" />
             </a-descriptions-item>
           </a-descriptions>
@@ -1113,12 +1291,29 @@ function reset() {
 }
 
 .setting-tabs {
-  width: 180px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  width: 200px;
+  overflow: hidden;
   border-right: 1px solid var(--wj-markdown-border-primary);
   background: var(--wj-markdown-bg-primary);
   user-select: none;
+}
+
+.setting-tabs__search {
+  flex: 0 0 auto;
+  padding: 10px 10px 6px;
+}
+
+.setting-search-input__icon {
+  color: var(--wj-markdown-text-tertiary);
+  font-size: 14px;
+}
+
+.setting-tabs__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .setting-tabs__inner {
@@ -1126,7 +1321,7 @@ function reset() {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px;
+  padding: 4px 10px 10px;
 }
 
 .setting-tabs__indicator {
@@ -1222,6 +1417,44 @@ function reset() {
 }
 
 .setting-descriptions:last-child {
+  margin-bottom: 0;
+}
+
+/* SettingSearchLabel 子组件渲染的高亮片段不带父组件 scopeId，必须用 :deep 命中。 */
+:deep(.setting-search-hit) {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: rgba(22, 119, 255, 0.18);
+  color: inherit;
+}
+
+.setting-search-empty {
+  min-height: 100%;
+  gap: 6px;
+  text-align: center;
+}
+
+.setting-search-empty__icon {
+  font-size: 40px;
+  opacity: 0.3;
+}
+
+.setting-search-empty__title {
+  color: var(--wj-markdown-text-secondary);
+  font-size: 13px;
+}
+
+.setting-search-empty__tip {
+  color: var(--wj-markdown-text-tertiary);
+  font-size: 12px;
+}
+
+.setting-content.is-searching .setting-panel {
+  margin-bottom: 18px;
+  animation: none;
+}
+
+.setting-content.is-searching .setting-panel:last-child {
   margin-bottom: 0;
 }
 
