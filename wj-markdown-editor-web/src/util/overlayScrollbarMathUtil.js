@@ -71,8 +71,60 @@ export function resolveScrollLeftFromThumbDrag({
   return Math.min(maxScrollLeft, Math.max(0, nextScrollLeft))
 }
 
+/**
+ * 计算把某个标签完整滚进可视区所需的目标 scrollLeft。
+ *
+ * 只有「完整可见」才返回 null；部分可见也要补齐 ——
+ * 判定标准是“能不能看全”，不是“能不能看见”。
+ *
+ * 落位规则（两侧对称，补被裁掉的那一侧）：
+ * - 左边被裁 → 标签左边缘对齐可视区左边缘
+ * - 右边被裁 → 标签右边缘对齐可视区右边缘
+ * - 标签比容器宽 → 优先保证左边缘可见
+ *
+ * @param {{
+ *   tabLeft?: number,
+ *   tabWidth?: number,
+ *   scrollLeft?: number,
+ *   clientWidth?: number,
+ *   edgePadding?: number,
+ * }} input
+ * @returns {number | null} 目标 scrollLeft；已完整可见时返回 null
+ */
+export function resolveTabScrollLeftToReveal({
+  tabLeft = 0,
+  tabWidth = 0,
+  scrollLeft = 0,
+  clientWidth = 0,
+  edgePadding = 4,
+} = {}) {
+  // 尚未布局完成时不能计算，否则会把 scrollLeft 误算成 0
+  if (clientWidth <= 0 || tabWidth <= 0) {
+    return null
+  }
+
+  const viewLeft = scrollLeft
+  const viewRight = scrollLeft + clientWidth
+  const tabRight = tabLeft + tabWidth
+
+  // 左边被裁
+  if (tabLeft < viewLeft) {
+    return Math.max(0, tabLeft - edgePadding)
+  }
+
+  // 右边被裁
+  if (tabRight > viewRight) {
+    const rightAligned = tabRight - clientWidth + edgePadding
+    return Math.max(0, Math.min(rightAligned, Math.max(0, tabLeft - edgePadding)))
+  }
+
+  // 完整可见
+  return null
+}
+
 export default {
   DEFAULT_MIN_THUMB_WIDTH,
   resolveOverlayThumbMetrics,
   resolveScrollLeftFromThumbDrag,
+  resolveTabScrollLeftToReveal,
 }

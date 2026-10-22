@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
 import {
@@ -7,6 +7,7 @@ import {
   requestDocumentCloseTab,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import { bindHorizontalWheelScroll } from '@/util/horizontalWheelScrollUtil.js'
+import { resolveTabScrollLeftToReveal } from '@/util/overlayScrollbarMathUtil.js'
 import { useOverlayScrollbar } from '@/util/useOverlayScrollbar.js'
 
 /**
@@ -18,14 +19,18 @@ import { useOverlayScrollbar } from '@/util/useOverlayScrollbar.js'
  * 3. 标签顺序就是主进程返回的数组顺序，渲染层不排序
  *
  * 布局是纯 flex 流，全程不使用 position：
- * - 标签内部：[脏点槽 6px] 文件名 [关闭槽 14px]，两个槽宽度恒定，
+ * - 标签内部：[脏点槽 14px] 文件名 [关闭槽 14px]，两个槽宽度恒定，
  *   干净标签只是不渲染圆点，槽位仍然占位，所以所有标签的文字起点完全一致
+ * - 标签内部间距：内边距与 gap 统一为 4px，四段间距完全对称
+ *   （4 | 脏点槽 | 4 | 文件名 | 4 | 关闭槽 | 4）
  * - 标签之间：独立的 `.document-tab-separator` 元素（1×16px，两侧各 4px），
  *   由 v-for 生成，数量恒为「标签数 − 1」，不用 border 也不用伪元素
  *
  * 尺寸基准（与现有界面严格对齐）：
  * - 标签栏 32px = 侧边栏 tab 区（p-1 + h-6）；含 1px 顶边框后两者都是 33px
  * - 标签 24px = 侧边栏 tab 按钮 / 工具栏 IconButton 的 h-6
+ * - 标签最大宽 240px（max-w-60）：内边距与 gap 统一 4px，固定开销共 44px，
+ *   文件名可用 196px；短文件名标签更窄，只有长文件名才会顶到这个上限
  * - 分隔线 16px = 标题栏那条竖分隔线（LayoutTop 的 h-4 w-px）
  *
  * 横向滚动：
@@ -34,6 +39,11 @@ import { useOverlayScrollbar } from '@/util/useOverlayScrollbar.js'
  * - 滑块是唯一使用绝对定位的元素：纯装饰、不参与布局，标签内部结构仍是纯 flex 流
  * - 滑块只在宽度不够且鼠标在标签栏内时出现，没有滚动轨道
  * - 垂直滚轮转横向滚动由 `bindHorizontalWheelScroll()` 接管，判定规则见该工具
+ *
+ * 自动滚动（`revealActiveTab`）：
+ * - 判定标准是“能不能看全”，不是“能不能看见”：部分可见也要补齐
+ * - 例外：用户自己在标签栏里点的标签不补位移，因为他对位置本来就是知情的
+ * - 首次（启动恢复标签组）无动画，之后平滑滚动
  *
  * 状态规则：
  * - 脏点只要有就一直显示，没有任何 hover 规则去隐藏它
@@ -52,6 +62,12 @@ const activeSessionId = computed(() => store.documentSessionSnapshot?.activeSess
 
 const scrollerRef = ref(null)
 const thumbRef = ref(null)
+
+// 记录用户刚在标签栏里点过的 session：这种激活是用户主动发起的，
+// 标签位置对他来说是已知的，不需要再补位移。
+let localActivationSessionId = null
+// 首次补位移（启动恢复标签组）必须无动画，否则标签栏会在启动时自己滑一段。
+let hasRevealedOnce = false
 
 const {
   thumbVisible,
@@ -74,6 +90,62 @@ watch(scrollerRef, (element, _previousElement, onCleanup) => {
 
 // 标签增删会改变 scrollWidth，而 ResizeObserver 只观察 border-box、感知不到，需要显式重测。
 watch(tabs, () => refreshOverlayScrollbar(), { flush: 'post' })
+
+/**
+ * 把活动标签完整滚进可视区。
+ *
+ * 只有“完整可见”才不动；部分可见也要补齐，因为用户需要看清文件名。
+ * 不用 `scrollIntoView()`：它会滚动所有可滚动祖先，可能带着整个页面一起跳。
+ */
+function revealActiveTab(sessionId, { smooth = true } = {}) {
+  const scroller = scrollerRef.value
+  if (!scroller) {
+    return
+  }
+
+  const tabElement = scroller.querySelector(`[data-session-id="${sessionId}"]`)
+  if (!tabElement) {
+    return
+  }
+
+  const targetLeft = resolveTabScrollLeftToReveal({
+    tabLeft: tabElement.offsetLeft,
+    tabWidth: tabElement.offsetWidth,
+    scrollLeft: scroller.scrollLeft,
+    clientWidth: scroller.clientWidth,
+  })
+  // null 表示已经完整可见，不做任何滚动
+  if (targetLeft === null) {
+    return
+  }
+
+  scroller.scrollTo({ left: targetLeft, behavior: smooth ? 'smooth' : 'auto' })
+}
+
+watch(activeSessionId, async (sessionId) => {
+  const isLocalActivation = sessionId === localActivationSessionId
+  localActivationSessionId = null
+
+  // 用户自己在标签栏点的标签不补位移；没有活动标签时也无需处理
+  if (!sessionId || isLocalActivation) {
+    return
+  }
+
+  // 新标签可能刚插入，等 DOM 就位再测量
+  await nextTick()
+  revealActiveTab(sessionId, { smooth: hasRevealedOnce })
+  hasRevealedOnce = true
+}, { flush: 'post' })
+
+// 启动恢复标签组时 activeSessionId 在挂载前就已存在，watch 不会触发，
+// 这里补一次无动画的定位；若标签栏尚未渲染（无标签）则什么都不做。
+onMounted(() => {
+  if (!activeSessionId.value) {
+    return
+  }
+  revealActiveTab(activeSessionId.value, { smooth: false })
+  hasRevealedOnce = true
+})
 
 // 标签标题直接用会话文件名。
 // 未命名草稿在数据层就是固定的 `Untitled` 哨兵值，
@@ -109,6 +181,8 @@ function activateTab(tab) {
   if (!tab?.sessionId || isActiveTab(tab)) {
     return
   }
+  // 用户自己点的标签不需要事后补位移，记下本次激活目标供 watch 消费
+  localActivationSessionId = tab.sessionId
   requestDocumentActivateTab(tab.sessionId).then(() => {}).catch(() => {})
 }
 
@@ -222,9 +296,10 @@ function onMenuClick({ key }, tab) {
         >
           <div
             :data-testid="`document-tab-${tab.sessionId}`"
+            :data-session-id="tab.sessionId"
             :data-active="isActiveTab(tab) ? 'true' : 'false'"
             :data-dirty="tab.dirty ? 'true' : 'false'"
-            class="document-tab group h-6 max-w-50 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1.5 text-sm transition-colors"
+            class="document-tab group h-6 max-w-60 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1 text-sm transition-colors"
             :class="getTabClassList(tab)"
             @click="activateTab(tab)"
             @auxclick.self.prevent="closeTab(tab)"

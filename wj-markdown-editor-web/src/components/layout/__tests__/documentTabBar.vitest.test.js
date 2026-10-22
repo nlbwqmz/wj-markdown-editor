@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, reactive } from 'vue'
 
 import DocumentTabBar from '../DocumentTabBar.vue'
@@ -28,6 +28,11 @@ vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
   requestDocumentActivateTab: vi.fn(() => Promise.resolve()),
   requestDocumentCloseTab: vi.fn(() => Promise.resolve()),
 }))
+
+// store 是模块级 reactive，测试之间必须重置，否则上一条用例改过的 activeSessionId 会污染下一条
+beforeEach(() => {
+  store.documentSessionSnapshot.activeSessionId = 'session-1'
+})
 
 /**
  * 标签栏只需要 dropdown 的默认插槽内容；右键菜单不是本测试的关注点，
@@ -179,6 +184,78 @@ describe('documentTabBar overlay 滚动条', () => {
 
     expect(scroller.scrollLeft).toBe(0)
     expect(event.defaultPrevented).toBe(false)
+
+    wrapper.unmount()
+  })
+})
+
+describe('documentTabBar 活动标签自动滚动', () => {
+  /** 把标签与滚动容器的布局尺寸固定下来，jsdom 里这些值恒为 0。 */
+  function applyTabLayout(wrapper, { tabLeft, tabWidth, clientWidth, scrollLeft = 0 }) {
+    const scroller = wrapper.get('[data-testid="document-tab-scroller"]').element
+    const tabElement = wrapper.get('[data-testid="document-tab-session-2"]').element
+
+    Object.defineProperty(tabElement, 'offsetLeft', { value: tabLeft, configurable: true })
+    Object.defineProperty(tabElement, 'offsetWidth', { value: tabWidth, configurable: true })
+    Object.defineProperty(scroller, 'clientWidth', { value: clientWidth, configurable: true })
+    scroller.scrollLeft = scrollLeft
+
+    // jsdom 不实现 scrollTo
+    scroller.scrollTo = vi.fn()
+
+    return scroller
+  }
+
+  it('外部激活一个被裁的标签时，必须把它完整滚进可视区', async () => {
+    store.documentSessionSnapshot.activeSessionId = 'session-1'
+    const wrapper = mountTabBar()
+    await nextTick()
+
+    // 标签 500~600，可视区 0~400 → 右边缘被裁，目标 = 600 - 400 + 4
+    const scroller = applyTabLayout(wrapper, { tabLeft: 500, tabWidth: 100, clientWidth: 400 })
+
+    store.documentSessionSnapshot.activeSessionId = 'session-2'
+    await vi.waitFor(() => {
+      expect(scroller.scrollTo).toHaveBeenCalled()
+    })
+
+    // 首次定位已在挂载时完成，这里属于后续激活，走平滑滚动
+    expect(scroller.scrollTo).toHaveBeenCalledWith({ left: 204, behavior: 'smooth' })
+
+    wrapper.unmount()
+  })
+
+  it('外部激活一个完整可见的标签时不得滚动', async () => {
+    store.documentSessionSnapshot.activeSessionId = 'session-1'
+    const wrapper = mountTabBar()
+    await nextTick()
+
+    // 标签 100~200 完整落在可视区 0~400 内
+    const scroller = applyTabLayout(wrapper, { tabLeft: 100, tabWidth: 100, clientWidth: 400 })
+
+    store.documentSessionSnapshot.activeSessionId = 'session-2'
+    await nextTick()
+    await nextTick()
+
+    expect(scroller.scrollTo).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('用户自己在标签栏点的标签不得触发补位移', async () => {
+    store.documentSessionSnapshot.activeSessionId = 'session-1'
+    const wrapper = mountTabBar()
+    await nextTick()
+
+    const scroller = applyTabLayout(wrapper, { tabLeft: 500, tabWidth: 100, clientWidth: 400 })
+
+    await wrapper.get('[data-testid="document-tab-session-2"]').trigger('click')
+    // 模拟主进程回推快照
+    store.documentSessionSnapshot.activeSessionId = 'session-2'
+    await nextTick()
+    await nextTick()
+
+    expect(scroller.scrollTo).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

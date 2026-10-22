@@ -4,6 +4,7 @@ import {
   DEFAULT_MIN_THUMB_WIDTH,
   resolveOverlayThumbMetrics,
   resolveScrollLeftFromThumbDrag,
+  resolveTabScrollLeftToReveal,
 } from '../overlayScrollbarMathUtil.js'
 
 const { test } = await import('node:test')
@@ -155,5 +156,67 @@ test('滑块宽度等于可视宽度时不得除零', () => {
       thumbWidth: 400,
     }),
     400,
+  )
+})
+
+test('标签完整可见时不得滚动', () => {
+  assert.equal(
+    resolveTabScrollLeftToReveal({ tabLeft: 100, tabWidth: 80, scrollLeft: 0, clientWidth: 400 }),
+    null,
+  )
+})
+
+test('左边部分被裁时必须把标签左边缘对齐到可视区左边缘', () => {
+  // 标签 100~180，可视区从 120 开始 → 左边缘被裁 20，目标 = 100 - 4
+  assert.equal(
+    resolveTabScrollLeftToReveal({ tabLeft: 100, tabWidth: 80, scrollLeft: 120, clientWidth: 400 }),
+    96,
+  )
+})
+
+test('右边部分被裁时必须把标签右边缘对齐到可视区右边缘', () => {
+  // 标签 350~450，可视区 0~400 → 右边缘被裁 50，目标 = 450 - 400 + 4
+  assert.equal(
+    resolveTabScrollLeftToReveal({ tabLeft: 350, tabWidth: 100, scrollLeft: 0, clientWidth: 400 }),
+    54,
+  )
+})
+
+test('标签完全在左侧外时同样左对齐，且目标不得为负', () => {
+  // 标签 0~80，可视区从 200 开始；tabLeft - 4 为负 → 夹到 0
+  assert.equal(
+    resolveTabScrollLeftToReveal({ tabLeft: 0, tabWidth: 80, scrollLeft: 200, clientWidth: 400 }),
+    0,
+  )
+  assert.equal(
+    resolveTabScrollLeftToReveal({ tabLeft: 2, tabWidth: 80, scrollLeft: 200, clientWidth: 400 }),
+    0,
+  )
+})
+
+test('标签完全在右侧外时同样右对齐', () => {
+  // 标签 600~700，可视区 0~400 → 目标 = 700 - 400 + 4
+  assert.equal(
+    resolveTabScrollLeftToReveal({ tabLeft: 600, tabWidth: 100, scrollLeft: 0, clientWidth: 400 }),
+    304,
+  )
+})
+
+test('标签比容器还宽时必须优先保证左边缘可见', () => {
+  // 标签 300~800（宽 500），容器 400 → 右对齐会得到 404，但会推走左边缘
+  assert.equal(
+    resolveTabScrollLeftToReveal({ tabLeft: 300, tabWidth: 500, scrollLeft: 0, clientWidth: 400 }),
+    296,
+  )
+})
+
+test('容器尚未布局或标签宽度为 0 时不得滚动', () => {
+  assert.equal(
+    resolveTabScrollLeftToReveal({ tabLeft: 0, tabWidth: 100, scrollLeft: 0, clientWidth: 0 }),
+    null,
+  )
+  assert.equal(
+    resolveTabScrollLeftToReveal({ tabLeft: 0, tabWidth: 0, scrollLeft: 0, clientWidth: 400 }),
+    null,
   )
 })
