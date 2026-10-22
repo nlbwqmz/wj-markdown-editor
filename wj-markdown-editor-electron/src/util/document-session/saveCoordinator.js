@@ -510,6 +510,7 @@ function getTriggerPriority(trigger) {
     case 'manual-save':
       return 2
     case 'blur-auto-save':
+    case 'switch-auto-save':
       return 1
     default:
       return 0

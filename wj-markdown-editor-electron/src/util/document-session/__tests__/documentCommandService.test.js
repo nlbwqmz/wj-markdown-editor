@@ -2549,6 +2549,115 @@ describe('documentCommandService', () => {
       }).toThrow(/sessionId|会话/i)
     })
 
+    it('开启 switch 自动保存时，切换标签只保存被切走的脏文档，且必须先切后存', () => {
+      const { store, service, windowId } = createTwoTabContext(['switch'])
+
+      // 让第一个标签变脏
+      service.dispatch({
+        windowId,
+        command: 'document.edit',
+        payload: { content: '# first changed' },
+      })
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.activate-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-second')
+      // 写盘必须排在 activate-tab 之后：applyEffects 是顺序 await，
+      // 写盘在前会让切标签等磁盘 IO。
+      expect(result.effects[0]).toEqual({ type: 'activate-tab', sessionId: 'tab-second' })
+      expect(result.effects).toHaveLength(2)
+      expect(result.effects[1]).toEqual(expect.objectContaining({
+        type: 'execute-save',
+        job: expect.objectContaining({
+          sessionId: 'tab-first',
+          trigger: 'switch-auto-save',
+          content: '# first changed',
+        }),
+      }))
+    })
+
+    it('未开启 switch 自动保存时，切换标签不得产生保存副作用', () => {
+      const { service, windowId } = createTwoTabContext(['blur'])
+
+      service.dispatch({
+        windowId,
+        command: 'document.edit',
+        payload: { content: '# first changed' },
+      })
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.activate-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(result.effects).toEqual([{ type: 'activate-tab', sessionId: 'tab-second' }])
+    })
+
+    it('被切走的标签不脏时，切换标签不得触发保存', () => {
+      const { service, windowId } = createTwoTabContext(['switch'])
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.activate-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(result.effects).toEqual([{ type: 'activate-tab', sessionId: 'tab-second' }])
+    })
+
+    it('渲染层未能同步正文时（autoSave: false），切换标签不得保存旧内容', () => {
+      const { service, windowId } = createTwoTabContext(['switch'])
+
+      service.dispatch({
+        windowId,
+        command: 'document.edit',
+        payload: { content: '# first changed' },
+      })
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.activate-tab',
+        payload: { sessionId: 'tab-second', autoSave: false },
+      })
+
+      expect(result.effects).toEqual([{ type: 'activate-tab', sessionId: 'tab-second' }])
+    })
+
+    it('被切走的是未命名草稿时，切换标签不得触发保存', () => {
+      const { store, service } = createTestContext(['switch'])
+      const draftSession = createDraftSession({ sessionId: 'tab-draft' })
+      const fileSession = createBoundFileSession({
+        sessionId: 'tab-file',
+        path: 'C:/docs/file.md',
+        content: '# file',
+        stat: null,
+        now: 1700000003004,
+      })
+      const windowId = bindSession(store, draftSession)
+      store.createSession(fileSession)
+      store.addSessionToWindow({ windowId, sessionId: fileSession.sessionId })
+
+      service.dispatch({
+        windowId,
+        command: 'document.edit',
+        payload: { content: '# draft changed' },
+      })
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.activate-tab',
+        payload: { sessionId: 'tab-file' },
+      })
+
+      // 草稿没有保存路径，不能弹保存对话框
+      expect(result.effects).toEqual([{ type: 'activate-tab', sessionId: 'tab-file' }])
+    })
+
     it('document.reorder-tabs 应改写标签顺序，并要求集合一致', () => {
       const { store, service, windowId } = createTwoTabContext()
 

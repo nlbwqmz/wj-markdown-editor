@@ -131,6 +131,7 @@ wj-markdown-editor/
 - **标签组持久化**：`wj-markdown-editor-electron/src/data/tabGroup.js` 写入 `tab-group.json`，只记有磁盘路径的标签顺序与活动下标，**不套 `recentMax`**；启动时 `windowLifecycleService.restoreTabGroup` 按它恢复，并按 `activeIndex` 把活动标签落回上次位置。第一个路径缺失时必须走 `createNew(firstPath, true)` 保留为 recent-missing 标签，不能退化成无路径空草稿；其余缺失路径静默跳过。因此 `activeIndex` 必须按「原始下标 → 实际恢复会话」映射，且判断“是否恢复成功”要看 `path` 或 `missingPath`，只看 `path` 会漏掉 recent-missing 标签；目标标签缺失时回退到最后一个成功恢复的标签。
 - **关窗写盘**：使用期间每次标签操作照常异步写盘（`persistCurrentTabGroup`）；`finalizeWindowClose` 在销毁会话前再**同步**写一次（`persistCurrentTabGroupSync`），所以正常关闭流程下“最后关闭的窗口”胜出。必须同步写，因为 `checkWinList()` 在最后一个窗口关闭时会立刻 `app.exit()`，异步写盘会被截断。异常退出时仍回退到“最后一次操作标签的窗口”。
 - **关窗销毁全部会话**：`finalizeWindowClose` 必须遍历 `getSessionIdsByWindowId` 逐个 `destroySession`，不能只销毁 `getSessionByWindowId` 返回的活动会话——残留会话会让“已打开文档”判定命中一个已经不存在的窗口，表现为“打开文件没任何反应”，且假聚焦会把旧标签组写回 `tab-group.json`。
+- **切换标签自动保存**：`autoSave` 含 `switch` 时，`document.activate-tab` 只对被切走的那个会话发起 `switch-auto-save`（不扩散到同窗口其它标签，也不跨窗口）。两个硬约束：1）`activate-tab` effect 必须排在保存 effect 之前，因为 `applyEffects` 是顺序 `await`，写盘在前会让切标签等磁盘 IO；2）渲染层必须先 `requestCurrentWindowOpenPreparation()` 把挂起正文同步进主进程，同步失败时传 `autoSave: false` 跳过保存，避免拿旧内容写盘并伪装成“已保存”。
 
 ### 资源操作主线
 
@@ -375,7 +376,7 @@ npm run test:run
 - 启动视图模式 `startView`：`source` / `split` / `preview`（只决定窗口打开时的视图模式，不决定打开哪个页面）
 - 最近文件恢复与最近记录数量（`openRecent` / `recentMax`，只管最近文件菜单）
 - 标签组重启恢复（`tab-group.json`，独立于 `recentMax`）
-- 自动保存时机：失焦 / 关闭窗口
+- 自动保存时机：失焦 / 关闭窗口 / 切换标签（`blur` / `close` / `switch`，默认全关）
 - 外部文件变更策略：`apply` / `prompt`
 - 编辑器扩展：行号、自动换行、当前行高亮、匹配文本高亮、括号匹配、自动补全括号
 - 关联高亮

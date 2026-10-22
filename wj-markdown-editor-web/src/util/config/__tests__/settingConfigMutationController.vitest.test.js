@@ -83,6 +83,26 @@ describe('settingConfigMutationController', () => {
     })
   })
 
+  it('autoSave 集合新增 switch（切换标签时）时必须真正提交 mutation 并立即应用乐观值', async () => {
+    const context = createControllerTestContext()
+
+    const result = await context.controller.submitAutoSaveListChange(['blur'], ['blur', 'switch'])
+
+    // 关键回归点：option 列表漏掉 switch 时这里会变成 skipped: true，
+    // 设置页表现为“勾选框点不动”。
+    expect(result.skipped).toBeUndefined()
+    expect(context.sendMutationRequest).toHaveBeenCalledWith({
+      operations: [
+        {
+          type: 'setAutoSaveOption',
+          option: 'switch',
+          enabled: true,
+        },
+      ],
+    })
+    expect(context.getDraftConfig().autoSave).toEqual(['blur', 'switch'])
+  })
+
   it('快捷键字段更新必须通过 setShortcutKeyField mutation 提交', async () => {
     const context = createControllerTestContext()
 

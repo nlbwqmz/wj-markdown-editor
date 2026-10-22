@@ -203,6 +203,7 @@ export default {
         tip: '仅当文件保存路径存在时生效',
         onWindowBlur: '窗口失焦时',
         onWindowClose: '窗口关闭时',
+        onTabSwitch: '切换标签时',
       },
       externalFileChangeStrategyOption: {
         apply: '直接应用',

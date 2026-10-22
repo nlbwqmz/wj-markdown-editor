@@ -193,11 +193,14 @@ export function requestDocumentOpenPathInCurrentWindow(targetPath, options = {})
  * 标签切换是窗口级动作：主进程负责重绑目录监听、同步窗口状态并广播快照，
  * renderer 只表达“我要看哪个标签”。
  */
-export function requestDocumentActivateTab(sessionId) {
+export function requestDocumentActivateTab(sessionId, options = {}) {
   return channelUtil.send({
     event: 'document.activate-tab',
     data: {
       sessionId,
+      // 渲染层没能把挂起正文同步进主进程时传 false：
+      // 主进程据此跳过本次切换自动保存，避免拿旧内容写盘并伪装成“已保存”。
+      autoSave: options.autoSave !== false,
     },
   })
 }

@@ -381,7 +381,9 @@ export function createDocumentEffectService({
     const errorDetail = typeof error?.message === 'string' && error.message
       ? ` ${error.message}`
       : ''
-    const isAutoSave = trigger === 'blur-auto-save' || trigger === 'close-auto-save'
+    const isAutoSave = trigger === 'blur-auto-save'
+      || trigger === 'close-auto-save'
+      || trigger === 'switch-auto-save'
     if (getLanguage(getConfig) === 'en-US') {
       return isAutoSave ? `Auto save failed.${errorDetail}` : `Save failed.${errorDetail}`
     }

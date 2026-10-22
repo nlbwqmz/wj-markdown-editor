@@ -92,6 +92,14 @@ describe('validateConfigMutationRequest', () => {
     })).toThrow(/自动保存选项仅允许/)
   })
 
+  it('必须接受 switch（切换标签时）作为合法自动保存选项', () => {
+    expect(() => validateConfigMutationRequest({
+      operations: [
+        { type: 'setAutoSaveOption', option: 'switch', enabled: true },
+      ],
+    })).not.toThrow()
+  })
+
   it('拒绝未知操作类型', () => {
     expect(() => validateConfigMutationRequest({
       operations: [

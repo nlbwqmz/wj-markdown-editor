@@ -203,6 +203,7 @@ export default {
         tip: 'Effective only if the file save path exists',
         onWindowBlur: 'On window blur',
         onWindowClose: 'On window close',
+        onTabSwitch: 'On tab switch',
       },
       externalFileChangeStrategyOption: {
         apply: 'Apply directly',

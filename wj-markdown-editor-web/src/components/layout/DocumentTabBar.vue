@@ -73,6 +73,17 @@ const { t } = useI18n()
 const tabs = computed(() => store.documentSessionSnapshot?.tabs || [])
 const activeSessionId = computed(() => store.documentSessionSnapshot?.activeSessionId ?? null)
 
+/**
+ * “切换标签时”自动保存是否开启。
+ *
+ * 开关本身是全局配置（不做 per-window 开关，否则用户记不住哪个窗口是什么状态），
+ * 但触发时只作用于当前窗口里被切走的那个文档。
+ */
+const isTabSwitchAutoSaveEnabled = computed(() => {
+  const autoSaveList = store.config?.autoSave
+  return Array.isArray(autoSaveList) && autoSaveList.includes('switch')
+})
+
 const scrollerRef = ref(null)
 const thumbRef = ref(null)
 
@@ -234,13 +245,31 @@ function handleTabClick(tab) {
   activateTab(tab)
 }
 
-function activateTab(tab) {
+async function activateTab(tab) {
   if (!tab?.sessionId || isActiveTab(tab)) {
     return
   }
+
+  // 切标签前必须先把挂起的正文同步进主进程，
+  // 否则主进程的切换自动保存会拿到上一个版本。
+  // 只有开启“切换标签时”自动保存才需要这次往返。
+  //
+  // 同步失败时传 autoSave: false：宁可不保存，
+  // 也不能拿旧内容写盘并伪装成“已保存”。
+  let autoSaveReady = true
+  if (isTabSwitchAutoSaveEnabled.value) {
+    try {
+      const preparation = await requestCurrentWindowOpenPreparation()
+      autoSaveReady = preparation?.ok !== false
+    }
+    catch {
+      autoSaveReady = false
+    }
+  }
+
   // 用户自己点的标签不需要事后补位移，记下本次激活目标供 watch 消费
   localActivationSessionId = tab.sessionId
-  requestDocumentActivateTab(tab.sessionId).then(() => {}).catch(() => {})
+  requestDocumentActivateTab(tab.sessionId, { autoSave: autoSaveReady }).then(() => {}).catch(() => {})
 }
 
 function closeTab(tab) {

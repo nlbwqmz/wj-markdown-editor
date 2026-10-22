@@ -280,6 +280,24 @@ export function createDocumentCommandService({
               type: 'activate-tab',
               sessionId: targetSessionId,
             })
+
+            // 切换时自动保存：只保存“被切走的这一个”文档。
+            // 切换动作只产生一个离开事件，同窗口的其它标签并没有被离开；
+            // 跨窗口保存更会打断用户在别处的编辑，所以这里不扩散。
+            //
+            // 必须排在 activate-tab effect 之后：applyEffects 是顺序 await，
+            // 写盘排在前面会让切标签等磁盘 IO，网络盘上会明显卡顿。
+            //
+            // payload.autoSave === false 表示渲染层没能把挂起正文同步进主进程，
+            // 这时宁可不保存，也不能拿旧内容写盘并伪装成“已保存”。
+            if (payload?.autoSave !== false
+              && session.documentSource.path
+              && isDirty(session)
+              && canAutoSave(config, 'switch')) {
+              effects.push(...saveCoordinator.requestSave(session, {
+                trigger: 'switch-auto-save',
+              }).effects)
+            }
           }
         }
         break

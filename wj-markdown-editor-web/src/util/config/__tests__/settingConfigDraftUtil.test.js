@@ -17,6 +17,7 @@ function requireSettingConfigDraftUtil() {
   const {
     applySelectableStringField,
     cloneConfigDraft,
+    createAutoSaveOptionMutationOperations,
     createTransportConfigUpdateFailureRecovery,
     normalizeRecentMaxInputValue,
     resolveConfigUpdateFailureRecovery,
@@ -24,6 +25,7 @@ function requireSettingConfigDraftUtil() {
 
   assert.equal(typeof applySelectableStringField, 'function')
   assert.equal(typeof cloneConfigDraft, 'function')
+  assert.equal(typeof createAutoSaveOptionMutationOperations, 'function')
   assert.equal(typeof createTransportConfigUpdateFailureRecovery, 'function')
   assert.equal(typeof normalizeRecentMaxInputValue, 'function')
   assert.equal(typeof resolveConfigUpdateFailureRecovery, 'function')
@@ -31,11 +33,27 @@ function requireSettingConfigDraftUtil() {
   return {
     applySelectableStringField,
     cloneConfigDraft,
+    createAutoSaveOptionMutationOperations,
     createTransportConfigUpdateFailureRecovery,
     normalizeRecentMaxInputValue,
     resolveConfigUpdateFailureRecovery,
   }
 }
+
+test('autoSave 集合变更必须覆盖 switch（切换标签时）选项', () => {
+  const { createAutoSaveOptionMutationOperations } = requireSettingConfigDraftUtil()
+
+  // 遗漏 switch 时这里会返回空数组，
+  // 设置页会把本次变更当成“无需提交”直接跳过，表现为勾选框点不动。
+  assert.deepEqual(
+    createAutoSaveOptionMutationOperations(['blur'], ['blur', 'switch']),
+    [{ type: 'setAutoSaveOption', option: 'switch', enabled: true }],
+  )
+  assert.deepEqual(
+    createAutoSaveOptionMutationOperations(['blur', 'switch'], ['blur']),
+    [{ type: 'setAutoSaveOption', option: 'switch', enabled: false }],
+  )
+})
 
 test('目录选择取消时不应覆盖本地字符串配置字段', () => {
   const { applySelectableStringField } = requireSettingConfigDraftUtil()

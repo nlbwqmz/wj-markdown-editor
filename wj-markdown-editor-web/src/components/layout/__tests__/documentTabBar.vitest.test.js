@@ -20,6 +20,7 @@ const defaultTabs = [
 ]
 
 const store = reactive({
+  config: { autoSave: [] },
   documentSessionSnapshot: {
     activeSessionId: 'session-1',
     tabs: defaultTabs.map(tab => ({ ...tab })),
@@ -69,6 +70,7 @@ vi.mock('ant-design-vue', () => ({
 
 // store 是模块级 reactive，测试之间必须重置，否则上一条用例改过的状态会污染下一条
 beforeEach(() => {
+  store.config = { autoSave: [] }
   store.documentSessionSnapshot.activeSessionId = 'session-1'
   store.documentSessionSnapshot.tabs = defaultTabs.map(tab => ({ ...tab }))
   vi.clearAllMocks()
@@ -756,7 +758,7 @@ describe('documentTabBar 拖拽重排', () => {
     element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     await flushPromises()
 
-    expect(requestDocumentActivateTab).toHaveBeenCalledWith('session-2')
+    expect(requestDocumentActivateTab).toHaveBeenCalledWith('session-2', { autoSave: true })
     expect(requestDocumentReorderTabs).not.toHaveBeenCalled()
 
     wrapper.unmount()
@@ -845,6 +847,55 @@ describe('documentTabBar 拖拽重排', () => {
 
     // 关闭按钮有自己的点击语义，按住它拖不应该变成重排
     expect(requestDocumentReorderTabs).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+})
+
+describe('documentTabBar 切换标签自动保存', () => {
+  it('开启“切换标签时”自动保存时，必须先同步挂起正文再切标签', async () => {
+    store.config = { autoSave: ['switch'] }
+    const wrapper = mountTabBar()
+    await nextTick()
+
+    await wrapper.get('[data-testid="document-tab-session-2"]').trigger('click')
+    await flushPromises()
+
+    expect(requestCurrentWindowOpenPreparation).toHaveBeenCalledTimes(1)
+    expect(requestDocumentActivateTab).toHaveBeenCalledWith('session-2', { autoSave: true })
+    // flush 必须在切换之前完成，否则主进程会保存上一个版本
+    expect(requestCurrentWindowOpenPreparation.mock.invocationCallOrder[0])
+      .toBeLessThan(requestDocumentActivateTab.mock.invocationCallOrder[0])
+
+    wrapper.unmount()
+  })
+
+  it('未开启时点击标签不应多一次正文收敛往返', async () => {
+    const wrapper = mountTabBar()
+    await nextTick()
+
+    await wrapper.get('[data-testid="document-tab-session-2"]').trigger('click')
+    await flushPromises()
+
+    expect(requestCurrentWindowOpenPreparation).not.toHaveBeenCalled()
+    expect(requestDocumentActivateTab).toHaveBeenCalledWith('session-2', { autoSave: true })
+
+    wrapper.unmount()
+  })
+
+  it('正文同步失败时必须传 autoSave: false，避免拿旧内容写盘', async () => {
+    store.config = { autoSave: ['switch'] }
+    requestCurrentWindowOpenPreparation.mockResolvedValueOnce({
+      ok: false,
+      reason: 'preparation-unavailable',
+    })
+    const wrapper = mountTabBar()
+    await nextTick()
+
+    await wrapper.get('[data-testid="document-tab-session-2"]').trigger('click')
+    await flushPromises()
+
+    expect(requestDocumentActivateTab).toHaveBeenCalledWith('session-2', { autoSave: false })
 
     wrapper.unmount()
   })

@@ -263,10 +263,11 @@ describe('configLoadSanitizer', () => {
   it('autoSave 可变枚举数组必须保留合法项并过滤非法项', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),
-      autoSave: ['blur', 'oops'],
+      autoSave: ['blur', 'switch', 'oops'],
     }, defaultConfig, configSchema)
 
-    expect(sanitized.autoSave).toEqual(['blur'])
+    // switch（切换标签时）必须与 blur / close 一样被视为合法值
+    expect(sanitized.autoSave).toEqual(['blur', 'switch'])
   })
 
   it('watermark.gap 固定长度数组中的非法项必须按同下标默认值修复', () => {

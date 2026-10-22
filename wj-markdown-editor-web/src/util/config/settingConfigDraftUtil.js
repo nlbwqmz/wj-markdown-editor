@@ -42,14 +42,19 @@ export function setConfigDraftValueByPath(draftConfig, path, value) {
 /**
  * 把 autoSave 集合变更收口为逐项 mutation，避免设置页回退到整份数组 set。
  *
+ * `optionList` 必须与主进程的 `configSchema.autoSave.items.enum`、
+ * `configMutationSchema.AUTO_SAVE_OPTION_SET` 保持一致：
+ * 这里漏掉一个选项，设置页就会算出 0 条 mutation，
+ * 提交直接被当成“无需变更”跳过，表现为勾选框点不动。
+ *
  * @param {unknown} previousAutoSave
  * @param {unknown} nextAutoSave
- * @returns {Array<{ type: 'setAutoSaveOption', option: 'blur' | 'close', enabled: boolean }>} 返回按 blur / close 差异生成的 mutation 列表。
+ * @returns {Array<{ type: 'setAutoSaveOption', option: 'blur' | 'close' | 'switch', enabled: boolean }>} 返回按 blur / close / switch 差异生成的 mutation 列表。
  */
 export function createAutoSaveOptionMutationOperations(previousAutoSave, nextAutoSave) {
   const previousSet = new Set(Array.isArray(previousAutoSave) ? previousAutoSave : [])
   const nextSet = new Set(Array.isArray(nextAutoSave) ? nextAutoSave : [])
-  const optionList = ['blur', 'close']
+  const optionList = ['blur', 'close', 'switch']
 
   return optionList.flatMap((option) => {
     const previousEnabled = previousSet.has(option)
