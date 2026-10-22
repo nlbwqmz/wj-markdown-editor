@@ -2693,6 +2693,33 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(snapshot.activeSessionId).toBe(snapshot.tabs[0].sessionId)
   })
 
+  it('restoreTabGroup 成功时必须返回结构化结果并带上恢复统计', async () => {
+    pathExistsMock.mockImplementation(async targetPath => targetPath !== 'D:/second.md')
+    readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
+
+    const result = await winInfoUtil.restoreTabGroup(['D:/first.md', 'D:/second.md'], 0)
+
+    expect(result.ok).toBe(true)
+    expect(typeof result.windowId).toBe('string')
+    expect(result.requestedTabCount).toBe(2)
+    expect(result.restoredTabCount).toBe(1)
+    expect(result.skippedPathList).toEqual(['D:/second.md'])
+    expect(typeof result.activeSessionId).toBe('string')
+  })
+
+  it('restoreTabGroup 首个文件读取失败时必须返回结构化失败，不能返回裸字符串', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockRejectedValue(new Error('EACCES'))
+
+    const result = await winInfoUtil.restoreTabGroup(['D:/locked.md'], 0)
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'open-target-read-failed',
+      path: 'D:/locked.md',
+    })
+  })
+
   it('restoreTabGroup 在 activeIndex 指向的文件缺失时回退到最后一个成功恢复的标签', async () => {
     pathExistsMock.mockImplementation(async targetPath => targetPath !== 'D:/second.md')
     readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)

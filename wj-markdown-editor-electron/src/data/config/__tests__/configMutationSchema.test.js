@@ -36,6 +36,7 @@ describe('validateConfigMutationRequest', () => {
     [['sidebarDefaultView'], 'files'],
     [['fileDefaultDirectory'], 'D:/notes'],
     [['startView'], 'source'],
+    [['restoreTabs'], 'always'],
     [['imageBed', 'uploader'], 'smms'],
     [['imageBed', 'smms', 'token'], 'token'],
     [['imageBed', 'smms', 'backupDomain'], 'smms.app'],

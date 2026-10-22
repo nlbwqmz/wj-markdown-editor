@@ -382,7 +382,8 @@ npm run test:run
 默认配置位于 `wj-markdown-editor-electron/src/data/defaultConfig.js`，当前重要配置包括：
 
 - 启动视图模式 `startView`：`source` / `split` / `preview`（只决定窗口打开时的视图模式，不决定打开哪个页面）
-- 最近文件恢复与最近记录数量（`openRecent` / `recentMax`，只管最近文件菜单）
+- 启动时标签组恢复策略 `restoreTabs`：`never` / `onStartup` / `always`（默认 `onStartup`，即仅在直接启动时恢复；`always` 会在双击文件打开时先恢复标签组再把该文件追加进去）
+- 最近记录数量 `recentMax`（只管最近文件菜单，与标签组恢复无关）
 - 标签组重启恢复（`tab-group.json`，独立于 `recentMax`）
 - 自动保存时机：失焦 / 关闭窗口 / 切换标签（`blur` / `close` / `switch`，默认全关）
 - 外部文件变更策略：`apply` / `prompt`

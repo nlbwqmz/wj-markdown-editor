@@ -688,15 +688,22 @@ function reset() {
                 </a-radio-button>
               </a-radio-group>
             </a-descriptions-item>
-            <a-descriptions-item v-if="isSettingItemVisible('general.openLastRecord')" :label="settingLabel('general.openLastRecord')">
-              <a-radio-group :value="config.openRecent" button-style="solid" @update:value="value => submitSetPathMutation(['openRecent'], value)">
-                <a-radio-button :value="true">
-                  {{ $t('config.yes') }}
-                </a-radio-button>
-                <a-radio-button :value="false">
-                  {{ $t('config.no') }}
-                </a-radio-button>
-              </a-radio-group>
+            <a-descriptions-item v-if="isSettingItemVisible('general.restoreTabs')" :label="settingLabel('general.restoreTabs')">
+              <a-select
+                :value="config.restoreTabs"
+                class="w-full"
+                @update:value="value => submitSetPathMutation(['restoreTabs'], value)"
+              >
+                <a-select-option value="never">
+                  {{ $t('config.general.restoreTabsOption.never') }}
+                </a-select-option>
+                <a-select-option value="onStartup">
+                  {{ $t('config.general.restoreTabsOption.onStartup') }}
+                </a-select-option>
+                <a-select-option value="always">
+                  {{ $t('config.general.restoreTabsOption.always') }}
+                </a-select-option>
+              </a-select>
             </a-descriptions-item>
             <a-descriptions-item v-if="isSettingItemVisible('general.recentHistoryCount')" :label="settingLabel('general.recentHistoryCount')">
               <a-input-number

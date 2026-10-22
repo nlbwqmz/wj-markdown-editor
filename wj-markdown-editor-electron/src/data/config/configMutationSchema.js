@@ -30,7 +30,7 @@ const SET_PATH_SET = new Set([
   'markdown.imageShadow',
   'externalFileChangeStrategy',
   'startView',
-  'openRecent',
+  'restoreTabs',
   'recentMax',
   'imgLocal',
   'imgNetwork',

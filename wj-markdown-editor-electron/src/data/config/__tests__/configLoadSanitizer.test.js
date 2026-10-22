@@ -194,6 +194,28 @@ describe('configLoadSanitizer', () => {
     expect(sanitized.startView).toBe('split')
   })
 
+  it('restoreTabs 非法枚举值必须回退默认值 onStartup', () => {
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      restoreTabs: 'invalid',
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.restoreTabs).toBe('onStartup')
+  })
+
+  it('旧配置里的 openRecent 必须被裁掉，restoreTabs 回退默认值', () => {
+    const legacyConfig = {
+      ...cloneConfig(defaultConfig),
+      openRecent: false,
+    }
+    delete legacyConfig.restoreTabs
+
+    const sanitized = sanitizeLoadedConfig(legacyConfig, defaultConfig, configSchema)
+
+    expect(sanitized).not.toHaveProperty('openRecent')
+    expect(sanitized.restoreTabs).toBe('onStartup')
+  })
+
   it('非法主题枚举值必须回退到默认值', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),

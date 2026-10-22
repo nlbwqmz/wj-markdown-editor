@@ -1014,6 +1014,13 @@ function persistCurrentTabGroupSync(windowId) {
  * 恢复完后按 `activeIndex` 把活动标签落回上次的位置：
  * 它记的是「有路径标签列表」里的下标，而缺失文件会被跳过，
  * 所以必须按「原始下标 → 实际恢复的 sessionId」映射，不能直接当数组下标用。
+ *
+ * 返回值统一为结构化结果：
+ * - 成功：`{ ok: true, windowId, requestedTabCount, restoredTabCount, activeSessionId, skippedPathList }`
+ * - 失败：透传 `createNew` 的结构化失败结果，或兜底 `{ ok: false, reason: 'window-create-failed' }`
+ *
+ * 不返回裸 windowId：`createNew` 自身在失败时返回的是结构化对象，
+ * 混合类型会让调用方把失败结果当成窗口 id 继续传下去。
  */
 async function restoreTabGroup(pathList, activeIndex = 0) {
   const candidatePathList = Array.isArray(pathList)
@@ -1021,21 +1028,40 @@ async function restoreTabGroup(pathList, activeIndex = 0) {
     : []
 
   if (candidatePathList.length === 0) {
-    return await createNew(null)
+    const createResult = await createNew(null)
+    const emptyWindowId = typeof createResult === 'string' && createResult !== '' ? createResult : null
+    if (!emptyWindowId) {
+      return createResult?.ok === false
+        ? createResult
+        : { ok: false, reason: 'window-create-failed', path: null }
+    }
+
+    return {
+      ok: true,
+      windowId: emptyWindowId,
+      requestedTabCount: 0,
+      restoredTabCount: 0,
+      activeSessionId: null,
+      skippedPathList: [],
+    }
   }
 
   const [firstPath, ...restPathList] = candidatePathList
   // 第一个路径用来开窗。文件缺失时必须走 recent-missing 分支，
   // 否则会变成一个无路径、无提示的 Untitled 空草稿：
   // 用户看不出原来那个文件去哪了，这个标签下次写盘时也会彻底消失。
-  const windowId = await createNew(firstPath, true)
-  if (typeof windowId !== 'string' || windowId === '') {
-    // 第一个文件读取失败时 createNew 会返回结构化失败结果，不能当窗口 id 用。
-    return windowId
+  const createResult = await createNew(firstPath, true)
+  const windowId = typeof createResult === 'string' && createResult !== '' ? createResult : null
+  if (!windowId) {
+    // 第一个文件读取失败时 createNew 会返回结构化失败结果，直接透传。
+    return createResult?.ok === false
+      ? createResult
+      : { ok: false, reason: 'window-create-failed', path: firstPath }
   }
 
   const restoredIndexList = []
   const restoredSessionIdList = []
+  const skippedPathList = []
 
   // 判断“这个标签有没有恢复出来”只能看 path / missingPath：
   // recent-missing 会话的 documentSource.path 也是 null，
@@ -1046,11 +1072,15 @@ async function restoreTabGroup(pathList, activeIndex = 0) {
     restoredIndexList.push(0)
     restoredSessionIdList.push(firstSession.sessionId)
   }
+  else {
+    skippedPathList.push(firstPath)
+  }
 
   for (let i = 0; i < restPathList.length; i++) {
     const targetPath = restPathList[i]
     try {
       if (!await fs.pathExists(targetPath)) {
+        skippedPathList.push(targetPath)
         continue
       }
       const content = await fs.readFile(targetPath, 'utf-8')
@@ -1064,9 +1094,13 @@ async function restoreTabGroup(pathList, activeIndex = 0) {
         restoredIndexList.push(i + 1)
         restoredSessionIdList.push(restoredSessionId)
       }
+      else {
+        skippedPathList.push(targetPath)
+      }
     }
     catch {
       // 单个标签恢复失败不能影响其他标签。
+      skippedPathList.push(targetPath)
     }
   }
 
@@ -1084,7 +1118,14 @@ async function restoreTabGroup(pathList, activeIndex = 0) {
     await activateTabInWindow(windowId, targetSessionId)
   }
 
-  return windowId
+  return {
+    ok: true,
+    windowId,
+    requestedTabCount: candidatePathList.length,
+    restoredTabCount: restoredSessionIdList.length,
+    activeSessionId: targetSessionId || null,
+    skippedPathList,
+  }
 }
 
 function createOpenTargetReadFailedResult(documentPath) {
@@ -2955,6 +2996,7 @@ Object.assign(windowLifecycleService, {
   deleteEditorWin,
   createNew,
   createDraftTab,
+  openDocumentTabInWindow,
   persistCurrentTabGroup,
   restoreTabGroup,
   configure: configureWindowLifecycleService,

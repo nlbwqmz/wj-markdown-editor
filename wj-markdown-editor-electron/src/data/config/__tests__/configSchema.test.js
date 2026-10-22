@@ -151,6 +151,36 @@ describe('configSchema', () => {
     })).toThrow()
   })
 
+  it('defaultConfig 必须提供 restoreTabs 默认值 onStartup', () => {
+    expect(defaultConfig.restoreTabs).toBe('onStartup')
+  })
+
+  it('config schema 必须接纳 restoreTabs 三态枚举值', () => {
+    for (const value of ['never', 'onStartup', 'always']) {
+      expect(() => validateConfigShape({
+        ...defaultConfig,
+        restoreTabs: value,
+      })).not.toThrow()
+    }
+  })
+
+  it('config schema 必须拒绝非法 restoreTabs', () => {
+    // 旧版本的 openRecent 布尔值不能再被当成合法配置。
+    for (const value of [true, false, 'invalid', null]) {
+      expect(() => validateConfigShape({
+        ...defaultConfig,
+        restoreTabs: value,
+      })).toThrow()
+    }
+  })
+
+  it('restoreTabs 缺失时必须校验失败', () => {
+    const brokenConfig = { ...defaultConfig }
+    delete brokenConfig.restoreTabs
+
+    expect(() => validateConfigShape(brokenConfig)).toThrow()
+  })
+
   it('startView 缺失时必须校验失败', () => {
     const brokenConfig = { ...defaultConfig }
     delete brokenConfig.startView

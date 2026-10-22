@@ -175,31 +175,72 @@ if (!lock) {
     }
 
     const openOnFilePath = getOpenOnFilePath()
-    if (openOnFilePath) {
-      await handleStartupOpenRequest({
-        targetPath: openOnFilePath,
-        baseDir: process.cwd(),
-        openDocumentPath: (targetPath, options) => runtime.openDocumentPath(targetPath, options),
-        createDraftWindow: () => windowLifecycleService.createNew(null),
-      })
-    } else if (configUtil.getConfig().openRecent) {
+    // 启动时恢复标签组的策略：
+    // - never：不恢复，直接给空草稿窗口
+    // - onStartup：仅直接启动时恢复（双击文件时不恢复）
+    // - always：双击文件时也先恢复标签组，再把该文件作为新标签追加进去
+    const restoreTabsMode = configUtil.getConfig().restoreTabs || 'onStartup'
+    const shouldRestoreTabGroup = restoreTabsMode === 'always'
+      || (restoreTabsMode === 'onStartup' && !openOnFilePath)
+
+    let restoredWindowId = null
+    if (shouldRestoreTabGroup) {
       // 重启恢复的是“上次打开的标签组”，而不是最近文件列表：
       // 两者是不同的事实，标签组不套 recentMax 上限。
       const savedTabGroup = tabGroup.get()
       if (savedTabGroup.tabs.length > 0) {
         // 连 activeIndex 一起传：恢复后活动标签要回到上次停留的那个，
         // 不能总是落在最后一个恢复的标签上。
-        const restoredWindowId = await windowLifecycleService.restoreTabGroup(
+        const restoreResult = await windowLifecycleService.restoreTabGroup(
           savedTabGroup.tabs,
           savedTabGroup.activeIndex,
         )
-        if (!restoredWindowId) {
-          await windowLifecycleService.createNew(null)
+        if (restoreResult?.ok === true && restoreResult.windowId) {
+          restoredWindowId = restoreResult.windowId
+          if (restoreResult.skippedPathList.length > 0) {
+            console.warn('[startup] 部分标签路径已失效，已跳过:', restoreResult.skippedPathList)
+          }
         }
-      } else {
-        await windowLifecycleService.createNew(null)
+        else {
+          console.warn('[startup] 标签组恢复失败:', restoreResult)
+        }
       }
-    } else {
+    }
+
+    if (openOnFilePath) {
+      if (restoredWindowId) {
+        // always 模式：标签组已恢复，把双击文件作为新标签开进去。
+        // openDocumentTabInWindow 内部走 resolveOpenExistingTab：
+        // 该文件已经在标签组里时会激活原标签，不会重复打开。
+        const openResult = await windowLifecycleService.openDocumentTabInWindow(
+          restoredWindowId,
+          openOnFilePath,
+          { trigger: 'startup' },
+        )
+        if (openResult?.ok !== true) {
+          // 保留已恢复的标签组，再补一个空草稿（createDraftTab 会自动激活它），
+          // 并用一次性消息告知用户文件没打开。
+          console.warn('[startup] 打开失败，已保留恢复的标签组:', openOnFilePath, openResult)
+          await windowLifecycleService.createDraftTab(restoredWindowId)
+          windowLifecycleService.publishWindowMessage(restoredWindowId, {
+            type: 'warning',
+            content: 'message.openDroppedFileFailed',
+          })
+        }
+      }
+      else {
+        // never / onStartup 模式：只打开双击的那个文件；
+        // 读取失败时回退为空草稿窗口。
+        await handleStartupOpenRequest({
+          targetPath: openOnFilePath,
+          baseDir: process.cwd(),
+          openDocumentPath: (targetPath, options) => runtime.openDocumentPath(targetPath, options),
+          createDraftWindow: () => windowLifecycleService.createNew(null),
+        })
+      }
+    }
+    else if (!restoredWindowId) {
+      // 空草稿窗口（Untitled）
       await windowLifecycleService.createNew(null)
     }
     await updateUtil.initUpdater(() => windowLifecycleService.listWindows())

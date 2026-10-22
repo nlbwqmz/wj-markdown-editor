@@ -32,7 +32,9 @@ export default {
     otherArea: '',
   },
   startView: 'split',
-  openRecent: true,
+  // 启动时恢复上次标签组的策略：
+  // never = 不恢复；onStartup = 仅直接启动时恢复；always = 含双击文件打开也恢复
+  restoreTabs: 'onStartup',
   recentMax: 10,
   language: 'auto',
   externalFileChangeStrategy: 'prompt',

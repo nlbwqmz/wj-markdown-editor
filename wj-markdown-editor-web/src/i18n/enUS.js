@@ -193,7 +193,7 @@ export default {
       language: 'Language',
       languageAuto: 'Auto (follow system)',
       startupView: 'Startup view',
-      openLastRecord: 'Open latest record',
+      restoreTabs: 'Restore tabs',
       recentHistoryCount: 'Recent history count',
       autoSave: 'Auto save',
       externalFileChangeStrategy: 'External Change Handling',
@@ -203,6 +203,11 @@ export default {
         source: 'Source mode',
         split: 'Split mode',
         preview: 'Preview mode',
+      },
+      restoreTabsOption: {
+        never: 'Never',
+        onStartup: 'On direct launch',
+        always: 'Always',
       },
       autoSaveOption: {
         tip: 'Effective only if the file save path exists',
@@ -461,5 +466,6 @@ export default {
     fileExternalChangeNotificationBody: 'The file was modified externally and the latest content has been applied automatically.',
     fileManagerSearchPlaceholder: 'Search',
     fileManagerNoSearchResults: 'No match found',
+    openDroppedFileFailed: 'Failed to open the file. Previous tabs were kept and a blank draft was created.',
   },
 }

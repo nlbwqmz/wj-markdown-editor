@@ -40,7 +40,7 @@ const SETTING_SEARCH_ITEM_LIST = [
   // 常规
   { id: 'general.language', sectionId: 'general', labelKey: 'config.general.language', keywords: ['locale', '中文', '英文', 'english', 'zh', 'en'] },
   { id: 'general.startupView', sectionId: 'general', labelKey: 'config.general.startupView', keywords: ['源码', '双栏', '预览', 'source', 'split', 'preview'] },
-  { id: 'general.openLastRecord', sectionId: 'general', labelKey: 'config.general.openLastRecord', keywords: ['recent', 'history', '恢复', '上次'] },
+  { id: 'general.restoreTabs', sectionId: 'general', labelKey: 'config.general.restoreTabs', keywords: ['tab', '标签', '恢复', 'restore', 'session', 'recent', '上次', '启动'] },
   { id: 'general.recentHistoryCount', sectionId: 'general', labelKey: 'config.general.recentHistoryCount', keywords: ['recent', 'max', '数量', '上限'] },
   { id: 'general.autoSave', sectionId: 'general', labelKey: 'config.general.autoSave', keywords: ['autosave', '失焦', '关闭窗口', '切换标签', 'blur', 'close', 'switch'] },
   { id: 'general.externalFileChangeStrategy', sectionId: 'general', labelKey: 'config.general.externalFileChangeStrategy', keywords: ['external', '冲突', '同步', '提醒', '直接应用', 'prompt', 'apply'] },

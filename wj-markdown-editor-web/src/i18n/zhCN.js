@@ -193,7 +193,7 @@ export default {
       language: '语言',
       languageAuto: '自动（跟随系统）',
       startupView: '启动视图',
-      openLastRecord: '打开最近一次记录',
+      restoreTabs: '恢复标签',
       recentHistoryCount: '最近历史记录数量',
       autoSave: '自动保存',
       externalFileChangeStrategy: '外部变更处理',
@@ -203,6 +203,11 @@ export default {
         source: '源码模式',
         split: '双栏模式',
         preview: '预览模式',
+      },
+      restoreTabsOption: {
+        never: '不恢复',
+        onStartup: '直接启动时恢复',
+        always: '总是恢复',
       },
       autoSaveOption: {
         tip: '仅当文件保存路径存在时生效',
@@ -461,5 +466,6 @@ export default {
     fileExternalChangeNotificationBody: '检测到文件被外部修改，已自动应用最新内容。',
     fileManagerSearchPlaceholder: '搜索',
     fileManagerNoSearchResults: '未找到匹配项',
+    openDroppedFileFailed: '无法打开该文件，已保留上次的标签组并新建空白草稿。',
   },
 }
