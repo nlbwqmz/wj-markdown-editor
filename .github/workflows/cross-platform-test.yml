@@ -1,0 +1,73 @@
+name: Cross-platform test
+
+# 跨平台测试矩阵：验证 Windows 与 Linux 上的测试是否都能通过。
+#
+# 触发策略说明：
+# 1. pull_request 是「合并前门禁」——PR 每次提交都会跑；
+#    GitHub 没有「合并时」的前置事件（closed 只在合并后触发），所以门禁放在这里。
+# 2. workflow_dispatch 用于手动重跑（首版上线时请先用它验证一次）。
+# 3. 刻意不配 push：主分支提交不自动跑，避免每次推送都消耗 Actions 额度；
+#    需要验证主分支时手动触发即可。
+on:
+  pull_request:
+  workflow_dispatch:
+
+# 同一个 PR / 分支只保留最新一次运行，避免连续推送时堆叠。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test / ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      # 两个平台都跑完再汇总，方便直接对比 Windows 与 Linux 的差异。
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [22]
+
+    steps:
+      # 必须在 checkout 之前执行：
+      # 仓库没有 .gitattributes，而 Windows runner 的系统 git 默认 core.autocrlf=true，
+      # 不关掉会让同一份源码在 Windows 上检出成 CRLF、Linux 上检出成 LF，
+      # 导致「读源码做断言」的测试在两个平台结果不一致。
+      - name: Normalize line endings for CI
+        run: git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          # 两个包各自有独立的 package-lock.json，没有 workspace 关系。
+          cache-dependency-path: |
+            wj-markdown-editor-web/package-lock.json
+            wj-markdown-editor-electron/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: wj-markdown-editor-web
+        run: npm ci --no-audit --no-fund
+
+      - name: Install electron dependencies
+        working-directory: wj-markdown-editor-electron
+        run: npm ci --no-audit --no-fund
+
+      # 不需要先构建 web-dist：
+      # 它是运行期 loadFile 的目标，测试里 loadFile 全部被 mock，
+      # 并且 windowLifecycleService.test.js 有专门的 web-dist missing 用例。
+      - name: Run web tests
+        working-directory: wj-markdown-editor-web
+        run: npm run test:run
+
+      - name: Run electron tests
+        working-directory: wj-markdown-editor-electron
+        run: npm run test:run
