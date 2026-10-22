@@ -5,6 +5,7 @@ import { computed, createVNode, h, nextTick, onMounted, onUnmounted, ref, watch 
 import { useI18n } from 'vue-i18n'
 import ColorPicker from '@/components/AsyncColorPicker.js'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
+import TopBarActionButton from '@/components/layout/TopBarActionButton.vue'
 import TypographerDescription from '@/components/TypographerDescription.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
@@ -380,19 +381,13 @@ function reset() {
         <template #title>
           <span>{{ $t('config.resetToDefault') }}</span>
         </template>
-        <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="reset">
-          <div class="i-tabler:settings-off" />
-        </div>
+        <TopBarActionButton icon="i-tabler:settings-off" @click="reset" />
       </a-tooltip>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="settingMinimize">
-        <div class="i-tabler:minus" />
-      </div>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-red" @click="settingClose">
-        <div class="i-tabler:x" />
-      </div>
+      <TopBarActionButton icon="i-tabler:minus" @click="settingMinimize" />
+      <TopBarActionButton icon="i-tabler:x" danger @click="settingClose" />
     </template>
     <div v-if="config" ref="settingContainerRef" class="allow-search setting-root h-full w-full flex">
-      <nav class="setting-tabs wj-scrollbar shrink-0" role="tablist" aria-orientation="vertical">
+      <nav class="wj-scrollbar setting-tabs shrink-0" role="tablist" aria-orientation="vertical">
         <div class="setting-tabs__inner" :class="{ 'is-ready': tabIndicatorReady }">
           <div class="setting-tabs__indicator" :style="tabIndicatorStyle" aria-hidden="true" />
           <button

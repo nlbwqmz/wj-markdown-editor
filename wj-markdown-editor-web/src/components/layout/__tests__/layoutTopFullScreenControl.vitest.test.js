@@ -404,11 +404,11 @@ describe('layoutTop full screen control', () => {
     expect(hiddenButton.classes()).not.toContain('bg-bg-hover')
     expect(hiddenButton.classes()).not.toContain('hover:bg-bg-hover')
 
-    // 内层：28×28 圆角背景层，只有 group-hover 背景，没有选中态
+    // 内层：28×28 圆角背景层，只有 group-hover 背景（弱交互色），没有选中态
     expect(hiddenSurface.classes()).toContain('h-7')
     expect(hiddenSurface.classes()).toContain('w-7')
     expect(hiddenSurface.classes()).toContain('rounded-1')
-    expect(hiddenSurface.classes()).toContain('group-hover:bg-bg-hover')
+    expect(hiddenSurface.classes()).toContain('group-hover:bg-[var(--wj-markdown-bg-secondary)]')
     expect(hiddenSurface.classes()).not.toContain('bg-bg-hover')
 
     store.sidebarVisible = true
@@ -426,7 +426,7 @@ describe('layoutTop full screen control', () => {
     expect(visibleSurface.classes()).toContain('h-7')
     expect(visibleSurface.classes()).toContain('w-7')
     expect(visibleSurface.classes()).toContain('rounded-1')
-    expect(visibleSurface.classes()).toContain('group-hover:bg-bg-hover')
+    expect(visibleSurface.classes()).toContain('group-hover:bg-[var(--wj-markdown-bg-secondary)]')
     expect(visibleSurface.classes()).not.toContain('bg-bg-hover')
   })
 

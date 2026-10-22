@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import MarkdownMenu from '@/components/editor/MarkdownMenu.vue'
 import MarkdownPreview from '@/components/editor/MarkdownPreview.vue'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
+import TopBarActionButton from '@/components/layout/TopBarActionButton.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import guideUtil from '@/util/guideUtil.js'
@@ -76,12 +77,8 @@ onUnmounted(() => {
 <template>
   <OtherLayout icon="i-tabler:bubble-text" :name="$t('topMenu.help.children.example')">
     <template #action>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="guideMinimize">
-        <div class="i-tabler:minus" />
-      </div>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-red" @click="guideClose">
-        <div class="i-tabler:x" />
-      </div>
+      <TopBarActionButton icon="i-tabler:minus" @click="guideMinimize" />
+      <TopBarActionButton icon="i-tabler:x" danger @click="guideClose" />
     </template>
     <div ref="guideContainerRef" class="allow-search grid grid-cols-[200px_1px_1fr] h-full w-full overflow-hidden b-t-1 b-t-border-primary b-t-solid">
       <MarkdownMenu :anchor-list="anchorList" :get-container="() => previewContainerRef" :show-header="false" />

@@ -5,6 +5,7 @@ import { createVNode, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import logo from '@/assets/img/logo.png'
 import OtherLayout from '@/components/layout/OtherLayout.vue'
+import TopBarActionButton from '@/components/layout/TopBarActionButton.vue'
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
 import eventEmit from '@/util/channel/eventEmit.js'
@@ -99,7 +100,7 @@ onMounted(() => {
     downloading.value = false
     downloadFinish.value = true
   })
-  eventEmit.on('update-error', (result) => {
+  eventEmit.on('update-error', () => {
     checking.value = false
     downloading.value = false
     downloadFinish.value = false
@@ -117,12 +118,8 @@ onMounted(() => {
 <template>
   <OtherLayout icon="i-tabler:info-circle" :name="$t('aboutView.title')">
     <template #action>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-bg-hover" @click="aboutMinimize">
-        <div class="i-tabler:minus" />
-      </div>
-      <div class="h-8 w-8 flex items-center justify-center hover:cursor-pointer hover:bg-red" @click="aboutClose">
-        <div class="i-tabler:x" />
-      </div>
+      <TopBarActionButton icon="i-tabler:minus" @click="aboutMinimize" />
+      <TopBarActionButton icon="i-tabler:x" danger @click="aboutClose" />
     </template>
     <div class="h-full w-full flex flex-col justify-between p-2">
       <div class="w-full text-center">

@@ -11,6 +11,7 @@ import {
 } from '@/util/config/configMutationCommandUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { createLayoutTopOpenFolderAction } from './layoutTopOpenFolderAction.js'
+import TopBarActionButton from './TopBarActionButton.vue'
 
 const store = useCommonStore()
 const { t } = useI18n()
@@ -140,19 +141,13 @@ const hasNewVersion = computed(() => store.hasNewVersion)
           </div>
           <span v-else>{{ sidebarToggleLabel }}</span>
         </template>
-        <div
+        <TopBarActionButton
+          :icon="sidebarVisible ? 'i-tabler:layout-sidebar-left-collapse' : 'i-tabler:layout-sidebar-left-expand'"
           data-testid="layout-top-toggle-sidebar"
           :data-active="String(sidebarVisible)"
           :aria-pressed="sidebarVisible"
-          class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer"
           @click="toggleSidebar"
-        >
-          <div
-            class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover"
-          >
-            <div :class="sidebarVisible ? 'i-tabler:layout-sidebar-left-collapse' : 'i-tabler:layout-sidebar-left-expand'" />
-          </div>
-        </div>
+        />
       </a-tooltip>
     </div>
     <div
@@ -169,11 +164,11 @@ const hasNewVersion = computed(() => store.hasNewVersion)
         <template #title>
           <span>{{ $t('top.newVersion') }}</span>
         </template>
-        <div class="group bouncing h-8 w-8 flex items-center justify-center color-red hover:cursor-pointer" @click="openAbout">
-          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
-            <div class="i-tabler:arrow-bar-up" />
-          </div>
-        </div>
+        <TopBarActionButton
+          icon="i-tabler:arrow-bar-up"
+          class="bouncing color-red"
+          @click="openAbout"
+        />
       </a-tooltip>
       <div
         v-if="hasNewVersion"
@@ -196,20 +191,14 @@ const hasNewVersion = computed(() => store.hasNewVersion)
           </div>
           <span v-else>{{ $t(item.labelKey) }}</span>
         </template>
-        <div
+        <TopBarActionButton
+          :icon="item.icon"
+          :active="store.viewMode === item.mode"
           :data-testid="`layout-top-view-mode-${item.mode}`"
           :data-active="String(store.viewMode === item.mode)"
           :aria-pressed="store.viewMode === item.mode"
-          class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer"
           @click="selectViewMode(item.mode)"
-        >
-          <div
-            class="h-7 w-7 flex items-center justify-center rounded-1"
-            :class="store.viewMode === item.mode ? 'bg-bg-hover' : 'group-hover:bg-[var(--wj-markdown-bg-secondary)]'"
-          >
-            <div :class="item.icon" />
-          </div>
-        </div>
+        />
       </a-tooltip>
       <div
         data-testid="layout-top-view-group-divider"
@@ -220,19 +209,13 @@ const hasNewVersion = computed(() => store.hasNewVersion)
         <template #title>
           <span>{{ $t('top.switchTheme') }}</span>
         </template>
-        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="switchThemes">
-          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
-            <div v-if="theme === 'light'" class="i-tabler:moon" />
-            <div v-else class="i-tabler:sun" />
-          </div>
-        </div>
+        <TopBarActionButton
+          :icon="theme === 'light' ? 'i-tabler:moon' : 'i-tabler:sun'"
+          @click="switchThemes"
+        />
       </a-tooltip>
       <a-dropdown placement="bottom" :trigger="['hover', 'click']" arrow>
-        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer">
-          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
-            <div class="i-tabler:language" />
-          </div>
-        </div>
+        <TopBarActionButton icon="i-tabler:language" />
         <template #overlay>
           <a-menu>
             <a-menu-item key="auto" @click="switchLanguage('auto')">
@@ -254,52 +237,24 @@ const hasNewVersion = computed(() => store.hasNewVersion)
         <template #title>
           <span>{{ $t('top.openInExplorer') }}</span>
         </template>
-        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="openFolder">
-          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
-            <div class="i-tabler:folder-open" />
-          </div>
-        </div>
+        <TopBarActionButton icon="i-tabler:folder-open" @click="openFolder" />
       </a-tooltip>
       <a-tooltip v-if="!isAlwaysOnTop" placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.pinTop') }}</span>
         </template>
-        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="alwaysOnTop(true)">
-          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
-            <div class="i-tabler:pin" />
-          </div>
-        </div>
+        <TopBarActionButton icon="i-tabler:pin" @click="alwaysOnTop(true)" />
       </a-tooltip>
       <a-tooltip v-if="isAlwaysOnTop" placement="bottom" color="#1677ff">
         <template #title>
           <span>{{ $t('top.cancelPinTop') }}</span>
         </template>
-        <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="alwaysOnTop(false)">
-          <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
-            <div class="i-tabler:pinned-off" />
-          </div>
-        </div>
+        <TopBarActionButton icon="i-tabler:pinned-off" @click="alwaysOnTop(false)" />
       </a-tooltip>
-      <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="minimize">
-        <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
-          <div class="i-tabler:minus" />
-        </div>
-      </div>
-      <div v-show="!isMaximize" class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="maximize">
-        <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
-          <div class="i-tabler:crop-1-1" />
-        </div>
-      </div>
-      <div v-show="isMaximize" class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="restore">
-        <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-bg-hover">
-          <div class="i-tabler:layers-subtract" />
-        </div>
-      </div>
-      <div class="group h-8 w-8 flex items-center justify-center hover:cursor-pointer" @click="close">
-        <div class="h-7 w-7 flex items-center justify-center rounded-1 group-hover:bg-red">
-          <div class="i-tabler:x" />
-        </div>
-      </div>
+      <TopBarActionButton icon="i-tabler:minus" @click="minimize" />
+      <TopBarActionButton v-show="!isMaximize" icon="i-tabler:crop-1-1" @click="maximize" />
+      <TopBarActionButton v-show="isMaximize" icon="i-tabler:layers-subtract" @click="restore" />
+      <TopBarActionButton icon="i-tabler:x" danger @click="close" />
     </div>
   </div>
 </template>
