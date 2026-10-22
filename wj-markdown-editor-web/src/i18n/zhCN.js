@@ -56,6 +56,7 @@ export default {
     closeOthers: '关闭其它',
     closeToLeft: '关闭左侧',
     closeToRight: '关闭右侧',
+    copyFileName: '复制文件名',
     copyPath: '复制路径',
     revealInExplorer: '在资源管理器中显示',
   },

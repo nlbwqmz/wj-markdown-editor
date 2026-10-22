@@ -250,6 +250,7 @@ describe('documentTabBar 右键菜单', () => {
       'close-others',
       'close-left',
       'close-right',
+      'copy-file-name',
       'copy-path',
       'reveal-in-explorer',
     ])
@@ -291,6 +292,20 @@ describe('documentTabBar 右键菜单', () => {
     expect(requestDocumentCloseTabs).toHaveBeenCalledTimes(1)
     expect(requestDocumentCloseTabs).toHaveBeenCalledWith(['session-1', 'session-2'])
     expect(requestDocumentCloseTab).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('复制文件名成功后必须给出提示', async () => {
+    const wrapper = mountTabBar()
+
+    // 第二个标签（session-2）是后台标签，文件名是 b.md
+    const secondMenu = wrapper.findAllComponents({ name: 'AMenu' })[1]
+    await secondMenu.vm.$emit('click', { key: 'copy-file-name' })
+    await flushPromises()
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('b.md')
+    expect(message.success).toHaveBeenCalledWith('message.copySucceeded')
 
     wrapper.unmount()
   })

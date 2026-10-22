@@ -56,6 +56,7 @@ export default {
     closeOthers: 'Close others',
     closeToLeft: 'Close to the left',
     closeToRight: 'Close to the right',
+    copyFileName: 'Copy file name',
     copyPath: 'Copy path',
     revealInExplorer: 'Show in explorer',
   },

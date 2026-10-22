@@ -237,14 +237,13 @@ function closeTabsToLeft(tab) {
   closeTabList(tabs.value.slice(0, targetIndex))
 }
 
-function copyTabPath(tab) {
-  const targetPath = tab?.displayPath || ''
-  if (!targetPath) {
+function copyTextToClipboard(text) {
+  if (!text) {
     return
   }
   copyTextWithFeedback({
-    text: targetPath,
-    writeText: async text => await navigator.clipboard.writeText(text),
+    text,
+    writeText: async value => await navigator.clipboard.writeText(value),
     onEmpty() {
       message.warning(t('message.noCopyableContent'))
     },
@@ -255,6 +254,14 @@ function copyTabPath(tab) {
       message.error(t('message.copyFailed'))
     },
   })
+}
+
+function copyTabFileName(tab) {
+  copyTextToClipboard(tab?.fileName || '')
+}
+
+function copyTabPath(tab) {
+  copyTextToClipboard(tab?.displayPath || '')
 }
 
 function revealTabInExplorer(tab) {
@@ -316,6 +323,10 @@ function getMenuItems(tab) {
       type: 'divider',
     },
     {
+      key: 'copy-file-name',
+      label: t('documentTab.copyFileName'),
+    },
+    {
       key: 'copy-path',
       label: t('documentTab.copyPath'),
       disabled: !hasPath,
@@ -343,6 +354,10 @@ function onMenuClick({ key }, tab) {
   }
   if (key === 'close-right') {
     closeTabsToRight(tab)
+    return
+  }
+  if (key === 'copy-file-name') {
+    copyTabFileName(tab)
     return
   }
   if (key === 'copy-path') {
