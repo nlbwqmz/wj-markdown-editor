@@ -2568,8 +2568,8 @@ describe('documentCommandService', () => {
       }).toThrow(/sessionIds/i)
     })
 
-    it('document.close-tab 关闭未修改标签时应直接派发 close-tab effect', () => {
-      const { service, windowId } = createTwoTabContext()
+    it('document.close-tab 关闭干净的后台标签时必须直接关闭，不得切过去', () => {
+      const { store, service, windowId } = createTwoTabContext()
 
       const result = service.dispatch({
         windowId,
@@ -2577,16 +2577,15 @@ describe('documentCommandService', () => {
         payload: { sessionId: 'tab-second' },
       })
 
+      // 用户点的是关闭按钮，不是“打开这个标签”：
+      // 干净标签直接关掉即可，不需要先激活再关。
       expect(result.effects).toEqual([
-        {
-          type: 'activate-tab',
-          sessionId: 'tab-second',
-        },
         {
           type: 'close-tab',
           sessionId: 'tab-second',
         },
       ])
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-first')
     })
 
     it('document.close-tabs 必须一次派发批量 effect，且不得逐个激活标签', () => {

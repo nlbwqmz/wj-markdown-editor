@@ -301,20 +301,10 @@ export function createDocumentCommandService({
 
       case 'document.close-tab':
         {
-          // 关标签先把目标标签激活：脏判断、保存链路、关闭确认弹窗
-          // 全部按“当前活动会话”工作，这样用户看到弹窗时看到的就是要关掉的那份文档。
           const targetSessionId = payload?.sessionId || null
           const windowSessionIds = store.getSessionIdsByWindowId?.(windowId) || []
           if (!targetSessionId || !windowSessionIds.includes(targetSessionId)) {
             throw new Error(`close-tab 目标会话不属于该窗口: ${targetSessionId}`)
-          }
-
-          if (store.getActiveSessionIdByWindowId?.(windowId) !== targetSessionId) {
-            store.activateSession({ windowId, sessionId: targetSessionId })
-            effects.push({
-              type: 'activate-tab',
-              sessionId: targetSessionId,
-            })
           }
 
           const targetSession = store.getSession(targetSessionId)
@@ -325,6 +315,8 @@ export function createDocumentCommandService({
           ensureCloseRuntime(targetSession)
           watchCoordinator.prepareSession(targetSession)
 
+          // 干净标签直接关掉，不切换活动标签：
+          // 用户点的是关闭按钮，不是“打开这个标签”，没必要先跳过去再关。
           if (!isDirty(targetSession)) {
             resetCloseRuntime(targetSession)
             effects.push({
@@ -332,6 +324,17 @@ export function createDocumentCommandService({
               sessionId: targetSessionId,
             })
             break
+          }
+
+          // 只有脏标签才需要先激活：
+          // 脏判断、保存链路、关闭确认弹窗全部按“当前活动会话”工作，
+          // 这样用户看到弹窗时看到的就是要关掉的那份文档。
+          if (store.getActiveSessionIdByWindowId?.(windowId) !== targetSessionId) {
+            store.activateSession({ windowId, sessionId: targetSessionId })
+            effects.push({
+              type: 'activate-tab',
+              sessionId: targetSessionId,
+            })
           }
 
           // 关标签故意不做“关闭自动保存”：
