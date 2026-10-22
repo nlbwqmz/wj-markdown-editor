@@ -667,6 +667,83 @@ describe('saveCoordinator', () => {
     expect(firstSucceeded.session.copySaveRuntime.activeJobs).toEqual({})
   })
 
+  it('close-tab 作用域下保存完成必须关标签而不是关窗口', () => {
+    const coordinator = createDeterministicCoordinator()
+    const session = createBoundFileSession({
+      sessionId: 'close-tab-scope-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000001060,
+    })
+
+    session.editorSnapshot.content = '# 目标内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000001061
+    session.saveRuntime.requestedRevision = 1
+
+    const closeSaveRequested = coordinator.requestSave(session, {
+      trigger: 'save-and-close',
+    })
+    // 关单个标签：intent 必须是 close-tab，且等待的 job 要挂上
+    closeSaveRequested.session.closeRuntime.intent = 'close-tab'
+    closeSaveRequested.session.closeRuntime.waitingSaveJobId = 'job-1'
+
+    const saveSucceeded = coordinator.handleSaveSucceeded(closeSaveRequested.session, {
+      jobId: 'job-1',
+      revision: 1,
+      content: '# 目标内容',
+      path: 'C:/docs/demo.md',
+      trigger: 'save-and-close',
+      savedAt: 1700000001062,
+      stat: null,
+    })
+
+    // 关键：多标签下“保存并关闭”只能关这个标签，绝不能关窗口
+    expect(saveSucceeded.effects).toEqual([
+      {
+        type: 'close-tab',
+        sessionId: 'close-tab-scope-session',
+      },
+    ])
+    expect(saveSucceeded.session.closeRuntime.intent).toBeNull()
+  })
+
+  it('close-tab 作用域保存失败时必须回退到标签作用域的确认态', () => {
+    const coordinator = createDeterministicCoordinator()
+    const session = createBoundFileSession({
+      sessionId: 'close-tab-save-failed-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
+      now: 1700000001070,
+    })
+
+    session.editorSnapshot.content = '# 目标内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000001071
+    session.saveRuntime.requestedRevision = 1
+
+    const closeSaveRequested = coordinator.requestSave(session, {
+      trigger: 'save-and-close',
+    })
+    closeSaveRequested.session.closeRuntime.intent = 'close-tab'
+    closeSaveRequested.session.closeRuntime.waitingSaveJobId = 'job-1'
+
+    const saveFailed = coordinator.handleSaveFailed(closeSaveRequested.session, {
+      jobId: 'job-1',
+      error: new Error('写盘失败'),
+      trigger: 'save-and-close',
+    })
+
+    expect(saveFailed.effects).toContainEqual({
+      type: 'show-unsaved-prompt',
+    })
+    // 回退时必须保留 close-tab，否则下一次“保存并关闭”会关掉整个窗口
+    expect(saveFailed.session.closeRuntime.intent).toBe('close-tab')
+    expect(saveFailed.session.closeRuntime.promptReason).toBe('unsaved-changes')
+  })
+
   it('waitingSaveJobId 挂靠当前 job 时，即使 revision 递增但最新内容已被当前 save 覆盖，仍必须正确关闭窗口', () => {
     const coordinator = createDeterministicCoordinator()
     const session = createBoundFileSession({

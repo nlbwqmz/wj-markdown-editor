@@ -2,16 +2,21 @@ import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, reactive } from 'vue'
 
-import { requestDocumentCloseTab } from '@/util/document-session/rendererDocumentCommandUtil.js'
+import {
+  requestDocumentCloseTab,
+  requestDocumentCloseTabs,
+} from '@/util/document-session/rendererDocumentCommandUtil.js'
 import DocumentTabBar from '../DocumentTabBar.vue'
+
+const defaultTabs = [
+  { sessionId: 'session-1', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: false },
+  { sessionId: 'session-2', fileName: 'b.md', displayPath: 'D:/docs/b.md', dirty: true },
+]
 
 const store = reactive({
   documentSessionSnapshot: {
     activeSessionId: 'session-1',
-    tabs: [
-      { sessionId: 'session-1', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: false },
-      { sessionId: 'session-2', fileName: 'b.md', displayPath: 'D:/docs/b.md', dirty: true },
-    ],
+    tabs: defaultTabs.map(tab => ({ ...tab })),
   },
 })
 
@@ -28,16 +33,13 @@ vi.mock('@/stores/counter.js', () => ({
 vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
   requestDocumentActivateTab: vi.fn(() => Promise.resolve()),
   requestDocumentCloseTab: vi.fn(() => Promise.resolve()),
+  requestDocumentCloseTabs: vi.fn(() => Promise.resolve()),
 }))
 
-// store 是模块级 reactive，测试之间必须重置，否则上一条用例改过的 activeSessionId 会污染下一条
+// store 是模块级 reactive，测试之间必须重置，否则上一条用例改过的状态会污染下一条
 beforeEach(() => {
   store.documentSessionSnapshot.activeSessionId = 'session-1'
-})
-
-// store 是模块级 reactive，测试之间必须重置，否则上一条用例改过的 activeSessionId 会污染下一条
-beforeEach(() => {
-  store.documentSessionSnapshot.activeSessionId = 'session-1'
+  store.documentSessionSnapshot.tabs = defaultTabs.map(tab => ({ ...tab }))
   vi.clearAllMocks()
 })
 
@@ -248,11 +250,52 @@ describe('documentTabBar 右键菜单', () => {
   it('关闭其它必须跳过脏标签，不得把它们批量关掉', async () => {
     const wrapper = mountTabBar()
 
-    // session-2 是脏标签，对 session-1 执行「关闭其它」时它必须被保留
+    // session-2 是脏标签，对 session-1 执行「关闭其它」时它必须被保留，
+    // 过滤后关闭列表为空，因此不该发出任何请求
     const firstMenu = wrapper.findAllComponents({ name: 'AMenu' })[0]
     await firstMenu.vm.$emit('click', { key: 'close-others' })
 
+    expect(requestDocumentCloseTabs).not.toHaveBeenCalled()
     expect(requestDocumentCloseTab).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('关闭右侧必须只发一次批量请求，不能逐个发 close-tab', async () => {
+    // 三个干净标签，避免脏标签过滤干扰断言
+    store.documentSessionSnapshot.tabs = [
+      { sessionId: 'session-1', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: false },
+      { sessionId: 'session-3', fileName: 'c.md', displayPath: 'D:/docs/c.md', dirty: false },
+      { sessionId: 'session-4', fileName: 'd.md', displayPath: 'D:/docs/d.md', dirty: false },
+    ]
+    const wrapper = mountTabBar()
+
+    const firstMenu = wrapper.findAllComponents({ name: 'AMenu' })[0]
+    await firstMenu.vm.$emit('click', { key: 'close-right' })
+
+    expect(requestDocumentCloseTabs).toHaveBeenCalledTimes(1)
+    expect(requestDocumentCloseTabs).toHaveBeenCalledWith(['session-3', 'session-4'])
+    // 逐个关闭会让主进程每个命令都先激活目标，标签高亮会一路跳
+    expect(requestDocumentCloseTab).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('关闭其它必须一次交出全部干净标签', async () => {
+    store.documentSessionSnapshot.tabs = [
+      { sessionId: 'session-1', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: false },
+      { sessionId: 'session-2', fileName: 'b.md', displayPath: 'D:/docs/b.md', dirty: true },
+      { sessionId: 'session-3', fileName: 'c.md', displayPath: 'D:/docs/c.md', dirty: false },
+      { sessionId: 'session-4', fileName: 'd.md', displayPath: 'D:/docs/d.md', dirty: false },
+    ]
+    const wrapper = mountTabBar()
+
+    const firstMenu = wrapper.findAllComponents({ name: 'AMenu' })[0]
+    await firstMenu.vm.$emit('click', { key: 'close-others' })
+
+    // session-2 是脏标签必须排除，其余三个一次交出
+    expect(requestDocumentCloseTabs).toHaveBeenCalledTimes(1)
+    expect(requestDocumentCloseTabs).toHaveBeenCalledWith(['session-3', 'session-4'])
 
     wrapper.unmount()
   })

@@ -5,6 +5,7 @@ import { useCommonStore } from '@/stores/counter.js'
 import {
   requestDocumentActivateTab,
   requestDocumentCloseTab,
+  requestDocumentCloseTabs,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import { bindHorizontalWheelScroll } from '@/util/horizontalWheelScrollUtil.js'
 import { resolveTabScrollLeftToReveal } from '@/util/overlayScrollbarMathUtil.js'
@@ -198,13 +199,19 @@ function closeTab(tab) {
  *
  * 有未保存内容的标签如果被批量关掉，会连续弹多次确认框，
  * 用户无法判断自己到底在确认哪一个；所以这类标签一律保留，让用户单独处理。
+ *
+ * 必须一次请求发给主进程，不能 forEach 逐个发：
+ * 逐个关闭时主进程每个命令都会先激活目标、再推一次快照，
+ * 渲染层会看到活动标签一路跳过去（标签循环切换）。
  */
 function closeTabList(tabList) {
-  tabList
+  const sessionIds = tabList
     .filter(tab => tab && tab.sessionId && tab.dirty !== true)
-    .forEach((tab) => {
-      requestDocumentCloseTab(tab.sessionId).then(() => {}).catch(() => {})
-    })
+    .map(tab => tab.sessionId)
+  if (sessionIds.length === 0) {
+    return
+  }
+  requestDocumentCloseTabs(sessionIds).then(() => {}).catch(() => {})
 }
 
 function closeOtherTabs(tab) {

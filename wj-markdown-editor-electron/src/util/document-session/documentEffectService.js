@@ -944,6 +944,14 @@ export function createDocumentEffectService({
         return closed ?? null
       }
 
+      case 'close-tabs':
+      {
+        // 批量关标签：一次销毁多个会话，只广播一次快照。
+        // 渲染层因此看不到“活动标签逐个挪动”的中间态。
+        const closedTabs = await tabHostController?.closeTabs?.(effect.sessionIds)
+        return closedTabs ?? null
+      }
+
       case 'close-tab-after-save':
       {
         // “保存并关闭标签”的收尾：只有确认会话已经不脏才真的关，

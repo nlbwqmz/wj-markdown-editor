@@ -29,6 +29,7 @@ import {
 } from './documentSessionRuntime.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 import { createExternalWatchBridge } from './externalWatchBridge.js'
+import { resolveNextActiveSessionId } from './tabCloseMathUtil.js'
 import { createWindowHostStateStore } from './windowHostStateStore.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -1933,10 +1934,93 @@ async function closeTabInWindow(windowId, sessionId) {
   return true
 }
 
+/**
+ * 批量关掉一组标签页。
+ *
+ * 用于“关闭其他 / 关闭右侧”：整个操作只广播一次快照，
+ * 因此渲染层不会看到“活动标签来回跳”的中间态。
+ *
+ * 脏标签由命令层提前过滤，这里只负责落地销毁。
+ */
+async function closeTabsInWindow(windowId, sessionIds) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const { store } = ensureSessionRuntimeInitialized()
+  if (!normalizedWindowId) {
+    return false
+  }
+
+  const windowSessionIds = store.getSessionIdsByWindowId?.(normalizedWindowId) || []
+  const targetSessionIds = Array.isArray(sessionIds)
+    ? sessionIds.filter(sessionId => typeof sessionId === 'string' && windowSessionIds.includes(sessionId))
+    : []
+  if (targetSessionIds.length === 0) {
+    return false
+  }
+
+  // 先算好关闭后应该停在哪个标签，再逐个销毁：
+  // 销毁过程会临时改动活动指针，但只要不推快照，渲染层就看不到中间态。
+  const previousActiveSessionId = store.getActiveSessionIdByWindowId?.(normalizedWindowId) ?? null
+  const remainingSessionIds = windowSessionIds.filter(sessionId => !targetSessionIds.includes(sessionId))
+  const nextActiveSessionId = resolveNextActiveSessionId({
+    windowSessionIds,
+    remainingSessionIds,
+    previousActiveSessionId,
+  })
+
+  for (const sessionId of targetSessionIds) {
+    const session = store.getSession(sessionId)
+    if (!session) {
+      continue
+    }
+
+    stopExternalWatch(normalizedWindowId, sessionId)
+
+    // 与单个关闭保持一致：关掉的标签也要写 recent
+    const closingDocumentPath = session.documentSource?.path || null
+    if (closingDocumentPath) {
+      try {
+        await recent.add(closingDocumentPath)
+      }
+      catch {}
+    }
+
+    store.destroySession(sessionId)
+    getWindowRegistry().removeSession?.({
+      windowId: normalizedWindowId,
+      sessionId,
+    })
+  }
+
+  const nextActiveSession = nextActiveSessionId ? store.getSession(nextActiveSessionId) : null
+  if (!nextActiveSession) {
+    return await continueWindowClose(normalizedWindowId)
+  }
+
+  store.activateSession({
+    windowId: normalizedWindowId,
+    sessionId: nextActiveSession.sessionId,
+  })
+  getWindowRegistry().activateSession?.({
+    windowId: normalizedWindowId,
+    sessionId: nextActiveSession.sessionId,
+  })
+  syncWindowStateFromSession(normalizedWindowId, nextActiveSession)
+
+  try {
+    await rebindDirectoryWatchForSession(normalizedWindowId, nextActiveSession)
+  }
+  catch {}
+
+  publishSnapshotChanged(normalizedWindowId)
+  await persistCurrentTabGroup(normalizedWindowId)
+  return true
+}
+
 function createTabHostController(windowId) {
   return {
     activateTab: sessionId => activateTabInWindow(windowId, sessionId),
     closeTab: sessionId => closeTabInWindow(windowId, sessionId),
+    closeTabs: sessionIds => closeTabsInWindow(windowId, sessionIds),
     saveAllTabsAndClose: () => saveAllTabsAndClose(windowId),
     isSessionDirty: (sessionId) => {
       const { store } = ensureSessionRuntimeInitialized()

@@ -2589,6 +2589,90 @@ describe('documentCommandService', () => {
       ])
     })
 
+    it('document.close-tabs 必须一次派发批量 effect，且不得逐个激活标签', () => {
+      const { store, service, windowId } = createTwoTabContext()
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tabs',
+        payload: { sessionIds: ['tab-second'] },
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'close-tabs',
+          sessionIds: ['tab-second'],
+        },
+      ])
+      // 关键：批量关闭不得像 close-tab 那样“先激活目标”，
+      // 否则活动标签会在渲染层跳来跳去
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-first')
+    })
+
+    it('document.close-tabs 必须跳过脏标签，只关干净标签', () => {
+      const { service, windowId, secondSession } = createTwoTabContext()
+      secondSession.editorSnapshot.content = '# 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tabs',
+        payload: { sessionIds: ['tab-first', 'tab-second'] },
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'close-tabs',
+          sessionIds: ['tab-first'],
+        },
+      ])
+    })
+
+    it('document.close-tabs 全部是脏标签时不派发任何 effect', () => {
+      const { service, windowId, firstSession, secondSession } = createTwoTabContext()
+      firstSession.editorSnapshot.content = '# first 已修改'
+      firstSession.editorSnapshot.revision = 1
+      secondSession.editorSnapshot.content = '# second 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tabs',
+        payload: { sessionIds: ['tab-first', 'tab-second'] },
+      })
+
+      expect(result.effects).toEqual([])
+    })
+
+    it('document.close-tabs 必须忽略不属于本窗口的 sessionId', () => {
+      const { service, windowId } = createTwoTabContext()
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tabs',
+        payload: { sessionIds: ['tab-second', 'not-in-window'] },
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'close-tabs',
+          sessionIds: ['tab-second'],
+        },
+      ])
+    })
+
+    it('document.close-tabs 空列表不得派发 effect', () => {
+      const { service, windowId } = createTwoTabContext()
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tabs',
+        payload: { sessionIds: [] },
+      })
+
+      expect(result.effects).toEqual([])
+    })
+
     it('document.close-tab 遇到脏标签时必须先激活再进入标签作用域的确认弹窗', () => {
       const { store, service, windowId, secondSession } = createTwoTabContext()
       secondSession.editorSnapshot.content = '# 已修改'

@@ -1878,6 +1878,18 @@ describe('ipcMainUtil command mapping', () => {
     expect(winInfoUtil.executeCommand).not.toHaveBeenCalled()
   })
 
+  it('document.save-and-close 必须把 scope 透传给 runtime，不能吞成 null', async () => {
+    const { sender, sendToMainHandler } = await setupCommandHandler()
+
+    await sendToMainHandler({ sender }, {
+      event: 'document.save-and-close',
+      data: { scope: 'tab' },
+    })
+
+    // 丢掉 payload 会让“保存并关闭标签”退化成关窗口，保存完成后直接退出程序
+    expect(runtimeExecuteUiCommand).toHaveBeenCalledWith(1, 'document.save-and-close', { scope: 'tab' })
+  })
+
   it('full-screen IPC 收到 true 时，必须对当前窗口调用 setFullScreen(true)', async () => {
     const { sender, sendToMainHandler, win, winInfoUtil } = await setupCommandHandler()
 

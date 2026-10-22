@@ -109,6 +109,7 @@ const DOCUMENT_STATE_COMMAND_SET = new Set([
   'document.confirm-force-close',
   'document.activate-tab',
   'document.close-tab',
+  'document.close-tabs',
   'document.reorder-tabs',
   'document.external.apply',
   'document.external.ignore',

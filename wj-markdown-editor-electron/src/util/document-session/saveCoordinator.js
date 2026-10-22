@@ -443,10 +443,32 @@ function resetCloseRuntime(session) {
 
 // 判断当前某个 save job 是否正是关闭链路正在等待的那一个。
 // 只有命中这条条件，save.succeeded / save.failed 才需要额外推进关闭流程。
+//
+// intent 有两种合法取值：'close'（关窗口）与 'close-tab'（只关当前标签），
+// 两者都要推进，否则“保存并关闭标签”会在保存成功后停住不动。
 function isActiveCloseWaitingJob(session, jobId) {
   ensureCloseRuntime(session)
-  return session.closeRuntime.intent === 'close'
+  return (session.closeRuntime.intent === 'close' || session.closeRuntime.intent === 'close-tab')
     && session.closeRuntime.waitingSaveJobId === jobId
+}
+
+// 关闭链路的落地动作：关标签还是关窗口由 intent 决定。
+// 必须在 resetCloseRuntime 之前调用，否则 intent 已经被清掉。
+function buildCloseEffects(session) {
+  return session.closeRuntime.intent === 'close-tab'
+    ? [{ type: 'close-tab', sessionId: session.sessionId }]
+    : [{ type: 'close-window' }]
+}
+
+// 回退到“未保存确认”时保留原作用域。
+// 关标签的回退必须仍是标签作用域，否则弹窗会退化成关窗口提示，
+// 用户再点一次“保存并关闭”就把整个窗口关掉了。
+function resetCloseRuntimeToUnsavedPrompt(session) {
+  ensureCloseRuntime(session)
+  session.closeRuntime.intent = session.closeRuntime.intent === 'close-tab' ? 'close-tab' : 'close'
+  session.closeRuntime.promptReason = 'unsaved-changes'
+  session.closeRuntime.waitingSaveJobId = null
+  session.closeRuntime.awaitingPathSelection = false
 }
 
 // 把任意错误对象压平成可序列化结构。
@@ -555,15 +577,11 @@ function isSessionSaved(session) {
 // 构造“未保存确认”结果。
 // 当关闭等待的 save job 完成后，发现当前文档仍不安全可关时，就必须回退到这个分支。
 function buildUnsavedPromptResult(session) {
-  ensureCloseRuntime(session)
-
   // 关闭链路等待的 save job 返回“成功”并不等于当前文档已经可安全关闭。
   // 只要保存完成后派生态仍然是 dirty，例如 watcher 已先推进到外部版本，
   // 就必须回到未保存确认态，而不是直接关窗。
-  session.closeRuntime.intent = 'close'
-  session.closeRuntime.promptReason = 'unsaved-changes'
-  session.closeRuntime.waitingSaveJobId = null
-  session.closeRuntime.awaitingPathSelection = false
+  // 作用域（关标签 / 关窗口）必须原样保留，见 resetCloseRuntimeToUnsavedPrompt。
+  resetCloseRuntimeToUnsavedPrompt(session)
 
   return {
     session,
@@ -1124,14 +1142,11 @@ export function createSaveCoordinator() {
             return buildUnsavedPromptResult(session)
           }
 
+          const closeEffects = buildCloseEffects(session)
           resetCloseRuntime(session)
           return {
             session,
-            effects: [
-              {
-                type: 'close-window',
-              },
-            ],
+            effects: closeEffects,
             completedManualRequestIds: settledManualRequestIds,
           }
         }
@@ -1150,14 +1165,11 @@ export function createSaveCoordinator() {
           return buildUnsavedPromptResult(session)
         }
 
+        const closeEffects = buildCloseEffects(session)
         resetCloseRuntime(session)
         return {
           session,
-          effects: [
-            {
-              type: 'close-window',
-            },
-          ],
+          effects: closeEffects,
           completedManualRequestIds: settledManualRequestIds,
         }
       }
@@ -1206,10 +1218,7 @@ export function createSaveCoordinator() {
       // 一旦用户已经执行过 cancel-close，迟到的 close-auto-save 结果就只是一条普通失败通知，
       // 不允许再因为 payload.trigger 把会话重新拖回关闭链路。
       if (closeWaitingCurrentJob) {
-        session.closeRuntime.intent = 'close'
-        session.closeRuntime.promptReason = 'unsaved-changes'
-        session.closeRuntime.waitingSaveJobId = null
-        session.closeRuntime.awaitingPathSelection = false
+        resetCloseRuntimeToUnsavedPrompt(session)
         effects.push({
           type: 'show-unsaved-prompt',
         })

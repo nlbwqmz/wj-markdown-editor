@@ -217,6 +217,23 @@ export function requestDocumentCloseTab(sessionId) {
 }
 
 /**
+ * 请求主进程批量关闭标签页。
+ *
+ * 用于「关闭其他 / 关闭右侧」：一次请求只广播一次快照，
+ * 避免逐个关闭时活动标签在渲染层来回跳。
+ *
+ * 脏标签由主进程过滤后保留，renderer 不做脏判断。
+ */
+export function requestDocumentCloseTabs(sessionIds) {
+  return channelUtil.send({
+    event: 'document.close-tabs',
+    data: {
+      sessionIds,
+    },
+  })
+}
+
+/**
  * 请求主进程重排标签顺序。
  *
  * 顺序本身会被持久化，所以必须由主进程收口，不能在渲染层只改一份本地副本。

@@ -348,6 +348,49 @@ export function createDocumentCommandService({
         }
         break
 
+      case 'document.close-tabs':
+        {
+          // 批量关闭（“关闭其他 / 关闭右侧”）一次裁决、一次广播。
+          //
+          // 不能把多个 close-tab 串起来用：单个命令为了脏判断会“先激活目标”，
+          // 批量时会把活动标签一路拖过去，用户看到的就是标签循环切换。
+          const sessionIds = Array.isArray(payload?.sessionIds) ? payload.sessionIds : []
+          const windowSessionIds = store.getSessionIdsByWindowId?.(windowId) || []
+          const targetSessionIds = sessionIds.filter(sessionId =>
+            typeof sessionId === 'string' && windowSessionIds.includes(sessionId),
+          )
+          if (targetSessionIds.length === 0) {
+            break
+          }
+
+          // 批量关闭只处理干净标签：脏标签留下来交给用户单独处理，
+          // 这里不弹确认框（多个弹窗用户分不清在确认哪一个）。
+          const closableSessionIds = []
+          for (const sessionId of targetSessionIds) {
+            const session = store.getSession(sessionId)
+            if (!session) {
+              continue
+            }
+            ensureSaveRuntime(session)
+            ensureCloseRuntime(session)
+            watchCoordinator.prepareSession(session)
+            if (isDirty(session) || session.saveRuntime.inFlightJobId) {
+              continue
+            }
+            closableSessionIds.push(sessionId)
+          }
+
+          if (closableSessionIds.length === 0) {
+            break
+          }
+
+          effects.push({
+            type: 'close-tabs',
+            sessionIds: closableSessionIds,
+          })
+        }
+        break
+
       case 'document.request-close':
       {
         // forceClose 表示关闭流程已经明确拿到“可直接关闭”的结论，

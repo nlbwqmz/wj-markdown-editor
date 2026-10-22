@@ -240,7 +240,9 @@ const handlerList = {
   // renderer 已经切到新的 session 命令名，这里只保留直连入口。
   'document.save-copy': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save-copy', null),
   'document.save': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save', null),
-  'document.save-and-close': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.save-and-close', null),
+  // 必须透传 data：payload.scope === 'tab' 决定“保存并关闭”关的是标签还是整个窗口，
+  // 丢掉它会让关单个标签的确认弹窗退化成关窗口，保存完成后直接退出程序。
+  'document.save-and-close': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.save-and-close', data),
   'document.get-session-snapshot': async (windowContext) => {
     return await executeRuntimeUiCommand(windowContext, 'document.get-session-snapshot', null)
   },
@@ -297,6 +299,9 @@ const handlerList = {
   },
   'document.close-tab': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'document.close-tab', data)
+  },
+  'document.close-tabs': async (windowContext, data) => {
+    return await executeRuntimeUiCommand(windowContext, 'document.close-tabs', data)
   },
   'document.reorder-tabs': async (windowContext, data) => {
     return await executeRuntimeUiCommand(windowContext, 'document.reorder-tabs', data)
