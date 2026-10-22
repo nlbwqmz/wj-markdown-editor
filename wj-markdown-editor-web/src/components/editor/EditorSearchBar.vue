@@ -136,13 +136,13 @@ function stopDrag() {
           @keydown.enter="onFindNext"
         >
         <div class="h-full flex items-center gap-1 font-size-4.5 color-gray-500">
-          <div class="cursor-pointer rounded-1 p-1 hover:bg-bg-hover" :class="searchOption.caseSensitive ? 'bg-bg-hover' : ''" @click="searchOption.caseSensitive = !searchOption.caseSensitive">
+          <div class="cursor-pointer rounded-1 p-1 hover:bg-[var(--wj-markdown-bg-secondary)]" :class="searchOption.caseSensitive ? 'bg-bg-hover' : ''" @click="searchOption.caseSensitive = !searchOption.caseSensitive">
             <div class="i-tabler:letter-case" />
           </div>
-          <div class="cursor-pointer rounded-1 p-1 hover:bg-bg-hover" :class="searchOption.wholeWord ? 'bg-bg-hover' : ''" @click="searchOption.wholeWord = !searchOption.wholeWord">
+          <div class="cursor-pointer rounded-1 p-1 hover:bg-[var(--wj-markdown-bg-secondary)]" :class="searchOption.wholeWord ? 'bg-bg-hover' : ''" @click="searchOption.wholeWord = !searchOption.wholeWord">
             <div class="i-tabler:circle-letter-w" />
           </div>
-          <div class="cursor-pointer rounded-1 p-1 hover:bg-bg-hover" :class="searchOption.regexp ? 'bg-bg-hover' : ''" @click="searchOption.regexp = !searchOption.regexp">
+          <div class="cursor-pointer rounded-1 p-1 hover:bg-[var(--wj-markdown-bg-secondary)]" :class="searchOption.regexp ? 'bg-bg-hover' : ''" @click="searchOption.regexp = !searchOption.regexp">
             <div class="i-tabler:regex" />
           </div>
         </div>

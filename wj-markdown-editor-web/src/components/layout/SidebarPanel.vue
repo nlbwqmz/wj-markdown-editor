@@ -44,7 +44,7 @@ function onAnchorNavigate(payload) {
         class="sidebar-panel__tab h-6 min-w-0 flex flex-1 cursor-pointer items-center justify-center rounded border-none px-2 text-center text-sm transition-colors"
         :class="store.sidebarActiveTab === tab.key
           ? 'sidebar-panel__tab--active bg-bg-hover color-text-primary'
-          : 'bg-transparent color-text-secondary hover:bg-bg-hover'"
+          : 'bg-transparent color-text-secondary hover:bg-[var(--wj-markdown-bg-secondary)]'"
         :data-testid="`sidebar-tab-${tab.key}`"
         :data-active="String(store.sidebarActiveTab === tab.key)"
         @click="store.setSidebarActiveTab(tab.key)"

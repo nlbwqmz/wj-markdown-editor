@@ -386,7 +386,7 @@ async function handleFocusCurrentDocumentDirectory() {
   cursor: pointer;
 
   &:hover {
-    background: var(--wj-markdown-bg-hover);
+    background: var(--wj-markdown-bg-secondary);
     color: var(--wj-markdown-text-primary);
   }
 

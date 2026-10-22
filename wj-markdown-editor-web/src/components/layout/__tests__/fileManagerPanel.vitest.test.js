@@ -1304,7 +1304,9 @@ describe('fileManagerPanel 组件', () => {
     const entryDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__entry')
     const activeDeclarations = extractCssRuleDeclarations(css, '.file-manager-panel__entry.is-active')
 
+    // 非激活项仍不降级成次级文字色，避免整列变灰。
     expect(entryDeclarations.get('color')).not.toBe('var(--wj-markdown-text-secondary)')
+    // 当前文件仍只用蓝色文字高亮，不加背景。
     expect(activeDeclarations.get('color')).toBe('#1677ff')
     expect(activeDeclarations.has('background')).toBe(false)
     expect(activeDeclarations.has('box-shadow')).toBe(false)

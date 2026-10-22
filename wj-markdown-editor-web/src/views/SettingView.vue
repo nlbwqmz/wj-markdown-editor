@@ -1174,7 +1174,7 @@ function reset() {
 }
 
 .setting-tab:hover {
-  background: var(--wj-markdown-bg-hover);
+  background: var(--wj-markdown-bg-secondary);
   color: var(--wj-markdown-text-primary);
 }
 

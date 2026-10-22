@@ -205,7 +205,7 @@ const hasNewVersion = computed(() => store.hasNewVersion)
         >
           <div
             class="h-7 w-7 flex items-center justify-center rounded-1"
-            :class="store.viewMode === item.mode ? 'bg-bg-hover' : 'group-hover:bg-bg-hover'"
+            :class="store.viewMode === item.mode ? 'bg-bg-hover' : 'group-hover:bg-[var(--wj-markdown-bg-secondary)]'"
           >
             <div :class="item.icon" />
           </div>

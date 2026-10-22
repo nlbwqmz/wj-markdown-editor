@@ -221,7 +221,7 @@ function getTabClassList(tab) {
     'color-text-primary': active || tab?.dirty === true,
     'font-medium': active,
     'color-text-secondary': !active && tab?.dirty !== true,
-    'hover:bg-bg-hover': !active,
+    'hover:bg-[var(--wj-markdown-bg-secondary)]': !active,
   }
 }
 
@@ -549,7 +549,7 @@ function onMenuClick({ key }, tab) {
             :data-session-id="tab.sessionId"
             :data-active="isActiveTab(tab) ? 'true' : 'false'"
             :data-dirty="tab.dirty ? 'true' : 'false'"
-            class="document-tab group h-6 max-w-60 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1 text-sm transition-colors"
+            class="group document-tab h-6 max-w-60 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1 text-sm transition-colors"
             :class="getTabClassList(tab)"
             @pointerdown="handleTabPointerDown(tab, $event)"
             @click="handleTabClick(tab)"

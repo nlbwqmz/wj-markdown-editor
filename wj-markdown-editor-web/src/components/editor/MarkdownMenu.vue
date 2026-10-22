@@ -528,14 +528,17 @@ onBeforeUnmount(() => {
     background-color 0.15s ease,
     color 0.15s ease;
 
-  &:hover {
-    background: var(--wj-markdown-bg-hover);
+  // 选中态用更重的 bg-hover，hover 降到 bg-secondary，
+  // 和 completion.scss 的「选中 > hover」层级保持一致；
+  // 用 :not 排除选中项，否则 hover 会把选中项的背景刷弱。
+  &:hover:not(.markdown-menu__item--active) {
+    background: var(--wj-markdown-bg-secondary);
     color: var(--wj-markdown-text-primary);
   }
 }
 
 .markdown-menu__item--active {
-  background: var(--wj-markdown-bg-secondary);
+  background: var(--wj-markdown-bg-hover);
   color: var(--wj-markdown-text-primary);
 
   &::before {

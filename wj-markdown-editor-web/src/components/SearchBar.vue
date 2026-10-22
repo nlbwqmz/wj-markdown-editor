@@ -275,7 +275,7 @@ function onCloseSearchBar() {
       class="h-full w-30 b-b-1 b-b-border-primary b-none b-b-solid bg-bg-primary outline-none"
     >
     <div class="h-full flex items-center font-size-4.5 color-gray-500">
-      <div class="cursor-pointer rounded-1 p-1 hover:bg-bg-hover" :class="searchOption.caseSensitive ? 'bg-bg-hover' : ''" @click="searchOption.caseSensitive = !searchOption.caseSensitive">
+      <div class="cursor-pointer rounded-1 p-1 hover:bg-[var(--wj-markdown-bg-secondary)]" :class="searchOption.caseSensitive ? 'bg-bg-hover' : ''" @click="searchOption.caseSensitive = !searchOption.caseSensitive">
         <div class="i-tabler:letter-case" />
       </div>
     </div>
