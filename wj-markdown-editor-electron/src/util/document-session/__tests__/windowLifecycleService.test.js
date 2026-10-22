@@ -2707,6 +2707,23 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(snapshot.activeSessionId).toBe(snapshot.tabs[1].sessionId)
   })
 
+  it('restoreTabGroup 在第一个文件缺失时必须保留为 recent-missing 标签，而不是空草稿', async () => {
+    pathExistsMock.mockImplementation(async targetPath => targetPath !== 'D:/first.md')
+    readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
+
+    await winInfoUtil.restoreTabGroup(['D:/first.md', 'D:/second.md'], 0)
+
+    const [winInfo] = listWindowRefs()
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+
+    // 标签仍然存在，且保留原路径，渲染层能据此展示“文件缺失”
+    expect(snapshot.tabs.map(tab => tab.displayPath)).toEqual(['D:/first.md', 'D:/second.md'])
+    expect(snapshot.tabs[0].isRecentMissing).toBe(true)
+    // activeIndex = 0 必须落在第一个标签上：
+    // recent-missing 会话的 path 为 null，不能因此被排除在映射表外
+    expect(snapshot.activeSessionId).toBe(snapshot.tabs[0].sessionId)
+  })
+
   it('多窗口按关闭顺序退出时，必须把最后关闭的文档重新顶到 recent 顶部', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)

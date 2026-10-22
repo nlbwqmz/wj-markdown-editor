@@ -128,7 +128,7 @@ wj-markdown-editor/
 - **外部监听按会话隔离**：`windowLifecycleService` 的 `externalWatchMap` / `externalWatchBridgeMap` 以 `sessionId` 为键；监听事件回流时带 `sessionId`，保证后台标签的外部变更不会打到活动标签上。命令层 `dispatch` 因此支持可选 `sessionId`。
 - **关闭作用域**：`closeRuntime.intent` 取 `close`（关窗口）或 `close-tab`（关单个标签），快照里暴露为 `closePrompt.scope`，并用 `closePrompt.unsavedTabCount` 做“笼统提示”。
 - **编辑器状态**：`MarkdownEdit` 按会话保存 `EditorState`（正文 + 选区 + undo 历史），切标签时换入换出；滚动位置仍走按文档路径索引的锚点缓存，缓存生命周期跟随标签（关标签即删桶，不设数量上限）。
-- **标签组持久化**：`wj-markdown-editor-electron/src/data/tabGroup.js` 写入 `tab-group.json`，只记有磁盘路径的标签顺序与活动下标，**不套 `recentMax`**；启动时 `windowLifecycleService.restoreTabGroup` 按它恢复，并按 `activeIndex` 把活动标签落回上次位置。缺失文件会被跳过，所以 `activeIndex` 必须按「原始下标 → 实际恢复会话」映射，不能直接当数组下标用；目标标签缺失时回退到最后一个成功恢复的标签。
+- **标签组持久化**：`wj-markdown-editor-electron/src/data/tabGroup.js` 写入 `tab-group.json`，只记有磁盘路径的标签顺序与活动下标，**不套 `recentMax`**；启动时 `windowLifecycleService.restoreTabGroup` 按它恢复，并按 `activeIndex` 把活动标签落回上次位置。第一个路径缺失时必须走 `createNew(firstPath, true)` 保留为 recent-missing 标签，不能退化成无路径空草稿；其余缺失路径静默跳过。因此 `activeIndex` 必须按「原始下标 → 实际恢复会话」映射，且判断“是否恢复成功”要看 `path` 或 `missingPath`，只看 `path` 会漏掉 recent-missing 标签；目标标签缺失时回退到最后一个成功恢复的标签。
 - **关窗写盘**：使用期间每次标签操作照常异步写盘（`persistCurrentTabGroup`）；`finalizeWindowClose` 在销毁会话前再**同步**写一次（`persistCurrentTabGroupSync`），所以正常关闭流程下“最后关闭的窗口”胜出。必须同步写，因为 `checkWinList()` 在最后一个窗口关闭时会立刻 `app.exit()`，异步写盘会被截断。异常退出时仍回退到“最后一次操作标签的窗口”。
 - **关窗销毁全部会话**：`finalizeWindowClose` 必须遍历 `getSessionIdsByWindowId` 逐个 `destroySession`，不能只销毁 `getSessionByWindowId` 返回的活动会话——残留会话会让“已打开文档”判定命中一个已经不存在的窗口，表现为“打开文件没任何反应”，且假聚焦会把旧标签组写回 `tab-group.json`。
 

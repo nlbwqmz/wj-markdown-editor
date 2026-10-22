@@ -1025,7 +1025,10 @@ async function restoreTabGroup(pathList, activeIndex = 0) {
   }
 
   const [firstPath, ...restPathList] = candidatePathList
-  const windowId = await createNew(firstPath)
+  // 第一个路径用来开窗。文件缺失时必须走 recent-missing 分支，
+  // 否则会变成一个无路径、无提示的 Untitled 空草稿：
+  // 用户看不出原来那个文件去哪了，这个标签下次写盘时也会彻底消失。
+  const windowId = await createNew(firstPath, true)
   if (typeof windowId !== 'string' || windowId === '') {
     // 第一个文件读取失败时 createNew 会返回结构化失败结果，不能当窗口 id 用。
     return windowId
@@ -1034,8 +1037,12 @@ async function restoreTabGroup(pathList, activeIndex = 0) {
   const restoredIndexList = []
   const restoredSessionIdList = []
 
+  // 判断“这个标签有没有恢复出来”只能看 path / missingPath：
+  // recent-missing 会话的 documentSource.path 也是 null，
+  // 只按 path 判断会把“第一个文件缺失”的标签漏掉，activeIndex 随之错位。
   const firstSession = getSessionByWindowId(windowId)
-  if (firstSession?.sessionId && firstSession.documentSource?.path) {
+  const firstDocumentSource = firstSession?.documentSource || null
+  if (firstSession?.sessionId && (firstDocumentSource?.path || firstDocumentSource?.missingPath)) {
     restoredIndexList.push(0)
     restoredSessionIdList.push(firstSession.sessionId)
   }
