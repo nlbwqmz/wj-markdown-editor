@@ -242,7 +242,10 @@ describe('resolveOpenTargetArg', () => {
     expect(resolveOpenTargetArg('--ozone-platform=wayland')).toBeNull()
     expect(resolveOpenTargetArg('   ')).toBeNull()
     expect(resolveOpenTargetArg(42)).toBeNull()
-    expect(resolveOpenTargetArg('file://')).toBeNull()
+    // 不要用 `file://` 当畸形输入：它在 POSIX 上等价于根目录（fileURLToPath 返回 '/'），
+    // 只在 Windows 上招错，用它做断言会把测试变成平台相关。
+    // `file://%zz` 的百分号编码无法解析，两个平台都会抛错。
+    expect(resolveOpenTargetArg('file://%zz')).toBeNull()
   })
 })
 

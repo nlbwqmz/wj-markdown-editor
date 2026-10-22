@@ -47,7 +47,7 @@ describe('isSafePath - 路径安全验证', () => {
       expect(isSafePath(resolvedPath, basePath)).toBe(true)
     })
 
-    it('应该允许 Windows 路径格式', () => {
+    it.skipIf(process.platform !== 'win32')('应该允许 Windows 路径格式', () => {
       const basePath = 'C:\\Users\\user\\docs'
       const resolvedPath = 'C:\\Users\\user\\docs\\images\\test.png'
       expect(isSafePath(resolvedPath, basePath)).toBe(true)
@@ -182,7 +182,7 @@ describe('isSafePath - 路径安全验证', () => {
 
   // eslint-disable-next-line test/prefer-lowercase-title
   describe('Windows 特定测试', () => {
-    it('应该正确处理 Windows 路径分隔符', () => {
+    it.skipIf(process.platform !== 'win32')('应该正确处理 Windows 路径分隔符', () => {
       const basePath = 'C:\\Users\\user\\docs'
       const resolvedPath = 'C:\\Users\\user\\docs\\images\\test.png'
       expect(isSafePath(resolvedPath, basePath)).toBe(true)

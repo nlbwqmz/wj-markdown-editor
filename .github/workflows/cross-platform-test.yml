@@ -61,6 +61,20 @@ jobs:
         working-directory: wj-markdown-editor-electron
         run: npm ci --no-audit --no-fund
 
+      # electron 43 没有 postinstall，改成首次 require 时按需下载。
+      # 不预下载的话，下载会发生在测试执行期间，把用例拖到 5s 超时线以上。
+      - name: Cache Electron binary
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/AppData/Local/electron/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('wj-markdown-editor-electron/package-lock.json') }}
+
+      - name: Pre-download Electron binary
+        working-directory: wj-markdown-editor-electron
+        run: node node_modules/electron/install.js
+
       # 不需要先构建 web-dist：
       # 它是运行期 loadFile 的目标，测试里 loadFile 全部被 mock，
       # 并且 windowLifecycleService.test.js 有专门的 web-dist missing 用例。

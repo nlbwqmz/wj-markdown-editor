@@ -49,25 +49,27 @@ function createFakeFs({
 
 describe('configRepository', () => {
   it('开发环境必须继续使用 app.getAppPath 下的 config.json', async () => {
+    const appPath = path.resolve('/app')
     const repository = createConfigRepository({
       app: {
         isPackaged: false,
-        getAppPath: () => 'D:\\code\\wj-markdown-editor\\wj-markdown-editor-electron',
-        getPath: () => 'C:\\Users\\tester\\Documents',
+        getAppPath: () => appPath,
+        getPath: () => path.resolve('/documents'),
       },
       fs: createFakeFs(),
       writeFileAtomic: vi.fn(),
     })
 
     expect(repository.getConfigPath()).toMatch(/[\\/]config\.json$/)
-    expect(repository.getConfigPath()).toBe('D:\\code\\wj-markdown-editor\\wj-markdown-editor-electron\\config.json')
+    expect(repository.getConfigPath()).toBe(path.join(appPath, 'config.json'))
   })
 
   it('jSON 解析失败时必须备份损坏文件并回退默认配置流程', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-23T10:20:30.456Z'))
 
-    const configDir = 'C:\\Users\\tester\\Documents\\wj-markdown-editor'
+    const documentsPath = path.resolve('/documents')
+    const configDir = path.resolve(documentsPath, 'wj-markdown-editor')
     const configPath = path.join(configDir, 'config.json')
     const rawText = '{"broken": }'
     const backupPath = path.join(configDir, 'config.corrupted.1774261230456.json')
@@ -78,8 +80,8 @@ describe('configRepository', () => {
     const repository = createConfigRepository({
       app: {
         isPackaged: true,
-        getAppPath: () => 'D:\\unused',
-        getPath: () => 'C:\\Users\\tester\\Documents',
+        getAppPath: () => path.resolve('/unused'),
+        getPath: () => documentsPath,
       },
       fs: fakeFs,
       writeFileAtomic: vi.fn(),
@@ -100,7 +102,8 @@ describe('configRepository', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-23T10:20:30.456Z'))
 
-    const configDir = 'C:\\Users\\tester\\Documents\\wj-markdown-editor'
+    const documentsPath = path.resolve('/documents')
+    const configDir = path.resolve(documentsPath, 'wj-markdown-editor')
     const configPath = path.join(configDir, 'config.json')
     const backupWriteError = new Error('disk full')
     const fakeFs = createFakeFs({
@@ -111,8 +114,8 @@ describe('configRepository', () => {
     const repository = createConfigRepository({
       app: {
         isPackaged: true,
-        getAppPath: () => 'D:\\unused',
-        getPath: () => 'C:\\Users\\tester\\Documents',
+        getAppPath: () => path.resolve('/unused'),
+        getPath: () => documentsPath,
       },
       fs: fakeFs,
       writeFileAtomic: vi.fn(),
@@ -132,11 +135,13 @@ describe('configRepository', () => {
   it('写入配置文本前必须先确保配置目录存在，并使用原子写与 utf8 编码', async () => {
     const writeFileAtomic = vi.fn().mockResolvedValue(undefined)
     const fakeFs = createFakeFs()
+    const documentsPath = path.resolve('/documents')
+    const configDir = path.resolve(documentsPath, 'wj-markdown-editor')
     const repository = createConfigRepository({
       app: {
         isPackaged: true,
-        getAppPath: () => 'D:\\unused',
-        getPath: () => 'C:\\Users\\tester\\Documents',
+        getAppPath: () => path.resolve('/unused'),
+        getPath: () => documentsPath,
       },
       fs: fakeFs,
       writeFileAtomic,
@@ -144,12 +149,10 @@ describe('configRepository', () => {
 
     await repository.writeConfigText('{"configVersion":1}')
 
-    expect(fakeFs.ensuredDirectories).toEqual([
-      path.join('C:\\Users\\tester\\Documents', 'wj-markdown-editor'),
-    ])
+    expect(fakeFs.ensuredDirectories).toEqual([configDir])
     expect(writeFileAtomic).toHaveBeenCalledTimes(1)
     expect(writeFileAtomic).toHaveBeenCalledWith(
-      path.join('C:\\Users\\tester\\Documents', 'wj-markdown-editor', 'config.json'),
+      path.join(configDir, 'config.json'),
       '{"configVersion":1}',
       { encoding: 'utf8' },
     )

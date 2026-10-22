@@ -1,7 +1,33 @@
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { convertResourceUrl } from '../../../../../wj-markdown-editor-web/src/util/resourceUrlUtil.js'
 import { createBoundFileSession, createDraftSession } from '../documentSessionFactory.js'
 import { createDocumentSessionStore } from '../documentSessionStore.js'
+
+// 被测源码统一用平台相关的 `node:path` 解析资源路径，
+// 因此测试里的文档路径与资源路径必须按当前平台构造：
+// Windows 上 `path.resolve('/docs')` 得到 `<当前盘符>:\docs`，Linux / macOS 上得到 `/docs`。
+// 如果直接写死 Windows 路径字面量，`path.isAbsolute` / `path.dirname` / `path.resolve`
+// 在 Linux 上会给出完全不同的结果，导致断言与被测代码的真实行为对不上。
+const DOC_ROOT = path.resolve('/docs')
+const DOCS_SUBDIR = path.join(DOC_ROOT, 'docs')
+const DOC_PATH = path.join(DOC_ROOT, 'note.md')
+const OTHER_DOC_PATH = path.join(DOC_ROOT, 'other.md')
+const ASSETS_DIR = path.join(DOC_ROOT, 'assets')
+const ASSET_PATH = path.join(ASSETS_DIR, 'demo.png')
+const MISSING_ASSET_PATH = path.join(ASSETS_DIR, 'missing.png')
+const INDEX_HTML_PATH = path.join(DOCS_SUBDIR, 'index.html')
+// query / hash 后缀不参与 path 归一，直接由平台无关的路径常量拼接。
+const INDEX_HTML_WITH_QUERY_PATH = `${INDEX_HTML_PATH}?tab=a`
+const INDEX_HTML_WITH_HASH_PATH = `${INDEX_HTML_PATH}#guide`
+const HASH_LITERAL_FILE_PATH = path.join(DOCS_SUBDIR, 'a#b.md')
+const ENCODED_QUESTION_FILE_PATH = path.join(DOCS_SUBDIR, 'demo?guide.md')
+// 另存为的目标路径同样不能写死盘符，否则在 Linux 上会变成 cwd 下的相对结果。
+const SAVED_FROM_THROW_PATH = path.resolve('/exports/saved-from-throw.png')
+const SAVED_FROM_EMPTY_PATH = path.resolve('/exports/saved-from-empty.png')
+const PICKED_PNG_PATH = path.resolve('/exports/picked.png')
+const PICKED_AVIF_PATH = path.resolve('/exports/picked.avif')
+const PICKED_JPG_PATH = path.resolve('/exports/picked.jpg')
 
 const {
   copyFile,
@@ -129,7 +155,7 @@ describe('documentResourceService', () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-absolute-path-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004010,
@@ -154,8 +180,8 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: true,
       reason: 'copied',
-      path: 'D:\\docs\\assets\\demo.png',
-      text: 'D:\\docs\\assets\\demo.png',
+      path: ASSET_PATH,
+      text: ASSET_PATH,
     })
   })
 
@@ -163,14 +189,14 @@ describe('documentResourceService', () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-absolute-path-fallback-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004011,
     })
     const windowId = bindSession(store, session)
     pathExists.mockImplementation(async (targetPath) => {
-      return targetPath === 'D:\\docs\\docs\\index.html'
+      return targetPath === INDEX_HTML_PATH
     })
     stat.mockResolvedValue({
       isDirectory: () => false,
@@ -190,26 +216,26 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: true,
       reason: 'copied',
-      path: 'D:\\docs\\docs\\index.html',
-      text: 'D:\\docs\\docs\\index.html',
+      path: INDEX_HTML_PATH,
+      text: INDEX_HTML_PATH,
     })
-    expect(pathExists).toHaveBeenNthCalledWith(1, 'D:\\docs\\docs\\index.html?tab=a')
-    expect(pathExists).toHaveBeenNthCalledWith(2, 'D:\\docs\\docs\\index.html')
-    expect(stat).toHaveBeenCalledWith('D:\\docs\\docs\\index.html')
+    expect(pathExists).toHaveBeenNthCalledWith(1, INDEX_HTML_WITH_QUERY_PATH)
+    expect(pathExists).toHaveBeenNthCalledWith(2, INDEX_HTML_PATH)
+    expect(stat).toHaveBeenCalledWith(INDEX_HTML_PATH)
   })
 
   it('document.resource.copy-absolute-path 在字面量 hash 文件名存在时，应返回完整文件路径而不是 fallback', async () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-absolute-path-literal-hash-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004012,
     })
     const windowId = bindSession(store, session)
     pathExists.mockImplementation(async (targetPath) => {
-      return targetPath === 'D:\\docs\\docs\\a#b.md'
+      return targetPath === HASH_LITERAL_FILE_PATH
     })
     stat.mockResolvedValue({
       isDirectory: () => false,
@@ -229,18 +255,18 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: true,
       reason: 'copied',
-      path: 'D:\\docs\\docs\\a#b.md',
-      text: 'D:\\docs\\docs\\a#b.md',
+      path: HASH_LITERAL_FILE_PATH,
+      text: HASH_LITERAL_FILE_PATH,
     })
-    expect(pathExists).toHaveBeenCalledWith('D:\\docs\\docs\\a#b.md')
-    expect(stat).toHaveBeenCalledWith('D:\\docs\\docs\\a#b.md')
+    expect(pathExists).toHaveBeenCalledWith(HASH_LITERAL_FILE_PATH)
+    expect(stat).toHaveBeenCalledWith(HASH_LITERAL_FILE_PATH)
   })
 
   it('document.resource.copy-absolute-path 在字面量编码问号文件名存在时，应返回完整文件路径', async () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-absolute-path-literal-encoded-question-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004013,
@@ -260,8 +286,8 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: true,
       reason: 'copied',
-      path: 'D:\\docs\\docs\\demo?guide.md',
-      text: 'D:\\docs\\docs\\demo?guide.md',
+      path: ENCODED_QUESTION_FILE_PATH,
+      text: ENCODED_QUESTION_FILE_PATH,
     })
   })
 
@@ -269,7 +295,7 @@ describe('documentResourceService', () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-absolute-path-missing-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004011,
@@ -290,8 +316,8 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: true,
       reason: 'copied',
-      path: 'D:\\docs\\assets\\missing.png',
-      text: 'D:\\docs\\assets\\missing.png',
+      path: MISSING_ASSET_PATH,
+      text: MISSING_ASSET_PATH,
     })
     expect(stat).not.toHaveBeenCalled()
   })
@@ -300,7 +326,7 @@ describe('documentResourceService', () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-absolute-path-no-probe-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004021,
@@ -321,17 +347,17 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: true,
       reason: 'copied',
-      path: 'D:\\docs\\docs\\index.html#guide',
-      text: 'D:\\docs\\docs\\index.html#guide',
+      path: INDEX_HTML_WITH_HASH_PATH,
+      text: INDEX_HTML_WITH_HASH_PATH,
     })
-    expect(pathExists).toHaveBeenCalledWith('D:\\docs\\docs\\index.html#guide')
+    expect(pathExists).toHaveBeenCalledWith(INDEX_HTML_WITH_HASH_PATH)
   })
 
   it('document.resource.copy-link 在 remote 资源上成功时应该返回 text 字段', async () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-link-success-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004018,
@@ -359,7 +385,7 @@ describe('documentResourceService', () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-link-source-type-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004012,
@@ -394,7 +420,7 @@ describe('documentResourceService', () => {
     const { service, store } = serviceContext
     const session = createBoundFileSession({
       sessionId: `${methodName}-remote-resource-url-session`,
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004012,
@@ -428,7 +454,7 @@ describe('documentResourceService', () => {
     const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-image-local-png-success-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004013,
@@ -462,13 +488,13 @@ describe('documentResourceService', () => {
   })
 
   it.each([
-    ['./assets/foo?bar.png', 'D:\\docs\\assets\\foo?bar.png'],
-    ['./assets/foo#bar.jpg', 'D:\\docs\\assets\\foo#bar.jpg'],
+    ['./assets/foo?bar.png', path.join(ASSETS_DIR, 'foo?bar.png')],
+    ['./assets/foo#bar.jpg', path.join(ASSETS_DIR, 'foo#bar.jpg')],
   ])('document.resource.copy-image 对文件名合法包含 query/hash 字符的本地图片 %s，应直接走 copyImageAt 而不是格式白名单', async (rawPath) => {
     const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: `copy-image-local-special-char-${rawPath}-session`,
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004013,
@@ -505,7 +531,7 @@ describe('documentResourceService', () => {
     const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-image-remote-webp-copy-image-at-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004013,
@@ -540,7 +566,7 @@ describe('documentResourceService', () => {
     const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-image-invalid-target-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004013,
@@ -572,7 +598,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-cancel-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004014,
@@ -610,7 +636,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-cancel-before-fetch-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004034,
@@ -665,7 +691,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fsModule, nativeImageApi, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-ignore-native-image-throw-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004022,
@@ -680,7 +706,7 @@ describe('documentResourceService', () => {
     nativeImageApi.createFromBuffer.mockImplementation(() => {
       throw new Error('decode failed')
     })
-    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\saved-from-throw.png')
+    dialogApi.showSaveDialogSync.mockReturnValue(SAVED_FROM_THROW_PATH)
 
     await expect(service.saveAs({
       windowId,
@@ -693,14 +719,14 @@ describe('documentResourceService', () => {
     })).resolves.toEqual({
       ok: true,
       reason: 'saved',
-      path: 'D:\\exports\\saved-from-throw.png',
-      targetPath: 'D:\\exports\\saved-from-throw.png',
+      path: SAVED_FROM_THROW_PATH,
+      targetPath: SAVED_FROM_THROW_PATH,
       messageKey: 'message.saveAsSuccessfully',
     })
     expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
       defaultPath: 'demo.png',
     }))
-    expect(fsModule.copyFile).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png', 'D:\\exports\\saved-from-throw.png')
+    expect(fsModule.copyFile).toHaveBeenCalledWith(ASSET_PATH, SAVED_FROM_THROW_PATH)
     expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
@@ -708,7 +734,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fsModule, nativeImageApi, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-ignore-native-image-empty-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004023,
@@ -723,7 +749,7 @@ describe('documentResourceService', () => {
     nativeImageApi.createFromBuffer.mockReturnValue({
       isEmpty: () => true,
     })
-    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\saved-from-empty.png')
+    dialogApi.showSaveDialogSync.mockReturnValue(SAVED_FROM_EMPTY_PATH)
 
     const result = await service.saveAs({
       windowId,
@@ -738,14 +764,14 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: true,
       reason: 'saved',
-      path: 'D:\\exports\\saved-from-empty.png',
-      targetPath: 'D:\\exports\\saved-from-empty.png',
+      path: SAVED_FROM_EMPTY_PATH,
+      targetPath: SAVED_FROM_EMPTY_PATH,
       messageKey: 'message.saveAsSuccessfully',
     })
     expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
       defaultPath: 'demo.png',
     }))
-    expect(fsModule.copyFile).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png', 'D:\\exports\\saved-from-empty.png')
+    expect(fsModule.copyFile).toHaveBeenCalledWith(ASSET_PATH, SAVED_FROM_EMPTY_PATH)
     expect(fsModule.writeFile).not.toHaveBeenCalled()
   })
 
@@ -753,7 +779,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-file-name-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004020,
@@ -770,7 +796,7 @@ describe('documentResourceService', () => {
       },
       arrayBuffer: vi.fn(async () => remoteBuffer),
     })
-    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\picked.png')
+    dialogApi.showSaveDialogSync.mockReturnValue(PICKED_PNG_PATH)
 
     const result = await service.saveAs({
       windowId,
@@ -785,12 +811,12 @@ describe('documentResourceService', () => {
     expect(dialogApi.showSaveDialogSync).toHaveBeenCalledWith(expect.objectContaining({
       defaultPath: 'demo.jpg',
     }))
-    expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\picked.png', expect.any(Buffer))
+    expect(fsModule.writeFile).toHaveBeenCalledWith(PICKED_PNG_PATH, expect.any(Buffer))
     expect(result).toEqual({
       ok: true,
       reason: 'saved',
-      path: 'D:\\exports\\picked.png',
-      targetPath: 'D:\\exports\\picked.png',
+      path: PICKED_PNG_PATH,
+      targetPath: PICKED_PNG_PATH,
       messageKey: 'message.saveAsSuccessfully',
     })
   })
@@ -799,7 +825,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-reliable-url-no-probe-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004021,
@@ -833,7 +859,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-unmapped-extension-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004021,
@@ -890,7 +916,7 @@ describe('documentResourceService', () => {
       const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
       const session = createBoundFileSession({
         sessionId: 'save-as-remote-head-timeout-session',
-        path: 'D:\\docs\\note.md',
+        path: DOC_PATH,
         content: '# 文档',
         stat: null,
         now: 1700000004035,
@@ -953,7 +979,7 @@ describe('documentResourceService', () => {
       const { dialogApi, fetchImpl, service, store } = await createServiceContext()
       const session = createBoundFileSession({
         sessionId: 'save-as-remote-head-short-timeout-session',
-        path: 'D:\\docs\\note.md',
+        path: DOC_PATH,
         content: '# 文档',
         stat: null,
         now: 1700000004036,
@@ -1013,7 +1039,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-probe-then-get-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004036,
@@ -1057,7 +1083,7 @@ describe('documentResourceService', () => {
     })
     dialogApi.showSaveDialogSync.mockImplementation(({ defaultPath }) => {
       callSequence.push(`dialog:${defaultPath}`)
-      return 'D:\\exports\\picked.avif'
+      return PICKED_AVIF_PATH
     })
 
     const result = await service.saveAs({
@@ -1082,12 +1108,12 @@ describe('documentResourceService', () => {
     expect(headArrayBuffer).not.toHaveBeenCalled()
     expect(headText).not.toHaveBeenCalled()
     expect(getArrayBuffer).toHaveBeenCalledTimes(1)
-    expect(fsModule.writeFile).toHaveBeenCalledWith('D:\\exports\\picked.avif', expect.any(Buffer))
+    expect(fsModule.writeFile).toHaveBeenCalledWith(PICKED_AVIF_PATH, expect.any(Buffer))
     expect(result).toEqual({
       ok: true,
       reason: 'saved',
-      path: 'D:\\exports\\picked.avif',
-      targetPath: 'D:\\exports\\picked.avif',
+      path: PICKED_AVIF_PATH,
+      targetPath: PICKED_AVIF_PATH,
       messageKey: 'message.saveAsSuccessfully',
     })
   })
@@ -1096,7 +1122,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-head-405-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004037,
@@ -1147,7 +1173,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-content-disposition-filename-star-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004038,
@@ -1204,7 +1230,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-probe-stale-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004039,
@@ -1214,7 +1240,7 @@ describe('documentResourceService', () => {
     fetchImpl.mockImplementation(async () => {
       return await deferred.promise
     })
-    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\picked.avif')
+    dialogApi.showSaveDialogSync.mockReturnValue(PICKED_AVIF_PATH)
 
     const resultPromise = service.saveAs({
       windowId,
@@ -1232,7 +1258,7 @@ describe('documentResourceService', () => {
 
     const nextSession = createBoundFileSession({
       sessionId: 'save-as-remote-probe-stale-next-session',
-      path: 'D:\\docs\\other.md',
+      path: OTHER_DOC_PATH,
       content: '# 其他文档',
       stat: null,
       now: 1700000004040,
@@ -1269,7 +1295,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-probe-no-body-read-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004041,
@@ -1335,7 +1361,7 @@ describe('documentResourceService', () => {
     const { service, showItemInFolder, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'resource-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004001,
@@ -1358,9 +1384,9 @@ describe('documentResourceService', () => {
       ok: true,
       opened: true,
       reason: 'opened',
-      path: 'D:\\docs\\assets\\demo.png',
+      path: ASSET_PATH,
     })
-    expect(showItemInFolder).toHaveBeenCalledWith('D:\\docs\\assets\\demo.png')
+    expect(showItemInFolder).toHaveBeenCalledWith(ASSET_PATH)
   })
 
   it('document.resource.open-in-folder 在未保存文档中遇到相对资源时，应返回 relative-resource-without-document', async () => {
@@ -1391,7 +1417,7 @@ describe('documentResourceService', () => {
     const { service, showItemInFolder, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'open-stale-context-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004008,
@@ -1404,7 +1430,7 @@ describe('documentResourceService', () => {
         resourceUrl: convertResourceUrl('./assets/demo.png'),
         requestContext: {
           sessionId: 'stale-session',
-          documentPath: 'D:\\docs\\other.md',
+          documentPath: OTHER_DOC_PATH,
         },
       },
     })
@@ -1424,7 +1450,7 @@ describe('documentResourceService', () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'resource-info-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004006,
@@ -1450,7 +1476,7 @@ describe('documentResourceService', () => {
       exists: true,
       isDirectory: false,
       isFile: true,
-      path: 'D:\\docs\\assets\\demo.png',
+      path: ASSET_PATH,
     })
   })
 
@@ -1458,7 +1484,7 @@ describe('documentResourceService', () => {
     const { service, showItemInFolder, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'resource-open-missing-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004015,
@@ -1478,7 +1504,7 @@ describe('documentResourceService', () => {
       ok: true,
       opened: false,
       reason: 'not-found',
-      path: 'D:\\docs\\assets\\missing.png',
+      path: MISSING_ASSET_PATH,
     })
     expect(showItemInFolder).not.toHaveBeenCalled()
   })
@@ -1487,14 +1513,14 @@ describe('documentResourceService', () => {
     const { service, showItemInFolder, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'query-fallback-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004003,
     })
     const windowId = bindSession(store, session)
     pathExists.mockImplementation(async (targetPath) => {
-      return targetPath === 'D:\\docs\\docs\\index.html'
+      return targetPath === INDEX_HTML_PATH
     })
     stat.mockResolvedValue({
       isDirectory: () => false,
@@ -1513,16 +1539,16 @@ describe('documentResourceService', () => {
       ok: true,
       opened: true,
       reason: 'opened',
-      path: 'D:\\docs\\docs\\index.html',
+      path: INDEX_HTML_PATH,
     })
-    expect(showItemInFolder).toHaveBeenCalledWith('D:\\docs\\docs\\index.html')
+    expect(showItemInFolder).toHaveBeenCalledWith(INDEX_HTML_PATH)
   })
 
   it('document.resource.delete-local 删除文件失败时，应标准化为 delete-failed 并保留 Markdown 清理裁决给 renderer', async () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'delete-failed-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004004,
@@ -1546,7 +1572,7 @@ describe('documentResourceService', () => {
       ok: false,
       removed: false,
       reason: 'delete-failed',
-      path: 'D:\\docs\\assets\\demo.png',
+      path: ASSET_PATH,
     })
   })
 
@@ -1554,7 +1580,7 @@ describe('documentResourceService', () => {
     const { clipboardApi, resolveWindowById, service, store, webContents, window } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-image-stale-before-copy-image-at-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004028,
@@ -1563,7 +1589,7 @@ describe('documentResourceService', () => {
     resolveWindowById.mockImplementation(() => {
       const nextSession = createBoundFileSession({
         sessionId: 'copy-image-stale-next-session',
-        path: 'D:\\docs\\other.md',
+        path: OTHER_DOC_PATH,
         content: '# 其他文档',
         stat: null,
         now: 1700000004029,
@@ -1602,7 +1628,7 @@ describe('documentResourceService', () => {
     const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents, window } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-image-host-window-unavailable-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004034,
@@ -1639,7 +1665,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-size-header-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004026,
@@ -1662,7 +1688,7 @@ describe('documentResourceService', () => {
       },
       arrayBuffer,
     })
-    dialogApi.showSaveDialogSync.mockReturnValue('D:\\exports\\picked.jpg')
+    dialogApi.showSaveDialogSync.mockReturnValue(PICKED_JPG_PATH)
 
     const result = await service.saveAs({
       windowId,
@@ -1690,7 +1716,7 @@ describe('documentResourceService', () => {
     const { clipboardApi, fetchImpl, nativeImageApi, service, store, webContents } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'copy-image-copy-image-at-throw-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004027,
@@ -1729,7 +1755,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fetchImpl, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-remote-missing-raw-src-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004035,
@@ -1760,7 +1786,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-missing-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004017,
@@ -1781,7 +1807,7 @@ describe('documentResourceService', () => {
     expect(result).toEqual({
       ok: false,
       reason: 'not-found',
-      path: 'D:\\docs\\assets\\missing.png',
+      path: MISSING_ASSET_PATH,
       messageKey: 'message.theFileDoesNotExist',
     })
     expect(dialogApi.showSaveDialogSync).not.toHaveBeenCalled()
@@ -1793,7 +1819,7 @@ describe('documentResourceService', () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'delete-stale-context-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004007,
@@ -1806,7 +1832,7 @@ describe('documentResourceService', () => {
         resourceUrl: convertResourceUrl('./assets/demo.png'),
         requestContext: {
           sessionId: 'stale-session',
-          documentPath: 'D:\\docs\\other.md',
+          documentPath: OTHER_DOC_PATH,
         },
       },
     })
@@ -1826,7 +1852,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-stale-after-read-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004030,
@@ -1859,7 +1885,7 @@ describe('documentResourceService', () => {
 
     const nextSession = createBoundFileSession({
       sessionId: 'save-as-stale-next-session',
-      path: 'D:\\docs\\other.md',
+      path: OTHER_DOC_PATH,
       content: '# 其他文档',
       stat: null,
       now: 1700000004031,
@@ -1883,7 +1909,7 @@ describe('documentResourceService', () => {
     const { dialogApi, fsModule, service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'save-as-stale-after-dialog-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004032,
@@ -1898,7 +1924,7 @@ describe('documentResourceService', () => {
     dialogApi.showSaveDialogSync.mockImplementation(() => {
       const nextSession = createBoundFileSession({
         sessionId: 'save-as-stale-after-dialog-next-session',
-        path: 'D:\\docs\\other.md',
+        path: OTHER_DOC_PATH,
         content: '# 其他文档',
         stat: null,
         now: 1700000004033,
@@ -1908,7 +1934,7 @@ describe('documentResourceService', () => {
         windowId,
         sessionId: nextSession.sessionId,
       })
-      return 'D:\\exports\\picked.png'
+      return PICKED_PNG_PATH
     })
 
     const result = await service.saveAs({
@@ -1932,7 +1958,7 @@ describe('documentResourceService', () => {
     const { service, store } = await createServiceContext()
     const session = createBoundFileSession({
       sessionId: 'comparable-key-session',
-      path: 'D:\\docs\\note.md',
+      path: DOC_PATH,
       content: '# 文档',
       stat: null,
       now: 1700000004005,
@@ -1947,6 +1973,11 @@ describe('documentResourceService', () => {
       },
     })
 
-    expect(result).toBe('wj-local-file:d:/docs/assets/demo.png')
+    // createComparableKey 只对盘符路径做小写归一，POSIX 路径原样保留。
+    const expectedComparableKey = process.platform === 'win32'
+      ? `wj-local-file:${ASSET_PATH.replaceAll('\\', '/').toLowerCase()}`
+      : `wj-local-file:${ASSET_PATH}`
+
+    expect(result).toBe(expectedComparableKey)
   })
 })
