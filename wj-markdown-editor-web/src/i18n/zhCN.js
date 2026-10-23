@@ -475,5 +475,6 @@ export default {
     fileManagerSearchPlaceholderSupported: '搜索（仅支持的文件）',
     fileManagerNoSearchResults: '未找到匹配项',
     openDroppedFileFailed: '无法打开该文件，已保留上次的标签组并新建空白草稿。',
+    startupSkippedTabs: '上次打开的 {total} 个文件已不存在，已跳过：',
   },
 }

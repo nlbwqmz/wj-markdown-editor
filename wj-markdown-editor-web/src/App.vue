@@ -4,13 +4,14 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 
 import { useI18n } from 'vue-i18n'
 import SearchBar from '@/components/SearchBar.vue'
+import StartupSkippedTabsModal from '@/components/StartupSkippedTabsModal.vue'
 import router from '@/router/index.js'
 import { useCommonStore } from '@/stores/counter.js'
 import constant from '@/util/constant.js'
 import { resolveLanguagePreference } from '@/util/languagePreferenceUtil.js'
 import { previewSearchBarController } from '@/util/searchBarController.js'
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
-import { STARTUP_LOADING_READY_EVENT } from '@/util/startupLoadingUtil.js'
+import { STARTUP_LOADING_DISMISSED_EVENT, STARTUP_LOADING_READY_EVENT } from '@/util/startupLoadingUtil.js'
 
 const defaultFontFamily = {
   editArea: `source-code-pro,Menlo,Monaco,Consolas,'Courier New',monospace`,
@@ -95,6 +96,8 @@ function dismissStartupLoading() {
   }
   startupLoadingDismissed = true
   document.getElementById('startup-loading')?.remove()
+  // 遮罩真正移除后再广播：启动期需要“等遮罩消失再出现”的 UI 以此为准。
+  window.dispatchEvent(new CustomEvent(STARTUP_LOADING_DISMISSED_EVENT))
 }
 
 onMounted(() => {
@@ -115,6 +118,7 @@ onBeforeUnmount(() => {
     <a-config-provider :theme="{ token: { fontFamily: 'var(--other-area-font)' } }">
       <router-view />
       <SearchBar v-if="searchBarVisible" />
+      <StartupSkippedTabsModal />
     </a-config-provider>
   </a-style-provider>
 </template>

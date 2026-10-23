@@ -198,6 +198,8 @@ if (!lock) {
         if (restoreResult?.ok === true && restoreResult.windowId) {
           restoredWindowId = restoreResult.windowId
           if (restoreResult.skippedPathList.length > 0) {
+            // 跳过提示由 restoreTabGroup 在窗口可渲染后统一发送，
+            // 这里只保留启动日志，避免同一条提示重复推送。
             console.warn('[startup] 部分标签路径已失效，已跳过:', restoreResult.skippedPathList)
           }
         }

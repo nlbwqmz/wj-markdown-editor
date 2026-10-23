@@ -410,6 +410,11 @@ const handlerList = {
   'get-global-theme': () => {
     return configUtil.getConfig().theme.global
   },
+  // 启动恢复跳过列表是一次性提示：渲染层启动后主动消费一次，
+  // 主进程返回后立即清空，组件重挂载/页面刷新都不会重复弹窗。
+  'window.consume-startup-skipped-tabs': (windowContext) => {
+    return windowLifecycleService.consumeStartupSkippedPathList(windowContext.windowId)
+  },
 }
 
 const handlerListSync = {

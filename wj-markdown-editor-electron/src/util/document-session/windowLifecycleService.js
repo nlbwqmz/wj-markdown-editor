@@ -136,6 +136,44 @@ function getHostWindowState(windowId) {
   return hostStateStore.getWindowState(normalizedWindowId)
 }
 
+// 启动恢复时被跳过的路径：窗口级的一次性提示数据，随窗口生命周期存在。
+// 不走快照也不走推送：窗口创建时就写进来，渲染层挂载后主动消费一次。
+const startupSkippedPathListByWindowId = new Map()
+
+/**
+ * 读取并清空窗口的“启动跳过列表”。
+ *
+ * 语义是一次性消费：渲染层启动后主动拉一次，拿到就清掉，
+ * 后续再拉（组件重挂载、页面刷新）都不会重复弹窗。
+ */
+function consumeStartupSkippedPathList(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return []
+  }
+
+  const pathList = startupSkippedPathListByWindowId.get(normalizedWindowId) || []
+  startupSkippedPathListByWindowId.delete(normalizedWindowId)
+  return [...pathList]
+}
+
+function setStartupSkippedPathList(windowId, pathList) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return
+  }
+
+  const normalizedPathList = Array.isArray(pathList)
+    ? pathList.filter(item => typeof item === 'string' && item !== '')
+    : []
+  if (normalizedPathList.length === 0) {
+    startupSkippedPathListByWindowId.delete(normalizedWindowId)
+    return
+  }
+
+  startupSkippedPathListByWindowId.set(normalizedWindowId, normalizedPathList)
+}
+
 function updateHostWindowState(windowId, updater) {
   const normalizedWindowId = normalizeWindowId(windowId)
   if (!normalizedWindowId) {
@@ -337,6 +375,7 @@ function deleteEditorWin(id) {
 
   getWindowRegistry().unregisterWindow?.(normalizedWindowId)
   hostStateStore.unregisterWindowState(normalizedWindowId)
+  startupSkippedPathListByWindowId.delete(normalizedWindowId)
   return true
 }
 
@@ -1008,8 +1047,14 @@ function persistCurrentTabGroupSync(windowId) {
 /**
  * 启动时按上次的标签组恢复窗口。
  *
- * 第一个存在的路径直接用来开窗，其余路径逐个挂成标签；
- * 缺失的文件静默跳过，不走 recent-missing 提示流程。
+ * 统一排除策略：缺失路径跳过并提示，读取失败路径只记日志、不提示。
+ * 第一个路径不再特殊保留成 recent-missing 标签；第一个“真的能打开”的路径负责开窗，
+ * 其余按原始顺序挂成标签。
+ *
+ * 跳过列表必须在**开窗之前**确定：它随窗口创建写进窗口状态，
+ * 渲染层挂载后主动消费一次就能拿到，不依赖任何推送。
+ * 因此这里先扫描 `pathExists`，再建窗口；读取失败的路径在恢复过程中才暴露，
+ * 属于权限/占用类极低概率场景，只记日志、不进跳过提示。
  *
  * 恢复完后按 `activeIndex` 把活动标签落回上次的位置：
  * 它记的是「有路径标签列表」里的下标，而缺失文件会被跳过，
@@ -1027,8 +1072,58 @@ async function restoreTabGroup(pathList, activeIndex = 0) {
     ? pathList.filter(item => typeof item === 'string' && item.trim() !== '')
     : []
 
-  if (candidatePathList.length === 0) {
-    const createResult = await createNew(null)
+  // 第一轮只做存在性扫描：跳过列表必须在建窗口前完整确定。
+  // 保留原始下标，activeIndex 映射仍然按上次的标签顺序算。
+  const existingEntryList = []
+  const skippedPathList = []
+  for (let i = 0; i < candidatePathList.length; i++) {
+    const targetPath = candidatePathList[i]
+    if (await fs.pathExists(targetPath)) {
+      existingEntryList.push({ index: i, path: targetPath })
+    }
+    else {
+      skippedPathList.push(targetPath)
+    }
+  }
+
+  // 第二个循环才建窗口：第一个能读出来的路径负责开窗，
+  // 跳过列表随窗口创建一并写入窗口状态。
+  let windowId = null
+  let openedEntry = null
+  let openedPosition = -1
+  for (let i = 0; i < existingEntryList.length; i++) {
+    const entry = existingEntryList[i]
+    // 恢复路径只接受能读出来的文件：isRecent 固定为 false，
+    // 缺失路径已在扫描阶段排除，这里不会再产生 recent-missing 会话。
+    const createResult = await createNew(entry.path, false, {
+      startupSkippedPathList: skippedPathList,
+    })
+    const createdWindowId = typeof createResult === 'string' && createResult !== '' ? createResult : null
+    if (!createdWindowId) {
+      // 只有“目标文件读失败”可以降级为跳过；
+      // 窗口壳创建失败属于应用级故障，继续试下一个路径没有意义，直接透传。
+      if (createResult?.reason === 'open-target-read-failed') {
+        console.warn('[startup] 标签文件读取失败，已跳过:', entry.path)
+        continue
+      }
+      return createResult?.ok === false
+        ? createResult
+        : { ok: false, reason: 'window-create-failed', path: entry.path }
+    }
+
+    windowId = createdWindowId
+    openedEntry = entry
+    openedPosition = i
+    break
+  }
+
+  // 一个都没能恢复：开空草稿窗口，跳过列表照样带进窗口状态。
+  // 这里刻意不写 tab-group.json，让原标签组留到下次启动再试一次，
+  // 避免一次误判就把用户的标签组清空。
+  if (!windowId) {
+    const createResult = await createNew(null, false, {
+      startupSkippedPathList: skippedPathList,
+    })
     const emptyWindowId = typeof createResult === 'string' && createResult !== '' ? createResult : null
     if (!emptyWindowId) {
       return createResult?.ok === false
@@ -1039,68 +1134,45 @@ async function restoreTabGroup(pathList, activeIndex = 0) {
     return {
       ok: true,
       windowId: emptyWindowId,
-      requestedTabCount: 0,
+      requestedTabCount: candidatePathList.length,
       restoredTabCount: 0,
       activeSessionId: null,
-      skippedPathList: [],
+      skippedPathList,
     }
-  }
-
-  const [firstPath, ...restPathList] = candidatePathList
-  // 第一个路径用来开窗。文件缺失时必须走 recent-missing 分支，
-  // 否则会变成一个无路径、无提示的 Untitled 空草稿：
-  // 用户看不出原来那个文件去哪了，这个标签下次写盘时也会彻底消失。
-  const createResult = await createNew(firstPath, true)
-  const windowId = typeof createResult === 'string' && createResult !== '' ? createResult : null
-  if (!windowId) {
-    // 第一个文件读取失败时 createNew 会返回结构化失败结果，直接透传。
-    return createResult?.ok === false
-      ? createResult
-      : { ok: false, reason: 'window-create-failed', path: firstPath }
   }
 
   const restoredIndexList = []
   const restoredSessionIdList = []
-  const skippedPathList = []
 
-  // 判断“这个标签有没有恢复出来”只能看 path / missingPath：
-  // recent-missing 会话的 documentSource.path 也是 null，
-  // 只按 path 判断会把“第一个文件缺失”的标签漏掉，activeIndex 随之错位。
   const firstSession = getSessionByWindowId(windowId)
-  const firstDocumentSource = firstSession?.documentSource || null
-  if (firstSession?.sessionId && (firstDocumentSource?.path || firstDocumentSource?.missingPath)) {
-    restoredIndexList.push(0)
+  if (firstSession?.sessionId) {
+    restoredIndexList.push(openedEntry.index)
     restoredSessionIdList.push(firstSession.sessionId)
   }
-  else {
-    skippedPathList.push(firstPath)
-  }
 
-  for (let i = 0; i < restPathList.length; i++) {
-    const targetPath = restPathList[i]
+  // openedPosition 之前的路径已经全部扫过，这里从它之后按原始顺序继续挂标签，
+  // 标签顺序与上次保持一致。
+  for (let i = openedPosition + 1; i < existingEntryList.length; i++) {
+    const entry = existingEntryList[i]
     try {
-      if (!await fs.pathExists(targetPath)) {
-        skippedPathList.push(targetPath)
-        continue
-      }
-      const content = await fs.readFile(targetPath, 'utf-8')
+      const content = await fs.readFile(entry.path, 'utf-8')
       const switchResult = await switchSessionInCurrentWindow(windowId, {
-        documentPath: targetPath,
+        documentPath: entry.path,
         content,
         trigger: 'startup',
       })
       const restoredSessionId = switchResult?.snapshot?.sessionId || null
       if (switchResult?.ok === true && restoredSessionId) {
-        restoredIndexList.push(i + 1)
+        restoredIndexList.push(entry.index)
         restoredSessionIdList.push(restoredSessionId)
       }
       else {
-        skippedPathList.push(targetPath)
+        console.warn('[startup] 标签恢复失败，已跳过:', entry.path)
       }
     }
     catch {
       // 单个标签恢复失败不能影响其他标签。
-      skippedPathList.push(targetPath)
+      console.warn('[startup] 标签文件读取失败，已跳过:', entry.path)
     }
   }
 
@@ -2827,6 +2899,10 @@ async function createNew(filePath, isRecent = false, options = {}) {
       },
     })
 
+    // 启动恢复的跳过列表在开窗时就写入窗口状态：
+    // 渲染层挂载后主动消费一次即可，不需要任何推送。
+    setStartupSkippedPathList(id, options.startupSkippedPathList)
+
     if (migrateSession) {
       // 迁移：会话对象已经存在于 store，只把归属窗口换成新窗口。
       // 不能走 registerSessionForWindow，那会再 createSession 一次并覆盖现有状态。
@@ -3010,6 +3086,7 @@ Object.assign(windowLifecycleService, {
   publishHostWindowStateByWindowId,
   getDocumentContext,
   getSessionSnapshot,
+  consumeStartupSkippedPathList,
   handleLocalResourceLinkOpen,
   updateTempContent,
   startExternalWatch,

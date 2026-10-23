@@ -14,9 +14,14 @@ const registeredEventHandlerMap = new Map()
 const windowNodeState = vi.hoisted(() => ({
   sendToShow: vi.fn(),
 }))
+const antMessageState = vi.hoisted(() => ({
+  warning: vi.fn(),
+}))
 
 vi.mock('ant-design-vue', () => ({
-  message: {},
+  message: {
+    warning: antMessageState.warning,
+  },
 }))
 
 vi.mock('@/i18n/index.js', () => ({
@@ -75,6 +80,19 @@ describe('eventUtil', () => {
 
     fullScreenChangedHandler(false)
     expect(store.isFullScreen).toBe(false)
+  })
+
+  it('普通消息必须继续走 ant-design-vue 的 message', async () => {
+    const { default: eventUtil } = await import('../eventUtil.js')
+
+    eventUtil.on()
+
+    registeredEventHandlerMap.get('message')({
+      type: 'warning',
+      content: 'message.openDroppedFileFailed',
+    })
+
+    expect(antMessageState.warning).toHaveBeenCalledTimes(1)
   })
 
   it('eventUtil.link 应把 window.effect.file-manager-directory-changed 原样转发到 eventEmit', async () => {

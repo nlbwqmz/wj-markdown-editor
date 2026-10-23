@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { STARTUP_LOADING_READY_EVENT } from '@/util/startupLoadingUtil.js'
+import { STARTUP_LOADING_DISMISSED_EVENT, STARTUP_LOADING_READY_EVENT } from '@/util/startupLoadingUtil.js'
 import App from '../App.vue'
 
 const mocked = vi.hoisted(() => ({
@@ -76,6 +76,7 @@ function mountApp() {
         'a-style-provider': true,
         'a-config-provider': true,
         'router-view': true,
+        'StartupSkippedTabsModal': true,
       },
     },
   })
@@ -97,16 +98,36 @@ describe('app startup loading dismiss', () => {
   it('就绪事件触发后应立即移除启动遮罩，而不是等待淡出动画结束', () => {
     createStartupLoadingElement()
     const wrapper = mountApp()
+    const dismissedHandler = vi.fn()
+    window.addEventListener(STARTUP_LOADING_DISMISSED_EVENT, dismissedHandler)
     expect(document.getElementById('startup-loading')).not.toBeNull()
 
     window.dispatchEvent(new CustomEvent(STARTUP_LOADING_READY_EVENT))
 
     // 旧实现会等待 250ms 淡出动画的 animationend 才移除；新实现必须在事件派发后同步移除。
     expect(document.getElementById('startup-loading')).toBeNull()
+    // 遮罩真正移除后必须广播一次，供“等遮罩消失再出现”的启动期 UI 消费
+    expect(dismissedHandler).toHaveBeenCalledTimes(1)
     // 遮罩移除后不应再触发一次动画等待：推进动画时长后仍保持移除状态。
     vi.advanceTimersByTime(500)
     expect(document.getElementById('startup-loading')).toBeNull()
 
+    window.removeEventListener(STARTUP_LOADING_DISMISSED_EVENT, dismissedHandler)
+    wrapper.unmount()
+  })
+
+  it('重复派发就绪事件不应重复广播遮罩已移除事件', () => {
+    createStartupLoadingElement()
+    const wrapper = mountApp()
+    const dismissedHandler = vi.fn()
+    window.addEventListener(STARTUP_LOADING_DISMISSED_EVENT, dismissedHandler)
+
+    window.dispatchEvent(new CustomEvent(STARTUP_LOADING_READY_EVENT))
+    window.dispatchEvent(new CustomEvent(STARTUP_LOADING_READY_EVENT))
+
+    expect(dismissedHandler).toHaveBeenCalledTimes(1)
+
+    window.removeEventListener(STARTUP_LOADING_DISMISSED_EVENT, dismissedHandler)
     wrapper.unmount()
   })
 

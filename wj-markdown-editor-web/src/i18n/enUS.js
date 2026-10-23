@@ -475,5 +475,6 @@ export default {
     fileManagerSearchPlaceholderSupported: 'Search (supported only)',
     fileManagerNoSearchResults: 'No match found',
     openDroppedFileFailed: 'Failed to open the file. Previous tabs were kept and a blank draft was created.',
+    startupSkippedTabs: '{total} file(s) from the last session no longer exist and were skipped:',
   },
 }

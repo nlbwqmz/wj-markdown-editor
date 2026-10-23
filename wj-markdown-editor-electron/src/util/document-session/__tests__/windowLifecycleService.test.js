@@ -2707,17 +2707,28 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(typeof result.activeSessionId).toBe('string')
   })
 
-  it('restoreTabGroup 首个文件读取失败时必须返回结构化失败，不能返回裸字符串', async () => {
+  it('restoreTabGroup 首个文件读取失败时必须与其余标签一致按跳过处理，并回退到空草稿窗口', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockRejectedValue(new Error('EACCES'))
 
     const result = await winInfoUtil.restoreTabGroup(['D:/locked.md'], 0)
 
+    // 读取失败不进“跳过提示”（文件本身是存在的），但也不能阻断恢复：
+    // 仍然开空草稿窗口，只记日志
     expect(result).toMatchObject({
-      ok: false,
-      reason: 'open-target-read-failed',
-      path: 'D:/locked.md',
+      ok: true,
+      requestedTabCount: 1,
+      restoredTabCount: 0,
+      activeSessionId: null,
+      skippedPathList: [],
     })
+    expect(typeof result.windowId).toBe('string')
+
+    const [winInfo] = listWindowRefs()
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.tabs).toHaveLength(1)
+    expect(snapshot.tabs[0].displayPath).toBeNull()
+    expect(winInfoUtil.consumeStartupSkippedPathList(winInfo.id)).toEqual([])
   })
 
   it('restoreTabGroup 在 activeIndex 指向的文件缺失时回退到最后一个成功恢复的标签', async () => {
@@ -2734,21 +2745,49 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(snapshot.activeSessionId).toBe(snapshot.tabs[1].sessionId)
   })
 
-  it('restoreTabGroup 在第一个文件缺失时必须保留为 recent-missing 标签，而不是空草稿', async () => {
+  it('restoreTabGroup 在第一个文件缺失时必须与其余标签一致被跳过，不再保留 recent-missing 标签', async () => {
     pathExistsMock.mockImplementation(async targetPath => targetPath !== 'D:/first.md')
     readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
 
-    await winInfoUtil.restoreTabGroup(['D:/first.md', 'D:/second.md'], 0)
+    const result = await winInfoUtil.restoreTabGroup(['D:/first.md', 'D:/second.md'], 0)
 
     const [winInfo] = listWindowRefs()
     const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
 
-    // 标签仍然存在，且保留原路径，渲染层能据此展示“文件缺失”
-    expect(snapshot.tabs.map(tab => tab.displayPath)).toEqual(['D:/first.md', 'D:/second.md'])
-    expect(snapshot.tabs[0].isRecentMissing).toBe(true)
-    // activeIndex = 0 必须落在第一个标签上：
-    // recent-missing 会话的 path 为 null，不能因此被排除在映射表外
+    // 第一个路径缺失与其余路径缺失同等待遇：不建标签、只记跳过
+    expect(snapshot.tabs.map(tab => tab.displayPath)).toEqual(['D:/second.md'])
     expect(snapshot.activeSessionId).toBe(snapshot.tabs[0].sessionId)
+    expect(result.skippedPathList).toEqual(['D:/first.md'])
+    expect(result.restoredTabCount).toBe(1)
+
+    // 跳过的路径必须在开窗前就写进窗口状态，渲染层挂载后消费一次即可
+    expect(winInfoUtil.consumeStartupSkippedPathList(winInfo.id)).toEqual(['D:/first.md'])
+    // 消费后必须清空，避免组件重挂载/页面刷新重复弹窗
+    expect(winInfoUtil.consumeStartupSkippedPathList(winInfo.id)).toEqual([])
+  })
+
+  it('restoreTabGroup 在所有文件都缺失时必须开空草稿窗口，并返回全部跳过路径', async () => {
+    pathExistsMock.mockResolvedValue(false)
+
+    const result = await winInfoUtil.restoreTabGroup(['D:/a.md', 'D:/b.md'], 0)
+
+    expect(result).toMatchObject({
+      ok: true,
+      requestedTabCount: 2,
+      restoredTabCount: 0,
+      activeSessionId: null,
+      skippedPathList: ['D:/a.md', 'D:/b.md'],
+    })
+    expect(typeof result.windowId).toBe('string')
+
+    const [winInfo] = listWindowRefs()
+    const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(snapshot.tabs).toHaveLength(1)
+    expect(snapshot.tabs[0].displayPath).toBeNull()
+
+    // 单标签全部缺失时同样必须把跳过路径写进窗口状态，且只能被消费一次
+    expect(winInfoUtil.consumeStartupSkippedPathList(winInfo.id)).toEqual(['D:/a.md', 'D:/b.md'])
+    expect(winInfoUtil.consumeStartupSkippedPathList(winInfo.id)).toEqual([])
   })
 
   it('多窗口按关闭顺序退出时，必须把最后关闭的文档重新顶到 recent 顶部', async () => {
