@@ -18,7 +18,6 @@ const {
   canOpenParentDirectory,
   canFocusCurrentDocumentDirectory,
   emptyMessageKey,
-  entryList,
   focusCurrentDocumentDirectory,
   hasDirectory,
   openEntry,
@@ -27,6 +26,9 @@ const {
   requestCreateFolderFromInput,
   requestCreateMarkdownFromInput,
   updateFileManagerSortConfig,
+  updateFileManagerVisibleFileMode,
+  visibleEntryList,
+  visibleFileMode,
 } = controller
 
 const searchQuery = ref('')
@@ -39,13 +41,18 @@ const SCROLL_INTO_VIEW_OPTIONS = Object.freeze({
 
 const filteredEntryList = computed(() => {
   if (!searchQuery.value.trim()) {
-    return entryList.value
+    return visibleEntryList.value
   }
   const query = searchQuery.value.toLowerCase()
-  return entryList.value.filter(entry =>
+  return visibleEntryList.value.filter(entry =>
     entry.name.toLowerCase().includes(query),
   )
 })
+
+// 显示范围为「仅可打开的文件」时，搜索框文案同步提示过滤范围。
+const searchPlaceholder = computed(() => visibleFileMode.value === 'supported'
+  ? t('message.fileManagerSearchPlaceholderSupported')
+  : t('message.fileManagerSearchPlaceholder'))
 
 const createMenuList = computed(() => [
   {
@@ -129,6 +136,29 @@ const sortMenuList = computed(() => [
       field: 'modifiedTime',
       direction: 'desc',
     }),
+  },
+])
+
+function createVisibleFileModeMenuLabel(messageKey, key) {
+  const label = t(messageKey)
+  const indicatorClass = visibleFileMode.value === key ? 'i-tabler:check mr-1' : 'mr-1 inline-block w-[1em]'
+
+  return h('span', { class: 'inline-flex items-center' }, [
+    h('span', { class: indicatorClass }),
+    label,
+  ])
+}
+
+const visibleFileModeMenuList = computed(() => [
+  {
+    key: 'all',
+    label: createVisibleFileModeMenuLabel('message.fileManagerVisibleFileModeAll', 'all'),
+    action: () => updateFileManagerVisibleFileMode('all'),
+  },
+  {
+    key: 'supported',
+    label: createVisibleFileModeMenuLabel('message.fileManagerVisibleFileModeSupported', 'supported'),
+    action: () => updateFileManagerVisibleFileMode('supported'),
   },
 ])
 
@@ -259,13 +289,21 @@ async function handleFocusCurrentDocumentDirectory() {
         />
       </div>
     </div>
-    <div v-if="hasDirectory" class="file-manager-panel__search border-b border-b-border-primary border-b-solid p-1">
+    <div v-if="hasDirectory" class="file-manager-panel__search flex items-center gap-1 border-b border-b-border-primary border-b-solid p-1">
       <AInput
         v-model:value="searchQuery"
         allow-clear
-        :placeholder="t('message.fileManagerSearchPlaceholder')"
-        class="file-manager-panel__search-input w-full"
+        :placeholder="searchPlaceholder"
+        class="file-manager-panel__search-input min-w-0 flex-1"
         size="small"
+      />
+      <IconButton
+        data-testid="file-manager-visible-file-mode"
+        icon="i-tabler:filter"
+        :label="t('message.fileManagerVisibleFileMode')"
+        :menu-list="visibleFileModeMenuList"
+        :menu-trigger="['hover']"
+        :show-tooltip="false"
       />
     </div>
     <div class="h-0 min-h-0 flex-1 overflow-hidden">

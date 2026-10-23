@@ -26,3 +26,27 @@ test('设置页应提供文件管理栏分组，并包含默认显示与 Markdow
   assert.match(source, /fileManagerLeftClickAction/u)
   assert.match(source, /\['fileManagerLeftClickAction', 'markdown'\]/u)
 })
+
+test('设置页应提供文件管理栏显示范围配置项，并保持默认目录与 Markdown 左键逻辑之间的顺序', () => {
+  const source = readSettingViewSource()
+
+  assert.equal(zhCN.config.fileManager.visibleFileMode, '显示范围')
+  assert.equal(enUS.config.fileManager.visibleFileMode, 'Visible files')
+  assert.equal(zhCN.config.fileManager.visibleFileModeOption.all, '全部文件')
+  assert.equal(enUS.config.fileManager.visibleFileModeOption.all, 'All files')
+  assert.equal(zhCN.config.fileManager.visibleFileModeOption.supported, '仅支持的文件')
+  assert.equal(enUS.config.fileManager.visibleFileModeOption.supported, 'Supported files only')
+
+  assert.match(source, /isSettingItemVisible\('fileManager\.visibleFileMode'\)/u)
+  assert.match(source, /:value="config\.fileManagerVisibleFileMode"/u)
+  assert.match(source, /\['fileManagerVisibleFileMode'\]/u)
+  assert.match(source, /config\.fileManager\.visibleFileModeOption\.all/u)
+  assert.match(source, /config\.fileManager\.visibleFileModeOption\.supported/u)
+
+  const defaultDirectoryIndex = source.indexOf('isSettingItemVisible(\'fileManager.defaultDirectory\')')
+  const visibleFileModeIndex = source.indexOf('isSettingItemVisible(\'fileManager.visibleFileMode\')')
+  const markdownLeftClickActionIndex = source.indexOf('isSettingItemVisible(\'fileManager.markdownLeftClickAction\')')
+
+  assert.ok(defaultDirectoryIndex >= 0 && defaultDirectoryIndex < visibleFileModeIndex)
+  assert.ok(visibleFileModeIndex < markdownLeftClickActionIndex)
+})

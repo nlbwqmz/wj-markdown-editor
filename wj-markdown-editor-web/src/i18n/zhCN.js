@@ -253,6 +253,11 @@ export default {
         outline: '大纲',
       },
       defaultDirectory: '默认目录',
+      visibleFileMode: '显示范围',
+      visibleFileModeOption: {
+        all: '全部文件',
+        supported: '仅支持的文件',
+      },
       markdownLeftClickAction: 'Markdown 左键逻辑',
       leftClickActionOption: {
         prompt: '提示',
@@ -465,6 +470,10 @@ export default {
     fileExternalChangeNotificationTitle: '文件内容已更新',
     fileExternalChangeNotificationBody: '检测到文件被外部修改，已自动应用最新内容。',
     fileManagerSearchPlaceholder: '搜索',
+    fileManagerVisibleFileMode: '显示范围',
+    fileManagerVisibleFileModeAll: '全部文件',
+    fileManagerVisibleFileModeSupported: '仅支持的文件',
+    fileManagerSearchPlaceholderSupported: '搜索（仅支持的文件）',
     fileManagerNoSearchResults: '未找到匹配项',
     openDroppedFileFailed: '无法打开该文件，已保留上次的标签组并新建空白草稿。',
   },

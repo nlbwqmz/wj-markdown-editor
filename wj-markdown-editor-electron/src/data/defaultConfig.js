@@ -20,6 +20,8 @@ export default {
     field: 'type',
     direction: 'asc',
   },
+  // 文件管理栏可见文件范围：all(显示全部) / supported(仅显示受支持的文件)，文件夹不受此配置影响
+  fileManagerVisibleFileMode: 'all',
   fileManagerLeftClickAction: {
     markdown: 'prompt',
   },

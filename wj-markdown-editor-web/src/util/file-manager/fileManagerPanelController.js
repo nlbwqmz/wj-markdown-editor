@@ -6,7 +6,7 @@ import eventEmit from '@/util/channel/eventEmit.js'
 import { createBatchSetConfigPathRequest } from '@/util/config/configMutationCommandUtil.js'
 import { getConfigUpdateFailureMessageKey } from '@/util/config/configUpdateResultUtil.js'
 import { requestDocumentOpenPathByInteraction } from '@/util/document-session/documentOpenInteractionService.js'
-import { resolveFileManagerEntryType, sortFileManagerEntryList } from './fileManagerEntryMetaUtil.js'
+import { isFileManagerEntryVisibleUnderMode, resolveFileManagerEntryType, sortFileManagerEntryList } from './fileManagerEntryMetaUtil.js'
 import { FILE_MANAGER_DIRECTORY_CHANGED_EVENT } from './fileManagerEventUtil.js'
 import { resolveDocumentOpenCurrentPath } from './fileManagerOpenDecisionController.js'
 import {
@@ -38,6 +38,8 @@ const DEFAULT_FILE_MANAGER_SORT_CONFIG = Object.freeze({
   direction: 'asc',
 })
 const FILE_MANAGER_MARKDOWN_LEFT_CLICK_ACTION_SET = new Set(['prompt', 'new-window', 'current-window'])
+const FILE_MANAGER_VISIBLE_FILE_MODE_SET = new Set(['all', 'supported'])
+const DEFAULT_FILE_MANAGER_VISIBLE_FILE_MODE = 'all'
 
 function isWindowsDriveRootPath(path) {
   return /^[A-Za-z]:\/$/u.test(path)
@@ -175,6 +177,18 @@ function normalizeFileManagerSortConfig(sortConfig) {
     field,
     direction,
   }
+}
+
+/**
+ * 归一化「显示范围」配置：非字符串或不在枚举集合内一律回退默认值 all。
+ *
+ * @param {unknown} mode 配置中的原始值。
+ * @returns {'all' | 'supported'} 归一化后的显示范围模式。
+ */
+function normalizeFileManagerVisibleFileMode(mode) {
+  return typeof mode === 'string' && FILE_MANAGER_VISIBLE_FILE_MODE_SET.has(mode)
+    ? mode
+    : DEFAULT_FILE_MANAGER_VISIBLE_FILE_MODE
 }
 
 function normalizeFileManagerMarkdownLeftClickAction(action) {
@@ -449,6 +463,10 @@ export function createFileManagerPanelController({
   let latestDirectoryBindingRequestId = 0
   const directoryPath = computed(() => directoryState.value.directoryPath)
   const entryList = computed(() => directoryState.value.entryList)
+  // entryList 保持「目录全量」语义，过滤只在派生层做，避免影响缓存与主进程同步。
+  const visibleFileMode = computed(() => normalizeFileManagerVisibleFileMode(store?.config?.fileManagerVisibleFileMode))
+  // 列表渲染统一消费 visibleEntryList：目录永不过滤，文件类型按当前显示范围收敛。
+  const visibleEntryList = computed(() => entryList.value.filter(entry => isFileManagerEntryVisibleUnderMode(entry, visibleFileMode.value)))
   const emptyMessageKey = computed(() => directoryState.value.emptyMessageKey)
   const hasDirectory = computed(() => Boolean(directoryState.value.directoryPath))
   const breadcrumbList = computed(() => buildBreadcrumbList(directoryPath.value))
@@ -655,6 +673,45 @@ export function createFileManagerPanelController({
 
       if (typeof store?.config === 'object' && store.config) {
         store.config.fileManagerSort = normalizedSortConfig
+      } else if (store) {
+        store.config = nextConfigPatch
+      }
+      return result
+    } catch {
+      showWarningMessage('message.configWriteFailed')
+      return {
+        ok: false,
+        messageKey: 'message.configWriteFailed',
+        reason: 'config-update-transport-failed',
+      }
+    }
+  }
+
+  /**
+   * 持久化「显示范围」配置。
+   * 与排序一致：成功后手动同步 store.config，不依赖事件回流，避免界面滞后。
+   */
+  async function updateFileManagerVisibleFileMode(nextMode) {
+    const normalizedMode = normalizeFileManagerVisibleFileMode(nextMode)
+    const nextConfigPatch = {
+      fileManagerVisibleFileMode: normalizedMode,
+    }
+
+    try {
+      const result = await sendCommand({
+        event: 'config.update',
+        data: createBatchSetConfigPathRequest([
+          { path: ['fileManagerVisibleFileMode'], value: normalizedMode },
+        ]),
+      })
+      const failureMessageKey = getConfigUpdateFailureMessageKey(result)
+      if (failureMessageKey) {
+        showWarningMessage(failureMessageKey)
+        return result
+      }
+
+      if (typeof store?.config === 'object' && store.config) {
+        store.config.fileManagerVisibleFileMode = normalizedMode
       } else if (store) {
         store.config = nextConfigPatch
       }
@@ -1036,6 +1093,8 @@ export function createFileManagerPanelController({
     directoryState,
     directoryPath,
     entryList,
+    visibleFileMode,
+    visibleEntryList,
     emptyMessageKey,
     hasDirectory,
     breadcrumbList,
@@ -1050,6 +1109,7 @@ export function createFileManagerPanelController({
     createFolder,
     createMarkdown,
     updateFileManagerSortConfig,
+    updateFileManagerVisibleFileMode,
     requestCreateFolderFromInput,
     requestCreateMarkdownFromInput,
     openEntry,

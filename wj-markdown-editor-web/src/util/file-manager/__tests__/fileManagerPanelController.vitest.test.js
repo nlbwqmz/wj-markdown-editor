@@ -7,8 +7,16 @@ const { sortFileManagerEntryListMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../fileManagerEntryMetaUtil.js', async () => {
+  // 与真实工具保持同一语义：目录/图片保留原类型，未知与 'file' 回退 markdown。
+  const resolveFileManagerEntryType = entry => (['directory', 'markdown', 'image', 'other'].includes(entry?.kind)
+    ? entry.kind
+    : 'markdown')
+
   return {
-    resolveFileManagerEntryType: entry => (entry?.kind === 'directory' ? 'directory' : 'markdown'),
+    resolveFileManagerEntryType,
+    isFileManagerEntryVisibleUnderMode: (entry, mode) => resolveFileManagerEntryType(entry) === 'directory'
+      || mode !== 'supported'
+      || resolveFileManagerEntryType(entry) === 'markdown',
     sortFileManagerEntryList: sortFileManagerEntryListMock,
   }
 })
@@ -1000,6 +1008,104 @@ describe('fileManagerPanelController', () => {
     expect(controller.directoryPath.value).toBe('D:/docs')
     expect(controller.entryList.value.map(item => item.name)).toEqual(['current.md'])
     expect(showWarningMessage).toHaveBeenCalledWith('message.fileManagerOpenDirectoryFailed')
+
+    scope.stop()
+  })
+
+  it('visibleEntryList 在 all 下等于全量，在 supported 下只留目录与 markdown，且 entryList 仍为全量', async () => {
+    const requestDirectoryState = vi.fn().mockResolvedValue({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+        { name: 'cover.png', path: 'D:/docs/cover.png', kind: 'image' },
+      ],
+    })
+    const store = createStore()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+    })
+
+    await flushController()
+
+    expect(controller.visibleFileMode.value).toBe('all')
+    expect(controller.visibleEntryList.value.map(item => item.name)).toEqual([
+      'assets',
+      'current.md',
+      'cover.png',
+    ])
+
+    store.config.fileManagerVisibleFileMode = 'supported'
+    await flushController()
+
+    expect(controller.visibleFileMode.value).toBe('supported')
+    expect(controller.visibleEntryList.value.map(item => item.name)).toEqual([
+      'assets',
+      'current.md',
+    ])
+    // 过滤只发生在派生层，entryList 必须保持目录全量语义
+    expect(controller.entryList.value.map(item => item.name)).toEqual([
+      'assets',
+      'current.md',
+      'cover.png',
+    ])
+
+    scope.stop()
+  })
+
+  it('切换显示范围只允许发 config.update 单路径 mutation，不得触发任何 file-manager.* 命令或重新读取目录', async () => {
+    const requestDirectoryState = vi.fn().mockResolvedValue({
+      directoryPath: 'D:/docs',
+      entryList: [
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+      ],
+    })
+    const sendCommand = vi.fn().mockResolvedValue({
+      ok: true,
+    })
+    const store = createStore()
+    const { controller, scope } = createPanelController(store, {
+      requestDirectoryState,
+      sendCommand,
+    })
+
+    await flushController()
+    requestDirectoryState.mockClear()
+
+    await controller.updateFileManagerVisibleFileMode('supported')
+
+    expect(sendCommand).toHaveBeenCalledTimes(1)
+    expect(sendCommand).toHaveBeenCalledWith({
+      event: 'config.update',
+      data: {
+        operations: [
+          {
+            type: 'set',
+            path: ['fileManagerVisibleFileMode'],
+            value: 'supported',
+          },
+        ],
+      },
+    })
+    expect(sendCommand.mock.calls.some(([payload]) => String(payload?.event ?? '').startsWith('file-manager.'))).toBe(false)
+    expect(requestDirectoryState).not.toHaveBeenCalled()
+    expect(store.config.fileManagerVisibleFileMode).toBe('supported')
+
+    // 非法值必须归一化回默认 all，不能把脏值写进配置
+    await controller.updateFileManagerVisibleFileMode('hidden')
+    expect(sendCommand).toHaveBeenLastCalledWith({
+      event: 'config.update',
+      data: {
+        operations: [
+          {
+            type: 'set',
+            path: ['fileManagerVisibleFileMode'],
+            value: 'all',
+          },
+        ],
+      },
+    })
+    expect(store.config.fileManagerVisibleFileMode).toBe('all')
 
     scope.stop()
   })

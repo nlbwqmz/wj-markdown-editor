@@ -17,6 +17,7 @@ const SET_PATH_SET = new Set([
   'sidebarDefaultView',
   'sidebarWidth',
   'editor.previewPosition',
+  'fileManagerVisibleFileMode',
   'fileManagerLeftClickAction.markdown',
   'editor.associationHighlight',
   'editorExtension.lineNumbers',

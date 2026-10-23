@@ -617,7 +617,7 @@ function reset() {
             </template>
           </a-input>
         </div>
-        <div class="setting-tabs__list wj-scrollbar">
+        <div class="wj-scrollbar setting-tabs__list">
           <div class="setting-tabs__inner" role="tablist" aria-orientation="vertical" :class="{ 'is-ready': tabIndicatorReady }">
             <div class="setting-tabs__indicator" :style="tabIndicatorStyle" aria-hidden="true" />
             <button
@@ -789,6 +789,20 @@ function reset() {
                   </div>
                 </template>
               </a-input>
+            </a-descriptions-item>
+            <a-descriptions-item v-if="isSettingItemVisible('fileManager.visibleFileMode')" :label="settingLabel('fileManager.visibleFileMode')">
+              <a-radio-group
+                :value="config.fileManagerVisibleFileMode"
+                button-style="solid"
+                @update:value="value => submitSetPathMutation(['fileManagerVisibleFileMode'], value)"
+              >
+                <a-radio-button value="all">
+                  {{ $t('config.fileManager.visibleFileModeOption.all') }}
+                </a-radio-button>
+                <a-radio-button value="supported">
+                  {{ $t('config.fileManager.visibleFileModeOption.supported') }}
+                </a-radio-button>
+              </a-radio-group>
             </a-descriptions-item>
             <a-descriptions-item v-if="isSettingItemVisible('fileManager.markdownLeftClickAction')" :label="settingLabel('fileManager.markdownLeftClickAction')">
               <a-radio-group

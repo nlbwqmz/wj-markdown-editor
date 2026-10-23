@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  isFileManagerEntryVisibleUnderMode,
+  isSupportedFileManagerEntry,
   resolveFileManagerEntryExtension,
   resolveFileManagerEntryIconProfile,
   resolveFileManagerEntryType,
@@ -334,6 +336,74 @@ describe('fileManagerEntryMetaUtil', () => {
     })
 
     expect(trackedEntryList.reduce((sum, item) => sum + item.getKindReadCount(), 0)).toBeLessThanOrEqual(48)
+  })
+
+  it('受支持判定应只认 markdown 类型，并兼容大小写与 .markdown 扩展名', () => {
+    expect(isSupportedFileManagerEntry(createEntry({
+      name: 'note.md',
+      kind: 'file',
+    }))).toBe(true)
+    expect(isSupportedFileManagerEntry(createEntry({
+      name: 'README.MD',
+      kind: 'file',
+    }))).toBe(true)
+    expect(isSupportedFileManagerEntry(createEntry({
+      name: 'guide.markdown',
+      kind: 'file',
+    }))).toBe(true)
+
+    expect(isSupportedFileManagerEntry(createEntry({
+      name: 'cover.png',
+      kind: 'file',
+    }))).toBe(false)
+    expect(isSupportedFileManagerEntry(createEntry({
+      name: 'report.pdf',
+      kind: 'file',
+    }))).toBe(false)
+    expect(isSupportedFileManagerEntry(createEntry({
+      name: 'LICENSE',
+      kind: 'file',
+    }))).toBe(false)
+  })
+
+  it('supported 模式下目录恒可见，只保留 markdown 文件', () => {
+    expect(isFileManagerEntryVisibleUnderMode(createEntry({
+      name: 'assets',
+      kind: 'directory',
+    }), 'supported')).toBe(true)
+    expect(isFileManagerEntryVisibleUnderMode(createEntry({
+      name: 'note.md',
+      kind: 'file',
+    }), 'supported')).toBe(true)
+    expect(isFileManagerEntryVisibleUnderMode(createEntry({
+      name: 'cover.png',
+      kind: 'file',
+    }), 'supported')).toBe(false)
+    expect(isFileManagerEntryVisibleUnderMode(createEntry({
+      name: 'report.pdf',
+      kind: 'file',
+    }), 'supported')).toBe(false)
+    expect(isFileManagerEntryVisibleUnderMode(createEntry({
+      name: 'archive.bin',
+      kind: 'file',
+    }), 'supported')).toBe(false)
+    expect(isFileManagerEntryVisibleUnderMode(createEntry({
+      name: 'LICENSE',
+      kind: 'file',
+    }), 'supported')).toBe(false)
+  })
+
+  it('all 模式下所有条目（含目录与不受支持类型）都可见', () => {
+    const entryList = [
+      createEntry({ name: 'assets', kind: 'directory' }),
+      createEntry({ name: 'note.md', kind: 'file' }),
+      createEntry({ name: 'cover.png', kind: 'file' }),
+      createEntry({ name: 'report.pdf', kind: 'file' }),
+      createEntry({ name: 'archive.bin', kind: 'file' }),
+      createEntry({ name: 'LICENSE', kind: 'file' }),
+    ]
+
+    expect(entryList.every(entry => isFileManagerEntryVisibleUnderMode(entry, 'all'))).toBe(true)
   })
 
   it('缺失排序配置时应回退到默认 type 升序排序', () => {

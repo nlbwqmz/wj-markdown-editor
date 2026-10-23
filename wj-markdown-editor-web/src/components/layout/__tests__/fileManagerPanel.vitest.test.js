@@ -385,6 +385,7 @@ describe('fileManagerPanel 组件', () => {
     fileManagerPanelState.store.config.fileManagerLeftClickAction = {
       markdown: 'prompt',
     }
+    fileManagerPanelState.store.config.fileManagerVisibleFileMode = 'all'
     fileManagerPanelState.requestFileManagerDirectoryState.mockReset()
     fileManagerPanelState.requestFileManagerOpenDirectory.mockReset()
     fileManagerPanelState.requestFileManagerCreateFolder.mockReset()
@@ -1258,6 +1259,103 @@ describe('fileManagerPanel 组件', () => {
     ].sort())
   })
 
+  it('搜索行左侧应提供显示范围筛选按钮，菜单包含全部文件与仅可打开的文件两项', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    const filterButton = wrapper.get('.file-manager-panel__search').findAllComponents(IconButton).find(component => component.props('icon') === 'i-tabler:filter')
+
+    expect(filterButton).toBeTruthy()
+    // antd Dropdown 不透传 attrs 且菜单懒渲染，按钮标识与菜单项从组件 attrs / props 断言
+    expect(filterButton.vm.$attrs['data-testid']).toBe('file-manager-visible-file-mode')
+    expect(filterButton.props('menuTrigger')).toEqual(['hover'])
+    // 带菜单的按钮不能再叠加 tooltip，否则浮层互相干扰
+    expect(filterButton.props('showTooltip')).toBe(false)
+    expect(filterButton.props('menuList').map(item => item.key)).toEqual(['all', 'supported'])
+
+    const visibleFileModeMenuList = resolveSetupStateBinding(wrapper.vm.$.setupState.visibleFileModeMenuList)
+    expect(visibleFileModeMenuList.map(item => item.key)).toEqual(['all', 'supported'])
+    expect(extractVNodeText(visibleFileModeMenuList[0].label)).toBe('translated:message.fileManagerVisibleFileModeAll')
+    expect(extractVNodeText(visibleFileModeMenuList[1].label)).toBe('translated:message.fileManagerVisibleFileModeSupported')
+    // 当前模式打勾，未选中项用与勾选图标等宽的占位
+    expect(containsVNodeClass(visibleFileModeMenuList[0].label, 'i-tabler:check')).toBe(true)
+    expect(containsVNodeClass(visibleFileModeMenuList[1].label, 'i-tabler:check')).toBe(false)
+    expect(containsVNodeClass(visibleFileModeMenuList[1].label, 'w-[1em]')).toBe(true)
+
+    expect(wrapper.get('.file-manager-panel__search-input input').attributes('placeholder')).toBe('translated:message.fileManagerSearchPlaceholder')
+  })
+
+  it('显示范围为仅支持的文件时，placeholder 切换且列表只渲染目录与 markdown', async () => {
+    fileManagerPanelState.store.config.fileManagerVisibleFileMode = 'supported'
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+        { name: 'cover.png', path: 'D:/docs/cover.png', kind: 'other' },
+        { name: 'report.pdf', path: 'D:/docs/report.pdf', kind: 'other' },
+        { name: 'archive.zip', path: 'D:/docs/archive.zip', kind: 'other' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.get('.file-manager-panel__search-input input').attributes('placeholder')).toBe('translated:message.fileManagerSearchPlaceholderSupported')
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toEqual([
+      'assets',
+      'current.md',
+    ])
+
+    const visibleFileModeMenuList = resolveSetupStateBinding(wrapper.vm.$.setupState.visibleFileModeMenuList)
+    expect(containsVNodeClass(visibleFileModeMenuList[1].label, 'i-tabler:check')).toBe(true)
+  })
+
+  it('通过筛选菜单切换显示范围应持久化配置并立即收敛列表', async () => {
+    fileManagerPanelState.requestFileManagerDirectoryState.mockResolvedValue(createDirectoryState({
+      entryList: [
+        { name: 'assets', path: 'D:/docs/assets', kind: 'directory' },
+        { name: 'current.md', path: 'D:/docs/current.md', kind: 'markdown' },
+        { name: 'cover.png', path: 'D:/docs/cover.png', kind: 'other' },
+      ],
+    }))
+
+    const wrapper = mount(FileManagerPanel)
+    mountedWrapperList.push(wrapper)
+    await flushFileManagerPanel()
+
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toContain('cover.png')
+
+    const supportedMenuItem = resolveSetupStateBinding(wrapper.vm.$.setupState.visibleFileModeMenuList)
+      .find(item => item.key === 'supported')
+    await supportedMenuItem.action()
+    await flushFileManagerPanel()
+
+    expect(fileManagerPanelState.channelSend).toHaveBeenCalledWith({
+      event: 'config.update',
+      data: {
+        operations: [
+          {
+            type: 'set',
+            path: ['fileManagerVisibleFileMode'],
+            value: 'supported',
+          },
+        ],
+      },
+    })
+    expect(fileManagerPanelState.store.config.fileManagerVisibleFileMode).toBe('supported')
+    expect(wrapper.findAll('[data-testid="file-manager-entry-name"]').map(node => node.text())).toEqual([
+      'assets',
+      'current.md',
+    ])
+    expect(wrapper.get('.file-manager-panel__search-input input').attributes('placeholder')).toBe('translated:message.fileManagerSearchPlaceholderSupported')
+  })
+
   it('中英文文案应补齐文件管理栏真实使用到的 key', async () => {
     const zhCN = (await import('@/i18n/zhCN.js')).default
     const enUS = (await import('@/i18n/enUS.js')).default
@@ -1276,6 +1374,10 @@ describe('fileManagerPanel 组件', () => {
     expect(zhCN.message.fileManagerSortModifiedTimeDesc).toBeTruthy()
     expect(zhCN.message.fileManagerSortTypeAsc).toBeTruthy()
     expect(zhCN.message.fileManagerSortTypeDesc).toBeTruthy()
+    expect(zhCN.message.fileManagerVisibleFileMode).toBeTruthy()
+    expect(zhCN.message.fileManagerVisibleFileModeAll).toBeTruthy()
+    expect(zhCN.message.fileManagerVisibleFileModeSupported).toBeTruthy()
+    expect(zhCN.message.fileManagerSearchPlaceholderSupported).toBeTruthy()
     expect(zhCN.message.fileManagerFolderNameRequired).toBeTruthy()
     expect(zhCN.message.fileManagerMarkdownNameRequired).toBeTruthy()
     expect(zhCN.message.fileManagerOpenDirectoryFailed).toBeTruthy()
@@ -1294,6 +1396,10 @@ describe('fileManagerPanel 组件', () => {
     expect(enUS.message.fileManagerSortModifiedTimeDesc).toBeTruthy()
     expect(enUS.message.fileManagerSortTypeAsc).toBeTruthy()
     expect(enUS.message.fileManagerSortTypeDesc).toBeTruthy()
+    expect(enUS.message.fileManagerVisibleFileMode).toBeTruthy()
+    expect(enUS.message.fileManagerVisibleFileModeAll).toBeTruthy()
+    expect(enUS.message.fileManagerVisibleFileModeSupported).toBeTruthy()
+    expect(enUS.message.fileManagerSearchPlaceholderSupported).toBeTruthy()
     expect(enUS.message.fileManagerFolderNameRequired).toBeTruthy()
     expect(enUS.message.fileManagerMarkdownNameRequired).toBeTruthy()
     expect(enUS.message.fileManagerOpenDirectoryFailed).toBeTruthy()

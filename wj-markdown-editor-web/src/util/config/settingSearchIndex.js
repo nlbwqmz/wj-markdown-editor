@@ -48,6 +48,7 @@ const SETTING_SEARCH_ITEM_LIST = [
   // 侧边栏
   { id: 'fileManager.defaultView', sectionId: 'fileManager', labelKey: 'config.fileManager.defaultView', keywords: ['侧边栏', '文件', '大纲', 'sidebar', 'files', 'outline'] },
   { id: 'fileManager.defaultDirectory', sectionId: 'fileManager', labelKey: 'config.fileManager.defaultDirectory', keywords: ['directory', 'folder', '路径', 'path'] },
+  { id: 'fileManager.visibleFileMode', sectionId: 'fileManager', labelKey: 'config.fileManager.visibleFileMode', keywords: ['显示范围', '文件过滤', '只显示支持的', '支持的文件', '过滤', 'visible', 'filter', 'supported', 'all files'] },
   { id: 'fileManager.markdownLeftClickAction', sectionId: 'fileManager', labelKey: 'config.fileManager.markdownLeftClickAction', keywords: ['click', '新窗口', '当前窗口', '提示', 'open'] },
 
   // 视图

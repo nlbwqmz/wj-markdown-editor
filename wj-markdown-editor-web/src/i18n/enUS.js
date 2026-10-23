@@ -253,6 +253,11 @@ export default {
         outline: 'Outline',
       },
       defaultDirectory: 'Default directory',
+      visibleFileMode: 'Visible files',
+      visibleFileModeOption: {
+        all: 'All files',
+        supported: 'Supported files only',
+      },
       markdownLeftClickAction: 'Markdown Left Click Action',
       leftClickActionOption: {
         prompt: 'Prompt',
@@ -465,6 +470,10 @@ export default {
     fileExternalChangeNotificationTitle: 'File content updated',
     fileExternalChangeNotificationBody: 'The file was modified externally and the latest content has been applied automatically.',
     fileManagerSearchPlaceholder: 'Search',
+    fileManagerVisibleFileMode: 'Visible files',
+    fileManagerVisibleFileModeAll: 'All files',
+    fileManagerVisibleFileModeSupported: 'Supported files only',
+    fileManagerSearchPlaceholderSupported: 'Search (supported only)',
     fileManagerNoSearchResults: 'No match found',
     openDroppedFileFailed: 'Failed to open the file. Previous tabs were kept and a blank draft was created.',
   },

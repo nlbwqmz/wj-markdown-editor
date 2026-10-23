@@ -61,6 +61,22 @@ describe('validateConfigMutationRequest', () => {
     })).not.toThrow()
   })
 
+  it('允许顶层平铺的 fileManagerVisibleFileMode 走 set mutation', () => {
+    expect(() => validateConfigMutationRequest({
+      operations: [
+        { type: 'set', path: ['fileManagerVisibleFileMode'], value: 'supported' },
+      ],
+    })).not.toThrow()
+  })
+
+  it('拒绝 fileManagerVisibleFileMode 的子路径写法', () => {
+    expect(() => validateConfigMutationRequest({
+      operations: [
+        { type: 'set', path: ['fileManagerVisibleFileMode', 'x'], value: 'supported' },
+      ],
+    })).toThrow(/未知配置更新路径/)
+  })
+
   it('拒绝未知路径', () => {
     expect(() => validateConfigMutationRequest({
       operations: [

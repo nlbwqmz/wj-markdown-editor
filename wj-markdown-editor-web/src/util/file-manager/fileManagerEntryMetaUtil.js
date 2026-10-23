@@ -210,6 +210,8 @@ const SHEET_EXTENSION_SET = new Set(['xls', 'xlsx', 'csv', 'ods'])
 const ARCHIVE_EXTENSION_SET = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'])
 const AUDIO_EXTENSION_SET = new Set(['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'wma', 'opus'])
 const MARKDOWN_EXTENSION_SET = new Set(['md', 'markdown'])
+// 受支持类型白名单：未来主进程支持新文档类型时同步扩展此处。
+const SUPPORTED_FILE_MANAGER_ENTRY_TYPE_SET = new Set(['markdown'])
 const FILE_MANAGER_SORT_FIELD_SET = new Set(['name', 'modifiedTime', 'type'])
 const FILE_MANAGER_SORT_DIRECTION_SET = new Set(['asc', 'desc'])
 const DEFAULT_FILE_MANAGER_SORT_CONFIG = Object.freeze({
@@ -322,6 +324,37 @@ export function resolveFileManagerEntryType(entry) {
   return 'other'
 }
 
+/**
+ * 判断条目是否属于受支持的文件类型。
+ * 目录与具体扩展名解析结果由 resolveFileManagerEntryType 统一给出，避免调用点各自拼规则。
+ *
+ * @param {object} entry 文件管理栏条目（可含 kind / type / name / path）。
+ * @returns {boolean} 受支持时返回 true。
+ */
+export function isSupportedFileManagerEntry(entry) {
+  return SUPPORTED_FILE_MANAGER_ENTRY_TYPE_SET.has(resolveFileManagerEntryType(entry))
+}
+
+/**
+ * 判断条目在给定「显示范围」下是否可见。
+ * 目录永不过滤；文件类型只在 supported 模式下按受支持白名单收敛，其余模式一律可见。
+ *
+ * @param {object} entry 文件管理栏条目。
+ * @param {'all' | 'supported'} mode 显示范围模式。
+ * @returns {boolean} 可见时返回 true。
+ */
+export function isFileManagerEntryVisibleUnderMode(entry, mode) {
+  if (resolveFileManagerEntryType(entry) === 'directory') {
+    return true
+  }
+
+  if (mode === 'supported') {
+    return isSupportedFileManagerEntry(entry)
+  }
+
+  return true
+}
+
 export function resolveFileManagerEntryTypeWeight(entryOrType) {
   const resolvedType = typeof entryOrType === 'string'
     ? entryOrType
@@ -409,6 +442,8 @@ export function sortFileManagerEntryList(entryList, sortConfig) {
 export default {
   resolveFileManagerEntryExtension,
   resolveFileManagerEntryType,
+  isSupportedFileManagerEntry,
+  isFileManagerEntryVisibleUnderMode,
   resolveFileManagerEntryTypeWeight,
   resolveFileManagerEntryIconProfile,
   sortFileManagerEntryList,

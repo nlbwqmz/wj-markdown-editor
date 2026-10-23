@@ -37,6 +37,36 @@ describe('configSchema', () => {
     })
   })
 
+  it('defaultConfig 必须提供 fileManagerVisibleFileMode 默认值 all', () => {
+    expect(defaultConfig.fileManagerVisibleFileMode).toBe('all')
+  })
+
+  it('config schema 必须接纳 fileManagerVisibleFileMode 的 all / supported', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerVisibleFileMode: 'all',
+    })).not.toThrow()
+
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerVisibleFileMode: 'supported',
+    })).not.toThrow()
+  })
+
+  it('config schema 必须拒绝非法 fileManagerVisibleFileMode', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      fileManagerVisibleFileMode: 'markdown',
+    })).toThrow()
+  })
+
+  it('fileManagerVisibleFileMode 缺失时必须校验失败', () => {
+    const brokenConfig = { ...defaultConfig }
+    delete brokenConfig.fileManagerVisibleFileMode
+
+    expect(() => validateConfigShape(brokenConfig)).toThrow()
+  })
+
   it('defaultConfig 必须提供 fileDefaultDirectory 默认值空字符串', () => {
     expect(defaultConfig.fileDefaultDirectory).toBe('')
   })
