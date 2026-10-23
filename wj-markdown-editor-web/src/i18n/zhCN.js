@@ -415,7 +415,6 @@ export default {
     fileManagerOpenCurrentWindowFailed: '切换当前窗口失败，请重试。',
     fileManagerSourceSessionChanged: '当前文档状态已变化，请重新执行打开操作。',
     fileAlreadyOpenedInOtherWindow: '该文件已在其他窗口打开',
-    fileActivatedExistingTab: '已切换到该标签页',
     fileAlreadyEditingCurrent: '已打开',
     openMarkdownFileFailed: '打开 Markdown 文件失败，请检查文件权限或占用状态。',
     invalidLocalResourceLink: '当前本地资源链接无效，无法定位到对应文件。',

@@ -443,8 +443,6 @@ describe('layoutMenu 文件管理栏接线', () => {
     expect(enUS.message.onlyMarkdownFilesCanBeOpened).toBe('Current file format is not supported.')
     expect(zhCN.message.fileAlreadyOpenedInOtherWindow).toBe('该文件已在其他窗口打开')
     expect(enUS.message.fileAlreadyOpenedInOtherWindow).toBe('The file is already open in another window.')
-    expect(zhCN.message.fileActivatedExistingTab).toBe('已切换到该标签页')
-    expect(enUS.message.fileActivatedExistingTab).toBe('Switched to that tab.')
     expect(zhCN.message.fileAlreadyEditingCurrent).toBe('已打开')
     expect(enUS.message.fileAlreadyEditingCurrent).toBe('Already open.')
     expect(zhCN.message.fileManagerOpenModeTitle).toBeTruthy()

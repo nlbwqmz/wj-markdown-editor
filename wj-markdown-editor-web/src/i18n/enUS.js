@@ -415,7 +415,6 @@ export default {
     fileManagerOpenCurrentWindowFailed: 'Failed to switch the current window. Please try again.',
     fileManagerSourceSessionChanged: 'The current document state has changed. Please try opening the file again.',
     fileAlreadyOpenedInOtherWindow: 'The file is already open in another window.',
-    fileActivatedExistingTab: 'Switched to that tab.',
     fileAlreadyEditingCurrent: 'Already open.',
     openMarkdownFileFailed: 'Failed to open the Markdown file. Please check file permissions or whether it is in use.',
     invalidLocalResourceLink: 'The local resource link is invalid and cannot be resolved to a file.',

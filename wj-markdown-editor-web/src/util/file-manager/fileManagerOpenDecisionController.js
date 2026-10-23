@@ -86,12 +86,12 @@ function resolveResultDecision(result) {
  * 打开结果 → 提示文案。
  *
  * 提示只在“用户发起的打开没有按预期新开”时出现，用一句话说明原因：
- * 命中其它窗口 / 命中本窗口的其它标签 / 就是当前文档。
+ * 命中其它窗口 / 就是当前文档。
+ * 命中本窗口的其它标签不再提示：标签栏高亮本身已经是反馈。
  * 真正新开成功（opened / ready-to-switch）不需要提示，结果本身就是反馈。
  */
 const OPEN_RESULT_MESSAGE_KEY_MAP = {
   'focused-existing-window': 'message.fileAlreadyOpenedInOtherWindow',
-  'activated-existing-tab': 'message.fileActivatedExistingTab',
   'noop-current-file': 'message.fileAlreadyEditingCurrent',
 }
 
