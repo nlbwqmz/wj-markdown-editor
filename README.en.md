@@ -16,15 +16,17 @@ A Markdown writing, preview, export, and asset management tool for Windows and L
 
 </div>
 
-> `wj-markdown-editor` is built with `Electron 39 + Vue 3 + Vite 6` for desktop writing workflows, covering editing, previewing, searching, asset management, exporting, theming, and multi-window document sessions.
+> `wj-markdown-editor` focuses on desktop writing workflows, covering editing, previewing, searching, asset management, exporting, theming, and multi-tab / multi-window document sessions.
 
 ## ✨ Feature Snapshot
 
-- 📝 All-in-one editing, preview, and export workflow for creating, opening, saving, saving copies of, and restoring local Markdown documents.
-- 🗂️ Built-in file manager panel for browsing directories, creating folders, creating Markdown files, and opening files in the current or a new window.
-- 👀 Precise editor-preview sync scrolling, scroll-anchor restore, left/right preview switching, standalone preview mode, and unified search targeting.
+- 📝 All-in-one editing, preview, and export workflow for creating, opening, saving, saving copies of, and tracking recent local Markdown documents.
+- 📑 Multiple document tabs per window with drag reordering, batch close, move-to-new-window, and configurable tab-group restore.
+- 🗂️ Built-in file manager panel for browsing directories, filtering visible files (all / supported only), creating folders, creating Markdown files, and opening files in the current or a new window.
+- 👀 Precise editor-preview sync scrolling, scroll-anchor restore, left/right preview switching, standalone preview mode, and unified search targeting; the settings page provides its own settings search.
 - 🖼️ Complete asset workflow with images, attachments, audio, video, screenshots, image-bed uploads, and preview-side context actions.
 - 🎨 `72` code highlight themes, `8` preview themes, light/dark modes, watermarks, per-area font settings, and export to files or the system clipboard.
+- ⚙️ Settings organized into 6 tabs (General / Appearance / Editor / Shortcuts / Files & Images / Export & Watermark) with search by name, keyword, and shortcut.
 - 🖥️ Desktop-focused capabilities including single-instance lock, `.md` file association, auto-update, system notifications, and external file change handling.
 
 ## 🚀 Features
@@ -32,35 +34,49 @@ A Markdown writing, preview, export, and asset management tool for Windows and L
 ### ✍️ Writing and Editing
 
 - Open, create, save, and save copies of local `Markdown(.md / .markdown)` files
-- Recent files history, recent-file restore, and missing recent-file prompts
+- Recent files history and missing recent-file prompts
+- Configurable tab-group restore on startup: never / on direct launch / always
 - Configurable startup view, with editor or preview as the default landing page
-- Auto-save support (on window blur / on window close)
+- Auto-save support (on window blur / on window close / on tab switch)
+- Per-tab undo history, cursor, and view mode, so tabs do not interfere with each other
+- Closing a dirty tab lets you save and close or close directly; closing a window with multiple dirty tabs shows an aggregated prompt
 - External file change watching with two handling modes: auto-apply latest disk content or review a diff before choosing apply / ignore
-- `32` configurable shortcuts with enable / disable and remapping support
+- `34` configurable shortcuts with enable / disable and remapping support
 - Toolbar insertion for headings, lists, task lists, quotes, code blocks, links, mark text, tables, alerts, containers, images, videos, audio, screenshots, and text colors
-- `/`-triggered auto-completion for headings, tables, code blocks, containers, alerts, media, and more
+- `/`-triggered auto-completion for headings, tables, code blocks, containers, alerts, media, dates/times, task lists, Mermaid charts, text colors, and more, with Chinese / pinyin aliases and grouped command sections
 - In-editor find and replace with case-sensitive, whole-word, and regex modes
 - One-click Markdown formatting with Prettier
 - Typographer toggle
 - Editor enhancement toggles for line numbers, wrapping, matching text highlight, bracket matching, auto close brackets, and association highlight
 
-### 🗂️ Document and File Management
+### 🗂️ Documents, Tabs, and File Management
 
+- Multiple document tabs per window, with unsaved indicators; closing the last tab closes the window
+- Horizontal tab scrolling when there are too many tabs (mouse wheel scrolls horizontally), with the active tab automatically revealed
+- Drag-and-drop tab reordering, persisted and restored on the next launch
+- Tab context menu: close, close others, close to the left, close to the right, move to new window, copy file name, copy path, and reveal in explorer
+- Batch close only closes tabs without unsaved changes; dirty tabs must be handled individually
+- Move a tab to a new window (the undo history is not preserved)
+- Save the tab group when a window closes and restore tab order plus the previously active tab on the next launch; missing files are skipped and listed in a startup dialog
+- Double-clicking a `.md` file or launching through a second instance opens it as a new tab in the most recently active editor window; if it is already open in another window, that window is focused
 - Built-in file manager panel with directory picking, parent-directory navigation, and quick focus on the current file directory
+- Visible file scope: all files / supported files only (folders are always shown)
 - Create folders and Markdown files directly from the file manager
+- Markdown file names automatically get a `.md` suffix
 - Choose to open a file in the current window or a new window from the file manager
-- Decide whether to save before switching files or discard changes and switch directly
+- When opening a new file in the current window, choose to save the current document before switching or discard changes and switch; files already open in the current window switch directly to their tab
 - Single-instance protection to avoid duplicate launches, with window switching when the target file is already open elsewhere
 - `.md` file association and open-by-double-click support
 
 ### 🔎 Preview, Navigation, and Search
 
 - Accurate synchronized scrolling between editor and preview
-- Scroll-anchor restore to return closer to the previous reading position after view switching, reactivation, or session recovery
+- Scroll-anchor restore to return closer to the previous reading position after view switching, tab switching, reactivation, or session recovery
 - Left/right preview position switching in the editor layout
 - Automatic outline extraction and navigation
 - Smooth scrolling for heading anchors, footnotes, and in-document hash links
-- Unified search and highlight targeting in preview, settings, and built-in guide pages
+- Unified search and highlight targeting in preview and built-in guide pages
+- Settings-page search for setting names, keywords, and shortcuts in both languages, with cross-tab results and `Esc` to clear
 - Standalone preview window for presentation and read-only browsing
 - Optional click-to-copy for inline code in preview
 - Code blocks with language labels and one-click copy actions
@@ -94,6 +110,8 @@ A Markdown writing, preview, export, and asset management tool for Windows and L
 
 ### 🎨 Themes, Export, and Personalization
 
+- Settings organized into 6 tabs: General / Appearance / Editor / Shortcuts / Files & Images / Export & Watermark
+- Shortcuts grouped into global shortcuts and editor shortcuts
 - Global light / dark theme switching
 - `72` code highlight themes and `8` preview themes
 - Preview width, font size, and per-area font settings for editor / preview / code / other regions
@@ -107,35 +125,21 @@ A Markdown writing, preview, export, and asset management tool for Windows and L
 
 - Windows and Linux packaging and distribution
 - Automatic update checks for installer builds, with manual replacement for portable builds
+- New window support for side-by-side document viewing
+- Top bar sidebar toggle and source / split / preview button group with shortcut tooltips
 - System notifications for external file changes, even when the window is unfocused
 - System notifications when opening a Markdown file fails, useful for permission or file-locking issues
 - File moved / deleted state awareness, with watch recovery when the original path becomes available again
+- Startup tab-group restore skips missing files and lists them in a dialog
 - Always-on-top window support and quick location of the current file in system explorer
 - Bilingual interface (`zh-CN` / `en-US`)
 - Built-in guide, about page, settings page, and export page windows
 
-## 🛠️ Tech Stack
-
-| Category           | Technology                      |
-| ------------------ | ------------------------------- |
-| Desktop framework  | Electron 39                     |
-| Frontend framework | Vue 3 + Vite 6                  |
-| Editor             | CodeMirror 6                    |
-| Markdown rendering | markdown-it + custom extensions |
-| State management   | Pinia                           |
-| UI library         | Ant Design Vue                  |
-| Styling            | UnoCSS + SCSS                   |
-| Testing            | Node Test + Vitest              |
-
 ## 📸 Screenshots
 
-| Editor                                                                                         | Preview                                                                                            |
-| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| ![Editor](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/edit_done_dKVmHx.png) | ![Preview](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/preview_done_Lu_VHD.png) |
+![Editor](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/edit.png)
 
-| Settings                                                                                            | Guide                                                                                          |
-| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| ![Settings](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/setting_done_mk6OCb.png) | ![Guide](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/guide_done_rhttdX.png) |
+![Preview](https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/preview.png)
 
 ## ⚡ Quick Start
 
@@ -201,6 +205,9 @@ Running the AppImage (`wj-markdown-editor-x86_64-<version>.AppImage`):
 ## 📌 Notes
 
 - Portable builds do not support auto-update and must be replaced manually.
+- Tab-group restore uses the last closed window; multiple windows are not restored at the same time.
+- "Move to new window" does not preserve the original tab's undo history.
+- With "On direct launch" selected, launching by double-clicking a file does not restore the tab group; with "Always", the tab group is restored first and the file is appended as a new tab.
 - Build the Web app before packaging Electron (`make` already includes the full pipeline).
 - Restart the app after installing new system fonts so the font list can refresh.
 - Electron development mode depends on the web dev server running on port `8080`.

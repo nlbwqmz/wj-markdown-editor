@@ -34,11 +34,11 @@ module.exports = async function afterPack(context) {
   <screenshots>
     <screenshot type="default">
       <caption>Editing with live preview</caption>
-      <image>https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/edit_done_dKVmHx.png</image>
+      <image>https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/edit.png</image>
     </screenshot>
     <screenshot>
       <caption>Preview mode</caption>
-      <image>https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/preview_done_Lu_VHD.png</image>
+      <image>https://cdn.jsdelivr.net/gh/nlbwqmz/static-resource@main/image/preview.png</image>
     </screenshot>
   </screenshots>
 
