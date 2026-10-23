@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BrowserWindow, shell } from 'electron'
 import configUtil from '../../data/configUtil.js'
+import { WINDOW_ICON_PATH } from '../appIconUtil.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -19,7 +20,7 @@ export default {
       const globalTheme = configUtil.getConfig()?.theme?.global === 'dark' ? 'dark' : 'light'
       guideWin = new BrowserWindow({
         frame: false,
-        icon: path.resolve(__dirname, '../../../icon/favicon.ico'),
+        icon: WINDOW_ICON_PATH,
         title: '示例',
         width: 1200,
         height: 800,

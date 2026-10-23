@@ -6,6 +6,7 @@ import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import recent from '../../data/recent.js'
 import tabGroup from '../../data/tabGroup.js'
+import { WINDOW_ICON_PATH } from '../appIconUtil.js'
 import sendUtil from '../channel/sendUtil.js'
 import commonUtil from '../commonUtil.js'
 import fileWatchUtil from '../fileWatchUtil.js'
@@ -2862,7 +2863,7 @@ async function createNew(filePath, isRecent = false, options = {}) {
   const globalTheme = configUtil.getConfig()?.theme?.global === 'dark' ? 'dark' : 'light'
   const win = new BrowserWindow({
     frame: false,
-    icon: path.resolve(__dirname, '../../../icon/favicon.ico'),
+    icon: WINDOW_ICON_PATH,
     title: 'wj-markdown-editor',
     // 先隐藏窗口，待首帧渲染完成（ready-to-show）后再显示，避免暗色主题下启动时暴露页面加载期间的白色帧
     show: false,

@@ -10,6 +10,7 @@
   "license": "MIT",
   "homepage": "https://github.com/nlbwqmz/wj-markdown-editor",
   "main": "src/main.js",
+  "desktopName": "wj-markdown-editor",
   "scripts": {
     "start": "cross-env NODE_ENV=dev electron .",
     "static": "electron .",
@@ -47,6 +48,13 @@
       "!installer.nsh",
       "!scripts/**",
       "!icon/1024x1024.png",
+      "!icon/16x16.png",
+      "!icon/24x24.png",
+      "!icon/32x32.png",
+      "!icon/48x48.png",
+      "!icon/64x64.png",
+      "!icon/128x128.png",
+      "!icon/512x512.png",
       "!**/node_modules/luxon/build/{amd,cjs-browser,es6,global}/**",
       "!**/node_modules/luxon/src/**",
       "!**/node_modules/axios/dist/{browser,esm}/**",
@@ -90,6 +98,7 @@
       ]
     },
     "linux": {
+      "syncDesktopName": true,
       "icon": "./icon",
       "category": "Utility",
       "artifactName": "${productName}-${platform}-${arch}-${version}.${ext}",
