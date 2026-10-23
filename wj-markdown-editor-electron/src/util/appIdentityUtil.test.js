@@ -8,20 +8,21 @@ import {
 } from './appIdentityUtil.js'
 
 describe('appIdentityUtil', () => {
-  it('应该在 Windows 开发态沿用统一的应用通知身份', () => {
+  it('应该在 Windows 开发态跳过应用通知身份设置', () => {
+    // electron.exe 抢占正式版 AUMID 会把开发态快捷方式的图标带进正式版任务栏，
+    // 因此未打包运行时必须跳过。
     const setAppUserModelId = vi.fn()
 
     const applied = applyWindowsAppIdentity({
       appApi: {
         setAppUserModelId,
+        isPackaged: false,
       },
       platform: 'win32',
-      isPackaged: false,
     })
 
-    expect(applied).toBe(true)
-    expect(setAppUserModelId).toHaveBeenCalledTimes(1)
-    expect(setAppUserModelId).toHaveBeenCalledWith(WINDOWS_APP_USER_MODEL_ID)
+    expect(applied).toBe(false)
+    expect(setAppUserModelId).not.toHaveBeenCalled()
   })
 
   it('应该在 Windows 安装态沿用统一的应用通知身份', () => {
@@ -30,9 +31,9 @@ describe('appIdentityUtil', () => {
     const applied = applyWindowsAppIdentity({
       appApi: {
         setAppUserModelId,
+        isPackaged: true,
       },
       platform: 'win32',
-      isPackaged: true,
     })
 
     expect(applied).toBe(true)

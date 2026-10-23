@@ -20,6 +20,7 @@
     "test:run": "vitest run"
   },
   "build": {
+    "appId": "com.electron.wj-markdown-editor",
     "publish": {
       "provider": "generic",
       "url": ""
