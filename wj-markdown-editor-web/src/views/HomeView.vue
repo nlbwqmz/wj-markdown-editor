@@ -30,6 +30,7 @@ import { createFileManagerPanelWidthPersistenceController } from '@/util/file-ma
 import shortcutKeyUtil from '@/util/shortcutKeyUtil.js'
 
 const functionShortcutKeyPattern = /^F(?:[1-9]|1[0-2])$/
+const hostHandledShortcutKeySet = new Set(['Ctrl+w', 'Ctrl+PageUp', 'Ctrl+PageDown'])
 const { t } = useI18n()
 const store = useCommonStore()
 const route = useRoute()
@@ -109,6 +110,9 @@ function onKeydown(e) {
     }
     const shortcutKeyId = findShortcutKeyId(shortcutKey)
     if (shortcutKeyId) {
+      if (hostHandledShortcutKeySet.has(shortcutKey)) {
+        e.preventDefault()
+      }
       shortcutKeyUtil.getWebShortcutKeyHandler(shortcutKeyId, true)
     }
   }

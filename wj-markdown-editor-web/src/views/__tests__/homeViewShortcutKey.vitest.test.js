@@ -249,4 +249,64 @@ describe('homeView shortcut key', () => {
 
     wrapper.unmount()
   })
+  it('宿主自带语义的标签快捷键命中后必须阻止宿主默认行为', async () => {
+    mocked.store.config.shortcutKeyList = [
+      {
+        id: 'closeTab',
+        keymap: 'Ctrl+w',
+        enabled: true,
+        type: 'web',
+      },
+      {
+        id: 'nextTab',
+        keymap: 'Ctrl+PageDown',
+        enabled: true,
+        type: 'web',
+      },
+      {
+        id: 'prevTab',
+        keymap: 'Ctrl+PageUp',
+        enabled: true,
+        type: 'web',
+      },
+    ]
+
+    for (const [keymap, id] of [
+      ['Ctrl+w', 'closeTab'],
+      ['Ctrl+PageDown', 'nextTab'],
+      ['Ctrl+PageUp', 'prevTab'],
+    ]) {
+      vi.clearAllMocks()
+      mocked.shortcutKeyUtil.isShortcutKey.mockReturnValue(true)
+      mocked.shortcutKeyUtil.getShortcutKey.mockReturnValue(keymap)
+      const wrapper = mountHomeView()
+
+      const event = dispatchWindowKeydown('KeyW')
+
+      expect(event.defaultPrevented).toBe(true)
+      expect(mocked.shortcutKeyUtil.getWebShortcutKeyHandler).toHaveBeenCalledWith(id, true)
+
+      wrapper.unmount()
+    }
+  })
+
+  it('未命中宿主语义的快捷键不应阻止宿主默认行为', async () => {
+    mocked.store.config.shortcutKeyList = [
+      {
+        id: 'save',
+        keymap: 'Ctrl+s',
+        enabled: true,
+        type: 'web',
+      },
+    ]
+    mocked.shortcutKeyUtil.getShortcutKey.mockReturnValue('Ctrl+s')
+    const wrapper = mountHomeView()
+
+    const event = dispatchWindowKeydown('KeyS')
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(mocked.shortcutKeyUtil.getWebShortcutKeyHandler).toHaveBeenCalledWith('save', true)
+
+    wrapper.unmount()
+  })
 })

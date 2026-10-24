@@ -1,7 +1,10 @@
 import { useCommonStore } from '@/stores/counter.js'
 import channelUtil from '@/util/channel/channelUtil.js'
+import { requestCurrentWindowOpenPreparation } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import { requestDocumentOpenByDialogAndOpen } from '@/util/document-session/documentOpenInteractionService.js'
 import {
+  requestDocumentActivateTab,
+  requestDocumentCloseTab,
   requestDocumentSave,
   requestDocumentSaveCopy,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
@@ -109,6 +112,67 @@ function toggleFileManagerPanelAction() {
   store.sidebarVisible = nextVisible
 }
 
+function readWorkspaceTabs(store) {
+  const snapshot = store.documentSessionSnapshot || null
+  const tabList = Array.isArray(snapshot?.tabs) ? snapshot.tabs : []
+  const sessionIdList = tabList
+    .map(tab => tab?.sessionId)
+    .filter(id => typeof id === 'string' && id !== '')
+
+  return {
+    sessionIdList,
+    activeSessionId: snapshot?.activeSessionId ?? snapshot?.sessionId ?? null,
+  }
+}
+
+async function prepareTabSwitchAutoSave(store) {
+  const autoSaveList = store.config?.autoSave
+  if (!Array.isArray(autoSaveList) || !autoSaveList.includes('switch')) {
+    return true
+  }
+
+  try {
+    const preparation = await requestCurrentWindowOpenPreparation()
+    return preparation?.ok !== false
+  }
+  catch {
+    return false
+  }
+}
+
+let tabActivationQueue = Promise.resolve()
+
+function enqueueTabActivation(task) {
+  const next = tabActivationQueue.then(task, task)
+  tabActivationQueue = next.then(() => {}, () => {})
+  return next
+}
+
+async function activateOffsetTab(offset) {
+  const store = useCommonStore()
+  const { sessionIdList, activeSessionId } = readWorkspaceTabs(store)
+  if (sessionIdList.length < 2) {
+    return
+  }
+
+  const currentIndex = sessionIdList.indexOf(activeSessionId)
+  if (currentIndex < 0) {
+    return
+  }
+
+  const nextIndex = (currentIndex + offset + sessionIdList.length) % sessionIdList.length
+  const autoSaveReady = await prepareTabSwitchAutoSave(store)
+  await requestDocumentActivateTab(sessionIdList[nextIndex], { autoSave: autoSaveReady })
+}
+
+let tabCloseQueue = Promise.resolve()
+
+function enqueueTabClose(task) {
+  const next = tabCloseQueue.then(task, task)
+  tabCloseQueue = next.then(() => {}, () => {})
+  return next
+}
+
 const webShortcutKeyHandler = {
   createNew: () => {
     channelUtil.send({ event: 'create-new' }).then(() => {})
@@ -139,6 +203,22 @@ const webShortcutKeyHandler = {
   },
   setting: () => {
     channelUtil.send({ event: 'open-setting' }).then(() => {})
+  },
+  nextTab: () => {
+    enqueueTabActivation(() => activateOffsetTab(1)).catch(() => {})
+  },
+  prevTab: () => {
+    enqueueTabActivation(() => activateOffsetTab(-1)).catch(() => {})
+  },
+  closeTab: () => {
+    enqueueTabClose(async () => {
+      const store = useCommonStore()
+      const { activeSessionId } = readWorkspaceTabs(store)
+      if (!activeSessionId) {
+        return
+      }
+      await requestDocumentCloseTab(activeSessionId)
+    }).catch(() => {})
   },
   toggleFullScreen: toggleFullScreenAction,
   toggleFileManagerPanel: toggleFileManagerPanelAction,

@@ -121,8 +121,12 @@ describe('configRepairUtil', () => {
     expect(repaired.shortcutKeyList[toggleFullScreenIndex - 3]?.id).toBe('viewSource')
     expect(repaired.shortcutKeyList[toggleFullScreenIndex - 2]?.id).toBe('viewSplit')
     expect(repaired.shortcutKeyList[toggleFullScreenIndex - 1]?.id).toBe('viewPreview')
-    expect(repaired.shortcutKeyList[toggleFullScreenIndex + 1]?.id).toBe('toggleFileManagerPanel')
-    expect(repaired.shortcutKeyList[toggleFileManagerPanelIndex + 1]?.id).toBe('editor-heading-1')
+    expect(toggleFullScreenIndex).toBeLessThan(toggleFileManagerPanelIndex)
+    expect(repaired.shortcutKeyList.map(item => item.id).sort()).toEqual(
+      defaultConfig.shortcutKeyList.map(item => item.id).sort(),
+    )
+    expect(repaired.shortcutKeyList.map(item => item.index))
+      .toEqual([...repaired.shortcutKeyList.map(item => item.index)].sort((a, b) => a - b))
   })
 
   it('shortcutKeyList 含 null 等脏项时不得抛错，未知脏项必须被忽略且默认快捷键仍会补齐', () => {

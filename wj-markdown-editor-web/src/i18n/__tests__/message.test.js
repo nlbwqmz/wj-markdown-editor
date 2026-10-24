@@ -320,3 +320,13 @@ test('中英文文案都应提供预览资源菜单新增标签', () => {
     'Copy Markdown reference',
   )
 })
+
+test('中英文文案都应提供标签页快捷键文案', () => {
+  assert.equal(zhCN.shortcutKey.nextTab, '切换到下一个标签页')
+  assert.equal(zhCN.shortcutKey.prevTab, '切换到上一个标签页')
+  assert.equal(zhCN.shortcutKey.closeTab, '关闭标签页')
+
+  assert.equal(enUS.shortcutKey.nextTab, 'Switch to next tab')
+  assert.equal(enUS.shortcutKey.prevTab, 'Switch to previous tab')
+  assert.equal(enUS.shortcutKey.closeTab, 'Close tab')
+})

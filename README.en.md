@@ -41,7 +41,7 @@ A Markdown writing, preview, export, and asset management tool for Windows and L
 - Per-tab undo history, cursor, and view mode, so tabs do not interfere with each other
 - Closing a dirty tab lets you save and close or close directly; closing a window with multiple dirty tabs shows an aggregated prompt
 - External file change watching with two handling modes: auto-apply latest disk content or review a diff before choosing apply / ignore
-- `34` configurable shortcuts with enable / disable and remapping support
+- `37` configurable shortcuts with enable / disable and remapping support
 - Toolbar insertion for headings, lists, task lists, quotes, code blocks, links, mark text, tables, alerts, containers, images, videos, audio, screenshots, and text colors
 - `/`-triggered auto-completion for headings, tables, code blocks, containers, alerts, media, dates/times, task lists, Mermaid charts, text colors, and more, with Chinese / pinyin aliases and grouped command sections
 - In-editor find and replace with case-sensitive, whole-word, and regex modes
