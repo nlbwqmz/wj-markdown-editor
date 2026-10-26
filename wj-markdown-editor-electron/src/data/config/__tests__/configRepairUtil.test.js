@@ -111,18 +111,25 @@ describe('configRepairUtil', () => {
     const toggleFileManagerPanelShortcutKey = repaired.shortcutKeyList.find(item => item.id === 'toggleFileManagerPanel')
     const defaultToggleFullScreenShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFullScreen')
     const defaultToggleFileManagerPanelShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'toggleFileManagerPanel')
-    const toggleFullScreenIndex = repaired.shortcutKeyList.findIndex(item => item.id === 'toggleFullScreen')
-    const toggleFileManagerPanelIndex = repaired.shortcutKeyList.findIndex(item => item.id === 'toggleFileManagerPanel')
-
     expect(toggleFullScreenShortcutKey).toBeDefined()
     expect(toggleFullScreenShortcutKey).toMatchObject(defaultToggleFullScreenShortcutKey)
     expect(toggleFileManagerPanelShortcutKey).toBeDefined()
     expect(toggleFileManagerPanelShortcutKey).toMatchObject(defaultToggleFileManagerPanelShortcutKey)
-    expect(repaired.shortcutKeyList[toggleFullScreenIndex - 3]?.id).toBe('viewSource')
-    expect(repaired.shortcutKeyList[toggleFullScreenIndex - 2]?.id).toBe('viewSplit')
-    expect(repaired.shortcutKeyList[toggleFullScreenIndex - 1]?.id).toBe('viewPreview')
-    expect(repaired.shortcutKeyList[toggleFullScreenIndex + 1]?.id).toBe('toggleFileManagerPanel')
-    expect(repaired.shortcutKeyList[toggleFileManagerPanelIndex + 1]?.id).toBe('editor-heading-1')
+
+    // 顺序断言不能靠“相邻 id”：任何同 index 的新键插入都会让它失效。
+    // 这里改为断言分组内的相对次序、id 集合完整性、以及 index 单调。
+    const indexOfShortcutKey = id => repaired.shortcutKeyList.findIndex(item => item.id === id)
+
+    expect(indexOfShortcutKey('viewSource')).toBeLessThan(indexOfShortcutKey('viewSplit'))
+    expect(indexOfShortcutKey('viewSplit')).toBeLessThan(indexOfShortcutKey('viewPreview'))
+    expect(indexOfShortcutKey('viewPreview')).toBeLessThan(indexOfShortcutKey('toggleFullScreen'))
+    expect(indexOfShortcutKey('toggleFullScreen')).toBeLessThan(indexOfShortcutKey('toggleFileManagerPanel'))
+
+    expect(repaired.shortcutKeyList.map(item => item.id).sort())
+      .toEqual(defaultConfig.shortcutKeyList.map(item => item.id).sort())
+
+    const repairedIndexList = repaired.shortcutKeyList.map(item => item.index)
+    expect(repairedIndexList).toEqual([...repairedIndexList].sort((a, b) => a - b))
   })
 
   it('旧配置缺失标签页快捷键时必须补齐且默认不带键位，同时不得覆盖用户已配键位', () => {
