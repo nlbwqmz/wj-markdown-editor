@@ -30,6 +30,7 @@ import {
 } from './documentSessionRuntime.js'
 import { deriveDocumentSnapshot } from './documentSnapshotUtil.js'
 import { createExternalWatchBridge } from './externalWatchBridge.js'
+import { createRebindGuard } from './rebindGuardUtil.js'
 import { resolveNextActiveSessionId } from './tabCloseMathUtil.js'
 import { createWindowHostStateStore } from './windowHostStateStore.js'
 
@@ -765,7 +766,7 @@ function createDirectoryWatchRebindFailureResult({
   }
 }
 
-async function rebindDirectoryWatchForSession(windowId, session) {
+async function applyDirectoryWatchRebind(windowId, session) {
   const normalizedWindowId = normalizeWindowId(windowId)
   if (!normalizedWindowId || !session) {
     return null
@@ -833,6 +834,42 @@ async function rebindDirectoryWatchForSession(windowId, session) {
   }
 
   return rebindResult
+}
+
+/**
+ * 目录监听重绑的代次封印（每个窗口一个代次号）。
+ *
+ * 命令的 dispatch 是同步的，所以状态推进不会乱；但重绑是异步 I/O，
+ * 两条改变活动会话的命令重叠时，先发起、后落地的那次会把监听写回旧会话，
+ * 造成「标签已经是 C，侧边栏目录与外部变更监听却还是 B」。
+ */
+const directoryWatchRebindGuard = createRebindGuard()
+
+function getActiveSessionByWindowId(windowId) {
+  const { store } = ensureSessionRuntimeInitialized()
+  return store.getSessionByWindowId?.(windowId) || null
+}
+
+/**
+ * 把窗口的目录监听绑到会话上，并对重叠落地做代次封印。
+ *
+ * 第 2 个参数不传时按当前活动会话处理；所有调用点都传了各自意图的会话，
+ * 封印只在“落地期间又有新请求”时才介入：丢弃本次结果，
+ * 按当前活动会话重放一次，保证最后落地的是最新意图。
+ */
+async function rebindDirectoryWatchForSession(windowId, session = null) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  return await directoryWatchRebindGuard.run({
+    windowId: normalizedWindowId,
+    target: session || getActiveSessionByWindowId(normalizedWindowId),
+    task: targetSession => applyDirectoryWatchRebind(normalizedWindowId, targetSession),
+    resolveLatest: id => getActiveSessionByWindowId(id),
+    isAlive: id => isWindowAlive(getWindowById(id)),
+  })
 }
 
 function stopExternalWatch(windowId, sessionId = null) {
@@ -928,6 +965,8 @@ function finalizeWindowClose(windowId) {
   // 必须在销毁会话 / 注销窗口之前，否则拿不到完整标签列表；
   // 必须同步写，checkWinList() 可能立刻 app.exit()，异步写盘会被截断。
   persistCurrentTabGroupSync(normalizedWindowId)
+  // 窗口没了，代次号也要清，别让 Map 随开关窗口增长。
+  directoryWatchRebindGuard.clear(normalizedWindowId)
 
   const closingSession = getSessionByWindowId(normalizedWindowId)
   setClosedManualRequestCompletions(
