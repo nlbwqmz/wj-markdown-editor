@@ -361,6 +361,34 @@ export default {
       enabled: true,
       type: 'editor',
     },
+    // 标签页快捷键刻意不预置键位：
+    // 1. repairShortcutKeyList 会把新增默认项补进存量配置，预置键位等于给所有老用户
+    //    静默加上立即生效的全局快捷键（其中“关闭标签页”是破坏性动作）
+    // 2. keymap 为空时 HomeView 的 keymap 全等匹配不会命中，等价于“未启用”
+    {
+      index: 11,
+      id: 'switchToNextTab',
+      name: '下一个标签页',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    },
+    {
+      index: 11,
+      id: 'switchToPreviousTab',
+      name: '上一个标签页',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    },
+    {
+      index: 11,
+      id: 'closeTab',
+      name: '关闭标签页',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    },
   ],
   imageBed: {
     uploader: 'github', // 代表当前的默认上传图床为 SM.MS,

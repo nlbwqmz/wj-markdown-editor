@@ -30,6 +30,17 @@ function resetSaveAndCloseRequest() {
   saveAndCloseRequestPromise = null
 }
 
+/**
+ * 声明“取消关闭”：清掉主进程里的关闭意图。
+ *
+ * 弹窗上的“取消”按钮与 Esc 必须走同一条路径：
+ * Esc 默认会直接销毁 antd 弹窗而不做任何决定，主进程的 closeRuntime 会留在原地，
+ * 于是下一次任意快照推送（例如随手敲一个字）都会把这个弹窗重新弹回来。
+ */
+function requestCancelClose() {
+  return channelUtil.send({ event: 'document.cancel-close' }).then(() => {}).catch(() => {})
+}
+
 const closePromptModalController = createClosePromptModalController({
   createModal: config => Modal.confirm(config),
   buildModalConfig(snapshot, { afterClose } = {}) {
@@ -51,6 +62,8 @@ const closePromptModalController = createClosePromptModalController({
       width: 560,
       title: t('prompt'),
       icon: createVNode(ExclamationCircleOutlined),
+      // Esc 等价于“取消”：所有出口都必须经过命令层，不能单方面只关掉弹窗。
+      onCancel: requestCancelClose,
       content: createVNode('div', {}, [
         ...(showFileName
           ? [h('span', { style: { fontWeight: 'bold' } }, snapshot.fileName)]
@@ -59,9 +72,7 @@ const closePromptModalController = createClosePromptModalController({
       ]),
       footer: h('div', { style: { width: '100%', display: 'flex', flexWrap: 'nowrap', justifyContent: 'right', gap: '10px', paddingTop: '10px' } }, [
         h(Button, {
-          onClick: () => {
-            channelUtil.send({ event: 'document.cancel-close' }).then(() => {})
-          },
+          onClick: requestCancelClose,
         }, () => t('cancelText')),
         // 关单个标签时，“打开设置”与本次决策无关，不占按钮位。
         ...(isTabScope

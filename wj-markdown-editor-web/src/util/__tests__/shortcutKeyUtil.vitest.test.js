@@ -35,6 +35,14 @@ vi.mock('@/util/document-session/rendererDocumentCommandUtil.js', () => ({
   requestDocumentSaveCopy: vi.fn(() => Promise.resolve()),
 }))
 
+vi.mock('@/util/document-session/rendererTabCommandService.js', () => ({
+  requestSwitchStep: vi.fn(),
+  requestCloseTab: vi.fn(),
+  activateTabById: vi.fn(() => Promise.resolve(true)),
+  closeTabById: vi.fn(() => Promise.resolve(true)),
+  resolveSwitchAutoSaveReady: vi.fn(() => Promise.resolve(true)),
+}))
+
 const functionKeyCodeList = Array.from({ length: 12 }, (_, index) => `F${index + 1}`)
 
 let shortcutKeyUtil
@@ -151,5 +159,17 @@ describe('shortcutKeyUtil', () => {
 
     expect(mockedStore.setSidebarVisible).toHaveBeenLastCalledWith(true)
     expect(mockedStore.sidebarVisible).toBe(true)
+  })
+
+  it('标签页快捷键必须只表达意图，具体调度交给标签命令服务', async () => {
+    const service = await import('@/util/document-session/rendererTabCommandService.js')
+
+    shortcutKeyUtil.getWebShortcutKeyHandler('switchToNextTab')()
+    shortcutKeyUtil.getWebShortcutKeyHandler('switchToPreviousTab')()
+    shortcutKeyUtil.getWebShortcutKeyHandler('closeTab')()
+
+    expect(service.requestSwitchStep).toHaveBeenNthCalledWith(1, 'next')
+    expect(service.requestSwitchStep).toHaveBeenNthCalledWith(2, 'previous')
+    expect(service.requestCloseTab).toHaveBeenCalledTimes(1)
   })
 })

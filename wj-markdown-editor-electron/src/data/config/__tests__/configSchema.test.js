@@ -118,6 +118,41 @@ describe('configSchema', () => {
     expect(editorHeadingShortcutKey.index).toBe(8)
   })
 
+  it('defaultConfig 必须提供标签页切换与关闭快捷键配置，且默认不预置键位', () => {
+    const switchToNextTabShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'switchToNextTab')
+    const switchToPreviousTabShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'switchToPreviousTab')
+    const closeTabShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'closeTab')
+
+    // 默认键位必须为空：repairShortcutKeyList 会把新增默认项补进存量配置，
+    // 预置键位等于给所有老用户静默加上立即生效的全局快捷键。
+    expect(switchToNextTabShortcutKey).toMatchObject({
+      id: 'switchToNextTab',
+      name: '下一个标签页',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    })
+    expect(switchToPreviousTabShortcutKey).toMatchObject({
+      id: 'switchToPreviousTab',
+      name: '上一个标签页',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    })
+    expect(closeTabShortcutKey).toMatchObject({
+      id: 'closeTab',
+      name: '关闭标签页',
+      keymap: '',
+      enabled: true,
+      type: 'web',
+    })
+
+    // index 必须落在既有分组之外（现有最大值是 editor-focus-line 的 10）
+    expect(switchToNextTabShortcutKey.index).toBe(11)
+    expect(switchToPreviousTabShortcutKey.index).toBe(11)
+    expect(closeTabShortcutKey.index).toBe(11)
+  })
+
   it('defaultConfig 必须提供源码、双栏、预览三种视图切换快捷键配置', () => {
     const viewSourceShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'viewSource')
     const viewSplitShortcutKey = defaultConfig.shortcutKeyList.find(item => item.id === 'viewSplit')

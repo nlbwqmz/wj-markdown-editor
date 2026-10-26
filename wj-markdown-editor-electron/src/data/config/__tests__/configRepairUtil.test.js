@@ -125,6 +125,45 @@ describe('configRepairUtil', () => {
     expect(repaired.shortcutKeyList[toggleFileManagerPanelIndex + 1]?.id).toBe('editor-heading-1')
   })
 
+  it('旧配置缺失标签页快捷键时必须补齐且默认不带键位，同时不得覆盖用户已配键位', () => {
+    const newShortcutKeyIdList = ['switchToNextTab', 'switchToPreviousTab', 'closeTab']
+
+    // 模拟存量配置：没有三项新增快捷键，但用户已把 save 改成自定义键位。
+    const legacyShortcutKeyList = defaultConfig.shortcutKeyList
+      .filter(item => !newShortcutKeyIdList.includes(item.id))
+      .map(item => (item.id === 'save' ? { ...item, keymap: 'Ctrl+Shift+Alt+s' } : item))
+
+    const repaired = repairConfig({ shortcutKeyList: legacyShortcutKeyList }, defaultConfig)
+
+    for (const id of newShortcutKeyIdList) {
+      const repairedShortcutKey = repaired.shortcutKeyList.find(item => item.id === id)
+
+      expect(repairedShortcutKey).toBeDefined()
+      // 补齐后必须是空键位：不能让存量用户升级后凭空多出生效的全局快捷键。
+      expect(repairedShortcutKey.keymap).toBe('')
+      expect(repairedShortcutKey.enabled).toBe(true)
+      expect(repairedShortcutKey.type).toBe('web')
+    }
+
+    expect(repaired.shortcutKeyList.find(item => item.id === 'save').keymap).toBe('Ctrl+Shift+Alt+s')
+
+    // 新增项 index 为 11，必须落在既有最大分组（editor-focus-line，index 10）之后。
+    const focusLineIndex = repaired.shortcutKeyList.findIndex(item => item.id === 'editor-focus-line')
+    const closeTabIndex = repaired.shortcutKeyList.findIndex(item => item.id === 'closeTab')
+
+    expect(closeTabIndex).toBeGreaterThan(focusLineIndex)
+  })
+
+  it('用户已为标签页快捷键配好键位时，repair 必须原样保留', () => {
+    const repaired = repairConfig({
+      shortcutKeyList: defaultConfig.shortcutKeyList.map(item => (
+        item.id === 'closeTab' ? { ...item, keymap: 'Ctrl+Shift+w' } : item
+      )),
+    }, defaultConfig)
+
+    expect(repaired.shortcutKeyList.find(item => item.id === 'closeTab').keymap).toBe('Ctrl+Shift+w')
+  })
+
   it('shortcutKeyList 含 null 等脏项时不得抛错，未知脏项必须被忽略且默认快捷键仍会补齐', () => {
     expect(() => repairConfig({
       shortcutKeyList: [

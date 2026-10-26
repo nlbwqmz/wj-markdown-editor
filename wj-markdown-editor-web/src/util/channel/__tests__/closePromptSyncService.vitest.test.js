@@ -169,6 +169,33 @@ describe('closePromptSyncService', () => {
     expect(requestDocumentSaveAndClose).toHaveBeenCalledTimes(2)
   })
 
+  it('按 Esc（onCancel）必须等价于点“取消”，不能静默关掉弹窗', async () => {
+    const modalInstance = {
+      destroy: vi.fn(),
+      update: vi.fn(),
+    }
+    modalConfirm.mockReturnValue(modalInstance)
+
+    syncClosePromptSnapshot({
+      fileName: 'demo.md',
+      closePrompt: {
+        visible: true,
+        allowForceClose: true,
+      },
+    })
+
+    const modalConfig = modalConfirm.mock.calls[0][0]
+
+    // Esc 默认只会销毁 antd 弹窗，主进程的关闭意图会残留（下次快照推送又弹回来），
+    // 因此必须把 onCancel 接到真正的“取消关闭”命令上。
+    expect(modalConfig.onCancel).toBeTypeOf('function')
+
+    await modalConfig.onCancel()
+
+    expect(channelSend).toHaveBeenCalledTimes(1)
+    expect(channelSend).toHaveBeenCalledWith({ event: 'document.cancel-close' })
+  })
+
   it('关闭弹窗的取消和设置按钮仍应清理关闭意图', async () => {
     const modalInstance = {
       destroy: vi.fn(),

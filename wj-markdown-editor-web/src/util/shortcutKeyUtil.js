@@ -5,6 +5,7 @@ import {
   requestDocumentSave,
   requestDocumentSaveCopy,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
+import { requestCloseTab, requestSwitchStep } from '@/util/document-session/rendererTabCommandService.js'
 import toggleFullScreenAction from '@/util/fullScreenActionUtil.js'
 
 /**
@@ -139,6 +140,17 @@ const webShortcutKeyHandler = {
   },
   setting: () => {
     channelUtil.send({ event: 'open-setting' }).then(() => {})
+  },
+  // 标签页动作全部收口到 rendererTabCommandService：
+  // 那里负责连按合并、单一队列与待决弹窗守卫，这里只表达意图。
+  switchToNextTab: () => {
+    requestSwitchStep('next')
+  },
+  switchToPreviousTab: () => {
+    requestSwitchStep('previous')
+  },
+  closeTab: () => {
+    requestCloseTab()
   },
   toggleFullScreen: toggleFullScreenAction,
   toggleFileManagerPanel: toggleFileManagerPanelAction,
