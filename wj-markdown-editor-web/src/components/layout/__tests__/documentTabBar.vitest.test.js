@@ -392,7 +392,7 @@ describe('documentTabBar 右键菜单', () => {
     const secondMenu = wrapper.findAllComponents({ name: 'AMenu' })[1]
     await secondMenu.vm.$emit('click', { key: 'close' })
 
-    expect(requestDocumentCloseTab).toHaveBeenCalledWith('session-2')
+    expect(requestDocumentCloseTab).toHaveBeenCalledWith('session-2', { autoSave: true })
 
     wrapper.unmount()
   })

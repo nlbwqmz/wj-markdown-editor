@@ -117,6 +117,14 @@ describe('validateConfigMutationRequest', () => {
     })).not.toThrow()
   })
 
+  it('必须接受 close-tab（关闭标签页时）作为合法自动保存选项', () => {
+    expect(() => validateConfigMutationRequest({
+      operations: [
+        { type: 'setAutoSaveOption', option: 'close-tab', enabled: true },
+      ],
+    })).not.toThrow()
+  })
+
   it('拒绝未知操作类型', () => {
     expect(() => validateConfigMutationRequest({
       operations: [

@@ -96,6 +96,28 @@ export async function resolveSwitchAutoSaveReady() {
 }
 
 /**
+ * 判断本次关闭是否需要先收敛正文，返回值为 requestDocumentCloseTab 的 autoSave 参数。
+ *
+ * 与切换同源：主进程“关闭标签页时”自动保存写的也是它手上的 session 正文，
+ * 不先 flush 就会把最后一次输入之前的旧版本写盘并标记成已保存。
+ * 收敛失败时返回 false：宁可退回未保存确认，也不能拿旧内容写盘。
+ */
+export async function resolveCloseAutoSaveReady() {
+  const autoSaveList = useCommonStore().config?.autoSave
+  if (!Array.isArray(autoSaveList) || !autoSaveList.includes('close-tab')) {
+    return true
+  }
+
+  try {
+    const preparation = await requestCurrentWindowOpenPreparation()
+    return preparation?.ok !== false
+  }
+  catch {
+    return false
+  }
+}
+
+/**
  * 切换到指定标签页（原语，不排队）。
  *
  * @param {string} sessionId
@@ -133,6 +155,10 @@ export async function activateTabById(sessionId) {
  *
  * 脏标签由主进程进入确认流程，renderer 不做脏判断。
  *
+ * 关闭前同样要收敛正文：只有活动标签的正文还在编辑器里，
+ * 但收敛动作对后台标签是幂等的（把当前编辑器正文同步进主进程），
+ * 所以这里不区分活动/后台，一律按「关闭标签页时」开关决定。
+ *
  * @param {string} sessionId
  * @returns {Promise<boolean>} 命令是否被接受（关闭是否真正完成由主进程决定）
  */
@@ -141,8 +167,10 @@ export async function closeTabById(sessionId) {
     return false
   }
 
+  const autoSave = await resolveCloseAutoSaveReady()
+
   try {
-    await requestDocumentCloseTab(sessionId)
+    await requestDocumentCloseTab(sessionId, { autoSave })
     // close 的销毁发生在主进程 effect 之后，命令回包仍是销毁前的快照，
     // 所以这里只能作废基线，不能拿回包当下一步的起点。
     lastActivateBaseline = null
@@ -302,6 +330,7 @@ export function requestCloseTab() {
 
 export default {
   resolveSwitchAutoSaveReady,
+  resolveCloseAutoSaveReady,
   activateTabById,
   closeTabById,
   requestSwitchStep,

@@ -292,6 +292,16 @@ describe('configLoadSanitizer', () => {
     expect(sanitized.autoSave).toEqual(['blur', 'switch'])
   })
 
+  it('autoSave 必须保留 close-tab（关闭标签页时）', () => {
+    // 勾选后重启仍生效的前提：读盘清洗必须认这个新枚举值，不能把它当非法项丢掉。
+    const sanitized = sanitizeLoadedConfig({
+      ...cloneConfig(defaultConfig),
+      autoSave: ['close-tab', 'oops'],
+    }, defaultConfig, configSchema)
+
+    expect(sanitized.autoSave).toEqual(['close-tab'])
+  })
+
   it('watermark.gap 固定长度数组中的非法项必须按同下标默认值修复', () => {
     const sanitized = sanitizeLoadedConfig({
       ...cloneConfig(defaultConfig),

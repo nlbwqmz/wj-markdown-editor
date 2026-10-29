@@ -355,14 +355,38 @@ export function createDocumentCommandService({
             })
           }
 
-          // 关标签故意不做“关闭自动保存”：
-          // 关掉一个后台标签时静默写盘比弹一次确认更危险，
-          // 所以脏标签一律走确认弹窗，由用户选“保存并关闭”或“直接关闭”。
           targetSession.closeRuntime.intent = 'close-tab'
           targetSession.closeRuntime.promptReason = 'unsaved-changes'
           targetSession.closeRuntime.forceClose = false
           targetSession.closeRuntime.awaitingPathSelection = false
           targetSession.closeRuntime.waitingSaveJobId = null
+
+          // 勾选了「关闭标签页时」才走自动保存：关掉一个后台标签时静默写盘比弹一次确认更危险，
+          // 所以这是显式开关（默认关），未勾选时脏标签仍然一律走确认弹窗。
+          //
+          // payload.autoSave === false 表示渲染层没能把挂起正文同步进主进程，
+          // 这时必须退回确认弹窗：宁可多问一次，也不能拿旧内容写盘并伪装成“已自动保存”。
+          if (payload?.autoSave !== false && canAutoSave(config, 'close-tab')) {
+            const saveRequested = saveCoordinator.requestSave(targetSession, {
+              trigger: 'close-tab-auto-save',
+            })
+            // 未命名草稿必须先补保存路径：这里记住“正在等选路径”，
+            // 后续 dialog.save-target-selected / cancelled 才能继续或回退这条关标签链路。
+            if (targetSession.saveRuntime.status === 'awaiting-path-selection'
+              && !targetSession.documentSource.path) {
+              targetSession.closeRuntime.awaitingPathSelection = true
+            }
+            if (targetSession.saveRuntime.inFlightJobId) {
+              targetSession.closeRuntime.awaitingPathSelection = false
+              targetSession.closeRuntime.waitingSaveJobId = targetSession.saveRuntime.inFlightJobId
+            }
+            // 自动保存成功即关标签，中途不再弹确认：
+            // intent 保持 close-tab，saveCoordinator 会在 save.succeeded 时产出 close-tab effect。
+            targetSession.closeRuntime.promptReason = null
+            effects.push(...saveRequested.effects)
+            break
+          }
+
           effects.push({
             type: 'show-unsaved-prompt',
           })
@@ -580,7 +604,10 @@ export function createDocumentCommandService({
         })
         // 如果当前仍处于关闭链路，并且 resolve 后已经生成 in-flight 保存任务，
         // 就继续让关闭流程等待这次保存完成。
-        if (session.closeRuntime.intent === 'close' && session.saveRuntime.inFlightJobId) {
+        // 关标签链路（intent = close-tab）与关窗口链路一样要把关标签挂在保存任务后面，
+        // 否则草稿选完路径保存成功后标签会一直留着不关。
+        if ((session.closeRuntime.intent === 'close' || session.closeRuntime.intent === 'close-tab')
+          && session.saveRuntime.inFlightJobId) {
           session.closeRuntime.waitingSaveJobId = session.saveRuntime.inFlightJobId
         }
         effects.push(...saveRequested.effects)
@@ -591,9 +618,22 @@ export function createDocumentCommandService({
         {
           // 记录取消前是否处于“关闭触发的首次保存选路径”阶段。
           // 这个分支与普通手动保存取消不同，需要直接终止整个关闭链路。
-          const wasCloseFirstSave = session.closeRuntime.intent === 'close'
+          const closeIntent = session.closeRuntime.intent
+          const wasCloseFirstSave = (closeIntent === 'close' || closeIntent === 'close-tab')
             && session.closeRuntime.awaitingPathSelection === true
           effects.push(...saveCoordinator.cancelPendingSaveTarget(session).effects)
+          if (wasCloseFirstSave && closeIntent === 'close-tab') {
+            // 关标签链路里取消选路径不能把草稿丢掉：
+            // 这里退回标签作用域的未保存确认，由用户再选“保存并关闭”或直接放弃，
+            // 而不是像关窗口那样整条关闭链路作废（关窗口作废后窗口还在，关标签作废会让标签悄悄留下）。
+            session.closeRuntime.promptReason = 'unsaved-changes'
+            session.closeRuntime.awaitingPathSelection = false
+            session.closeRuntime.waitingSaveJobId = null
+            effects.push({
+              type: 'show-unsaved-prompt',
+            })
+            break
+          }
           if (wasCloseFirstSave) {
             // 关闭链路里的“首次保存选路径”属于 close-auto-save 的前置步骤。
             // 设计明确要求：如果用户在这里取消，表示整个关闭请求被取消，

@@ -49,12 +49,12 @@ export function setConfigDraftValueByPath(draftConfig, path, value) {
  *
  * @param {unknown} previousAutoSave
  * @param {unknown} nextAutoSave
- * @returns {Array<{ type: 'setAutoSaveOption', option: 'blur' | 'close' | 'switch', enabled: boolean }>} 返回按 blur / close / switch 差异生成的 mutation 列表。
+ * @returns {Array<{ type: 'setAutoSaveOption', option: 'blur' | 'close' | 'switch' | 'close-tab', enabled: boolean }>} 返回按 blur / close / switch / close-tab 差异生成的 mutation 列表。
  */
 export function createAutoSaveOptionMutationOperations(previousAutoSave, nextAutoSave) {
   const previousSet = new Set(Array.isArray(previousAutoSave) ? previousAutoSave : [])
   const nextSet = new Set(Array.isArray(nextAutoSave) ? nextAutoSave : [])
-  const optionList = ['blur', 'close', 'switch']
+  const optionList = ['blur', 'close', 'switch', 'close-tab']
 
   return optionList.flatMap((option) => {
     const previousEnabled = previousSet.has(option)

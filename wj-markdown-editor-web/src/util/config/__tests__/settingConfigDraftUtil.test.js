@@ -55,6 +55,26 @@ test('autoSave 集合变更必须覆盖 switch（切换标签时）选项', () =
   )
 })
 
+test('autoSave 集合变更必须覆盖 close-tab（关闭标签页时）选项', () => {
+  const { createAutoSaveOptionMutationOperations } = requireSettingConfigDraftUtil()
+
+  // 遗漏 close-tab 时这里会返回空数组，
+  // 设置页会把本次变更当成“无需提交”直接跳过，表现为勾选框点不动。
+  assert.deepEqual(
+    createAutoSaveOptionMutationOperations(['blur'], ['blur', 'close-tab']),
+    [{ type: 'setAutoSaveOption', option: 'close-tab', enabled: true }],
+  )
+  assert.deepEqual(
+    createAutoSaveOptionMutationOperations(['blur', 'close-tab'], ['blur']),
+    [{ type: 'setAutoSaveOption', option: 'close-tab', enabled: false }],
+  )
+  // 关标签与关窗口是两个独立开关，勾选其中一个不得影响另一个。
+  assert.deepEqual(
+    createAutoSaveOptionMutationOperations(['close'], ['close', 'close-tab']),
+    [{ type: 'setAutoSaveOption', option: 'close-tab', enabled: true }],
+  )
+})
+
 test('目录选择取消时不应覆盖本地字符串配置字段', () => {
   const { applySelectableStringField } = requireSettingConfigDraftUtil()
   const draftConfig = {

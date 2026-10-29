@@ -103,6 +103,26 @@ describe('settingConfigMutationController', () => {
     expect(context.getDraftConfig().autoSave).toEqual(['blur', 'switch'])
   })
 
+  it('autoSave 集合新增 close-tab（关闭标签页时）时必须真正提交 mutation 并立即应用乐观值', async () => {
+    const context = createControllerTestContext()
+
+    const result = await context.controller.submitAutoSaveListChange(['blur'], ['blur', 'close-tab'])
+
+    // 与主进程两处枚举或 optionList 任一处漏改时，这里会退化成 skipped: true，
+    // 设置页表现为“勾选框点不动”。
+    expect(result.skipped).toBeUndefined()
+    expect(context.sendMutationRequest).toHaveBeenCalledWith({
+      operations: [
+        {
+          type: 'setAutoSaveOption',
+          option: 'close-tab',
+          enabled: true,
+        },
+      ],
+    })
+    expect(context.getDraftConfig().autoSave).toEqual(['blur', 'close-tab'])
+  })
+
   it('快捷键字段更新必须通过 setShortcutKeyField mutation 提交', async () => {
     const context = createControllerTestContext()
 
@@ -300,6 +320,34 @@ describe('settingConfigMutationController', () => {
       },
     })
     await secondSubmitPromise
+  })
+
+  it('取消勾选 close-tab 后，仍带着 close-tab 的旧 store 广播不得把本地集合覆盖回去', async () => {
+    const context = createControllerTestContext()
+    const deferred = createDeferred()
+    context.sendMutationRequest.mockImplementationOnce(() => deferred.promise)
+
+    // 先勾上 close-tab，再取消：本地集合回到 ['blur']
+    const submitPromise = context.controller.submitAutoSaveListChange(['blur', 'close-tab'], ['blur'])
+    expect(context.getDraftConfig().autoSave).toEqual(['blur'])
+
+    // 主进程广播的还是旧值（仍带 close-tab）：归一化比较必须能看出差异，
+    // 否则这次取消会被静默吞掉，表现为“勾选框取消后又自己勾回来”。
+    context.storeConfig.autoSave = ['blur', 'close-tab']
+    context.controller.syncStoreConfig(context.storeConfig)
+
+    expect(context.getDraftConfig().autoSave).toEqual(['blur'])
+
+    deferred.resolve({
+      ok: true,
+      config: {
+        ...cloneValue(defaultConfig),
+        autoSave: ['blur'],
+      },
+    })
+    await submitPromise
+
+    expect(context.getDraftConfig().autoSave).toEqual(['blur'])
   })
 
   it('快捷键连续更新时，旧 store 广播不得覆盖较新的本地字段', async () => {

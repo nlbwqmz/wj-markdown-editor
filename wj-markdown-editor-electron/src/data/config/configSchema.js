@@ -251,7 +251,7 @@ export const configSchema = {
       type: 'array',
       // 可选值必须与 `configMutationSchema.AUTO_SAVE_OPTION_SET` 保持一致，
       // 否则设置页勾选后会被当成非法值过滤掉，表现为“点了没反应”。
-      items: { enum: ['blur', 'close', 'switch'] },
+      items: { enum: ['blur', 'close', 'switch', 'close-tab'] },
     },
     sidebarDefaultView: { enum: ['close', 'files', 'outline'] },
     sidebarWidth: { type: 'number', minimum: 220, maximum: 420 },

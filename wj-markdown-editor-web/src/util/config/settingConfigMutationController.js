@@ -8,7 +8,7 @@ import {
 
 // 必须与 `settingConfigDraftUtil.createAutoSaveOptionMutationOperations`
 // 和主进程配置 schema 的枚举保持一致，否则 overlay 比较会把新增选项当成不存在。
-const AUTO_SAVE_OPTION_ORDER = ['blur', 'close', 'switch']
+const AUTO_SAVE_OPTION_ORDER = ['blur', 'close', 'switch', 'close-tab']
 
 function createShortcutKeyFieldRequest(id, field, value) {
   return {

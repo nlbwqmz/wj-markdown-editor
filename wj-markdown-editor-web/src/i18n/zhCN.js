@@ -214,6 +214,8 @@ export default {
         onWindowBlur: '窗口失焦时',
         onWindowClose: '窗口关闭时',
         onTabSwitch: '切换标签时',
+        onTabClose: '关闭标签页时',
+        onTabCloseTip: '「关闭标签页时」会直接落盘（文件已被外部删除时会重新写回），不再逐个确认',
       },
       externalFileChangeStrategyOption: {
         apply: '直接应用',

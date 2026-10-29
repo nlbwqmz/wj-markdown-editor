@@ -68,7 +68,17 @@ const autoSaveOptionList = computed(() => [
     label: t('config.general.autoSaveOption.onTabSwitch'),
     value: 'switch',
   },
+  {
+    label: t('config.general.autoSaveOption.onTabClose'),
+    value: 'close-tab',
+  },
 ])
+
+// 「关闭标签页时」是否开启。
+// 开启后关脏标签会静默落盘（不再逐个确认），所以提示里必须把这件事说清楚。
+const isTabCloseAutoSaveEnabled = computed(() => {
+  return Array.isArray(config.value?.autoSave) && config.value.autoSave.includes('close-tab')
+})
 
 const externalFileChangeStrategyOptionList = computed(() => [
   {
@@ -617,7 +627,7 @@ function reset() {
             </template>
           </a-input>
         </div>
-        <div class="wj-scrollbar setting-tabs__list">
+        <div class="setting-tabs__list wj-scrollbar">
           <div class="setting-tabs__inner" role="tablist" aria-orientation="vertical" :class="{ 'is-ready': tabIndicatorReady }">
             <div class="setting-tabs__indicator" :style="tabIndicatorStyle" aria-hidden="true" />
             <button
@@ -724,6 +734,10 @@ function reset() {
                   <a-tooltip placement="top" color="#1677ff" class="flex-shrink-0">
                     <template #title>
                       {{ $t('config.general.autoSaveOption.tip') }}
+                      <template v-if="isTabCloseAutoSaveEnabled">
+                        <br>
+                        {{ $t('config.general.autoSaveOption.onTabCloseTip') }}
+                      </template>
                     </template>
                     <div class="i-tabler:info-circle font-size-4 op-50 hover:op-100" />
                   </a-tooltip>

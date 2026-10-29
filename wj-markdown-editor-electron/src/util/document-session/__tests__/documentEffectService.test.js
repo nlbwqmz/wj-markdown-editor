@@ -14,7 +14,7 @@ function createDeferred() {
   }
 }
 
-async function createServiceContext() {
+async function createServiceContext(language = 'zh-CN') {
   const dialogApi = {
     showOpenDialogSync: vi.fn(),
   }
@@ -48,7 +48,7 @@ async function createServiceContext() {
     notificationApi,
     createSystemNotification: showMock,
     // 语言偏好必须显式声明，避免测试环境无系统 locale 时回退到英文文案
-    getConfig: () => ({ language: 'zh-CN' }),
+    getConfig: () => ({ language }),
   })
 
   return {
@@ -1481,5 +1481,62 @@ describe('documentEffectService', () => {
     })
     expect(dispatchCommand.mock.calls.filter(call => call[0] === 'watch.rebind-failed')).toHaveLength(1)
     expect(dispatchCommand.mock.calls.some(call => call[0] === 'watch.bound')).toBe(false)
+  })
+
+  it('notify-save-failed 命中 close-tab-auto-save 时必须按自动保存文案提示', async () => {
+    const { service } = await createServiceContext()
+    const showSaveFailedMessage = vi.fn()
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-save-failed',
+        trigger: 'close-tab-auto-save',
+        error: { name: 'Error', message: '磁盘不可写' },
+      },
+      showSaveFailedMessage,
+    })
+
+    expect(showSaveFailedMessage).toHaveBeenCalledWith({
+      type: 'error',
+      content: '自动保存失败。 磁盘不可写',
+    })
+  })
+
+  it('notify-save-failed 命中手动保存时仍必须提示保存失败，不能被自动保存文案吞掉', async () => {
+    const { service } = await createServiceContext()
+    const showSaveFailedMessage = vi.fn()
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-save-failed',
+        trigger: 'manual-save',
+        error: { name: 'Error', message: '磁盘不可写' },
+      },
+      showSaveFailedMessage,
+    })
+
+    expect(showSaveFailedMessage).toHaveBeenCalledWith({
+      type: 'error',
+      content: '保存失败。 磁盘不可写',
+    })
+  })
+
+  it('notify-save-failed 在英文界面下必须给出对应的自动保存失败文案', async () => {
+    const { service } = await createServiceContext('en-US')
+    const showSaveFailedMessage = vi.fn()
+
+    await service.applyEffect({
+      effect: {
+        type: 'notify-save-failed',
+        trigger: 'close-tab-auto-save',
+        error: { name: 'Error', message: 'disk is read-only' },
+      },
+      showSaveFailedMessage,
+    })
+
+    expect(showSaveFailedMessage).toHaveBeenCalledWith({
+      type: 'error',
+      content: 'Auto save failed. disk is read-only',
+    })
   })
 })

@@ -383,6 +383,7 @@ export function createDocumentEffectService({
       : ''
     const isAutoSave = trigger === 'blur-auto-save'
       || trigger === 'close-auto-save'
+      || trigger === 'close-tab-auto-save'
       || trigger === 'switch-auto-save'
     if (getLanguage(getConfig) === 'en-US') {
       return isAutoSave ? `Auto save failed.${errorDetail}` : `Save failed.${errorDetail}`

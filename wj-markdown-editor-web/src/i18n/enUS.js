@@ -214,6 +214,8 @@ export default {
         onWindowBlur: 'On window blur',
         onWindowClose: 'On window close',
         onTabSwitch: 'On tab switch',
+        onTabClose: 'On tab close',
+        onTabCloseTip: '"On tab close" writes to disk directly (and recreates the file if it was deleted externally), without asking tab by tab',
       },
       externalFileChangeStrategyOption: {
         apply: 'Apply directly',
