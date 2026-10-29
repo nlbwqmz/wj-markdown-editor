@@ -972,3 +972,104 @@ describe('documentTabBar 活动标签自动滚动', () => {
     wrapper.unmount()
   })
 })
+
+describe('documentTabBar 文件被外部删除的标签', () => {
+  /**
+   * 用给定标签列表挂载标签栏。
+   *
+   * 用例只关心删除线语义，所以直接替换 store 里的 tabs，
+   * 不走主进程广播。
+   */
+  function mountWithTabs(tabList) {
+    store.documentSessionSnapshot.tabs = tabList
+    return mountTabBar()
+  }
+
+  it('文件被外部删除的标签必须加删除线并弱化文字，同时给出说明文案', () => {
+    const wrapper = mountWithTabs([
+      { sessionId: 'session-1', fileName: 'gone.md', displayPath: 'D:/docs/gone.md', dirty: true, exists: false },
+    ])
+
+    const tab = wrapper.get('[data-testid="document-tab-session-1"]')
+    expect(tab.attributes('data-missing')).toBe('true')
+    expect(tab.attributes('title')).toBe('documentTab.fileMissing')
+
+    const label = wrapper.get('.document-tab__label')
+    expect(label.classes()).toContain('line-through')
+    expect(label.classes()).toContain('opacity-60')
+
+    wrapper.unmount()
+  })
+
+  it('文件仍然存在时不得加删除线，也不得挂说明文案', () => {
+    const wrapper = mountWithTabs([
+      { sessionId: 'session-1', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: false, exists: true },
+    ])
+
+    const tab = wrapper.get('[data-testid="document-tab-session-1"]')
+    expect(tab.attributes('data-missing')).toBe('false')
+    expect(tab.attributes('title')).toBeUndefined()
+    expect(wrapper.get('.document-tab__label').classes()).not.toContain('line-through')
+
+    wrapper.unmount()
+  })
+
+  it('未命名草稿没有磁盘文件，不得被判成“文件已被删除”', () => {
+    const wrapper = mountWithTabs([
+      { sessionId: 'session-1', fileName: 'Untitled', displayPath: null, dirty: true, exists: false },
+    ])
+
+    expect(wrapper.get('[data-testid="document-tab-session-1"]').attributes('data-missing')).toBe('false')
+    expect(wrapper.get('.document-tab__label').classes()).not.toContain('line-through')
+
+    wrapper.unmount()
+  })
+
+  it('recent-missing 标签走另一套展示语义，不得叠加删除线', () => {
+    const wrapper = mountWithTabs([
+      {
+        sessionId: 'session-1',
+        fileName: 'Untitled',
+        displayPath: 'C:/docs/missing.md',
+        dirty: false,
+        exists: false,
+        isRecentMissing: true,
+      },
+    ])
+
+    expect(wrapper.get('[data-testid="document-tab-session-1"]').attributes('data-missing')).toBe('false')
+    expect(wrapper.get('.document-tab__label').classes()).not.toContain('line-through')
+
+    wrapper.unmount()
+  })
+
+  it('主进程未下发 exists 时（老版本快照）不得把所有标签都打成删除线', () => {
+    const wrapper = mountWithTabs([
+      { sessionId: 'session-1', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: false },
+    ])
+
+    expect(wrapper.get('[data-testid="document-tab-session-1"]').attributes('data-missing')).toBe('false')
+
+    wrapper.unmount()
+  })
+
+  it('同一个标签上的删除线必须能随快照收敛：文件恢复后立刻去掉', async () => {
+    const wrapper = mountWithTabs([
+      { sessionId: 'session-1', fileName: 'gone.md', displayPath: 'D:/docs/gone.md', dirty: true, exists: false },
+    ])
+
+    expect(wrapper.get('[data-testid="document-tab-session-1"]').attributes('data-missing')).toBe('true')
+
+    // 主进程回推恢复后的快照：同一个 sessionId，exists 回到 true
+    store.documentSessionSnapshot.tabs = [
+      { sessionId: 'session-1', fileName: 'gone.md', displayPath: 'D:/docs/gone.md', dirty: false, exists: true },
+    ]
+    await nextTick()
+
+    const tab = wrapper.get('[data-testid="document-tab-session-1"]')
+    expect(tab.attributes('data-missing')).toBe('false')
+    expect(wrapper.get('.document-tab__label').classes()).not.toContain('line-through')
+
+    wrapper.unmount()
+  })
+})

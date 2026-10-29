@@ -175,6 +175,11 @@ export function deriveDocumentTabSnapshot(session) {
     fileName: snapshot.fileName,
     displayPath: snapshot.displayPath,
     dirty: snapshot.dirty,
+    // 标签对应文件在磁盘上是否仍然存在。
+    // 文件被外部删除/移动后这里是 false，渲染层据此给标签加删除线。
+    // 注意未命名草稿同样是 false：草稿本来就没有磁盘文件，
+    // 渲染层必须再用 displayPath 是否为空区分“草稿”与“文件被删”，不能只看这个字段。
+    exists: snapshot.exists,
     isRecentMissing: snapshot.isRecentMissing,
   }
 }

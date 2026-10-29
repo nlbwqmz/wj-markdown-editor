@@ -65,6 +65,7 @@ export default {
     copyPath: 'Copy path',
     revealInExplorer: 'Show in explorer',
     reorderFailed: 'Failed to reorder tabs',
+    fileMissing: 'File deleted or moved',
   },
   previewAssetMenu: {
     copyAbsolutePath: 'Copy absolute path',

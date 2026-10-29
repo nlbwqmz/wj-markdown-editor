@@ -111,6 +111,10 @@ function normalizeTabList(tabs) {
         fileName: typeof tab.fileName === 'string' && tab.fileName ? tab.fileName : 'Untitled',
         displayPath: tab.displayPath ?? null,
         dirty: tab.dirty === true,
+        // 文件是否仍存在于磁盘：false 时渲染层给标签加“已被外部删除/移动”的删除线。
+        // 字段缺失时按 true 处理：老主进程不下发这个字段，
+        // 缺失不能解释成“文件已被删除”，否则升级过渡期里所有标签都会被误打成删除线。
+        exists: tab.exists == null ? true : tab.exists === true,
         isRecentMissing: tab.isRecentMissing === true,
       }
     })

@@ -60,6 +60,8 @@ import { useOverlayScrollbar } from '@/util/useOverlayScrollbar.js'
  * 状态规则：
  * - 脏点只要有就一直显示，没有任何 hover 规则去隐藏它
  * - 关闭按钮只在 hover 时显示；槽位恒定，显隐不产生任何位移
+ * - 文件被外部删除/移动时，文件名加删除线并弱化对比度；
+ *   未命名草稿与 recent-missing 不属于这种状态，不加删除线
  *
  * 标签栏自己不画底边框：下方区域在两种视图模式下都已经有一条同位置的顶边框
  * （源码/分栏是 EditorToolbar 的 border-t，纯预览是布局元素的 b-t），
@@ -194,6 +196,49 @@ function getTabLabel(tab) {
 
 function isActiveTab(tab) {
   return Boolean(tab) && tab.sessionId === activeSessionId.value
+}
+
+/**
+ * 标签指向的文件是否已经不在磁盘上（被外部删除或移动）。
+ *
+ * 三个条件缺一不可：
+ * 1. `exists === false`：主进程下发的存在性；字段缺失不能当成“被删”
+ *    （老主进程不下发这个字段，见 `normalizeTabList` 的兜底）
+ * 2. 有正式路径：未命名草稿根本没有磁盘文件，`exists` 天然是 false，不能加删除线
+ * 3. 不是 recent-missing：那是“最近文件记录失效”的另一套展示语义，保持原样
+ */
+function isMissingFileTab(tab) {
+  return tab?.exists === false
+    && Boolean(tab?.displayPath)
+    && tab?.isRecentMissing !== true
+}
+
+/**
+ * 文件名的视觉状态类。
+ *
+ * 文件已被外部删除/移动时给文件名加删除线并弱化对比度，与 VS Code 对齐：
+ * 用户要能一眼看出“这个标签指向的文件没了”，而不是只看到一个无法解释的脏点。
+ * 样式只加在文件名上，脏点与关闭按钮保持原样，避免它们跟着一起变淡。
+ */
+function getTabLabelClassList(tab) {
+  if (!isMissingFileTab(tab)) {
+    return {}
+  }
+
+  return {
+    'line-through': true,
+    'opacity-60': true,
+  }
+}
+
+/**
+ * 标签的悬浮提示。
+ *
+ * 只在文件缺失时给说明文案：正常情况下不挂 title，
+ * 避免每个标签都弹一个和文件名重复的原生 tooltip。
+ */
+function getTabTooltip(tab) {
+  return isMissingFileTab(tab) ? t('documentTab.fileMissing') : undefined
 }
 
 /**
@@ -522,6 +567,8 @@ function onMenuClick({ key }, tab) {
             :data-session-id="tab.sessionId"
             :data-active="isActiveTab(tab) ? 'true' : 'false'"
             :data-dirty="tab.dirty ? 'true' : 'false'"
+            :data-missing="isMissingFileTab(tab) ? 'true' : 'false'"
+            :title="getTabTooltip(tab)"
             class="group document-tab h-6 max-w-60 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1 text-sm transition-colors"
             :class="getTabClassList(tab)"
             @pointerdown="handleTabPointerDown(tab, $event)"
@@ -535,7 +582,10 @@ function onMenuClick({ key }, tab) {
                 class="document-tab__dot h-1.5 w-1.5 rounded-full bg-text-secondary"
               />
             </span>
-            <span class="document-tab__label min-w-0 flex-1 truncate">{{ getTabLabel(tab) }}</span>
+            <span
+              class="document-tab__label min-w-0 flex-1 truncate"
+              :class="getTabLabelClassList(tab)"
+            >{{ getTabLabel(tab) }}</span>
             <button
               type="button"
               :aria-label="t('documentTab.close')"
