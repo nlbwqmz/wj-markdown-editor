@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBoundFileSession } from '../documentSessionFactory.js'
+import { deriveDocumentSnapshot } from '../documentSnapshotUtil.js'
 import { createWatchCoordinator } from '../watchCoordinator.js'
 
 function createSession() {
@@ -351,6 +352,113 @@ describe('watchCoordinator', () => {
       .toBe(restored.session.diskSnapshot.versionHash)
     expect(restored.session.watchRuntime.fileExists).toBe(true)
     expect(restored.session.watchRuntime.eventFloorObservedAt).toBe(1700000003013)
+  })
+
+  it('strategy=apply 时 watch.file-restored 自带的新内容必须写回编辑器，让会话收敛为已保存', () => {
+    const coordinator = createWatchCoordinator()
+    const session = createSession()
+    const originalRevision = session.editorSnapshot.revision
+
+    dispatchWatchCommand(coordinator, session, 'watch.file-missing', {
+      bindingToken: 1,
+      observedAt: 1700000003012,
+      error: {
+        name: 'Error',
+        message: 'ENOENT',
+        code: 'ENOENT',
+      },
+    })
+
+    // 外部编辑器用「临时文件 + rename」的原子替换写盘时，事件序列只有 missing → restored，
+    // restored 之后不一定还会补一次 change，所以这里必须自己完成“直接应用”。
+    const restored = dispatchWatchCommand(coordinator, session, 'watch.file-restored', {
+      bindingToken: 1,
+      observedAt: 1700000003013,
+      diskContent: '# 外部原子替换后的内容',
+      diskStat: {
+        mtimeMs: 1700000003013,
+      },
+    }, { externalChangeStrategy: 'apply' })
+
+    expect(restored.session.editorSnapshot.content).toBe('# 外部原子替换后的内容')
+    expect(restored.session.editorSnapshot.revision).toBe(originalRevision + 1)
+    expect(restored.session.diskSnapshot.content).toBe('# 外部原子替换后的内容')
+    expect(restored.session.externalRuntime.resolutionState).toBe('resolved')
+    expect(restored.session.externalRuntime.lastResolutionResult).toBe('applied')
+    expect(restored.session.externalRuntime.lastHandledVersionHash)
+      .toBe(restored.session.diskSnapshot.versionHash)
+    expect(restored.effects).toEqual([
+      {
+        type: 'notify-external-change',
+        mode: 'applied',
+        documentPath: 'C:/docs/demo.md',
+      },
+    ])
+
+    // 这条派生结果是关标签时会不会弹“有修改”的唯一依据。
+    expect(deriveDocumentSnapshot(restored.session).dirty).toBe(false)
+  })
+
+  it('strategy=apply 时恢复内容与编辑器内容一致，必须 no-op：不推进 revision 也不发通知', () => {
+    const coordinator = createWatchCoordinator()
+    const session = createSession()
+
+    dispatchWatchCommand(coordinator, session, 'watch.file-missing', {
+      bindingToken: 1,
+      observedAt: 1700000003012,
+      error: {
+        name: 'Error',
+        message: 'ENOENT',
+        code: 'ENOENT',
+      },
+    })
+
+    const restored = dispatchWatchCommand(coordinator, session, 'watch.file-restored', {
+      bindingToken: 1,
+      observedAt: 1700000003013,
+      diskContent: session.editorSnapshot.content,
+      diskStat: {
+        mtimeMs: 1700000003013,
+      },
+    }, { externalChangeStrategy: 'apply' })
+
+    expect(restored.session.editorSnapshot.revision).toBe(0)
+    expect(restored.session.externalRuntime.resolutionState).toBe('resolved')
+    expect(restored.session.externalRuntime.lastResolutionResult).toBe('noop')
+    expect(restored.effects).toEqual([])
+  })
+
+  it('strategy=prompt 时 watch.file-restored 不得改写编辑器内容，保持由后续 change 承担冲突裁决', () => {
+    const coordinator = createWatchCoordinator()
+    const session = createSession()
+    session.editorSnapshot.content = '# 用户本地内容'
+    session.editorSnapshot.revision = 1
+    session.editorSnapshot.updatedAt = 1700000003011
+
+    dispatchWatchCommand(coordinator, session, 'watch.file-missing', {
+      bindingToken: 1,
+      observedAt: 1700000003012,
+      error: {
+        name: 'Error',
+        message: 'ENOENT',
+        code: 'ENOENT',
+      },
+    })
+
+    const restored = dispatchWatchCommand(coordinator, session, 'watch.file-restored', {
+      bindingToken: 1,
+      observedAt: 1700000003013,
+      diskContent: '# 外部恢复后的内容',
+      diskStat: {
+        mtimeMs: 1700000003013,
+      },
+    }, { externalChangeStrategy: 'prompt' })
+
+    expect(restored.session.editorSnapshot.content).toBe('# 用户本地内容')
+    expect(restored.session.editorSnapshot.revision).toBe(1)
+    expect(restored.session.diskSnapshot.content).toBe('# 外部恢复后的内容')
+    expect(restored.session.externalRuntime.resolutionState).toBe('restored')
+    expect(restored.effects).toEqual([])
   })
 
   it('watch.file-restored 后的首次有效读盘若仍有差异，必须进入新的 pending-user，而不是直接回落为 idle', () => {
