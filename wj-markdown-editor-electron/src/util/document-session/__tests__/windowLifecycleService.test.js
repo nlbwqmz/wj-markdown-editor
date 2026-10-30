@@ -2477,6 +2477,75 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(restoredSnapshot.saved).toBe(true)
   })
 
+  it('strategy=apply 时原子替换写盘的 missing → restored 必须自动应用外部内容，关标签不再被问“有修改”', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    getConfigMock.mockReturnValue({
+      language: 'zh-CN',
+      autoSave: [],
+      startView: 'split',
+      externalFileChangeStrategy: 'apply',
+    })
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+
+    // 外部编辑器常见的原子替换：先 unlink（missing），再 rename 回来（restored 带着新内容）。
+    // 这条链路走完往往不会再补一次 change，所以恢复本身必须完成“直接应用”。
+    await emitWatchMissing(winInfo, new Error('ENOENT'), {
+      observedAt: 1700000005001,
+    })
+    const missingSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(missingSnapshot.exists).toBe(false)
+    expect(missingSnapshot.saved).toBe(false)
+
+    sendMock.mockClear()
+    await emitWatchRestored(winInfo, '# 外部原子替换后的内容', {
+      observedAt: 1700000005002,
+    })
+
+    const restoredSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(restoredSnapshot.exists).toBe(true)
+    expect(restoredSnapshot.content).toBe('# 外部原子替换后的内容')
+    expect(restoredSnapshot.saved).toBe(true)
+    expect(restoredSnapshot.externalPrompt).toBeNull()
+    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+      event: 'window.effect.message',
+      data: {
+        type: 'info',
+        content: 'message.fileExternalChangeAutoApplied',
+      },
+    })
+  })
+
+  it('strategy=prompt 时同一条 missing → restored 链路不得静默改写编辑器内容', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+    getConfigMock.mockReturnValue({
+      language: 'zh-CN',
+      autoSave: [],
+      startView: 'split',
+      externalFileChangeStrategy: 'prompt',
+    })
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+
+    await emitWatchMissing(winInfo, new Error('ENOENT'), {
+      observedAt: 1700000005001,
+    })
+    await emitWatchRestored(winInfo, '# 外部原子替换后的内容', {
+      observedAt: 1700000005002,
+    })
+
+    const restoredSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    expect(restoredSnapshot.content).toBe('# 原始内容')
+    expect(restoredSnapshot.exists).toBe(true)
+    expect(restoredSnapshot.saved).toBe(false)
+  })
+
   it('缺失后恢复时，即使恢复内容与之前 internal-save / handled 版本 hash 相同，也不能停在 exists=true 但磁盘基线仍缺失的不一致态', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')

@@ -279,7 +279,7 @@ function handleFileMissing(session, payload) {
   }
 }
 
-function handleFileRestored(session, payload) {
+function handleFileRestored(session, payload, { externalChangeStrategy = 'prompt' } = {}) {
   const observedAt = normalizeObservedAt(payload?.observedAt)
   if (!isCurrentBindingToken(session, payload?.bindingToken) || isLateObservedEvent(session, observedAt)) {
     return { session, effects: [] }
@@ -292,13 +292,49 @@ function handleFileRestored(session, payload) {
     // 这里必须立刻把磁盘基线恢复回来。
     // 否则一旦紧随其后的 change 因 handled / internal-save 去重被 fileWatchUtil 吞掉，
     // 会话就会卡在 exists=true 但 diskSnapshot 仍是 missing 的不一致态。
-    updateDiskBaseline(session, {
+    const versionHash = updateDiskBaseline(session, {
       content: payload?.diskContent ?? '',
       exists: true,
       stat: payload?.diskStat || null,
       observedAt,
       source: 'watch-restored',
     })
+
+    // 「恢复后的首次成功读盘」本身就是一次外部变更。
+    // 原子替换写盘（临时文件 + rename）的事件序列是 missing → restored，
+    // 后续不一定还会补一次 change；如果这里不像 handleFileChanged 那样按策略处理，
+    // 会话就会停在“编辑器是旧正文、磁盘基线是新正文”的脏态，
+    // 表现为选了直接应用、关标签页却仍然被问要不要保存。
+    if (externalChangeStrategy === 'apply') {
+      const restoredContent = payload?.diskContent ?? ''
+
+      // 恢复后的内容与编辑器当前内容一致时不得推进 revision：
+      // 这只是一次 no-op 的吃透，不是用户引入的新版本。
+      if (session.editorSnapshot.content === restoredContent) {
+        markResolved(session, {
+          result: 'noop',
+          versionHash,
+        })
+        return { session, effects: [] }
+      }
+
+      applyDiskContentToEditor(session, restoredContent)
+      markResolved(session, {
+        result: 'applied',
+        versionHash,
+      })
+
+      return {
+        session,
+        effects: [
+          {
+            type: 'notify-external-change',
+            mode: 'applied',
+            documentPath: session.documentSource?.path || null,
+          },
+        ],
+      }
+    }
   } else {
     // 不带 diskContent 的 restored 仍只表达“路径重新出现”，
     // 真正的内容真相要等后续首次有效读盘（watch.file-changed）来收敛。
@@ -553,7 +589,9 @@ export function createWatchCoordinator() {
       case 'watch.file-missing':
         return handleFileMissing(session, payload)
       case 'watch.file-restored':
-        return handleFileRestored(session, payload)
+        return handleFileRestored(session, payload, {
+          externalChangeStrategy,
+        })
       case 'watch.error':
         return handleWatchError(session, payload)
       case 'watch.bound':
