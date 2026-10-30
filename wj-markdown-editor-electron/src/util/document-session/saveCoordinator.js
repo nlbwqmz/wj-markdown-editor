@@ -504,6 +504,8 @@ function normalizeComparablePath(targetPath) {
 function getTriggerPriority(trigger) {
   switch (trigger) {
     case 'save-and-close':
+      return 5
+    case 'close-tab-auto-save':
       return 4
     case 'close-auto-save':
       return 3
@@ -1109,9 +1111,13 @@ export function createSaveCoordinator() {
       settledManualRequestIds.push(...completedManualRequestIds)
 
       if (session.editorSnapshot.revision > payload.revision) {
+        // 补写时必须沿用它自己那条关闭链路的触发语义：
+        // 关标签的补写若退化成 close-auto-save，失败提示与后续合并都会指向错误的关闭粒度。
         const closeFollowUpTrigger = session.saveRuntime.trigger === 'save-and-close'
           ? 'save-and-close'
-          : 'close-auto-save'
+          : session.closeRuntime.intent === 'close-tab'
+            ? 'close-tab-auto-save'
+            : 'close-auto-save'
         const nextResult = continueQueuedSaveIfNeeded(session, {
           preferredTrigger: closeWaitingCurrentJob
             ? closeFollowUpTrigger

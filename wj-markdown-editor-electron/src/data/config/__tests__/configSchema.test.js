@@ -475,6 +475,20 @@ describe('configSchema', () => {
     }
   })
 
+  it('autoSave 必须接受 close-tab（关闭标签页时）选项', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      autoSave: ['blur', 'close', 'switch', 'close-tab'],
+    })).not.toThrow()
+  })
+
+  it('非法 autoSave 选项必须被识别为 schema 违规', () => {
+    expect(() => validateConfigShape({
+      ...defaultConfig,
+      autoSave: ['blur', 'interval'],
+    })).toThrow()
+  })
+
   it('非法 language 必须被识别为 schema 违规', () => {
     const brokenConfig = {
       ...defaultConfig,

@@ -209,12 +209,17 @@ export function requestDocumentActivateTab(sessionId, options = {}) {
  * 请求主进程关闭指定标签页。
  *
  * 脏标签由主进程进入确认流程，renderer 不做脏判断。
+ *
+ * options.autoSave === false 表示渲染层没能把挂起正文同步进主进程：
+ * 主进程据此跳过“关闭标签页时”自动保存，退回未保存确认，
+ * 避免拿旧内容写盘并伪装成“已自动保存”。
  */
-export function requestDocumentCloseTab(sessionId) {
+export function requestDocumentCloseTab(sessionId, options = {}) {
   return channelUtil.send({
     event: 'document.close-tab',
     data: {
       sessionId,
+      autoSave: options.autoSave !== false,
     },
   })
 }

@@ -223,6 +223,71 @@ describe('rendererTabCommandService 切换时自动保存', () => {
   })
 })
 
+describe('rendererTabCommandService 关闭标签页时自动保存', () => {
+  it('开启关闭标签页时自动保存时必须先收敛正文', async () => {
+    const state = { sessionIdList: ['s1', 's2'], activeSessionId: 's1' }
+    setStoreSnapshot(state)
+    installCommandMocks(state)
+    mockedStore.config = { autoSave: ['close-tab'] }
+
+    await service.closeTabById('s1')
+
+    expect(preparationMock).toHaveBeenCalledTimes(1)
+    expect(commandMock.requestDocumentCloseTab).toHaveBeenCalledWith('s1', { autoSave: true })
+  })
+
+  it('正文收敛失败时必须传 autoSave: false，避免拿旧内容写盘', async () => {
+    const state = { sessionIdList: ['s1', 's2'], activeSessionId: 's1' }
+    setStoreSnapshot(state)
+    installCommandMocks(state)
+    mockedStore.config = { autoSave: ['close-tab'] }
+    preparationMock.mockResolvedValueOnce({ ok: false, reason: 'preparation-unavailable' })
+
+    await service.closeTabById('s1')
+
+    expect(commandMock.requestDocumentCloseTab).toHaveBeenCalledWith('s1', { autoSave: false })
+  })
+
+  it('关闭后台标签时同样必须收敛正文，不能按活动标签分流', async () => {
+    // 与切换侧刻意不同：关后台脏标签时主进程会先把它激活，编辑器随之换页，
+    // 这时不收敛反而会把活动标签最后一次输入一起丢掉，所以这里一律收敛。
+    const state = { sessionIdList: ['s1', 's2'], activeSessionId: 's1' }
+    setStoreSnapshot(state)
+    installCommandMocks(state)
+    mockedStore.config = { autoSave: ['close-tab'] }
+
+    await service.closeTabById('s2')
+
+    expect(preparationMock).toHaveBeenCalledTimes(1)
+    expect(commandMock.requestDocumentCloseTab).toHaveBeenCalledWith('s2', { autoSave: true })
+  })
+
+  it('未开启关闭标签页时自动保存时不得发起正文收敛', async () => {
+    const state = { sessionIdList: ['s1', 's2'], activeSessionId: 's1' }
+    setStoreSnapshot(state)
+    installCommandMocks(state)
+    mockedStore.config = { autoSave: ['close'] }
+
+    await service.closeTabById('s1')
+
+    expect(preparationMock).not.toHaveBeenCalled()
+    expect(commandMock.requestDocumentCloseTab).toHaveBeenCalledWith('s1', { autoSave: true })
+  })
+
+  it('快捷键关闭也必须走同一条正文收敛，不能绕过 closeTabById', async () => {
+    const state = { sessionIdList: ['s1', 's2'], activeSessionId: 's1' }
+    setStoreSnapshot(state)
+    installCommandMocks(state)
+    mockedStore.config = { autoSave: ['close-tab'] }
+
+    service.requestCloseTab()
+    await settleQueue()
+
+    expect(preparationMock).toHaveBeenCalledTimes(1)
+    expect(commandMock.requestDocumentCloseTab).toHaveBeenCalledWith('s1', { autoSave: true })
+  })
+})
+
 describe('rendererTabCommandService 关闭', () => {
   it('切换后立刻关闭必须关掉切换后的标签，而不是切换前的', async () => {
     const state = { sessionIdList: ['s1', 's2', 's3'], activeSessionId: 's1' }
@@ -234,7 +299,7 @@ describe('rendererTabCommandService 关闭', () => {
     await settleQueue()
 
     expect(commandMock.requestDocumentActivateTab).toHaveBeenLastCalledWith('s2', { autoSave: true })
-    expect(commandMock.requestDocumentCloseTab).toHaveBeenCalledWith('s2')
+    expect(commandMock.requestDocumentCloseTab).toHaveBeenCalledWith('s2', { autoSave: true })
   })
 
   it('同一帧连按 5 次关闭时必须受积压上限约束，不做全量排队', async () => {
@@ -304,7 +369,7 @@ describe('rendererTabCommandService 关闭', () => {
     await settleQueue()
 
     expect(commandMock.requestDocumentCloseTab).toHaveBeenCalledTimes(2)
-    expect(commandMock.requestDocumentCloseTab).toHaveBeenLastCalledWith('s1')
+    expect(commandMock.requestDocumentCloseTab).toHaveBeenLastCalledWith('s1', { autoSave: true })
   })
 
   it('没有活动标签时关闭必须不发送命令', async () => {

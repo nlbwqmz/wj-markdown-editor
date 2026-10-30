@@ -2889,6 +2889,336 @@ describe('documentCommandService', () => {
       })
     })
 
+    it('document.close-tab 勾选「关闭标签页时」时必须直接自动保存且不再弹确认框', () => {
+      const { store, service, windowId, secondSession } = createTwoTabContext(['close-tab'])
+      secondSession.editorSnapshot.content = '# 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      // 脏标签仍然先激活，但收尾从“弹确认”换成“先存后关”。
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-second')
+      expect(result.effects).toEqual([
+        {
+          type: 'activate-tab',
+          sessionId: 'tab-second',
+        },
+        {
+          type: 'execute-save',
+          job: expect.objectContaining({
+            sessionId: 'tab-second',
+            trigger: 'close-tab-auto-save',
+            content: '# 已修改',
+          }),
+        },
+      ])
+      expect(result.effects.find(effect => effect.type === 'show-unsaved-prompt')).toBeUndefined()
+      expect(store.getSession('tab-second').closeRuntime).toEqual({
+        intent: 'close-tab',
+        promptReason: null,
+        waitingSaveJobId: 'job-1',
+        awaitingPathSelection: false,
+        forceClose: false,
+      })
+      // 关标签自动保存链路不阻塞关闭：没有 promptReason，渲染层就不会弹确认框。
+      expect(result.snapshot.closePrompt).toBeNull()
+    })
+
+    it('document.close-tab 只勾选「窗口关闭时」时仍必须弹确认框，不得被关标签自动保存吞掉', () => {
+      const { service, windowId, secondSession } = createTwoTabContext(['close'])
+      secondSession.editorSnapshot.content = '# 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'activate-tab',
+          sessionId: 'tab-second',
+        },
+        {
+          type: 'show-unsaved-prompt',
+        },
+      ])
+    })
+
+    it('document.close-tab 收到 autoSave: false 时必须退回确认弹窗，不得拿未同步的旧正文写盘', () => {
+      const { service, windowId, secondSession } = createTwoTabContext(['close-tab'])
+      secondSession.editorSnapshot.content = '# 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-second', autoSave: false },
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'activate-tab',
+          sessionId: 'tab-second',
+        },
+        {
+          type: 'show-unsaved-prompt',
+        },
+      ])
+    })
+
+    it('document.close-tab 自动保存成功后必须直接关掉该标签', () => {
+      const { service, windowId, secondSession } = createTwoTabContext(['close-tab'])
+      secondSession.editorSnapshot.content = '# 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      const saved = service.dispatch({
+        windowId,
+        command: 'save.succeeded',
+        payload: {
+          jobId: 'job-1',
+          revision: 1,
+          content: '# 已修改',
+          path: 'C:/docs/second.md',
+          trigger: 'close-tab-auto-save',
+          savedAt: 1700000004001,
+          stat: null,
+        },
+      })
+
+      expect(saved.effects).toEqual([
+        {
+          type: 'close-tab',
+          sessionId: 'tab-second',
+        },
+      ])
+    })
+
+    it('document.close-tab 自动保存失败时必须回到标签作用域确认，且失败文案按自动保存处理', () => {
+      const { store, service, windowId, secondSession } = createTwoTabContext(['close-tab'])
+      secondSession.editorSnapshot.content = '# 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      const failed = service.dispatch({
+        windowId,
+        command: 'save.failed',
+        payload: {
+          jobId: 'job-1',
+          trigger: 'close-tab-auto-save',
+          error: { name: 'Error', message: '磁盘不可写' },
+        },
+      })
+
+      expect(failed.effects).toEqual([
+        {
+          type: 'notify-save-failed',
+          trigger: 'close-tab-auto-save',
+          error: { name: 'Error', message: '磁盘不可写' },
+        },
+        {
+          type: 'show-unsaved-prompt',
+        },
+      ])
+      // 关标签失败后不能悄悄关掉标签，也不能退化成关窗口。
+      expect(failed.effects.find(effect => effect.type === 'close-tab')).toBeUndefined()
+      expect(store.getSession('tab-second').closeRuntime.intent).toBe('close-tab')
+      expect(failed.snapshot.closePrompt).toMatchObject({
+        visible: true,
+        scope: 'tab',
+        reason: 'unsaved-changes',
+      })
+    })
+
+    it('document.close-tab 关闭未命名草稿时必须先补保存路径，取消后退回确认弹窗而不是静默丢草稿', () => {
+      const { store, service, windowId } = createTwoTabContext(['close-tab'])
+      const draftSession = createDraftSession({
+        sessionId: 'tab-draft',
+        now: 1700000004002,
+      })
+      store.createSession(draftSession)
+      store.addSessionToWindow({
+        windowId,
+        sessionId: draftSession.sessionId,
+      })
+
+      service.dispatch({
+        windowId,
+        sessionId: 'tab-draft',
+        command: 'document.edit',
+        payload: { content: '# 草稿内容' },
+      })
+
+      const closeRequested = service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-draft' },
+      })
+
+      expect(closeRequested.effects).toEqual([
+        {
+          type: 'activate-tab',
+          sessionId: 'tab-draft',
+        },
+        {
+          type: 'open-save-dialog',
+          trigger: 'close-tab-auto-save',
+        },
+      ])
+      expect(store.getSession('tab-draft').closeRuntime).toEqual({
+        intent: 'close-tab',
+        promptReason: null,
+        waitingSaveJobId: null,
+        awaitingPathSelection: true,
+        forceClose: false,
+      })
+
+      const cancelled = service.dispatch({
+        windowId,
+        command: 'dialog.save-target-cancelled',
+      })
+
+      expect(cancelled.effects).toEqual([
+        {
+          type: 'show-unsaved-prompt',
+        },
+      ])
+      // 草稿必须还在：既没有关标签，也没被当成“已保存”写盘。
+      expect(cancelled.effects.find(effect => effect.type === 'close-tab')).toBeUndefined()
+      expect(cancelled.session.documentSource.path).toBeNull()
+      expect(cancelled.session.closeRuntime).toEqual({
+        intent: 'close-tab',
+        promptReason: 'unsaved-changes',
+        waitingSaveJobId: null,
+        awaitingPathSelection: false,
+        forceClose: false,
+      })
+    })
+
+    it('document.close-tab 草稿补路径后必须继续关标签链路，保存成功即关闭该标签', () => {
+      const { store, service, windowId } = createTwoTabContext(['close-tab'])
+      const draftSession = createDraftSession({
+        sessionId: 'tab-draft-path',
+        now: 1700000004003,
+      })
+      store.createSession(draftSession)
+      store.addSessionToWindow({
+        windowId,
+        sessionId: draftSession.sessionId,
+      })
+
+      service.dispatch({
+        windowId,
+        sessionId: 'tab-draft-path',
+        command: 'document.edit',
+        payload: { content: '# 草稿内容' },
+      })
+      service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-draft-path' },
+      })
+
+      const pathSelected = service.dispatch({
+        windowId,
+        command: 'dialog.save-target-selected',
+        payload: { path: 'C:/docs/draft-tab.md' },
+      })
+
+      expect(pathSelected.effects).toEqual([
+        {
+          type: 'execute-save',
+          job: expect.objectContaining({
+            jobId: 'job-1',
+            path: 'C:/docs/draft-tab.md',
+            trigger: 'close-tab-auto-save',
+          }),
+        },
+      ])
+      expect(pathSelected.session.closeRuntime.waitingSaveJobId).toBe('job-1')
+
+      const saved = service.dispatch({
+        windowId,
+        command: 'save.succeeded',
+        payload: {
+          jobId: 'job-1',
+          revision: 1,
+          content: '# 草稿内容',
+          path: 'C:/docs/draft-tab.md',
+          trigger: 'close-tab-auto-save',
+          savedAt: 1700000004004,
+          stat: null,
+        },
+      })
+
+      expect(saved.effects).toEqual([
+        {
+          type: 'close-tab',
+          sessionId: 'tab-draft-path',
+        },
+      ])
+      expect(store.getSession('tab-draft-path').closeRuntime.intent).toBeNull()
+    })
+
+    it('只勾选「关闭标签页时」时，关闭窗口不得被它连带改成自动保存', () => {
+      const { service, windowId, firstSession } = createTwoTabContext(['close-tab'])
+      // 只有活动标签脏：这是关窗口唯一会考虑自动保存的分支，
+      // 必须验证它只看 close，不看 close-tab。
+      firstSession.editorSnapshot.content = '# first 已修改'
+      firstSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.request-close',
+      })
+
+      // close-tab 只作用于“关标签”这个动作，关窗口仍然只认 close。
+      expect(result.effects).toEqual([
+        {
+          type: 'hold-window-close',
+        },
+        {
+          type: 'show-unsaved-prompt',
+        },
+      ])
+    })
+
+    it('勾选「关闭标签页时」后，批量关闭仍然只关干净标签', () => {
+      const { service, windowId, firstSession } = createTwoTabContext(['close-tab'])
+      firstSession.editorSnapshot.content = '# first 已修改'
+      firstSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tabs',
+        payload: { sessionIds: ['tab-first', 'tab-second'] },
+      })
+
+      // 批量路径不做自动保存：多个保存对话框排队比逐个确认更难用。
+      expect(result.effects).toEqual([
+        {
+          type: 'close-tabs',
+          sessionIds: ['tab-second'],
+        },
+      ])
+    })
+
     it('关闭窗口时多个脏标签必须走一次笼统确认，而不是逐个静默保存', () => {
       const { store, service, windowId, firstSession, secondSession } = createTwoTabContext(['close'])
       firstSession.editorSnapshot.content = '# first 已修改'
