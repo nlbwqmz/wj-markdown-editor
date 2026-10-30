@@ -186,3 +186,28 @@ test('getDocumentSessionSnapshotIdentity 会统一提取 sessionId 与 revision�
     revision: 0,
   })
 })
+
+test('归一化的标签项必须保留 exists，供标签栏判断文件是否已被外部删除', () => {
+  const snapshot = normalizeDocumentSessionSnapshot({
+    sessionId: 'session-tab-exists',
+    tabs: [
+      { sessionId: 'tab-missing', fileName: 'gone.md', displayPath: 'D:/docs/gone.md', dirty: true, exists: false },
+      { sessionId: 'tab-normal', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: false, exists: true },
+    ],
+  })
+
+  assert.deepEqual(snapshot.tabs.map(tab => tab.exists), [false, true])
+  assert.equal(snapshot.tabs[0].displayPath, 'D:/docs/gone.md')
+  assert.equal(snapshot.tabs[1].displayPath, 'D:/docs/a.md')
+})
+
+test('标签项缺失 exists 字段时不得解释成“文件已被删除”，避免老主进程让所有标签都加上删除线', () => {
+  const snapshot = normalizeDocumentSessionSnapshot({
+    sessionId: 'session-tab-legacy',
+    tabs: [
+      { sessionId: 'tab-legacy', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: false },
+    ],
+  })
+
+  assert.equal(snapshot.tabs[0].exists, true)
+})

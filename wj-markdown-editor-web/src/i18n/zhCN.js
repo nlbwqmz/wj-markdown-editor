@@ -65,6 +65,7 @@ export default {
     copyPath: '复制路径',
     revealInExplorer: '在资源管理器中显示',
     reorderFailed: '调整标签顺序失败',
+    fileMissing: '文件已被外部删除或移动',
   },
   previewAssetMenu: {
     copyAbsolutePath: '复制绝对路径',

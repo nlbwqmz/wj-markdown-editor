@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createDraftSession } from '../documentSessionFactory.js'
-import { deriveDocumentSnapshot } from '../documentSnapshotUtil.js'
+import { createBoundFileSession, createDraftSession, createRecentMissingSession } from '../documentSessionFactory.js'
+import { deriveDocumentSnapshot, deriveDocumentTabSnapshot } from '../documentSnapshotUtil.js'
 
 describe('documentSnapshotUtil', () => {
   it('deriveDocumentSnapshot 在编辑内容和磁盘基线不一致时，应返回 dirty=true', () => {
@@ -139,5 +139,46 @@ describe('documentSnapshotUtil', () => {
     }
 
     expect(deriveDocumentSnapshot(session).kind).toBe('markdown')
+  })
+
+  it('deriveDocumentTabSnapshot 必须把 exists 下发到标签栏，外部删除后为 false', () => {
+    const session = createBoundFileSession({
+      sessionId: 'bound-file-session',
+      path: 'D:/docs/a.md',
+      content: '# 正文',
+    })
+
+    expect(deriveDocumentTabSnapshot(session).exists).toBe(true)
+
+    // 外部删除：watch.file-missing 会把 documentSource.exists 打成 false
+    session.documentSource.exists = false
+
+    const tabSnapshot = deriveDocumentTabSnapshot(session)
+    expect(tabSnapshot.exists).toBe(false)
+    // 路径与脏态必须照旧下发，否则渲染层无法区分“草稿”与“文件被删”
+    expect(tabSnapshot.displayPath).toBe('D:/docs/a.md')
+    expect(tabSnapshot.dirty).toBe(true)
+  })
+
+  it('deriveDocumentTabSnapshot 在 recent-missing 会话上必须同时下发 exists=false 与 isRecentMissing=true', () => {
+    const session = createRecentMissingSession({
+      sessionId: 'recent-missing-tab-session',
+      missingPath: 'C:/docs/missing.md',
+    })
+
+    const tabSnapshot = deriveDocumentTabSnapshot(session)
+
+    // 两个字段必须共存：渲染层要能靠 isRecentMissing 把这种“记录失效”
+    // 与“文件被外部删除”区分开，不能互相替代。
+    expect(tabSnapshot.exists).toBe(false)
+    expect(tabSnapshot.isRecentMissing).toBe(true)
+    expect(tabSnapshot.displayPath).toBe('C:/docs/missing.md')
+  })
+
+  it('deriveDocumentTabSnapshot 对未命名草稿下发 exists=false，且不带展示路径', () => {
+    const tabSnapshot = deriveDocumentTabSnapshot(createDraftSession({ sessionId: 'draft-tab-session' }))
+
+    expect(tabSnapshot.exists).toBe(false)
+    expect(tabSnapshot.displayPath).toBeNull()
   })
 })

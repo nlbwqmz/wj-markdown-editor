@@ -2535,6 +2535,64 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
   })
 
+  it('文件被外部删除时，广播给渲染层的标签快照必须带上 exists=false', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+    sendMock.mockClear()
+
+    await emitWatchMissing(winInfo, new Error('ENOENT'), {
+      observedAt: 1700000005001,
+    })
+
+    // if-changed 判定的是整份窗口快照的签名，标签列表也在签名里，
+    // 所以 exists 翻转必须真的随这次广播到达渲染层，否则删除线要等下一次切换才出现。
+    const publishedTabs = sendMock.mock.calls
+      .filter(([, payload]) => payload?.event === 'document.snapshot.changed')
+      .map(([, payload]) => payload?.data?.tabs)
+
+    expect(publishedTabs.length).toBeGreaterThan(0)
+    expect(publishedTabs.at(-1)).toEqual([
+      expect.objectContaining({
+        displayPath: 'D:/demo.md',
+        exists: false,
+      }),
+    ])
+  })
+
+  it('文件恢复后，标签快照的 exists 必须回到 true，删除线能正确收敛', async () => {
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/demo.md')
+
+    const [winInfo] = listWindowRefs()
+
+    await emitWatchMissing(winInfo, new Error('ENOENT'), {
+      observedAt: 1700000005001,
+    })
+    sendMock.mockClear()
+
+    await emitWatchRestored(winInfo, '# 原始内容', {
+      observedAt: 1700000005002,
+    })
+
+    const publishedTabs = sendMock.mock.calls
+      .filter(([, payload]) => payload?.event === 'document.snapshot.changed')
+      .map(([, payload]) => payload?.data?.tabs)
+
+    expect(publishedTabs.length).toBeGreaterThan(0)
+    expect(publishedTabs.at(-1)).toEqual([
+      expect.objectContaining({
+        displayPath: 'D:/demo.md',
+        exists: true,
+      }),
+    ])
+  })
+
   it('watcher onError 触发后，必须走 watch.error 命令流并自动发起重绑，而不是只发 legacy warning', async () => {
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
