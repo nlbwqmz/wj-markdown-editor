@@ -27,7 +27,7 @@ export default {
         frame: false,
         icon: WINDOW_ICON_PATH,
         title: '设置',
-        width: 900,
+        width: 960,
         height: 800,
         show: false,
         maximizable: false,

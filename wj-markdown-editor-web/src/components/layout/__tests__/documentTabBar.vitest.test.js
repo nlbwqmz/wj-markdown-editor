@@ -583,15 +583,47 @@ describe('documentTabBar 右键菜单', () => {
     wrapper.unmount()
   })
 
-  it('关闭其它必须跳过脏标签，不得把它们批量关掉', async () => {
+  it('未开启关闭标签自动保存时，其它标签全脏则批量关闭必须置灰', () => {
+    store.documentSessionSnapshot.tabs = [
+      { sessionId: 'session-1', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: true },
+      { sessionId: 'session-2', fileName: 'b.md', displayPath: 'D:/docs/b.md', dirty: false },
+      { sessionId: 'session-3', fileName: 'Untitled', displayPath: null, dirty: true },
+    ]
     const wrapper = mountTabBar()
 
-    // session-2 是脏标签，对 session-1 执行「关闭其它」时它必须被保留，
-    // 过滤后关闭列表为空，因此不该发出任何请求
+    // 脏标签会被跳过，草稿也不会被关，所以「关闭其他」什么也做不了。
+    const menu = wrapper.findAll('.menu-stub')[1]
+    expect(menu.get('[data-menu-key="close-others"]').attributes('data-disabled')).toBe('true')
+
+    wrapper.unmount()
+  })
+
+  it('开启关闭标签自动保存后，其它标签是脏文件时批量关闭不能置灰', () => {
+    store.config = { autoSave: ['closeTab'] }
+    store.documentSessionSnapshot.tabs = [
+      { sessionId: 'session-1', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: true },
+      { sessionId: 'session-2', fileName: 'b.md', displayPath: 'D:/docs/b.md', dirty: false },
+      { sessionId: 'session-3', fileName: 'Untitled', displayPath: null, dirty: true },
+    ]
+    const wrapper = mountTabBar()
+
+    // session-1 虽然脏，但会被保存后关掉，因此菜单必须可用；
+    // 草稿无路径，即使开关打开也会被跳过，但它不该影响整条菜单的可用性。
+    const menu = wrapper.findAll('.menu-stub')[1]
+    expect(menu.get('[data-menu-key="close-others"]').attributes('data-disabled')).toBe('false')
+
+    wrapper.unmount()
+  })
+
+  it('关闭其它必须把范围内的脏标签也交给主进程裁决', async () => {
+    const wrapper = mountTabBar()
+
+    // 渲染层不再按自己的脏标记过滤：
+    // 后台标签的脏状态本身可能陈旧，是否保存由主进程按开关决定。
     const firstMenu = wrapper.findAllComponents({ name: 'AMenu' })[0]
     await firstMenu.vm.$emit('click', { key: 'close-others' })
 
-    expect(requestDocumentCloseTabs).not.toHaveBeenCalled()
+    expect(requestDocumentCloseTabs).toHaveBeenCalledWith(['session-2'])
     expect(requestDocumentCloseTab).not.toHaveBeenCalled()
 
     wrapper.unmount()
@@ -617,7 +649,7 @@ describe('documentTabBar 右键菜单', () => {
     wrapper.unmount()
   })
 
-  it('关闭其它必须一次交出全部干净标签', async () => {
+  it('关闭其它必须一次交出范围内的全部标签', async () => {
     store.documentSessionSnapshot.tabs = [
       { sessionId: 'session-1', fileName: 'a.md', displayPath: 'D:/docs/a.md', dirty: false },
       { sessionId: 'session-2', fileName: 'b.md', displayPath: 'D:/docs/b.md', dirty: true },
@@ -629,9 +661,9 @@ describe('documentTabBar 右键菜单', () => {
     const firstMenu = wrapper.findAllComponents({ name: 'AMenu' })[0]
     await firstMenu.vm.$emit('click', { key: 'close-others' })
 
-    // session-2 是脏标签必须排除，其余三个一次交出
+    // 脏标签也一并交出：是否保存由主进程按“关闭标签自动保存”开关决定。
     expect(requestDocumentCloseTabs).toHaveBeenCalledTimes(1)
-    expect(requestDocumentCloseTabs).toHaveBeenCalledWith(['session-3', 'session-4'])
+    expect(requestDocumentCloseTabs).toHaveBeenCalledWith(['session-2', 'session-3', 'session-4'])
 
     wrapper.unmount()
   })
@@ -870,14 +902,15 @@ describe('documentTabBar 切换标签自动保存', () => {
     wrapper.unmount()
   })
 
-  it('未开启时点击标签不应多一次正文收敛往返', async () => {
+  it('未开启自动保存时点击标签同样要先收敛正文', async () => {
     const wrapper = mountTabBar()
     await nextTick()
 
     await wrapper.get('[data-testid="document-tab-session-2"]').trigger('click')
     await flushPromises()
 
-    expect(requestCurrentWindowOpenPreparation).not.toHaveBeenCalled()
+    // flush 是正确性：不收敛就切换会让主进程保存到旧正文。
+    expect(requestCurrentWindowOpenPreparation).toHaveBeenCalledTimes(1)
     expect(requestDocumentActivateTab).toHaveBeenCalledWith('session-2', { autoSave: true })
 
     wrapper.unmount()

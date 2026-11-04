@@ -52,16 +52,53 @@ export function requestDocumentSaveCopy() {
 }
 
 /**
+ * 每个会话的编辑序号。
+ *
+ * 主进程按 sessionId 落库，只接受序号更大的写入：
+ * 关闭标签、批量关闭、窗口关闭都会集中 flush 多个会话的全文，
+ * 并发下同一会话的两条命令可能乱序到达，没有序号就会把旧正文盖回去。
+ */
+const documentEditSeqBySessionId = new Map()
+
+function allocateDocumentEditSeq(sessionId) {
+  const nextSeq = (documentEditSeqBySessionId.get(sessionId) || 0) + 1
+  documentEditSeqBySessionId.set(sessionId, nextSeq)
+  return nextSeq
+}
+
+/**
+ * 释放某个会话的编辑序号。
+ *
+ * 标签关闭时调用，避免 Map 随开关标签无限增长。
+ */
+export function releaseDocumentEditSeq(sessionId) {
+  if (typeof sessionId === 'string' && sessionId !== '') {
+    documentEditSeqBySessionId.delete(sessionId)
+  }
+}
+
+/**
  * 发送“正文编辑已变化”命令。
  *
- * renderer 不再继续透传历史兼容编辑事件名，
- * 而是统一发送结构化 `document.edit` 命令。
+ * 正文归属必须显式声明：`sessionId` 是必填参数，
+ * 主进程只按它定位会话，不再回退到“窗口当前活动会话”。
+ * 否则关闭后台标签时写进会话的永远是活动标签的正文。
+ *
+ * @param {string} sessionId 目标会话 id
+ * @param {string} content 该会话的完整正文
+ * @returns {Promise<object>} 主进程命令结果
  */
-export function requestDocumentEdit(content) {
+export function requestDocumentEdit(sessionId, content) {
+  if (typeof sessionId !== 'string' || sessionId === '') {
+    throw new Error('document.edit 必须显式指定 sessionId')
+  }
+
   return channelUtil.send({
     event: 'document.edit',
     data: {
+      sessionId,
       content,
+      seq: allocateDocumentEditSeq(sessionId),
     },
   })
 }
@@ -345,6 +382,7 @@ export default {
   requestDocumentSaveAndClose,
   requestDocumentSaveCopy,
   requestDocumentEdit,
+  releaseDocumentEditSeq,
   requestDocumentOpenDialog,
   requestDocumentResolveOpenTarget,
   requestPrepareOpenPathInCurrentWindow,

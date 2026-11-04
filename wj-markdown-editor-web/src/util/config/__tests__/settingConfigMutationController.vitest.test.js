@@ -83,6 +83,24 @@ describe('settingConfigMutationController', () => {
     })
   })
 
+  it('autoSave 集合新增 closeTab（关闭标签时）时必须真正提交 mutation，不能算出空变更', async () => {
+    const context = createControllerTestContext()
+
+    await context.controller.submitAutoSaveListChange([], ['closeTab'])
+
+    // 选项白名单漏一个，这里就会得到空 operations，
+    // 提交被当成“无需变更”跳过，表现就是设置页勾选框点不动。
+    expect(context.sendMutationRequest).toHaveBeenCalledWith({
+      operations: [
+        {
+          type: 'setAutoSaveOption',
+          option: 'closeTab',
+          enabled: true,
+        },
+      ],
+    })
+  })
+
   it('autoSave 集合新增 switch（切换标签时）时必须真正提交 mutation 并立即应用乐观值', async () => {
     const context = createControllerTestContext()
 

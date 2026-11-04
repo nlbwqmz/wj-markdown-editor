@@ -7,6 +7,27 @@ function normalizeCursorPosition(cursorPosition) {
 }
 
 /**
+ * 判断一次快照回写是否发生了“视图与会话错配”。
+ *
+ * 典型场景：用户新建/切换标签，目标标签的容器还没渲染出来，
+ * 此时编辑器里仍是上一个标签的 view。
+ * 如果把新文档的正文（例如空草稿的 `''`）写进旧视图，
+ * 旧标签的内容会被静默清空；关闭标签时的正文收敛还会把这个空内容写进磁盘。
+ *
+ * @param {object} options
+ * @param {string | null | undefined} options.snapshotSessionId 快照声明的目标会话
+ * @param {string | null | undefined} options.viewSessionId 当前活动视图所属的会话
+ * @returns {boolean} true 表示本次回写必须跳过
+ */
+export function isContentSyncTargetMismatch({ snapshotSessionId = null, viewSessionId = null } = {}) {
+  if (!snapshotSessionId || !viewSessionId) {
+    return false
+  }
+
+  return snapshotSessionId !== viewSessionId
+}
+
+/**
  * 判断这次内容同步是否属于“滞后的 echo 回放”。
  *
  * 典型场景：
@@ -81,6 +102,7 @@ export function resolvePendingContentUpdateMeta({ handledToken = 0, contentUpdat
 }
 
 export default {
+  isContentSyncTargetMismatch,
   shouldDeferStaleContentSync,
   shouldSuppressNextContentSync,
   resolvePendingContentUpdateMeta,

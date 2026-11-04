@@ -214,6 +214,7 @@ export default {
         onWindowBlur: '窗口失焦时',
         onWindowClose: '窗口关闭时',
         onTabSwitch: '切换标签时',
+        onTabClose: '关闭标签时',
       },
       externalFileChangeStrategyOption: {
         apply: '直接应用',
@@ -384,6 +385,13 @@ export default {
     confirmExecuteUpdate: '当前操作不会校验文件是否保存，请确保文件已保存，安装后程序将重启，确认继续？',
   },
   message: {
+    // 列表分隔符：主进程只下发明细条目，渲染层负责按当前语言拼接。
+    listSeparator: '、',
+    closeSkippedSummary: '其余标签已关闭。未关闭：{detail}。',
+    closeSkippedDraft: '{count} 个未命名草稿',
+    closeSkippedExternal: '{count} 个存在外部变更',
+    closeSkippedSaving: '{count} 个正在保存',
+    closeSkippedSaveFailed: '{count} 个保存失败',
     anchorTargetDoesNotExist: '锚点目标位置不存在',
     theFileDoesNotExist: '文件不存在',
     onlyMarkdownFilesCanBeOpened: '不支当前文件格式',
@@ -410,11 +418,8 @@ export default {
     fileManagerOpenModeTip: '请选择在当前窗口还是新窗口打开。',
     fileManagerOpenInCurrentWindow: '当前窗口打开',
     fileManagerOpenInNewWindow: '新窗口打开',
-    fileManagerSaveBeforeSwitchTitle: '切换前如何处理当前文件？',
-    fileManagerSaveBeforeSwitch: '先保存再切换',
-    fileManagerDiscardAndSwitch: '不保存并切换',
+
     fileManagerOpenDirectoryFailed: '打开目录失败，请重试。',
-    fileManagerSaveBeforeSwitchFailed: '保存当前文件失败，已取消切换。',
     fileManagerOpenCurrentWindowFailed: '切换当前窗口失败，请重试。',
     fileManagerSourceSessionChanged: '当前文档状态已变化，请重新执行打开操作。',
     fileAlreadyOpenedInOtherWindow: '该文件已在其他窗口打开',

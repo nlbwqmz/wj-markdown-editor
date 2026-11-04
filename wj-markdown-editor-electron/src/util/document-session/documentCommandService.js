@@ -151,6 +151,20 @@ export function createDocumentCommandService({
       case 'document.edit':
       {
         const nextContent = payload?.content ?? ''
+        // 乱序保护：同一会话的正文可能被多条并发命令推送
+        // （关闭标签 / 批量关闭 / 关窗口都会集中 flush 全文），
+        // 只接受序号更大的写入，否则旧正文会盖回新正文。
+        // 序号由渲染层按会话单调递增分配；不带序号时保留旧行为（内部调用兼容）。
+        const nextSeq = Number.isFinite(payload?.seq) ? payload.seq : null
+        if (nextSeq !== null) {
+          const lastSeq = Number.isFinite(session.editorSnapshot.editSeq)
+            ? session.editorSnapshot.editSeq
+            : 0
+          if (nextSeq <= lastSeq) {
+            break
+          }
+          session.editorSnapshot.editSeq = nextSeq
+        }
         // document.edit 现在既被正常输入链路使用，也会被 route leave 当成
         // “确保最终正文已经进入 session”的屏障；因此相同正文必须严格 no-op，
         // 不能再把同一份内容重复推进成新 revision。
@@ -344,28 +358,72 @@ export function createDocumentCommandService({
             break
           }
 
-          // 只有脏标签才需要先激活：
-          // 脏判断、保存链路、关闭确认弹窗全部按“当前活动会话”工作，
-          // 这样用户看到弹窗时看到的就是要关掉的那份文档。
-          if (store.getActiveSessionIdByWindowId?.(windowId) !== targetSessionId) {
-            store.activateSession({ windowId, sessionId: targetSessionId })
+          // 脏标签统一走“激活 + 未保存确认”的分支。
+          // 未开启该开关时必须维持现状：激活目标、弹确认框。
+          const enterUnsavedPrompt = () => {
+            // 脏判断、保存链路、关闭确认弹窗全部按“当前活动会话”工作，
+            // 这样用户看到弹窗时看到的就是要关掉的那份文档。
+            if (store.getActiveSessionIdByWindowId?.(windowId) !== targetSessionId) {
+              store.activateSession({ windowId, sessionId: targetSessionId })
+              effects.push({
+                type: 'activate-tab',
+                sessionId: targetSessionId,
+              })
+            }
+
+            targetSession.closeRuntime.intent = 'close-tab'
+            targetSession.closeRuntime.promptReason = 'unsaved-changes'
+            targetSession.closeRuntime.forceClose = false
+            targetSession.closeRuntime.awaitingPathSelection = false
+            targetSession.closeRuntime.waitingSaveJobId = null
             effects.push({
-              type: 'activate-tab',
-              sessionId: targetSessionId,
+              type: 'show-unsaved-prompt',
             })
           }
 
-          // 关标签故意不做“关闭自动保存”：
-          // 关掉一个后台标签时静默写盘比弹一次确认更危险，
-          // 所以脏标签一律走确认弹窗，由用户选“保存并关闭”或“直接关闭”。
+          // 未开启“关闭标签自动保存”时，行为与旧版一致：一律走确认弹窗。
+          if (!canAutoSave(config, 'closeTab')) {
+            enterUnsavedPrompt()
+            break
+          }
+
+          // recent-missing 的目标文件已经不在了，没有可写的位置，也没有可丢的内容，
+          // 直接放行关闭，既不说盘也不提示。
+          if (deriveDocumentSnapshot(targetSession).isRecentMissing === true) {
+            resetCloseRuntime(targetSession)
+            effects.push({
+              type: 'close-tab',
+              sessionId: targetSessionId,
+            })
+            break
+          }
+
+          // 未命名草稿会自动要求选路径，超出“自动保存”的边界；
+          // 外部变更未决则意味着“谁的内容该赢”还没被用户裁决过。
+          // 两者都回落到确认弹窗，由用户决定保存还是丢弃。
+          if (!targetSession.documentSource?.path
+            || targetSession.externalRuntime?.pendingExternalChange) {
+            enterUnsavedPrompt()
+            break
+          }
+
+          // 开启后：不激活目标标签，直接按 sessionId 保存，再关掉。
+          // 这是本需求的核心行为：关一个后台脏标签不该让界面跳到它上面。
           targetSession.closeRuntime.intent = 'close-tab'
-          targetSession.closeRuntime.promptReason = 'unsaved-changes'
+          targetSession.closeRuntime.promptReason = null
           targetSession.closeRuntime.forceClose = false
           targetSession.closeRuntime.awaitingPathSelection = false
-          targetSession.closeRuntime.waitingSaveJobId = null
-          effects.push({
-            type: 'show-unsaved-prompt',
+
+          const closeTabSaveRequested = saveCoordinator.requestSave(targetSession, {
+            trigger: 'close-auto-save',
           })
+          effects.push(
+            ...closeTabSaveRequested.effects,
+            {
+              type: 'close-tab-after-save',
+              sessionId: targetSessionId,
+            },
+          )
         }
         break
 
@@ -384,9 +442,15 @@ export function createDocumentCommandService({
             break
           }
 
-          // 批量关闭只处理干净标签：脏标签留下来交给用户单独处理，
-          // 这里不弹确认框（多个弹窗用户分不清在确认哪一个）。
+          // 批量关闭一次裁决。
+          //
+          // 开启“关闭标签自动保存”后，脏标签也要保存后一并关；
+          // 未开启时保持旧行为：只关干净标签，脏标签静默保留。
+          const closeTabAutoSaveEnabled = canAutoSave(config, 'closeTab')
           const closableSessionIds = []
+          const saveSessionIds = []
+          const skippedList = []
+
           for (const sessionId of targetSessionIds) {
             const session = store.getSession(sessionId)
             if (!session) {
@@ -395,19 +459,69 @@ export function createDocumentCommandService({
             ensureSaveRuntime(session)
             ensureCloseRuntime(session)
             watchCoordinator.prepareSession(session)
-            if (isDirty(session) || session.saveRuntime.inFlightJobId) {
+
+            // 已经有写盘在跑的标签不能在这轮里关：保存结果会落到已销毁的会话上。
+            if (session.saveRuntime.inFlightJobId) {
+              if (closeTabAutoSaveEnabled) {
+                skippedList.push({ sessionId, reason: 'saving' })
+              }
               continue
             }
+
+            if (!isDirty(session)) {
+              closableSessionIds.push(sessionId)
+              continue
+            }
+
+            // 未开启开关：脏标签一律保留且不提示（与旧版一致）。
+            if (!closeTabAutoSaveEnabled) {
+              continue
+            }
+
+            // recent-missing 无文件可写、也无内容可丢，直接放行关闭。
+            if (deriveDocumentSnapshot(session).isRecentMissing === true) {
+              closableSessionIds.push(sessionId)
+              continue
+            }
+
+            if (!session.documentSource?.path) {
+              skippedList.push({ sessionId, reason: 'no-path' })
+              continue
+            }
+
+            if (session.externalRuntime?.pendingExternalChange) {
+              skippedList.push({ sessionId, reason: 'external-change' })
+              continue
+            }
+
             closableSessionIds.push(sessionId)
+            saveSessionIds.push(sessionId)
           }
 
           if (closableSessionIds.length === 0) {
             break
           }
 
+          if (saveSessionIds.length === 0) {
+            effects.push({
+              type: 'close-tabs',
+              sessionIds: closableSessionIds,
+            })
+            if (skippedList.length > 0) {
+              effects.push({
+                type: 'notify-close-skipped',
+                skipped: skippedList,
+              })
+            }
+            break
+          }
+
+          // 需要先保存的批量关闭交给宿主按 sessionId 逐个写盘，不切换活动标签。
           effects.push({
-            type: 'close-tabs',
-            sessionIds: closableSessionIds,
+            type: 'save-tabs-and-close',
+            closeSessionIds: closableSessionIds,
+            saveSessionIds,
+            skipped: skippedList,
           })
         }
         break
@@ -492,53 +606,45 @@ export function createDocumentCommandService({
           break
         }
 
-        // 多个标签都脏，或唯一脏的不是活动标签时，不做自动保存：
-        // 逐个静默写盘风险太高，交给用户在确认弹窗里明确选择。
-        if (dirtySessionList.length > 1 || dirtySessionList[0] !== session) {
-          session.closeRuntime.intent = 'close'
-          session.closeRuntime.promptReason = 'unsaved-changes'
-          effects.push(
-            {
-              type: 'hold-window-close',
-            },
-            {
-              type: 'show-unsaved-prompt',
-            },
-          )
-          break
-        }
-
         // 进入关闭链路后先记住关闭意图。
-        // 后续无论是自动保存、选路径，还是等待 in-flight 保存，都依赖这份语义上下文。
+        // 后续无论是自动保存还是弹窗，都依赖这份语义上下文。
         session.closeRuntime.intent = 'close'
-        session.closeRuntime.promptReason = null
-        if (canAutoSave(config, 'close')) {
-          // 未命名文档在关闭自动保存时，需要先补齐保存路径。
-          // 这里先把 awaitingPathSelection 置为 true，后续对话框回调才能继续关闭链路。
-          if (!session.documentSource.path) {
-            session.closeRuntime.awaitingPathSelection = true
-          }
+        session.closeRuntime.forceClose = false
 
-          // close-auto-save 仍然完全复用统一保存状态机，
-          // 命令层只负责把“这是关闭触发的保存”这一意图传下去。
-          const saveRequested = saveCoordinator.requestSave(session, {
-            trigger: 'close-auto-save',
-          })
-          // 如果保存请求已经成功进入 in-flight，就把关闭链路挂到该任务上等待完成。
-          if (session.saveRuntime.inFlightJobId) {
-            session.closeRuntime.waitingSaveJobId = session.saveRuntime.inFlightJobId
-          }
+        // 自动保存的许可条件：
+        // 1. 用户开启了“关闭窗口自动保存”
+        // 2. 渲染层已经把每个脏标签的真实正文推送上来（flushFailed 为 false）
+        // 3. 每个脏标签都能被自动保存：有真实路径，且没有未决的外部变更
+        //
+        // 任何一条不满足都不能替用户做决定：
+        // 草稿会要求选路径、recent-missing 无文件可写、外部变更未决意味着
+        // “谁的内容该赢”还没有被用户裁决过，静默写盘会直接覆盖磁盘上的修改。
+        const canAutoSaveAllDirtySessions = canAutoSave(config, 'close')
+          && payload?.flushFailed !== true
+          && payload?.skipAutoSave !== true
+          && dirtySessionList.every(candidate =>
+            Boolean(candidate.documentSource?.path)
+            && !candidate.externalRuntime?.pendingExternalChange,
+          )
+
+        if (canAutoSaveAllDirtySessions) {
+          // 任意数量、任意活动状态都全部保存后关窗，不弹确认框。
+          // 保存按 sessionId 逐个进行，不切换活动标签。
+          session.closeRuntime.promptReason = null
+          session.closeRuntime.waitingSaveJobId = null
+          session.closeRuntime.awaitingPathSelection = false
           effects.push(
             {
               type: 'hold-window-close',
             },
-            ...saveRequested.effects,
+            {
+              type: 'save-all-and-close',
+            },
           )
           break
         }
 
-        // 未开启 close 自动保存时，关闭请求需要进入“未保存确认”分支。
-        // 这里不直接关闭，而是先阻止窗口关闭并要求渲染层展示提示。
+        // 不满足自动保存条件时，回落到未保存确认弹窗。
         session.closeRuntime.promptReason = 'unsaved-changes'
         effects.push(
           {

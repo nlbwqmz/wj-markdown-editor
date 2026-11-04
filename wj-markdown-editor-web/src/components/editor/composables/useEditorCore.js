@@ -345,6 +345,41 @@ export function useEditorCore({ editorRef, t }) {
     return editorViews.has(sessionId)
   }
 
+  /**
+   * 取某个标签的 EditorView。
+   *
+   * 关闭链路需要读“非活动标签”的正文（每个标签的 view 常驻），
+   * 因此这里不能只用 editorView.value。
+   *
+   * @param {string | number} sessionId
+   * @returns {EditorView | null} 该会话对应的编辑器实例；尚未创建时返回 null
+   */
+  function getEditorView(sessionId) {
+    return editorViews.get(sessionId) ?? null
+  }
+
+  /**
+   * 反查一个 view 属于哪个会话。
+   *
+   * 正文回写必须确认“当前活动视图就是目标会话的视图”：
+   * 切换文档时目标标签的容器可能晚一帧才挂载，此时活动视图仍是上一个标签的，
+   * 直接把新文档的正文回写过去会把旧标签的内容清空。
+   *
+   * @param {EditorView | null} view
+   * @returns {string | number | null} 所属会话 id；不属于任何会话时返回 null
+   */
+  function resolveSessionIdByView(view) {
+    if (!view) {
+      return null
+    }
+    for (const [sessionId, candidate] of editorViews) {
+      if (candidate === view) {
+        return sessionId
+      }
+    }
+    return null
+  }
+
   function destroyEditor() {
     for (const sessionId of [...editorViews.keys()]) {
       releaseScrollHandler(sessionId)
@@ -391,6 +426,8 @@ export function useEditorCore({ editorRef, t }) {
     activateEditorView,
     destroyEditorView,
     hasEditorView,
+    getEditorView,
+    resolveSessionIdByView,
     destroyEditor,
     reconfigureTheme,
     reconfigureExtensions,

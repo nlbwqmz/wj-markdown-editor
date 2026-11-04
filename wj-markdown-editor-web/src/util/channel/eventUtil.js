@@ -3,10 +3,12 @@ import i18n from '@/i18n/index.js'
 import { useCommonStore } from '@/stores/counter.js'
 import { syncClosePromptSnapshot } from '@/util/channel/closePromptSyncService.js'
 import eventEmit from '@/util/channel/eventEmit.js'
+import { resolveWindowMessageContent } from '@/util/channel/windowEffectMessageUtil.js'
 import {
   createDocumentSessionEventHandlers,
   DOCUMENT_SESSION_RENDERER_SNAPSHOT_CHANGED_EVENT,
 } from '@/util/document-session/documentSessionEventUtil.js'
+import { handleFlushRequest } from '@/util/document-session/rendererSessionContentFlushService.js'
 
 const { t } = i18n.global
 
@@ -19,8 +21,13 @@ function showWindowEffectMessage(data) {
     return
   }
 
+  const content = resolveWindowMessageContent(data, t)
+  if (!content) {
+    return
+  }
+
   message[data.type]({
-    content: t(data.content) || data.content,
+    content,
     key: data.key,
     duration: data.duration,
   })
@@ -57,6 +64,11 @@ export default {
     })
     // session 路径的一次性提示已经收口到 `window.effect.message`。
     // 这里继续保留 legacy `message` 监听，只为了兼容导出、上传等非 session 流程。
+    // 关窗口时主进程会反向要求渲染层把各标签的当前正文推上来，
+    // 收到 ack 后它才会进入保存流程；提前 ack 等于让它拿旧正文写盘。
+    eventEmit.on('document.flush-request', (data) => {
+      handleFlushRequest(data).catch(() => {})
+    })
     eventEmit.on('message', (data) => {
       showWindowEffectMessage(data)
     })

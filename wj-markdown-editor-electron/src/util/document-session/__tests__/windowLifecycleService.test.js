@@ -383,7 +383,17 @@ async function executeTestCommand(target, command, payload = null) {
   if (typeof command === 'string' && command.startsWith('watch.')) {
     return await runtime.dispatch(windowId, command, payload)
   }
-  return await runtime.executeUiCommand(windowId, command, payload)
+
+  // 渲染层的 document.edit 现在必须显式带 sessionId。
+  // 测试里直接调 executeUiCommand 时默认指向窗口活动会话，等价于渲染层的实际行为。
+  const normalizedPayload = command === 'document.edit' && payload && !payload.sessionId
+    ? {
+        ...payload,
+        sessionId: runtime.store.getActiveSessionIdByWindowId?.(windowId) || null,
+      }
+    : payload
+
+  return await runtime.executeUiCommand(windowId, command, normalizedPayload)
 }
 
 async function openDocumentPathThroughRuntime(targetPath, options = {}) {
@@ -482,6 +492,18 @@ describe('windowLifecycleService 生命周期 facade', () => {
     resetDocumentSessionRuntime()
     lifecycleRegistry.reset()
     sendMock.mockReset()
+    // 关窗口前主进程会反向要求渲染层 flush 正文并等待 ack。
+    // 测试里没有真实渲染层，这里用同步 ack 模拟“渲染层已经收敛完毕”。
+    sendMock.mockImplementation((win, payload) => {
+      if (payload?.event !== 'document.flush-request') {
+        return
+      }
+      const windowId = winInfoUtil.getWindowIdByWin(win)
+      winInfoUtil.handleFlushAck(windowId, {
+        requestId: payload.data?.requestId,
+        ok: true,
+      })
+    })
     writeFileMock.mockReset()
     readFileMock.mockReset()
     pathExistsMock.mockReset()
@@ -997,6 +1019,44 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
   })
 
+  it('关窗口自动保存失败时必须回落到未保存确认，不能把窗口卡死', async () => {
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startView: 'split' })
+    pathExistsMock.mockImplementation(async targetPath => ['D:/first.md', 'D:/second.md'].includes(targetPath))
+    readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
+    writeFileMock.mockRejectedValueOnce(new Error('磁盘已满'))
+
+    await winInfoUtil.createNew('D:/first.md')
+    const [winInfo] = listWindowRefs()
+    const firstSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    await executeTestCommand(winInfo, 'document.open-path-in-current-window', {
+      path: 'D:/second.md',
+      switchPolicy: 'direct-switch',
+      expectedSessionId: firstSnapshot.sessionId,
+      expectedRevision: firstSnapshot.revision,
+    })
+
+    // 只有活动标签脏，也会走 save-all-and-close。
+    winInfoUtil.updateTempContent(winInfo.id, '# 第二个标签未保存')
+    await vi.waitFor(() => {
+      expectDocumentContent(winInfo, '# 第二个标签未保存')
+    })
+
+    winInfo.win.close()
+
+    await vi.waitFor(async () => {
+      const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+      expect(snapshot.closePrompt).toEqual(expect.objectContaining({
+        visible: true,
+        reason: 'unsaved-changes',
+        scope: 'window',
+      }))
+    })
+
+    // 失败后必须保留“直接退出”这个出口：
+    // 只返回 false 而不回到确认态，会让写盘失败的文件把窗口永久卡住。
+    expect(listWindowRefs()).toHaveLength(1)
+  })
+
   it('close-auto-save 成功关闭窗口后，不得再次 startWatching', async () => {
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startView: 'split' })
     pathExistsMock.mockResolvedValue(true)
@@ -1016,12 +1076,15 @@ describe('windowLifecycleService 生命周期 facade', () => {
       expect(listWindowRefs()).toHaveLength(0)
     })
     expect(stopWatchingMock).toHaveBeenCalled()
-    expect(startWatchingMock).not.toHaveBeenCalled()
+    // 保存成功后的 watcher 重绑会在关窗之前发生，这是预期行为；
+    // 关窗完成后不允许再启动任何新的监听，否则就是监听泄漏。
+    const startCallCountAtClose = startWatchingMock.mock.calls.length
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(startWatchingMock.mock.calls.length).toBe(startCallCountAtClose)
   })
 
-  it('关闭链路命中草稿首次保存且 dialog.save-target-cancelled 时，必须直接取消关闭流程并保持窗口打开', async () => {
+  it('关闭链路命中未命名草稿时，必须回落到未保存确认弹窗且不得弹系统保存对话框', async () => {
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['close'], startView: 'split' })
-    showSaveDialogSyncMock.mockReturnValueOnce(undefined)
 
     await winInfoUtil.createNew(null)
 
@@ -1031,9 +1094,16 @@ describe('windowLifecycleService 生命周期 facade', () => {
     const closeEvent = winInfo.win.close()
 
     expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
-    await vi.waitFor(() => {
-      expect(showSaveDialogSyncMock).toHaveBeenCalledTimes(1)
+    await vi.waitFor(async () => {
+      const snapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+      expect(snapshot.closePrompt).toEqual(expect.objectContaining({
+        visible: true,
+        reason: 'unsaved-changes',
+        scope: 'window',
+      }))
     })
+    // 自动流程不弹系统对话框：草稿必须交给用户自己决定保存还是丢弃。
+    expect(showSaveDialogSyncMock).not.toHaveBeenCalled()
     expect(writeFileMock).not.toHaveBeenCalled()
     expect(listWindowRefs()).toHaveLength(1)
     expect(winInfoUtil.getDocumentContext(winInfo.id).path).toBeNull()
@@ -1204,16 +1274,19 @@ describe('windowLifecycleService 生命周期 facade', () => {
     const closeEvent = winInfo.win.close()
 
     expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
-    expect(sendMock.mock.calls.some(call => call[1]?.event === 'unsaved')).toBe(false)
-    expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
-      event: 'document.snapshot.changed',
-      data: expect.objectContaining({
-        closePrompt: expect.objectContaining({
-          visible: true,
-          reason: 'unsaved-changes',
+    // 关窗口前会先向渲染层发起正文收敛，因此关闭裁决是异步落地的。
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith(winInfo.win, {
+        event: 'document.snapshot.changed',
+        data: expect.objectContaining({
+          closePrompt: expect.objectContaining({
+            visible: true,
+            reason: 'unsaved-changes',
+          }),
         }),
-      }),
+      })
     })
+    expect(sendMock.mock.calls.some(call => call[1]?.event === 'unsaved')).toBe(false)
     expect(listWindowRefs()).toHaveLength(1)
   })
 
@@ -1430,7 +1503,10 @@ describe('windowLifecycleService 生命周期 facade', () => {
     const saveResult = await manualSavePromise
 
     expect(saveResult).toBe(true)
-    expect(listWindowRefs()).toHaveLength(0)
+    // 关窗是在保存链路结算后异步继续的，不能同步断言窗口已销毁。
+    await vi.waitFor(() => {
+      expect(listWindowRefs()).toHaveLength(0)
+    })
     expect(sendMock.mock.calls.some(call => call[1]?.event === 'window.effect.message')).toBe(false)
   })
 
@@ -2593,6 +2669,82 @@ describe('windowLifecycleService 生命周期 facade', () => {
     })
   })
 
+  it('批量关闭含草稿时，文件标签必须先按自己的正文保存，不能被写成空内容', async () => {
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: ['closeTab'], startView: 'split' })
+    pathExistsMock.mockImplementation(async targetPath => ['D:/a.md', 'D:/b.md'].includes(targetPath))
+    readFileMock.mockImplementation(async targetPath => `# ${targetPath}`)
+
+    await winInfoUtil.createNew('D:/a.md')
+    const [winInfo] = listWindowRefs()
+    const runtime = getDocumentSessionRuntime()
+
+    const firstSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    await executeTestCommand(winInfo, 'document.open-path-in-current-window', {
+      path: 'D:/b.md',
+      switchPolicy: 'direct-switch',
+      expectedSessionId: firstSnapshot.sessionId,
+      expectedRevision: firstSnapshot.revision,
+    })
+
+    // a 改脏（后台标签），再新建一个草稿并改脏（草稿成为活动标签）。
+    await executeTestCommand(winInfo, 'document.edit', {
+      sessionId: firstSnapshot.sessionId,
+      content: '# a 修改',
+      seq: 3,
+    })
+    await winInfoUtil.createDraftTab(winInfo.id)
+
+    const sessionIds = runtime.store.getSessionIdsByWindowId(winInfo.id)
+    expect(sessionIds).toHaveLength(3)
+    const draftSessionId = sessionIds[2]
+    await executeTestCommand(winInfo, 'document.edit', {
+      sessionId: draftSessionId,
+      content: '# 草稿内容',
+      seq: 4,
+    })
+
+    await executeTestCommand(winInfo, 'document.close-tabs', {
+      sessionIds: [firstSnapshot.sessionId, draftSessionId],
+    })
+
+    // 文件标签必须按自己的正文写盘；草稿无路径，只会被跳过并保留。
+    expect(writeFileMock).toHaveBeenCalledWith('D:/a.md', '# a 修改')
+    expect(writeFileMock.mock.calls.some(call => call[1] === '')).toBe(false)
+    expect(runtime.store.getSession(draftSessionId)).not.toBeNull()
+  })
+
+  it('标签迁移到新窗口后必须重置该会话的 edit seq，否则新窗口的编辑会全部被丢弃', async () => {
+    getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startView: 'split' })
+    pathExistsMock.mockResolvedValue(true)
+    readFileMock.mockResolvedValue('# 原始内容')
+
+    await winInfoUtil.createNew('D:/first.md')
+    const [winInfo] = listWindowRefs()
+    const firstSnapshot = await executeTestCommand(winInfo, 'document.get-session-snapshot')
+    await executeTestCommand(winInfo, 'document.open-path-in-current-window', {
+      path: 'D:/second.md',
+      switchPolicy: 'direct-switch',
+      expectedSessionId: firstSnapshot.sessionId,
+      expectedRevision: firstSnapshot.revision,
+    })
+
+    const runtime = getDocumentSessionRuntime()
+    const windowSessionIds = runtime.store.getSessionIdsByWindowId(winInfo.id)
+    const targetSessionId = windowSessionIds[1]
+
+    await executeTestCommand(winInfo, 'document.edit', {
+      content: '# 高序号编辑',
+      seq: 5,
+    })
+    expect(runtime.store.getSession(targetSessionId).editorSnapshot.editSeq).toBe(5)
+
+    await executeTestCommand(winInfo, 'document.move-tab-to-new-window', { sessionId: targetSessionId })
+
+    // 序号权威随会话换到了另一个渲染进程，那边从 1 开始计数：
+    // 不归零的话，新窗口的第一条编辑会被当成过期写入丢弃。
+    expect(runtime.store.getSession(targetSessionId).editorSnapshot.editSeq).toBe(0)
+  })
+
   it('关闭窗口必须销毁该窗口的全部会话，不能只销毁活动会话', async () => {
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startView: 'split' })
     pathExistsMock.mockImplementation(async targetPath => ['D:/first.md', 'D:/second.md'].includes(targetPath))
@@ -3117,7 +3269,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
     expect(writeFileMock).not.toHaveBeenCalled()
   })
 
-  it('document.prepare-open-path-in-current-window 在当前文档 dirty 时，必须返回 needs-save-choice 且不提前保存', async () => {
+  it('document.prepare-open-path-in-current-window 在当前文档 dirty 时，也必须直接返回 ready-to-switch 且不提前保存', async () => {
     pathExistsMock.mockImplementation(async targetPath => ['D:/current.md', 'D:/next.md'].includes(targetPath))
     readFileMock.mockImplementation(async (targetPath) => {
       if (targetPath === 'D:/current.md') {
@@ -3146,9 +3298,10 @@ describe('windowLifecycleService 生命周期 facade', () => {
       sourceRevision: snapshot.revision,
     })
 
+    // 在当前窗口打开 = 新增标签，当前脏文档继续作为后台标签存在，不需要“切换前保存”。
     expect(result).toEqual({
       ok: true,
-      decision: 'needs-save-choice',
+      decision: 'ready-to-switch',
       path: 'D:/next.md',
       sourceSessionId: snapshot.sessionId,
       sourceRevision: snapshot.revision,

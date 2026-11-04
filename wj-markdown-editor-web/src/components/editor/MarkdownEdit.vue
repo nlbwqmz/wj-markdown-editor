@@ -29,10 +29,12 @@ import { createPreviewRefreshCoordinator } from '@/components/editor/previewRefr
 import { useCommonStore } from '@/stores/counter.js'
 import { requestOpenDroppedMarkdownDocument } from '@/util/document-session/documentDropOpenUtil.js'
 import { resolveDocumentScrollAnchorIdentity } from '@/util/document-session/documentScrollAnchorIdentityUtil.js'
+import { releaseDocumentEditSeq } from '@/util/document-session/rendererDocumentCommandUtil.js'
 import {
   shouldDeferExternalEditorDispatch,
 } from '@/util/editor/compositionStateUtil.js'
 import {
+  isContentSyncTargetMismatch,
   resolvePendingContentUpdateMeta,
   shouldDeferStaleContentSync,
 } from '@/util/editor/contentUpdateMetaUtil.js'
@@ -206,6 +208,8 @@ const {
   activateEditorView,
   destroyEditorView,
   hasEditorView,
+  getEditorView,
+  resolveSessionIdByView,
   destroyEditor,
   reconfigureTheme,
   reconfigureExtensions,
@@ -752,6 +756,30 @@ function hasPendingModelSync() {
   return modelSyncScheduler.hasPending()
 }
 
+/**
+ * 读取某个标签当前的编辑器正文。
+ *
+ * 关闭链路（关单个标签 / 批量关标签 / 关窗口）必须拿到该标签的真实内容，
+ * 而不是主进程 session 里可能落后的副本。
+ * 返回 null 表示这个标签在本窗口还没有自己的 EditorView
+ * （后台新开、从未激活过），此时 session 内容就是权威值。
+ *
+ * @param {string} sessionId
+ * @returns {string | null} 该标签当前正文；没有对应编辑器实例时返回 null
+ */
+function readSessionContent(sessionId) {
+  if (typeof sessionId !== 'string' || sessionId === '') {
+    return null
+  }
+
+  const view = getEditorView(sessionId)
+  if (!view) {
+    return null
+  }
+
+  return view.state.doc.toString()
+}
+
 function refreshToolbarList() {
   toolbarList.value = buildToolbarList()
 }
@@ -1097,6 +1125,10 @@ function pruneClosedDocumentTabCaches() {
     // 标签关闭：销毁它自己的 EditorView，并释放容器引用
     destroyEditorView(closedTab.sessionId)
     editorContainers.delete(closedTab.sessionId)
+    // 会话真的被销毁了，才能回收它的 edit seq。
+    // 关闭命令被受理时不能回收：脏标签会先进确认流程，用户取消后还要继续编辑，
+    // 计数器归零会让后续编辑以更小的序号到达并被主进程当成过期写入丢弃。
+    releaseDocumentEditSeq(closedTab.sessionId)
     // 滚动锚点按文档身份索引：必须走与采集侧同一个 key 生成函数，
     // 不能在这里手拼 `displayPath || session:<id>`——
     // 否则两边取值规则一旦分叉，桶就删不掉，内存泄漏。
@@ -1471,6 +1503,12 @@ function flushPendingExternalSync() {
     return false
   }
 
+  // 同 syncExternalModelValue：视图与会话错配时不能回写，
+  // 否则会把目标文档的正文灌进上一个标签。
+  if (isActiveViewForAnotherSession(view)) {
+    return false
+  }
+
   const currentValue = getCurrentEditorContent(view)
   const compositionActive = isCompositionActive()
   if (shouldDeferExternalEditorDispatch({
@@ -1505,8 +1543,35 @@ function flushPendingExternalSync() {
   return true
 }
 
+function resolveSnapshotSessionId() {
+  return store.documentSessionSnapshot?.activeSessionId
+    ?? store.documentSessionSnapshot?.sessionId
+    ?? null
+}
+
+/**
+ * 当前活动视图是否与快照声明的目标会话不一致。
+ *
+ * 目标标签的容器可能晚一帧才挂载（新建标签、切换文档都会这样），
+ * 此时编辑器里仍是上一个标签的 view。把新文档的正文（例如空草稿的 `''`）
+ * 写进旧视图会静默清空旧标签的内容，而关闭标签时的正文收敛会把它写进磁盘。
+ */
+function isActiveViewForAnotherSession(view) {
+  return isContentSyncTargetMismatch({
+    snapshotSessionId: resolveSnapshotSessionId(),
+    viewSessionId: resolveSessionIdByView(view),
+  })
+}
+
 function syncExternalModelValue(newValue = props.modelValue) {
   const view = editorView.value
+
+  // 视图还没切到目标会话时，本次回写必须跳过：
+  // 目标视图就绪后 initEditor / ensureEditorViewForSession 会带上正确正文。
+  if (isActiveViewForAnotherSession(view)) {
+    return
+  }
+
   const pendingContentUpdateMeta = resolvePendingContentUpdateMeta({
     handledToken: handledContentUpdateToken.value,
     contentUpdateMeta: props.contentUpdateMeta,
@@ -1774,6 +1839,7 @@ onBeforeUnmount(() => {
 defineExpose({
   flushPendingModelSync,
   hasPendingModelSync,
+  readSessionContent,
   captureViewScrollAnchors,
   scheduleRestoreForCurrentSnapshot,
   cancelPendingViewScrollRestore,

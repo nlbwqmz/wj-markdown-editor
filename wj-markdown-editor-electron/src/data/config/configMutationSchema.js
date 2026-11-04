@@ -77,7 +77,7 @@ const OPERATION_TYPE_SET = new Set([
 const SHORTCUT_KEY_FIELD_SET = new Set(['keymap', 'enabled'])
 // 可选值必须与 `configSchema.autoSave.items.enum` 保持一致，
 // 否则写配置时会被当成非法 option 拒绝。
-const AUTO_SAVE_OPTION_SET = new Set(['blur', 'close', 'switch'])
+const AUTO_SAVE_OPTION_SET = new Set(['blur', 'close', 'switch', 'closeTab'])
 
 function createPathKey(path) {
   if (!Array.isArray(path) || path.length === 0) {

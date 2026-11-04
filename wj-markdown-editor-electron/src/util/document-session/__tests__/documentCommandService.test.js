@@ -401,7 +401,7 @@ describe('documentCommandService', () => {
     expect(copySucceeded.session.watchRuntime.watchingPath).toBe('C:/docs/demo.md')
   })
 
-  it('关闭请求命中 autoSave=close 且已有有效路径时，必须走同一保存管线而不是旁路写盘', () => {
+  it('关闭请求命中 autoSave=close 且已有有效路径时，必须交给 save-all-and-close 统一收口，而不是只保存活动会话', () => {
     const { store, service } = createTestContext(['close'])
     const session = createBoundFileSession({
       sessionId: 'close-session',
@@ -430,14 +430,11 @@ describe('documentCommandService', () => {
         type: 'hold-window-close',
       },
       {
-        type: 'execute-save',
-        job: expect.objectContaining({
-          trigger: 'close-auto-save',
-          content: '# 关闭前自动保存内容',
-        }),
+        type: 'save-all-and-close',
       },
     ])
-    expect(closeRequested.session.closeRuntime.waitingSaveJobId).toBe('job-1')
+    // 保存不再由命令层直接起 job：全部脏标签交给宿主按 sessionId 逐个保存。
+    expect(closeRequested.session.closeRuntime.waitingSaveJobId).toBeNull()
   })
 
   it('document.save-and-close 必须复用保存状态机，并在重复点击时只等待同一个 job', () => {
@@ -1204,6 +1201,11 @@ describe('documentCommandService', () => {
         content: '# 关闭前自动保存内容',
       },
     })
+    // 先手动作一次保存，让关闭链路有一个可等待的 in-flight job。
+    service.dispatch({
+      windowId,
+      command: 'document.save',
+    })
     const closeRequested = service.dispatch({
       windowId,
       command: 'document.request-close',
@@ -1238,17 +1240,10 @@ describe('documentCommandService', () => {
       },
     })
 
+    // 已有 in-flight 保存时，关闭链路只挂等待，不再另起保存任务。
     expect(closeRequested.effects).toEqual([
       {
         type: 'hold-window-close',
-      },
-      {
-        type: 'execute-save',
-        job: expect.objectContaining({
-          jobId: 'job-1',
-          trigger: 'close-auto-save',
-          content: '# 关闭前自动保存内容',
-        }),
       },
     ])
     expect(saveSucceeded.effects.find(effect => effect.type === 'close-window')).toBeUndefined()
@@ -1360,7 +1355,7 @@ describe('documentCommandService', () => {
     })
   })
 
-  it('dialog.save-target-cancelled 发生在关闭链路的首次保存分支时，必须清空 closeRuntime 并保持窗口打开', () => {
+  it('未命名草稿在开启关闭自动保存时，也必须回落到未保存确认弹窗，不得弹系统保存对话框', () => {
     const { store, service } = createTestContext(['close'])
     const session = createDraftSession({
       sessionId: 'draft-close-session',
@@ -1379,45 +1374,43 @@ describe('documentCommandService', () => {
       windowId,
       command: 'document.request-close',
     })
-    const cancelled = service.dispatch({
-      windowId,
-      command: 'dialog.save-target-cancelled',
-    })
 
+    // 自动保存流程一旦弹出系统对话框就不再是“自动”了：
+    // 草稿属于“不能替用户决定”的情形，必须由用户在确认弹窗里选保存还是丢弃。
     expect(closeRequested.effects).toEqual([
       {
         type: 'hold-window-close',
       },
       {
-        type: 'open-save-dialog',
-        trigger: 'close-auto-save',
+        type: 'show-unsaved-prompt',
       },
     ])
-    expect(cancelled.session.documentSource.path).toBeNull()
-    expect(cancelled.session.closeRuntime).toEqual({
-      intent: null,
-      promptReason: null,
-      waitingSaveJobId: null,
-      awaitingPathSelection: false,
-      forceClose: false,
+    expect(closeRequested.session.documentSource.path).toBeNull()
+    expect(closeRequested.snapshot.closePrompt).toMatchObject({
+      visible: true,
+      scope: 'window',
+      reason: 'unsaved-changes',
     })
-    expect(cancelled.effects.find(effect => effect.type === 'show-unsaved-prompt')).toBeUndefined()
-    expect(cancelled.effects.find(effect => effect.type === 'close-window')).toBeUndefined()
   })
 
-  it('关闭链路首次保存已选路径并进入 in-flight 后，迟到的 dialog.save-target-cancelled 不得把状态拖回未保存确认态', () => {
+  it('存在未决外部变更时，关闭自动保存必须回落到未保存确认弹窗，不能覆盖外部修改', () => {
     const { store, service } = createTestContext(['close'])
-    const session = createDraftSession({
-      sessionId: 'draft-close-stale-cancel-session',
+    const session = createBoundFileSession({
+      sessionId: 'external-pending-close-session',
+      path: 'C:/docs/demo.md',
+      content: '# 原始内容',
+      stat: null,
       now: 1700000002083,
     })
+    // 外部变更未决 = “谁的内容该赢”还没被用户裁决过。
+    session.externalRuntime.pendingExternalChange = { version: 2 }
     const windowId = bindSession(store, session)
 
     service.dispatch({
       windowId,
       command: 'document.edit',
       payload: {
-        content: '# 草稿内容',
+        content: '# 本地修改',
       },
     })
 
@@ -1425,49 +1418,20 @@ describe('documentCommandService', () => {
       windowId,
       command: 'document.request-close',
     })
-    const pathSelected = service.dispatch({
-      windowId,
-      command: 'dialog.save-target-selected',
-      payload: {
-        path: 'C:/docs/draft-close.md',
-      },
-    })
-    const staleCancelled = service.dispatch({
-      windowId,
-      command: 'dialog.save-target-cancelled',
-    })
 
     expect(closeRequested.effects).toEqual([
       {
         type: 'hold-window-close',
       },
       {
-        type: 'open-save-dialog',
-        trigger: 'close-auto-save',
+        type: 'show-unsaved-prompt',
       },
     ])
-    expect(pathSelected.effects).toEqual([
-      {
-        type: 'execute-save',
-        job: expect.objectContaining({
-          jobId: 'job-1',
-          path: 'C:/docs/draft-close.md',
-          trigger: 'close-auto-save',
-        }),
-      },
-    ])
-    expect(staleCancelled.effects.find(effect => effect.type === 'show-unsaved-prompt')).toBeUndefined()
-    expect(staleCancelled.effects.find(effect => effect.type === 'close-window')).toBeUndefined()
-    expect(staleCancelled.session.closeRuntime).toEqual({
-      intent: 'close',
-      promptReason: null,
-      waitingSaveJobId: 'job-1',
-      awaitingPathSelection: false,
-      forceClose: false,
+    expect(closeRequested.snapshot.closePrompt).toMatchObject({
+      visible: true,
+      scope: 'window',
+      reason: 'unsaved-changes',
     })
-    expect(staleCancelled.session.saveRuntime.inFlightJobId).toBe('job-1')
-    expect(staleCancelled.session.saveRuntime.status).toBe('queued')
-    expect(staleCancelled.session.saveRuntime.trigger).toBe('close-auto-save')
   })
 
   it('草稿手动保存时，即使带了 payload.path，document.save 首次也必须先产出 open-save-dialog，不能直接 execute-save', () => {
@@ -1677,6 +1641,12 @@ describe('documentCommandService', () => {
         content: '# 关闭前自动保存内容',
       },
     })
+    // 先用手动保存造出一个 in-flight job，再发起关闭：
+    // 关闭链路必须先挂到已有保存任务上等待，而不是另起一个。
+    service.dispatch({
+      windowId,
+      command: 'document.save',
+    })
     const closeRequested = service.dispatch({
       windowId,
       command: 'document.request-close',
@@ -1736,6 +1706,11 @@ describe('documentCommandService', () => {
       payload: {
         content: '# 关闭前自动保存内容',
       },
+    })
+    // 同上：先手动保存造出 in-flight job，关闭链路才会挂上去等待。
+    service.dispatch({
+      windowId,
+      command: 'document.save',
     })
     service.dispatch({
       windowId,
@@ -2889,7 +2864,7 @@ describe('documentCommandService', () => {
       })
     })
 
-    it('关闭窗口时多个脏标签必须走一次笼统确认，而不是逐个静默保存', () => {
+    it('关闭窗口时多个脏标签必须交给 save-all-and-close 一次性保存，不再弹笼统确认', () => {
       const { store, service, windowId, firstSession, secondSession } = createTwoTabContext(['close'])
       firstSession.editorSnapshot.content = '# first 已修改'
       firstSession.editorSnapshot.revision = 1
@@ -2907,18 +2882,14 @@ describe('documentCommandService', () => {
           type: 'hold-window-close',
         },
         {
-          type: 'show-unsaved-prompt',
+          type: 'save-all-and-close',
         },
       ])
-      expect(result.snapshot.closePrompt).toMatchObject({
-        visible: true,
-        scope: 'window',
-        unsavedTabCount: 2,
-      })
+      // 自动保存路径不得切换活动标签：关窗不该让界面在后台跳标签。
       expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-first')
     })
 
-    it('窗口关闭时如果只有后台标签脏，也必须进入确认而不是直接关窗', () => {
+    it('窗口关闭时只有后台标签脏，也必须被保存后再关窗', () => {
       const { service, windowId, secondSession } = createTwoTabContext(['close'])
       secondSession.editorSnapshot.content = '# second 已修改'
       secondSession.editorSnapshot.revision = 1
@@ -2930,12 +2901,9 @@ describe('documentCommandService', () => {
       })
 
       expect(result.effects).toContainEqual({
-        type: 'show-unsaved-prompt',
+        type: 'save-all-and-close',
       })
-      expect(result.snapshot.closePrompt).toMatchObject({
-        scope: 'window',
-        unsavedTabCount: 1,
-      })
+      expect(result.snapshot.closePrompt).toBeNull()
     })
 
     it('多个脏标签时 document.save-and-close 必须交给 save-all-and-close 收口', () => {
@@ -2956,6 +2924,146 @@ describe('documentCommandService', () => {
           type: 'save-all-and-close',
         },
       ])
+    })
+
+    it('document.edit 必须按 sessionId 定向写入，不能落到窗口活动会话', () => {
+      const { store, service, windowId, firstSession, secondSession } = createTwoTabContext()
+      secondSession.editorSnapshot.content = '# second 原始'
+      secondSession.editorSnapshot.revision = 1
+
+      service.dispatch({
+        windowId,
+        sessionId: 'tab-second',
+        command: 'document.edit',
+        payload: {
+          sessionId: 'tab-second',
+          content: '# second 后台编辑',
+        },
+      })
+
+      // 活动会话保持不动，后台会话拿到新正文：
+      // 这正是“关后台标签不会把活动标签内容写进别人文件”的前提。
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-first')
+      expect(firstSession.editorSnapshot.content).toBe('# first')
+      expect(secondSession.editorSnapshot.content).toBe('# second 后台编辑')
+    })
+
+    it('document.edit 的 seq 必须单调递增，过期写入必须被丢弃', () => {
+      const { service, windowId, secondSession } = createTwoTabContext()
+
+      service.dispatch({
+        windowId,
+        sessionId: 'tab-second',
+        command: 'document.edit',
+        payload: { sessionId: 'tab-second', content: '# 新版本', seq: 2 },
+      })
+      service.dispatch({
+        windowId,
+        sessionId: 'tab-second',
+        command: 'document.edit',
+        payload: { sessionId: 'tab-second', content: '# 旧版本', seq: 1 },
+      })
+
+      // 批量关闭/flush 会并发推多条全文，没有序号就会让旧正文盖回新正文。
+      expect(secondSession.editorSnapshot.content).toBe('# 新版本')
+    })
+
+    it('开启关闭标签自动保存时，关后台脏标签必须直接保存并关闭，且不切换活动标签', () => {
+      const { store, service, windowId, secondSession } = createTwoTabContext(['closeTab'])
+      secondSession.editorSnapshot.content = '# second 已修改'
+      secondSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tab',
+        payload: { sessionId: 'tab-second' },
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'execute-save',
+          job: expect.objectContaining({
+            trigger: 'close-auto-save',
+            path: 'C:/docs/second.md',
+            content: '# second 已修改',
+          }),
+        },
+        {
+          type: 'close-tab-after-save',
+          sessionId: 'tab-second',
+        },
+      ])
+      // 关键不变量：关后台标签不允许把活动标签拖过去。
+      expect(store.getActiveSessionIdByWindowId(windowId)).toBe('tab-first')
+    })
+
+    it('开启关闭标签自动保存时，未命名草稿与外部变更未决的标签必须被跳过并汇总提示', () => {
+      const { store, service, windowId, firstSession } = createTwoTabContext(['closeTab'])
+      const draftSession = createDraftSession({
+        sessionId: 'tab-draft',
+        now: 1700000003050,
+      })
+      store.createSession(draftSession)
+      store.addSessionToWindow({ windowId, sessionId: 'tab-draft' })
+      draftSession.editorSnapshot.content = '# 草稿'
+      draftSession.editorSnapshot.revision = 1
+
+      const externalSession = createBoundFileSession({
+        sessionId: 'tab-external',
+        path: 'C:/docs/external.md',
+        content: '# external',
+        stat: null,
+        now: 1700000003051,
+      })
+      store.createSession(externalSession)
+      store.addSessionToWindow({ windowId, sessionId: 'tab-external' })
+      externalSession.editorSnapshot.content = '# external 已修改'
+      externalSession.editorSnapshot.revision = 1
+      externalSession.externalRuntime.pendingExternalChange = { version: 1 }
+
+      // 活动标签改成脏的，覆盖“先保存再关”的分支。
+      firstSession.editorSnapshot.content = '# first 已修改'
+      firstSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tabs',
+        payload: { sessionIds: ['tab-draft', 'tab-external', 'tab-first'] },
+      })
+
+      expect(result.effects).toEqual([
+        {
+          type: 'save-tabs-and-close',
+          // 草稿与外部变更未决的标签被跳过并保留，不参与关闭。
+          closeSessionIds: ['tab-first'],
+          saveSessionIds: ['tab-first'],
+          skipped: [
+            { sessionId: 'tab-draft', reason: 'no-path' },
+            { sessionId: 'tab-external', reason: 'external-change' },
+          ],
+        },
+      ])
+    })
+
+    it('未开启关闭标签自动保存时，批量关闭仍然只关干净标签', () => {
+      const { service, windowId, secondSession, firstSession } = createTwoTabContext()
+      firstSession.editorSnapshot.content = '# first 已修改'
+      firstSession.editorSnapshot.revision = 1
+
+      const result = service.dispatch({
+        windowId,
+        command: 'document.close-tabs',
+        payload: { sessionIds: ['tab-first', 'tab-second'] },
+      })
+
+      // 行为必须与旧版完全一致：脏标签静默保留，不提示、不保存。
+      expect(result.effects).toEqual([
+        {
+          type: 'close-tabs',
+          sessionIds: ['tab-second'],
+        },
+      ])
+      expect(secondSession.editorSnapshot.content).toBe('# second')
     })
   })
 })

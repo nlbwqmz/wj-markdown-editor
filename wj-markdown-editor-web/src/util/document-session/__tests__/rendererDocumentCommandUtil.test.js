@@ -45,7 +45,7 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
   await requestDocumentSave()
   await requestDocumentSaveAndClose()
   await requestDocumentSaveCopy()
-  await requestDocumentEdit('# 新内容')
+  await requestDocumentEdit('session-1', '# 新内容')
   await requestDocumentOpenDialog()
   await requestDocumentResolveOpenTarget('C:/docs/note.md', {
     entrySource: 'recent',
@@ -79,7 +79,9 @@ test('renderer 文档命令工具必须把保存、打开、recent 与 snapshot 
     {
       event: 'document.edit',
       data: {
+        sessionId: 'session-1',
         content: '# 新内容',
+        seq: 1,
       },
     },
     { event: 'document.request-open-dialog' },

@@ -316,7 +316,8 @@ describe('editorView 当前窗口切换前准备', () => {
     const result = await wrapper.vm.$.exposed.requestCurrentWindowOpenPreparation()
 
     expect(editorPreparationState.markdownEditExpose.flushPendingModelSync).toHaveBeenCalledTimes(1)
-    expect(editorPreparationState.requestDocumentEdit).toHaveBeenCalledWith('# 最新正文')
+    // 正文归属必须显式带 sessionId：主进程不再回退到“活动会话”。
+    expect(editorPreparationState.requestDocumentEdit).toHaveBeenCalledWith('session-editor', '# 最新正文')
     expect(result.snapshot.revision).toBe(8)
   })
 

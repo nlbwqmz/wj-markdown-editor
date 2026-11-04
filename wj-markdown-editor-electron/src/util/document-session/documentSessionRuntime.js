@@ -436,10 +436,10 @@ export function createDocumentSessionRuntime(deps = {}) {
       },
       prepareOpenPathInCurrentWindow: (targetPath, options = {}) => {
         if (typeof prepareOpenPathInCurrentWindow !== 'function') {
-          const currentSnapshot = getSessionSnapshot(normalizedWindowId)
           return {
             ok: true,
-            decision: currentSnapshot?.dirty === true ? 'needs-save-choice' : 'ready-to-switch',
+            // 在当前窗口打开 = 新增标签，不会替换当前文档，因此没有“切换前保存”这一步。
+            decision: 'ready-to-switch',
             path: targetPath || null,
             sourceSessionId: options.sourceSessionId || null,
             sourceRevision: options.sourceRevision,

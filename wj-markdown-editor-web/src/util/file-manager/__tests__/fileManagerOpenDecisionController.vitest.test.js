@@ -10,7 +10,6 @@ const mocked = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   notifySourceSessionChanged: vi.fn(),
   promptOpenModeChoice: vi.fn(),
-  promptSaveChoice: vi.fn(),
 }))
 
 function createDeferred() {
@@ -40,7 +39,6 @@ function createController(options = {}) {
     showErrorMessage: mocked.showErrorMessage,
     notifySourceSessionChanged: mocked.notifySourceSessionChanged,
     promptOpenModeChoice: mocked.promptOpenModeChoice,
-    promptSaveChoice: mocked.promptSaveChoice,
     ...options,
   })
 }
@@ -58,7 +56,6 @@ describe('fileManagerOpenDecisionController', () => {
     mocked.showErrorMessage.mockReset()
     mocked.notifySourceSessionChanged.mockReset()
     mocked.promptOpenModeChoice.mockReset()
-    mocked.promptSaveChoice.mockReset()
 
     mocked.requestDocumentResolveOpenTarget.mockResolvedValue({
       ok: true,
@@ -67,7 +64,7 @@ describe('fileManagerOpenDecisionController', () => {
     })
     mocked.requestPrepareOpenPathInCurrentWindow.mockResolvedValue({
       ok: true,
-      decision: 'needs-save-choice',
+      decision: 'ready-to-switch',
       path: '/tmp/next.md',
       sourceSessionId: 'session-current',
       sourceRevision: 7,
@@ -91,7 +88,6 @@ describe('fileManagerOpenDecisionController', () => {
       },
     })
     mocked.promptOpenModeChoice.mockResolvedValue('current-window')
-    mocked.promptSaveChoice.mockResolvedValue('save-before-switch')
     mocked.controllerFactory = controllerModule.createFileManagerOpenDecisionController
   })
 
@@ -100,32 +96,6 @@ describe('fileManagerOpenDecisionController', () => {
     let modalConfig = null
     const registerDestroyer = vi.fn()
     const prompt = createDefaultPromptOpenModeChoice(value => value, {
-      createModal: vi.fn((config) => {
-        modalConfig = config
-        return {
-          destroy: vi.fn(),
-        }
-      }),
-    })
-
-    const resultPromise = prompt({
-      setActiveDialogDestroyer: registerDestroyer,
-    })
-
-    expect(Array.isArray(modalConfig?.footer?.children)).toBe(true)
-    expect(modalConfig.footer.children).toHaveLength(3)
-    expect(registerDestroyer).toHaveBeenCalledWith(expect.any(Function))
-
-    modalConfig.onCancel()
-
-    await expect(resultPromise).resolves.toBe('cancel')
-  })
-
-  it('默认保存选择弹窗在真正取消时必须返回 cancel，且保留三选一 footer', async () => {
-    const { createDefaultPromptSaveChoice } = controllerModule
-    let modalConfig = null
-    const registerDestroyer = vi.fn()
-    const prompt = createDefaultPromptSaveChoice(value => value, {
       createModal: vi.fn((config) => {
         modalConfig = config
         return {
@@ -171,30 +141,6 @@ describe('fileManagerOpenDecisionController', () => {
     expect(modalDestroy).toHaveBeenCalledTimes(1)
   })
 
-  it('默认保存选择弹窗注册的 destroyer 被宿主触发时，应主动销毁弹窗并结束为 cancel', async () => {
-    const { createDefaultPromptSaveChoice } = controllerModule
-    const modalDestroy = vi.fn()
-    let registeredDestroyer = null
-    const prompt = createDefaultPromptSaveChoice(value => value, {
-      createModal: vi.fn(() => ({
-        destroy: modalDestroy,
-      })),
-    })
-
-    const resultPromise = prompt({
-      setActiveDialogDestroyer: (destroyer) => {
-        registeredDestroyer = destroyer
-      },
-    })
-
-    expect(typeof registeredDestroyer).toBe('function')
-
-    registeredDestroyer()
-
-    await expect(resultPromise).resolves.toBe('cancel')
-    expect(modalDestroy).toHaveBeenCalledTimes(1)
-  })
-
   it('目标已在其他窗口打开时，必须在 open-choice 前直接结束', async () => {
     mocked.requestDocumentResolveOpenTarget.mockResolvedValue({
       ok: true,
@@ -215,7 +161,6 @@ describe('fileManagerOpenDecisionController', () => {
       stageList: ['target-preflight'],
     })
     expect(mocked.promptOpenModeChoice).not.toHaveBeenCalled()
-    expect(mocked.promptSaveChoice).not.toHaveBeenCalled()
     expect(mocked.requestCurrentWindowOpenPreparation).not.toHaveBeenCalled()
     expect(mocked.showInfoMessage).toHaveBeenCalledWith('message.fileAlreadyOpenedInOtherWindow')
   })
@@ -263,7 +208,7 @@ describe('fileManagerOpenDecisionController', () => {
     expect(mocked.showInfoMessage).not.toHaveBeenCalledWith('message.fileActivatedExistingTab')
   })
 
-  it('点击其他 markdown 时，应先过目标预判和当前窗口预判，再在 dirty 场景下追加 save-choice', async () => {
+  it('点击其他 markdown 时，dirty 场景也必须直接在当前窗口新增标签，不再追问是否保存当前文件', async () => {
     const controller = createController()
 
     const result = await controller.openDocument('/tmp/next.md', {
@@ -275,7 +220,6 @@ describe('fileManagerOpenDecisionController', () => {
       'target-preflight',
       'open-choice',
       'current-window-preflight',
-      'save-choice',
       'dispatch',
     ])
     expect(mocked.requestDocumentResolveOpenTarget).toHaveBeenCalledWith('/tmp/next.md', {
@@ -293,12 +237,12 @@ describe('fileManagerOpenDecisionController', () => {
       entrySource: 'file-manager',
       expectedRevision: 7,
       expectedSessionId: 'session-current',
-      switchPolicy: 'save-before-switch',
+      switchPolicy: 'direct-switch',
       trigger: 'user',
     })
   })
 
-  it('选择新窗口打开时不应进入当前窗口预判与 save-choice', async () => {
+  it('选择新窗口打开时不应进入当前窗口预判', async () => {
     const controller = createController()
 
     const result = await controller.openDocument('/tmp/next.md', {
@@ -310,14 +254,13 @@ describe('fileManagerOpenDecisionController', () => {
     expect(result.stageList).toEqual(['target-preflight', 'open-choice', 'dispatch'])
     expect(mocked.requestCurrentWindowOpenPreparation).not.toHaveBeenCalled()
     expect(mocked.requestPrepareOpenPathInCurrentWindow).not.toHaveBeenCalled()
-    expect(mocked.promptSaveChoice).not.toHaveBeenCalled()
     expect(mocked.requestDocumentOpenPath).toHaveBeenCalledWith('/tmp/next.md', {
       entrySource: 'recent',
       trigger: 'user',
     })
   })
 
-  it('显式传入 current-window 时应跳过打开方式选择，但保留当前窗口预判与 save-choice', async () => {
+  it('显式传入 current-window 时应跳过打开方式选择，但仍做当前窗口预判', async () => {
     const controller = createController()
 
     const result = await controller.openDocument('/tmp/next.md', {
@@ -330,17 +273,15 @@ describe('fileManagerOpenDecisionController', () => {
       'target-preflight',
       'open-choice',
       'current-window-preflight',
-      'save-choice',
       'dispatch',
     ])
     expect(mocked.promptOpenModeChoice).not.toHaveBeenCalled()
     expect(mocked.requestCurrentWindowOpenPreparation).toHaveBeenCalledTimes(1)
-    expect(mocked.promptSaveChoice).toHaveBeenCalledTimes(1)
     expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('/tmp/next.md', {
       entrySource: 'file-manager',
       expectedRevision: 7,
       expectedSessionId: 'session-current',
-      switchPolicy: 'save-before-switch',
+      switchPolicy: 'direct-switch',
       trigger: 'user',
     })
   })
@@ -356,7 +297,7 @@ describe('fileManagerOpenDecisionController', () => {
     expect(result).toBe(false)
   })
 
-  it('当前窗口切换预判返回 ready-to-switch 时，必须跳过 save-choice 并使用 direct-switch', async () => {
+  it('当前窗口切换预判返回 ready-to-switch 时必须使用 direct-switch', async () => {
     mocked.requestPrepareOpenPathInCurrentWindow.mockResolvedValue({
       ok: true,
       decision: 'ready-to-switch',
@@ -377,7 +318,6 @@ describe('fileManagerOpenDecisionController', () => {
       'current-window-preflight',
       'dispatch',
     ])
-    expect(mocked.promptSaveChoice).not.toHaveBeenCalled()
     expect(mocked.requestDocumentOpenPathInCurrentWindow).toHaveBeenCalledWith('/tmp/next.md', {
       entrySource: 'file-manager',
       expectedRevision: 7,
@@ -387,7 +327,7 @@ describe('fileManagerOpenDecisionController', () => {
     })
   })
 
-  it('当前窗口切换预判若发现目标已在其他窗口打开，必须在 save-choice 前直接结束', async () => {
+  it('当前窗口切换预判若发现目标已在其他窗口打开，必须直接结束', async () => {
     mocked.requestPrepareOpenPathInCurrentWindow.mockResolvedValue({
       ok: true,
       decision: 'focused-existing-window',
@@ -410,7 +350,6 @@ describe('fileManagerOpenDecisionController', () => {
       sourceSessionId: 'session-current',
       stageList: ['target-preflight', 'open-choice', 'current-window-preflight'],
     })
-    expect(mocked.promptSaveChoice).not.toHaveBeenCalled()
     expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
     expect(mocked.showInfoMessage).toHaveBeenCalledWith('message.fileAlreadyOpenedInOtherWindow')
   })
@@ -428,20 +367,6 @@ describe('fileManagerOpenDecisionController', () => {
     })
     expect(mocked.requestCurrentWindowOpenPreparation).not.toHaveBeenCalled()
     expect(mocked.requestDocumentOpenPath).not.toHaveBeenCalled()
-  })
-
-  it('保存选择取消时应返回 open-cancelled，且不发起当前窗口切换', async () => {
-    mocked.promptSaveChoice.mockResolvedValue('cancel')
-    const controller = createController()
-
-    const result = await controller.openDocument('/tmp/next.md')
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'open-cancelled',
-      stageList: ['target-preflight', 'open-choice', 'current-window-preflight', 'save-choice'],
-    })
-    expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
   })
 
   it('execute 返回 source-session-changed 时，必须中止流程并提示用户重新发起打开', async () => {
@@ -470,7 +395,6 @@ describe('fileManagerOpenDecisionController', () => {
       path: '/tmp/next.md',
       stageList: ['target-preflight', 'open-choice', 'current-window-preflight', 'dispatch'],
     })
-    expect(mocked.promptSaveChoice).not.toHaveBeenCalled()
     expect(mocked.notifySourceSessionChanged).toHaveBeenCalledTimes(1)
   })
 
@@ -503,7 +427,7 @@ describe('fileManagerOpenDecisionController', () => {
     expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
   })
 
-  it('交互在当前窗口预判等待期间失效后，即使旧 preflight 继续返回，也不得进入 save-choice 或 dispatch', async () => {
+  it('交互在当前窗口预判等待期间失效后，即使旧 preflight 继续返回，也不得 dispatch', async () => {
     const currentWindowPreflightDeferred = createDeferred()
     mocked.requestPrepareOpenPathInCurrentWindow.mockImplementation(() => currentWindowPreflightDeferred.promise)
     const controller = createController()
@@ -521,7 +445,7 @@ describe('fileManagerOpenDecisionController', () => {
     active = false
     currentWindowPreflightDeferred.resolve({
       ok: true,
-      decision: 'needs-save-choice',
+      decision: 'ready-to-switch',
       path: '/tmp/next.md',
       sourceSessionId: 'session-current',
       sourceRevision: 7,
@@ -533,60 +457,7 @@ describe('fileManagerOpenDecisionController', () => {
       path: '/tmp/next.md',
       stageList: ['target-preflight', 'open-choice', 'current-window-preflight'],
     })
-    expect(mocked.promptSaveChoice).not.toHaveBeenCalled()
     expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
-  })
-
-  it('交互在 save-choice 等待期间失效后，即使旧选择继续返回，也不得继续当前窗口 dispatch', async () => {
-    const saveChoiceDeferred = createDeferred()
-    const promptSaveChoice = vi.fn(() => saveChoiceDeferred.promise)
-    const controller = createController({
-      promptSaveChoice,
-    })
-    let active = true
-
-    const resultPromise = controller.openDocument('/tmp/next.md', {
-      entrySource: 'file-manager',
-      trigger: 'user',
-      isInteractionActive: () => active,
-      setActiveDialogDestroyer: vi.fn(),
-    })
-
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(promptSaveChoice).toHaveBeenCalledTimes(1)
-    active = false
-    saveChoiceDeferred.resolve('discard-switch')
-
-    await expect(resultPromise).resolves.toEqual({
-      ok: false,
-      reason: 'request-invalidated',
-      path: '/tmp/next.md',
-      stageList: ['target-preflight', 'open-choice', 'current-window-preflight', 'save-choice'],
-    })
-    expect(mocked.requestDocumentOpenPathInCurrentWindow).not.toHaveBeenCalled()
-  })
-
-  it('当前窗口切换返回 save-before-switch-failed 时，必须提示用户失败原因', async () => {
-    mocked.requestDocumentOpenPathInCurrentWindow.mockResolvedValue({
-      ok: false,
-      reason: 'save-before-switch-failed',
-    })
-    const controller = createController()
-
-    const result = await controller.openDocument('/tmp/next.md', {
-      entrySource: 'file-manager',
-      trigger: 'user',
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'save-before-switch-failed',
-      stageList: ['target-preflight', 'open-choice', 'current-window-preflight', 'save-choice', 'dispatch'],
-    })
-    expect(mocked.showErrorMessage).toHaveBeenCalledWith('message.fileManagerSaveBeforeSwitchFailed')
   })
 
   it('当前窗口切换返回 open-current-window-switch-failed 时，必须提示用户失败原因', async () => {

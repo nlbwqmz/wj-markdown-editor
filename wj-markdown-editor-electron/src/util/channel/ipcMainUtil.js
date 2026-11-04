@@ -287,6 +287,11 @@ const handlerList = {
     return await executeRuntimeUiCommand(windowContext, 'file-manager.create-markdown', data)
   },
   'document.edit': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.edit', data),
+  // 渲染层收敛完正文后的回流：主进程据此结束“关窗口前等待正文”的挂起。
+  // 不走命令流：它只结算宿主侧的 Promise，不推进任何会话状态。
+  'document.flush-ack': async (windowContext, data) => {
+    return windowLifecycleService.handleFlushAck(windowContext?.windowId, data)
+  },
   'document.cancel-close': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.cancel-close', null),
   'document.confirm-force-close': async windowContext => await executeRuntimeUiCommand(windowContext, 'document.confirm-force-close', null),
   'document.external.apply': async (windowContext, data) => await executeRuntimeUiCommand(windowContext, 'document.external.apply', data),

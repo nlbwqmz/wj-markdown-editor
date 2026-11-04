@@ -207,32 +207,6 @@ export function createDefaultPromptOpenModeChoice(t, {
   }
 }
 
-export function createDefaultPromptSaveChoice(t, {
-  createModal = config => Modal.confirm(config),
-} = {}) {
-  return async ({ setActiveDialogDestroyer } = {}) => {
-    const choice = await createThreeWayChoiceModal({
-      title: t('message.fileManagerSaveBeforeSwitchTitle'),
-      content: t('message.theCurrentFileIsNotSaved'),
-      primaryText: t('message.fileManagerSaveBeforeSwitch'),
-      secondaryText: t('message.fileManagerDiscardAndSwitch'),
-      cancelText: t('cancelText'),
-      createModal,
-      registerDestroyer: setActiveDialogDestroyer,
-    })
-
-    if (choice === 'primary') {
-      return 'save-before-switch'
-    }
-
-    if (choice === 'secondary') {
-      return 'discard-switch'
-    }
-
-    return 'cancel'
-  }
-}
-
 /**
  * 统一处理文件管理栏里的“打开 Markdown 文件”决策。
  *
@@ -248,7 +222,6 @@ export function createFileManagerOpenDecisionController({
   requestDocumentOpenPathInCurrentWindow: requestOpenPathInCurrentWindow = requestDocumentOpenPathInCurrentWindow,
   requestCurrentWindowOpenPreparation: requestPreparation = requestCurrentWindowOpenPreparation,
   promptOpenModeChoice = createDefaultPromptOpenModeChoice(t),
-  promptSaveChoice = createDefaultPromptSaveChoice(t),
   showInfoMessage = messageKey => message.info(t(messageKey)),
   showErrorMessage = messageKey => message.error(t(messageKey)),
   notifySourceSessionChanged = () => message.warning(t('message.fileManagerSourceSessionChanged')),
@@ -363,34 +336,13 @@ export function createFileManagerOpenDecisionController({
       return currentWindowPreflightInvalidatedResult
     }
     notifyOpenResult(currentWindowPreflightResult)
-    if (currentWindowPreflightResult?.decision !== 'needs-save-choice'
-      && currentWindowPreflightResult?.decision !== 'ready-to-switch') {
+    if (currentWindowPreflightResult?.decision !== 'ready-to-switch') {
       return appendStageList(currentWindowPreflightResult, stageList)
     }
 
-    let switchPolicy = 'direct-switch'
-    if (currentWindowPreflightResult?.decision === 'needs-save-choice') {
-      stageList.push('save-choice')
-      const selectedSaveChoice = options.saveChoice || await promptSaveChoice({
-        targetPath,
-        ...interactionMeta,
-        setActiveDialogDestroyer,
-      })
-      const saveChoiceInvalidatedResult = stopIfInactive()
-      if (saveChoiceInvalidatedResult) {
-        return saveChoiceInvalidatedResult
-      }
-
-      if (!selectedSaveChoice || selectedSaveChoice === 'cancel') {
-        return {
-          ok: false,
-          reason: 'open-cancelled',
-          stageList,
-        }
-      }
-
-      switchPolicy = selectedSaveChoice
-    }
+    // “在当前窗口打开”就是新增标签：不会替换当前文档，也不会丢失任何未保存内容，
+    // 所以这里不再有“切换前如何处理当前文件”的第二级选择。
+    const switchPolicy = 'direct-switch'
 
     stageList.push('dispatch')
     const beforeCurrentWindowDispatchInvalidatedResult = stopIfInactive()
@@ -408,9 +360,6 @@ export function createFileManagerOpenDecisionController({
       return currentWindowDispatchInvalidatedResult
     }
     notifyOpenResult(dispatchResult)
-    if (dispatchResult?.reason === 'save-before-switch-failed') {
-      showErrorMessage('message.fileManagerSaveBeforeSwitchFailed')
-    }
     if (dispatchResult?.reason === 'open-current-window-switch-failed') {
       showErrorMessage('message.fileManagerOpenCurrentWindowFailed')
     }
@@ -427,7 +376,6 @@ export function createFileManagerOpenDecisionController({
 
 export default {
   createDefaultPromptOpenModeChoice,
-  createDefaultPromptSaveChoice,
   createFileManagerOpenDecisionController,
   resolveDocumentOpenCurrentPath,
 }

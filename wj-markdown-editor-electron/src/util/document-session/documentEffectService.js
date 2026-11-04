@@ -390,12 +390,43 @@ export function createDocumentEffectService({
     return isAutoSave ? `自动保存失败。${errorDetail}` : `保存失败。${errorDetail}`
   }
 
-  function getExternalWatchContext(externalWatchController) {
-    return externalWatchController?.getContext?.() || {}
+  /**
+   * 组装“批量关闭有标签被跳过”的提示。
+   *
+   * 只给出 i18n key 与计数，不拼自然语言：
+   * 主进程拼好的成品句子会被 renderer 的 `t()` 当成 key 去查，
+   * 既刷 `[intlify] Not found` 警告，也不会跟随语言切换变化。
+   *
+   * @returns {{type: string, content: string, detailList: Array<{key: string, count: number}>} | null} 待下发的一步提示；无需提示时返回 null
+   */
+  function buildCloseSkippedMessage(effect) {
+    const skippedList = Array.isArray(effect?.skipped) ? effect.skipped : []
+    const countBy = reason => skippedList.filter(item => item?.reason === reason).length
+
+    const detailList = [
+      { key: 'message.closeSkippedDraft', count: countBy('no-path') },
+      { key: 'message.closeSkippedExternal', count: countBy('external-change') },
+      { key: 'message.closeSkippedSaving', count: countBy('saving') },
+      { key: 'message.closeSkippedSaveFailed', count: countBy('save-failed') },
+    ].filter(item => item.count > 0)
+
+    if (detailList.length === 0) {
+      return null
+    }
+
+    return {
+      type: 'warning',
+      content: 'message.closeSkippedSummary',
+      detailList,
+    }
   }
 
-  function shouldRebindExternalWatchAfterSave(externalWatchController) {
-    return getExternalWatchContext(externalWatchController)?.shouldRebindAfterSave === true
+  function getExternalWatchContext(externalWatchController, sessionId) {
+    return externalWatchController?.getContext?.(sessionId) || {}
+  }
+
+  function shouldRebindExternalWatchAfterSave(externalWatchController, sessionId) {
+    return getExternalWatchContext(externalWatchController, sessionId)?.shouldRebindAfterSave === true
   }
 
   function publishWindowMessage(windowMessageController, data) {
@@ -559,10 +590,10 @@ export function createDocumentEffectService({
           )
         }
 
-        const snapshot = getSessionSnapshot?.() || null
+        // 在当前窗口打开 = 新增标签，不替换当前文档，因此不需要询问是否先保存。
         return await finalizeExistingTabResult(attachSourceSessionEnvelope({
           ok: true,
-          decision: snapshot?.dirty === true ? 'needs-save-choice' : 'ready-to-switch',
+          decision: 'ready-to-switch',
           path: resolveResult.path,
         }, payload), {
           fallbackPath: resolveResult.path,
@@ -779,16 +810,24 @@ export function createDocumentEffectService({
     }
 
     switch (effect.type) {
-      case 'execute-save':
+      case 'execute-save': {
         // 文档本体保存的完整副作用链：
         // 1. 先回流 save.started，推进状态机到 running
         // 2. 真正写文件
         // 3. 根据写盘结果回流 save.succeeded 或 save.failed
         // 保存任务的 started / succeeded / failed 必须全部回流命令层，
         // 这样状态推进、快照广播和迟到 effect 过滤才能共享同一套裁决。
+        //
+        // 所有回流都要带上 job.sessionId：关闭链路会逐个保存后台标签，
+        // 不显式定向就会把结果结算到窗口的活动会话上。
+        // 只有真正带 sessionId 时才追加第三参数：
+        // 生产链路里 job 一定带 sessionId，测试/旧调用没有时保持原有的两参数调用形状。
+        const saveDispatchExtraArgs = typeof effect.job.sessionId === 'string' && effect.job.sessionId
+          ? [{ sessionId: effect.job.sessionId }]
+          : []
         await dispatchCommand('save.started', {
           jobId: effect.job.jobId,
-        })
+        }, ...saveDispatchExtraArgs)
         try {
           // 这里真正把冻结后的 job.content 写入目标路径。
           await fsModule.writeFile(effect.job.path, effect.job.content)
@@ -797,7 +836,7 @@ export function createDocumentEffectService({
           await dispatchCommand('save.failed', {
             ...effect.job,
             error,
-          })
+          }, ...saveDispatchExtraArgs)
           return null
         }
 
@@ -806,7 +845,7 @@ export function createDocumentEffectService({
           savedAt: Date.now(),
           // 当前写盘成功后暂不补 stat，后续如果需要更精确 stat 可以再扩展。
           stat: null,
-        })
+        }, ...saveDispatchExtraArgs)
 
         // recent 更新是“保存成功后的附属动作”，失败不应逆转主保存结论。
         // recent 持久化只是附属副作用，不能反过来决定“主文档是否保存成功”，
@@ -825,8 +864,8 @@ export function createDocumentEffectService({
 
         // 某些场景下，保存成功后需要重绑 watcher。
         // 例如首次保存新文件时，监听目标路径可能已经发生变化。
-        if (shouldRebindExternalWatchAfterSave(externalWatchController)) {
-          const watchContext = getExternalWatchContext(externalWatchController)
+        if (shouldRebindExternalWatchAfterSave(externalWatchController, effect.job.sessionId)) {
+          const watchContext = getExternalWatchContext(externalWatchController, effect.job.sessionId)
           const bindingToken = Number.isFinite(watchContext.bindingToken)
             ? watchContext.bindingToken
             : null
@@ -840,7 +879,7 @@ export function createDocumentEffectService({
             const rebindResult = await externalWatchController.start({
               bindingToken,
               watchingPath,
-            })
+            }, effect.job.sessionId)
 
             if (rebindResult === false || rebindResult?.ok === false) {
               throw rebindResult?.error || new Error('watch rebind failed')
@@ -848,21 +887,26 @@ export function createDocumentEffectService({
 
             // 成功重绑后，把这次写盘内容标记为内部写入，
             // 避免 watcher 立刻把刚刚自己的保存又识别成外部变更。
-            externalWatchController.markInternalSave?.(effect.job.content)
+            if (typeof effect.job.sessionId === 'string' && effect.job.sessionId) {
+              externalWatchController.markInternalSave?.(effect.job.content, effect.job.sessionId)
+            } else {
+              externalWatchController.markInternalSave?.(effect.job.content)
+            }
             await dispatchCommand?.('watch.bound', {
               bindingToken,
               watchingPath: rebindResult?.watchingPath || watchingPath,
               watchingDirectoryPath: getWatchingDirectoryPath(rebindResult, watchingPath),
-            })
+            }, ...saveDispatchExtraArgs)
           } catch (error) {
             await dispatchCommand?.('watch.rebind-failed', {
               bindingToken,
               watchingPath,
               error: serializeError(error),
-            })
+            }, ...saveDispatchExtraArgs)
           }
         }
         return null
+      }
 
       case 'execute-copy-save':
         // “保存副本”与本体保存不同：
@@ -979,6 +1023,27 @@ export function createDocumentEffectService({
         // 多个脏标签的“保存并退出”：逐个保存，任一失败就中止关窗。
         const closed = await tabHostController?.saveAllTabsAndClose?.()
         return closed ?? null
+      }
+
+      case 'save-tabs-and-close':
+      {
+        // 批量关闭里的“先保存再关”：失败的标签保留，其余照关，最后汇总一条提示。
+        const skipped = await tabHostController?.saveTabsAndClose?.(effect)
+        const skippedMessage = buildCloseSkippedMessage({ skipped })
+        if (skippedMessage) {
+          publishWindowMessage(windowMessageController, skippedMessage)
+        }
+        return skipped ?? null
+      }
+
+      case 'notify-close-skipped':
+      {
+        const skippedMessage = buildCloseSkippedMessage({ skipped: effect.skipped })
+        if (!skippedMessage) {
+          return null
+        }
+        publishWindowMessage(windowMessageController, skippedMessage)
+        return null
       }
 
       case 'notify-save-failed':

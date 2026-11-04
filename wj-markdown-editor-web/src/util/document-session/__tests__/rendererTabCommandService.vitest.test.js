@@ -8,7 +8,10 @@ const { mockedStore, commandMock, preparationMock } = vi.hoisted(() => ({
   commandMock: {
     requestDocumentActivateTab: vi.fn(),
     requestDocumentCloseTab: vi.fn(),
+    requestDocumentCloseTabs: vi.fn(),
+    requestDocumentEdit: vi.fn(),
     requestDocumentSessionSnapshot: vi.fn(),
+    releaseDocumentEditSeq: vi.fn(),
   },
   preparationMock: vi.fn(),
 }))
@@ -95,6 +98,7 @@ beforeEach(async () => {
   mockedStore.documentSessionSnapshot = null
   commandMock.requestDocumentActivateTab.mockReset()
   commandMock.requestDocumentCloseTab.mockReset()
+  commandMock.releaseDocumentEditSeq.mockReset()
   commandMock.requestDocumentSessionSnapshot.mockReset()
   preparationMock.mockReset()
   preparationMock.mockResolvedValue({ ok: true })
@@ -210,7 +214,7 @@ describe('rendererTabCommandService 切换时自动保存', () => {
     expect(commandMock.requestDocumentActivateTab).toHaveBeenLastCalledWith('s2', { autoSave: false })
   })
 
-  it('未开启切换时自动保存时不得发起正文收敛', async () => {
+  it('未开启切换时自动保存时，仍然必须先收敛正文', async () => {
     const state = { sessionIdList: ['s1', 's2'], activeSessionId: 's1' }
     setStoreSnapshot(state)
     installCommandMocks(state)
@@ -219,7 +223,10 @@ describe('rendererTabCommandService 切换时自动保存', () => {
     service.requestSwitchStep('next')
     await settleQueue()
 
-    expect(preparationMock).not.toHaveBeenCalled()
+    // 正文收敛属于正确性，不属于用户偏好：
+    // 不 flush 就切走，会让主进程手上的正文落后于真实内容。
+    expect(preparationMock).toHaveBeenCalledTimes(1)
+    expect(commandMock.requestDocumentActivateTab).toHaveBeenLastCalledWith('s2', { autoSave: true })
   })
 })
 
@@ -235,6 +242,19 @@ describe('rendererTabCommandService 关闭', () => {
 
     expect(commandMock.requestDocumentActivateTab).toHaveBeenLastCalledWith('s2', { autoSave: true })
     expect(commandMock.requestDocumentCloseTab).toHaveBeenCalledWith('s2')
+  })
+
+  it('关闭命令被受理后不得重置该会话的 edit seq', async () => {
+    const state = { sessionIdList: ['s1', 's2'], activeSessionId: 's1' }
+    setStoreSnapshot(state)
+    installCommandMocks(state)
+
+    await service.closeTabById('s1')
+
+    // 脏标签会先进确认流程，用户取消后还要继续编辑。
+    // 这里重置计数器会让后续编辑以更小的序号到达，被主进程当成过期写入全部丢弃，
+    // 表现就是“取消关闭后继续输入，输入立刻消失”。
+    expect(commandMock.releaseDocumentEditSeq).not.toHaveBeenCalled()
   })
 
   it('同一帧连按 5 次关闭时必须受积压上限约束，不做全量排队', async () => {

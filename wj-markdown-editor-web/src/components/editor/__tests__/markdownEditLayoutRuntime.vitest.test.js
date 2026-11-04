@@ -212,6 +212,9 @@ vi.mock('@/components/editor/composables/useEditorCore.js', () => ({
       activateEditorView: vi.fn(),
       destroyEditorView: vi.fn(),
       hasEditorView: () => false,
+      // 测试桩没有真实 view 与会话映射，返回 null 表示“身份未知”，
+      // 即不触发视图/会话错配保护，保持原有断言语义。
+      resolveSessionIdByView: () => null,
       destroyEditor: vi.fn(),
       reconfigureTheme: vi.fn(),
       reconfigureExtensions: vi.fn(),

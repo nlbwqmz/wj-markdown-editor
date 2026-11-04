@@ -214,6 +214,7 @@ export default {
         onWindowBlur: 'On window blur',
         onWindowClose: 'On window close',
         onTabSwitch: 'On tab switch',
+        onTabClose: 'On tab close',
       },
       externalFileChangeStrategyOption: {
         apply: 'Apply directly',
@@ -384,6 +385,13 @@ export default {
     confirmExecuteUpdate: 'Current operation will not check if the file is saved, please ensure the file is saved, the program will restart after installation, confirm continue?',
   },
   message: {
+    // 列表分隔符：主进程只下发明细条目，渲染层负责按当前语言拼接。
+    listSeparator: ', ',
+    closeSkippedSummary: 'Remaining tabs were closed. Not closed: {detail}.',
+    closeSkippedDraft: '{count} unsaved draft(s)',
+    closeSkippedExternal: '{count} with external changes',
+    closeSkippedSaving: '{count} still saving',
+    closeSkippedSaveFailed: '{count} failed to save',
     anchorTargetDoesNotExist: 'The anchor target does not exist.',
     theFileDoesNotExist: 'The file does not exist.',
     onlyMarkdownFilesCanBeOpened: 'Current file format is not supported.',
@@ -410,11 +418,8 @@ export default {
     fileManagerOpenModeTip: 'Choose whether to open it in the current window or a new window.',
     fileManagerOpenInCurrentWindow: 'Open in current window',
     fileManagerOpenInNewWindow: 'Open in new window',
-    fileManagerSaveBeforeSwitchTitle: 'How should the current file be handled before switching?',
-    fileManagerSaveBeforeSwitch: 'Save before switching',
-    fileManagerDiscardAndSwitch: 'Discard and switch',
+
     fileManagerOpenDirectoryFailed: 'Failed to open the directory. Please try again.',
-    fileManagerSaveBeforeSwitchFailed: 'Failed to save the current file. Switching was cancelled.',
     fileManagerOpenCurrentWindowFailed: 'Failed to switch the current window. Please try again.',
     fileManagerSourceSessionChanged: 'The current document state has changed. Please try opening the file again.',
     fileAlreadyOpenedInOtherWindow: 'The file is already open in another window.',

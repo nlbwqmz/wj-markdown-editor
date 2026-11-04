@@ -3,8 +3,10 @@ import { requestCurrentWindowOpenPreparation } from './currentWindowOpenPreparat
 import {
   requestDocumentActivateTab,
   requestDocumentCloseTab,
+  requestDocumentCloseTabs,
   requestDocumentSessionSnapshot,
 } from './rendererDocumentCommandUtil.js'
+import { flushSessionContents } from './rendererSessionContentFlushService.js'
 import { pickTabBaseline, resolveTargetTabBySteps } from './tabNavigationUtil.js'
 
 /**
@@ -74,18 +76,16 @@ function clearPendingIntent() {
 }
 
 /**
- * 判断本次切换是否需要先收敛正文，返回值为 requestDocumentActivateTab 的 autoSave 参数。
+ * 切换标签前把当前正文收敛进主进程，返回值为 requestDocumentActivateTab 的 autoSave 参数。
  *
- * 主进程的“切换时自动保存”读的是它手上的 session 正文，而编辑器内容经异步 IPC 回流；
- * 不先 flush 就让刚输入的内容以旧版本写盘并被标记为已保存。
- * 收敛失败时返回 false：宁可不保存，也不能拿旧内容写盘。
+ * 这里的 flush 是**无条件**的：主进程的保存链路读的是它手上的 session 正文，
+ * 不先 flush 就会拿旧版本写盘并标记为已保存。
+ * “正文是否同步”属于正确性，不应由用户的自动保存开关决定。
+ *
+ * 返回值只表达“这次 flush 是否成功”：失败时宁可不做切换自动保存，
+ * 也不能拿旧内容写盘。
  */
 export async function resolveSwitchAutoSaveReady() {
-  const autoSaveList = useCommonStore().config?.autoSave
-  if (!Array.isArray(autoSaveList) || !autoSaveList.includes('switch')) {
-    return true
-  }
-
   try {
     const preparation = await requestCurrentWindowOpenPreparation()
     return preparation?.ok !== false
@@ -131,7 +131,9 @@ export async function activateTabById(sessionId) {
 /**
  * 关闭指定标签页（原语，不排队）。
  *
- * 脏标签由主进程进入确认流程，renderer 不做脏判断。
+ * 关闭前必须先把该标签的真实正文推给主进程：
+ * 后台标签的 session 正文可能落后于它自己的编辑器内容，
+ * 直接关会让“关闭前保存”把陈旧内容写进磁盘。
  *
  * @param {string} sessionId
  * @returns {Promise<boolean>} 命令是否被接受（关闭是否真正完成由主进程决定）
@@ -141,10 +143,51 @@ export async function closeTabById(sessionId) {
     return false
   }
 
+  const flushResult = await flushSessionContents([sessionId])
+  if (flushResult.ok !== true) {
+    return false
+  }
+
   try {
     await requestDocumentCloseTab(sessionId)
     // close 的销毁发生在主进程 effect 之后，命令回包仍是销毁前的快照，
     // 所以这里只能作废基线，不能拿回包当下一步的起点。
+    //
+    // 注意：这里绝不能释放该会话的 edit seq。
+    // 命令被受理不等同于会话已销毁：脏标签会先进确认流程，用户取消后仍会继续编辑；
+    // 一旦把 seq 计数器归零，后续编辑会以更小的序号到达，被主进程当成过期写入全部丢弃。
+    lastActivateBaseline = null
+    return true
+  }
+  catch {
+    return false
+  }
+}
+
+/**
+ * 批量关闭一批标签页（原语，不排队）。
+ *
+ * 与单个关闭保持同一个先后顺序：先 flush 全部目标的真实正文，再一次发出关闭命令。
+ * 不能 forEach 逐个 closeTabById：那会变成多次快照广播与多次活动标签重算。
+ *
+ * @param {string[]} sessionIds
+ * @returns {Promise<boolean>} 命令是否被接受
+ */
+export async function closeTabsByIds(sessionIds) {
+  const idList = (Array.isArray(sessionIds) ? sessionIds : [])
+    .filter(sessionId => typeof sessionId === 'string' && sessionId !== '')
+  if (idList.length === 0) {
+    return false
+  }
+
+  const flushResult = await flushSessionContents(idList)
+  if (flushResult.ok !== true) {
+    return false
+  }
+
+  try {
+    await requestDocumentCloseTabs(idList)
+    // 同上：批量关闭也可能部分保留，不能在这里释放 seq。
     lastActivateBaseline = null
     return true
   }
@@ -304,6 +347,7 @@ export default {
   resolveSwitchAutoSaveReady,
   activateTabById,
   closeTabById,
+  closeTabsByIds,
   requestSwitchStep,
   requestCloseTab,
 }

@@ -404,7 +404,7 @@ describe('documentEffectService', () => {
     })
   })
 
-  it('document.prepare-open-path-in-current-window 在当前文档 dirty 时，必须返回 needs-save-choice', async () => {
+  it('document.prepare-open-path-in-current-window 在当前文档 dirty 时，也必须直接返回 ready-to-switch（在当前窗口打开是新增标签）', async () => {
     const { service, fsModule } = await createServiceContext()
 
     fsModule.pathExists.mockResolvedValue(true)
@@ -433,7 +433,7 @@ describe('documentEffectService', () => {
 
     expect(result).toEqual({
       ok: true,
-      decision: 'needs-save-choice',
+      decision: 'ready-to-switch',
       path: 'C:/docs/next.md',
       sourceSessionId: 'session-current',
       sourceRevision: 7,

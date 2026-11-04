@@ -5,12 +5,11 @@ import { useI18n } from 'vue-i18n'
 import { useCommonStore } from '@/stores/counter.js'
 import { requestCurrentWindowOpenPreparation } from '@/util/document-session/currentWindowOpenPreparationService.js'
 import {
-  requestDocumentCloseTabs,
   requestDocumentMoveTabToNewWindow,
   requestDocumentReorderTabs,
   requestDocumentRevealInFolder,
 } from '@/util/document-session/rendererDocumentCommandUtil.js'
-import { activateTabById, closeTabById } from '@/util/document-session/rendererTabCommandService.js'
+import { activateTabById, closeTabById, closeTabsByIds } from '@/util/document-session/rendererTabCommandService.js'
 import { bindHorizontalWheelScroll } from '@/util/horizontalWheelScrollUtil.js'
 import { resolveTabScrollLeftToReveal } from '@/util/overlayScrollbarMathUtil.js'
 import { copyTextWithFeedback } from '@/util/previewInlineCodeCopyUtil.js'
@@ -253,10 +252,14 @@ function closeTab(tab) {
 }
 
 /**
- * 批量关闭只处理没有未保存内容的标签。
+ * 批量关闭一批标签页。
  *
- * 有未保存内容的标签如果被批量关掉，会连续弹多次确认框，
- * 用户无法判断自己到底在确认哪一个；所以这类标签一律保留，让用户单独处理。
+ * 脏标签交给主进程裁决，渲染层不再先行过滤：
+ * - 未开启“关闭标签自动保存”时，主进程仍然只关干净标签（行为不变）
+ * - 开启后，脏标签会先写盘再关
+ *
+ * 渲染层的脏标记本身可能除旧（后台标签的正文尚未回流），
+ * 在这里过滤等于拿不可信的脏状态做决定。
  *
  * 必须一次请求发给主进程，不能 forEach 逐个发：
  * 逐个关闭时主进程每个命令都会先激活目标、再推一次快照，
@@ -264,12 +267,12 @@ function closeTab(tab) {
  */
 function closeTabList(tabList) {
   const sessionIds = tabList
-    .filter(tab => tab && tab.sessionId && tab.dirty !== true)
+    .filter(tab => tab && tab.sessionId)
     .map(tab => tab.sessionId)
   if (sessionIds.length === 0) {
     return
   }
-  requestDocumentCloseTabs(sessionIds).then(() => {}).catch(() => {})
+  closeTabsByIds(sessionIds).then(() => {}).catch(() => {})
 }
 
 function closeOtherTabs(tab) {
@@ -393,10 +396,27 @@ function getMenuItems(tab) {
   const hasPath = Boolean(tab?.displayPath)
   const tabIndex = tabs.value.findIndex(item => item.sessionId === tab?.sessionId)
 
-  // 批量关闭只会跳过脏标签（脏标签要逐个确认，不能批量弹窗），
-  // 所以禁用态看的是“位置上还有没有可批量关闭的干净标签”：
-  // 右侧只剩脏标签时，关闭右侧其实什么也不会发生，菜单必须置灰。
-  const isBatchClosable = item => Boolean(item?.sessionId) && item.dirty !== true
+  // 批量关闭的禁用态必须跟主进程的裁剪策略一致，否则会出现“能关但菜单是灰的”
+  // （或者反过来“点了什么也没发生”）：
+  //
+  // - 未开启“关闭标签自动保存”：脏标签一律跳过，所以只有干净标签算可关。
+  // - 开启后：脏标签会先保存再关，因此只要它能被自动保存就算可关：
+  //   有真实路径即可；recent-missing 虽然没路径，但本来就放行关闭，也算可关。
+  //   未命名草稿无路径，即使开启开关也会被跳过，不能算“可关”。
+  const autoSaveOptionList = Array.isArray(store.config?.autoSave) ? store.config.autoSave : []
+  const closeTabAutoSaveEnabled = autoSaveOptionList.includes('closeTab')
+  const isBatchClosable = (item) => {
+    if (!item?.sessionId) {
+      return false
+    }
+    if (item.dirty !== true) {
+      return true
+    }
+    if (closeTabAutoSaveEnabled !== true) {
+      return false
+    }
+    return Boolean(item.displayPath) || item.isRecentMissing === true
+  }
   const leftTabs = tabIndex > 0 ? tabs.value.slice(0, tabIndex) : []
   const rightTabs = tabIndex >= 0 ? tabs.value.slice(tabIndex + 1) : []
   const otherTabs = tabs.value.filter(item => item.sessionId !== tab?.sessionId)

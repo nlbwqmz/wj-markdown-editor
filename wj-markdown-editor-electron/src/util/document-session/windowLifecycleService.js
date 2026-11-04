@@ -306,9 +306,17 @@ function buildRuntimeHostDeps() {
           ).then(result => result.commandResult)
 
         case 'document.edit':
-          // route leave 需要把 document.edit 当成“session 已经推进到最终正文”的可等待屏障，
-          // 因此这里必须等待真实 dispatch 完成，并把最新快照直接返回给调用方。
-          return updateTempContentWithDispatcher(windowId, payload?.content, dispatch)
+          // 正文归属必须显式：没有 sessionId 的编辑命令会静默写错会话，
+          // 这里直接拒绝，不留回退到“活动会话”的兼容分支。
+          return updateTempContentWithDispatcher(
+            windowId,
+            payload?.content,
+            dispatch,
+            {
+              sessionId: payload?.sessionId,
+              seq: payload?.seq,
+            },
+          )
 
         case 'document.request-close':
           // BrowserWindow close 事件需要先拿到结构化 effects，再决定 preventDefault 与执行时机；
@@ -1619,10 +1627,12 @@ async function prepareOpenPathInCurrentWindow(windowId, targetPath, options = {}
     }
   }
 
-  const snapshot = getSessionSnapshot(normalizedWindowId)
+  // “在当前窗口打开”实际是**新增标签**：
+  // switchSessionInCurrentWindow 会新建会话并追加到标签列表，当前文档继续作为后台标签存在。
+  // 既然不替换、不丢弃任何内容，就不该再问“是否先保存当前文件”。
   return {
     ok: true,
-    decision: snapshot?.dirty === true ? 'needs-save-choice' : 'ready-to-switch',
+    decision: 'ready-to-switch',
     path: targetPath || null,
     sourceSessionId: options.sourceSessionId || null,
     sourceRevision: options.sourceRevision,
@@ -1864,7 +1874,22 @@ async function dispatchCommand(windowId, command, payload, options = {}) {
   return result
 }
 
-function shouldRebindExternalWatchAfterSave(windowId) {
+/**
+ * 解析 watcher 作用的会话。
+ *
+ * 显式给出 sessionId 时必须用它：后台标签的保存不能去重绑活动会话的监听，
+ * 否则会把活动会话的 watcher 指向别人的文件。
+ */
+function resolveWatchSession(windowId, sessionId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const { store } = ensureSessionRuntimeInitialized()
+  const resolvedSessionId = typeof sessionId === 'string' && sessionId !== ''
+    ? sessionId
+    : (getSessionByWindowId(normalizedWindowId)?.sessionId || null)
+  return resolvedSessionId ? store.getSession(resolvedSessionId) : null
+}
+
+function shouldRebindExternalWatchAfterSave(windowId, sessionId) {
   const normalizedWindowId = normalizeWindowId(windowId)
   const win = getWindowById(normalizedWindowId)
   if (!isWindowAlive(win)) {
@@ -1875,12 +1900,12 @@ function shouldRebindExternalWatchAfterSave(windowId) {
     return false
   }
 
-  const session = getSessionByWindowId(normalizedWindowId)
+  const session = resolveWatchSession(normalizedWindowId, sessionId)
   return Boolean(session?.documentSource?.path)
 }
 
-function getExternalWatchContext(windowId) {
-  const session = getSessionByWindowId(windowId)
+function getExternalWatchContext(windowId, sessionId) {
+  const session = resolveWatchSession(windowId, sessionId)
   if (!session) {
     return {
       bindingToken: null,
@@ -2323,6 +2348,14 @@ async function moveTabToNewWindow(windowId, sessionId) {
     return null
   }
 
+  // 迁移到新窗口后，正文的写入序号权威换到另一个渲染进程，
+  // 而那个进程的序号计数器从 0 开始。这里必须把会话侧的 editSeq 一并归零，
+  // 否则新窗口的第一条编辑（seq=1）会被当成“过期写入”直接丢弃，表现为“迁过去后打不了字”。
+  const migratedSession = store.getSession(sessionId)
+  if (migratedSession && Number.isFinite(migratedSession.editorSnapshot?.editSeq)) {
+    migratedSession.editorSnapshot.editSeq = 0
+  }
+
   // 源窗口落点：活动标签被移走时按就近规则换一个，
   // 一个标签都不剩就按“关最后一个标签 = 关窗口”关掉源窗口。
   const remainingSessionIds = sourceSessionIds.filter(id => id !== sessionId)
@@ -2394,6 +2427,7 @@ function createTabHostController(windowId) {
     closeTabs: sessionIds => closeTabsInWindow(windowId, sessionIds),
     moveTabToNewWindow: sessionId => moveTabToNewWindow(windowId, sessionId),
     saveAllTabsAndClose: () => saveAllTabsAndClose(windowId),
+    saveTabsAndClose: effect => saveTabsAndClose(windowId, effect),
     isSessionDirty: (sessionId) => {
       const { store } = ensureSessionRuntimeInitialized()
       const session = sessionId ? store.getSession(sessionId) : null
@@ -2431,12 +2465,17 @@ async function createDraftTab(windowId) {
 /**
  * “保存并退出”遇到多个脏标签时，逐个会话保存完再关窗。
  *
- * 保存链路本身是按“当前活动会话”工作的，所以这里先切到目标标签，
- * 再复用同一套保存状态机；任何一个会话保存失败或用户取消，都立即中止关窗。
+ * 关键约束：**不允许切换活动标签**。
+ * 旧实现靠 `activate-tab` 把会话推上前台再复用单标签保存，
+ * 结果是一次关窗会在界面上把标签刷一遍，中途失败中止时用户面对的是被打乱的视图。
+ * 现在每个会话都显式带 sessionId 走保存链路，活动指针全程不变。
+ *
+ * 任一会话保存失败、或被判定为不可自动保存（无路径 / 外部变更未决），都立即中止关窗。
  */
 async function saveAllTabsAndClose(windowId) {
   const normalizedWindowId = normalizeWindowId(windowId)
-  const { store } = ensureSessionRuntimeInitialized()
+  const runtime = ensureSessionRuntimeInitialized()
+  const { store } = runtime
   const sessionIds = store.getSessionIdsByWindowId?.(normalizedWindowId) || []
 
   for (const sessionId of sessionIds) {
@@ -2445,12 +2484,33 @@ async function saveAllTabsAndClose(windowId) {
       continue
     }
 
-    await dispatchCommand(normalizedWindowId, 'document.activate-tab', { sessionId })
-    const saveResult = await executeDocumentSaveCommandWithDispatcherDetailed(
-      normalizedWindowId,
-      createRuntimeDispatchAdapter(normalizedWindowId, ensureSessionRuntimeInitialized()),
-    )
-    if (saveResult.saved !== true) {
+    // 未命名草稿会要求选路径，recent-missing 无文件可写。
+    // 自动流程里一弹对话框就不再是“自动”了，直接判为不可保存。
+    if (!targetSession.documentSource?.path) {
+      await dispatchCommand(normalizedWindowId, 'document.request-close', {
+        skipAutoSave: true,
+      })
+      return false
+    }
+
+    // 外部变更未决意味着“谁的内容该赢”还没被用户裁决过，
+    // 自动写盘会直接覆盖外部修改。
+    if (targetSession.externalRuntime?.pendingExternalChange) {
+      await dispatchCommand(normalizedWindowId, 'document.request-close', {
+        skipAutoSave: true,
+      })
+      return false
+    }
+
+    const dispatch = createRuntimeDispatchAdapter(normalizedWindowId, runtime)
+    const saved = await saveSessionBySessionId(normalizedWindowId, sessionId, dispatch)
+    if (saved !== true) {
+      // 保存失败也必须给用户一个出口：
+      // 直接返回 false 会让窗口永远关不掉（没有“直接退出”的入口）。
+      // 这里回到未保存确认态，用户可以选择修复后重试，或明确放弃修改退出。
+      await dispatchCommand(normalizedWindowId, 'document.request-close', {
+        skipAutoSave: true,
+      })
       return false
     }
   }
@@ -2458,18 +2518,240 @@ async function saveAllTabsAndClose(windowId) {
   return await continueWindowClose(normalizedWindowId)
 }
 
+/**
+ * 按 sessionId 保存一个会话。
+ *
+ * 不能走 `executeDocumentSaveCommandWithDispatcher`：那个 facade 只认窗口活动会话，
+ * 用于 Ctrl+S；关闭链路要求“不切标签也能保存任意会话”。
+ */
+async function saveSessionBySessionId(windowId, sessionId, existingDispatch = null) {
+  const runtime = ensureSessionRuntimeInitialized()
+  const dispatch = existingDispatch || createRuntimeDispatchAdapter(windowId, runtime)
+
+  const saveResult = await dispatch('document.save', null, { sessionId })
+  const manualRequestId = saveResult?.manualRequestId || null
+  const completion = manualRequestId
+    ? await waitForSessionManualSaveCompletion(sessionId, manualRequestId)
+    : null
+  return completion?.saved === true
+}
+
+/**
+ * 批量关闭中“先保存再关闭”的收尾。
+ *
+ * 任一保存失败只跳过该标签，其余照关（与单个关闭的“失败不关、其余继续”一致）；
+ * 被跳过的标签保持打开，并汇总成一条提示。
+ *
+ * @returns {Promise<Array<{sessionId: string, reason: string}>>} 最终未关闭的标签
+ */
+async function saveTabsAndClose(windowId, effect = {}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return []
+  }
+
+  const { store } = ensureSessionRuntimeInitialized()
+  const failedList = []
+
+  for (const sessionId of (Array.isArray(effect.saveSessionIds) ? effect.saveSessionIds : [])) {
+    const session = store.getSession(sessionId)
+    if (!session || deriveDocumentSnapshot(session).dirty !== true) {
+      continue
+    }
+
+    const saved = await saveSessionBySessionId(normalizedWindowId, sessionId)
+    if (saved !== true) {
+      failedList.push({ sessionId, reason: 'save-failed' })
+    }
+  }
+
+  const failedSessionIdSet = new Set(failedList.map(item => item.sessionId))
+  const closeSessionIds = (Array.isArray(effect.closeSessionIds) ? effect.closeSessionIds : [])
+    .filter(sessionId => !failedSessionIdSet.has(sessionId))
+
+  if (closeSessionIds.length > 0) {
+    await closeTabsInWindow(normalizedWindowId, closeSessionIds)
+  }
+
+  return [
+    ...(Array.isArray(effect.skipped) ? effect.skipped : []),
+    ...failedList,
+  ]
+}
+
+/**
+ * 等待指定会话的一次手动保存请求完成。
+ *
+ * 与 `waitForManualSaveRequestCompletion` 的区别：那个只认窗口活动会话，
+ * 这里必须按 sessionId 精确等待，否则批量保存会等错对象。
+ */
+async function waitForSessionManualSaveCompletion(sessionId, requestId, { pollIntervalMs = 10 } = {}) {
+  if (!sessionId || !requestId) {
+    return null
+  }
+
+  const { store } = ensureSessionRuntimeInitialized()
+  while (true) {
+    const session = store.getSession(sessionId)
+    if (!session) {
+      return null
+    }
+    const completion = findCompletedManualRequest(session, requestId)
+    if (completion) {
+      return completion
+    }
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+  }
+}
+
+// ── 关窗口前的正文收敛 ────────────────────────────────────────
+//
+// 主进程只认 session 里的正文，而每个标签的真实正文常驻在渲染层的 EditorView 里。
+// 关窗口时主进程必须反向要求渲染层把脏标签的当前正文推上来，收到 ack 后才能保存。
+//
+// 这里不用定时器：等待只由“收到 ack”或“对方已经不可能回应”两类事实结束。
+
+const pendingFlushRequestMap = new Map()
+const closeFlushPromiseMap = new Map()
+let flushRequestSequence = 0
+
+function getPendingFlushRequestMap(windowId, { create = false } = {}) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return null
+  }
+
+  let pendingMap = pendingFlushRequestMap.get(normalizedWindowId)
+  if (!pendingMap && create) {
+    pendingMap = new Map()
+    pendingFlushRequestMap.set(normalizedWindowId, pendingMap)
+  }
+  return pendingMap || null
+}
+
+/**
+ * 结束该窗口全部挂起的 flush 请求。
+ *
+ * 只在“渲染层不可能再回应”时调用（进程退出 / webContents 销毁 / 无响应 / 窗口关闭）。
+ */
+function settlePendingFlushRequests(windowId, resolution) {
+  const pendingMap = getPendingFlushRequestMap(windowId)
+  if (!pendingMap) {
+    return 0
+  }
+
+  const resolveList = [...pendingMap.values()]
+  pendingMap.clear()
+  resolveList.forEach(resolve => resolve(resolution))
+  return resolveList.length
+}
+
+/**
+ * 请求渲染层把指定会话的当前正文推上来。
+ *
+ * @param {string | number} windowId
+ * @param {string[]} sessionIds
+ * @returns {Promise<{ok: boolean, reason?: string, failedSessionIds?: string[]}>} 渲染层的收敛结果；失败时调用方必须放弃写盘
+ */
+function requestRendererFlush(windowId, sessionIds) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const win = getWindowById(normalizedWindowId)
+  if (!normalizedWindowId || !isWindowAlive(win) || !win.webContents || win.webContents.isDestroyed?.()) {
+    return Promise.resolve({ ok: false, reason: 'renderer-unavailable' })
+  }
+
+  flushRequestSequence += 1
+  const requestId = `flush-${normalizedWindowId}-${flushRequestSequence}`
+  const pendingMap = getPendingFlushRequestMap(normalizedWindowId, { create: true })
+
+  return new Promise((resolve) => {
+    pendingMap.set(requestId, resolve)
+    sendUtil.send(win, {
+      event: 'document.flush-request',
+      data: {
+        requestId,
+        sessionIds: Array.isArray(sessionIds) ? sessionIds : [],
+      },
+    })
+  })
+}
+
+/**
+ * 渲染层 flush 完成后的回流入口。
+ */
+function handleFlushAck(windowId, data) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  const requestId = typeof data?.requestId === 'string' ? data.requestId : ''
+  if (!normalizedWindowId || !requestId) {
+    return false
+  }
+
+  const pendingMap = getPendingFlushRequestMap(normalizedWindowId)
+  const resolve = pendingMap?.get(requestId) || null
+  if (!resolve) {
+    return false
+  }
+
+  pendingMap.delete(requestId)
+  resolve({
+    ok: data?.ok === true,
+    reason: data?.ok === true ? 'flushed' : 'flush-failed',
+    failedSessionIds: Array.isArray(data?.failedSessionIds) ? data.failedSessionIds : [],
+  })
+  return true
+}
+
+/**
+ * 关窗口前把脏标签的当前正文收敛进主进程。
+ *
+ * 没有脏标签时直接放行，不产生任何额外 IPC。
+ */
+function flushDirtySessionsBeforeClose(windowId) {
+  const normalizedWindowId = normalizeWindowId(windowId)
+  if (!normalizedWindowId) {
+    return Promise.resolve({ ok: false, reason: 'window-not-found' })
+  }
+
+  const existingPromise = closeFlushPromiseMap.get(normalizedWindowId)
+  if (existingPromise) {
+    return existingPromise
+  }
+
+  const { store } = ensureSessionRuntimeInitialized()
+  const dirtySessionIds = (store.getSessionIdsByWindowId?.(normalizedWindowId) || [])
+    .filter((sessionId) => {
+      const session = store.getSession(sessionId)
+      return session ? deriveDocumentSnapshot(session).dirty === true : false
+    })
+
+  if (dirtySessionIds.length === 0) {
+    return Promise.resolve({ ok: true, reason: 'nothing-to-flush' })
+  }
+
+  const pendingPromise = requestRendererFlush(normalizedWindowId, dirtySessionIds)
+    .finally(() => {
+      if (closeFlushPromiseMap.get(normalizedWindowId) === pendingPromise) {
+        closeFlushPromiseMap.delete(normalizedWindowId)
+      }
+    })
+  closeFlushPromiseMap.set(normalizedWindowId, pendingPromise)
+  return pendingPromise
+}
+
 function createExternalWatchController(windowId) {
-  const resolveActiveSessionId = () => getSessionByWindowId(windowId)?.sessionId || null
+  const resolveSessionId = sessionId => (typeof sessionId === 'string' && sessionId !== ''
+    ? sessionId
+    : (getSessionByWindowId(windowId)?.sessionId || null))
   return {
-    start: (options = {}) => startExternalWatch(windowId, resolveActiveSessionId(), options),
-    stop: () => stopExternalWatch(windowId, resolveActiveSessionId()),
-    getContext: () => ({
-      ...getExternalWatchContext(windowId),
-      shouldRebindAfterSave: shouldRebindExternalWatchAfterSave(windowId),
+    start: (options = {}, sessionId) => startExternalWatch(windowId, resolveSessionId(sessionId), options),
+    stop: sessionId => stopExternalWatch(windowId, resolveSessionId(sessionId)),
+    getContext: sessionId => ({
+      ...getExternalWatchContext(windowId, resolveSessionId(sessionId)),
+      shouldRebindAfterSave: shouldRebindExternalWatchAfterSave(windowId, resolveSessionId(sessionId)),
     }),
-    markInternalSave: content => getExternalWatchBridge(windowId, resolveActiveSessionId())?.markInternalSave?.(content),
-    settlePendingChange: versionHash => getExternalWatchBridge(windowId, resolveActiveSessionId())?.settlePendingChange?.(versionHash),
-    ignorePendingChange: () => getExternalWatchBridge(windowId, resolveActiveSessionId())?.ignorePendingChange?.(),
+    markInternalSave: (content, sessionId) => getExternalWatchBridge(windowId, resolveSessionId(sessionId))?.markInternalSave?.(content),
+    settlePendingChange: (versionHash, sessionId) => getExternalWatchBridge(windowId, resolveSessionId(sessionId))?.settlePendingChange?.(versionHash),
+    ignorePendingChange: sessionId => getExternalWatchBridge(windowId, resolveSessionId(sessionId))?.ignorePendingChange?.(),
   }
 }
 
@@ -2514,7 +2796,9 @@ function buildEffectContextForWindow(windowId, { dispatchCommand }) {
 async function applyEffects(windowId, effects = []) {
   const { effectService } = ensureSessionRuntimeInitialized()
   const effectContext = buildEffectContextForWindow(windowId, {
-    dispatchCommand: (command, payload) => dispatchCommand(windowId, command, payload),
+    // 保留 sessionId：关闭链路会逐个保存后台标签，
+    // 丢掉它会让 save.* 回流结算到活动会话上。
+    dispatchCommand: (command, payload, options = {}) => dispatchCommand(windowId, command, payload, options),
   })
 
   for (const effect of effects) {
@@ -2718,19 +3002,42 @@ async function executeDocumentCopySaveCommandWithDispatcher(windowId, dispatch) 
   return result
 }
 
-function updateTempContentWithDispatcher(windowId, content, dispatch) {
+function updateTempContentWithDispatcher(windowId, content, dispatch, options = {}) {
+  const sessionId = typeof options?.sessionId === 'string' && options.sessionId !== ''
+    ? options.sessionId
+    : null
+  if (!sessionId) {
+    throw new Error('document.edit 必须显式给出 sessionId')
+  }
+
   // 编辑更新直接进入统一命令流，
   // Electron 侧其他模块如需读取最新正文，必须回到 session getter，而不是继续依赖旧镜像字段。
   return dispatch('document.edit', {
     content,
+    seq: Number.isFinite(options?.seq) ? options.seq : null,
+  }, {
+    sessionId,
   })
 }
 
+/**
+ * 内部兼容入口：未显式指定会话时按窗口活动会话推进。
+ *
+ * IPC 链路必须走带 sessionId 的路径；这里只服务主进程内部（测试 / 旧别名）调用。
+ */
 function updateTempContent(windowId, content) {
+  const activeSessionId = getSessionByWindowId(windowId)?.sessionId || null
+  if (!activeSessionId) {
+    return Promise.resolve(null)
+  }
+
   return updateTempContentWithDispatcher(
     windowId,
     content,
     (command, payload, options = {}) => dispatchCommand(windowId, command, payload, options),
+    {
+      sessionId: activeSessionId,
+    },
   )
 }
 
@@ -2776,6 +3083,9 @@ function getDocumentContext(windowId) {
 function createRuntimeDispatchAdapter(windowId, runtime) {
   return (command, payload, options = {}) => runtime.dispatch(windowId, command, payload, {
     publishSnapshotChanged: options.publishSnapshotChanged || 'always',
+    // 多标签之后，命令也可以定向到指定会话（例如后台标签的正文同步）。
+    // 不传时保持旧语义：落到窗口当前活动会话。
+    sessionId: options.sessionId || null,
   })
 }
 
@@ -3005,6 +3315,10 @@ async function createNew(filePath, isRecent = false, options = {}) {
         return
       }
 
+      // 窗口关闭后不可能再有 ack 回来，必须把挂起的 flush 请求放掉，
+      // 否则持有它的 Promise 会永远悬着。
+      settlePendingFlushRequests(currentWindowId, { ok: false, reason: 'window-closing' })
+
       const command = isForceCloseRequested(currentWindowId)
         ? 'document.confirm-force-close'
         : 'document.request-close'
@@ -3036,20 +3350,43 @@ async function createNew(filePath, isRecent = false, options = {}) {
         e.preventDefault()
       }
 
-      const closeCommandResult = runtime.executeUiCommand(currentWindowId, command, null)
-      if (closeCommandResult && typeof closeCommandResult.then === 'function') {
-        closeCommandResult
-          .then(handleCloseCommandResult)
-          .catch(() => {})
-      } else {
-        handleCloseCommandResult(closeCommandResult)
+      // 必须先把脏标签的当前正文收敛上来，再进入保存裁决：
+      // 不收敛就会拿 session 里的旧正文写盘，甚至把“已等于磁盘内容”误判成不需保存。
+      const dispatchCloseCommand = (flushResult) => {
+        const payload = flushResult?.ok === true ? null : { flushFailed: true }
+        const closeCommandResult = runtime.executeUiCommand(currentWindowId, command, payload)
+        if (closeCommandResult && typeof closeCommandResult.then === 'function') {
+          closeCommandResult
+            .then(handleCloseCommandResult)
+            .catch(() => {})
+        } else {
+          handleCloseCommandResult(closeCommandResult)
+        }
       }
 
       if (isForceCloseRequested(currentWindowId)) {
+        dispatchCloseCommand({ ok: true })
         return
       }
+
+      flushDirtySessionsBeforeClose(currentWindowId)
+        .then(dispatchCloseCommand)
+        .catch(() => dispatchCloseCommand({ ok: false }))
+
       return false
     })
+
+    // 渲染层不再可能回应时，必须主动释放关窗前的 flush 等待。
+    // 用的是“进程/页面已经没了”的事实通知，不是超时策略。
+    const releaseFlushWaiters = (reason) => {
+      const currentWindowId = findRegisteredWindowIdByWin(win)
+      if (currentWindowId) {
+        settlePendingFlushRequests(currentWindowId, { ok: false, reason })
+      }
+    }
+    win.webContents.on('render-process-gone', () => releaseFlushWaiters('render-process-gone'))
+    win.webContents.on('destroyed', () => releaseFlushWaiters('webcontents-destroyed'))
+    win.on('unresponsive', () => releaseFlushWaiters('renderer-unresponsive'))
 
     win.on('blur', () => {
       const currentWindowId = findRegisteredWindowIdByWin(win)
@@ -3123,6 +3460,7 @@ Object.assign(windowLifecycleService, {
   getParentWindowIdByWebContentsId,
   listWindows,
   publishWindowMessage,
+  handleFlushAck,
   publishHostWindowStateByWindowId,
   getDocumentContext,
   getSessionSnapshot,

@@ -68,6 +68,10 @@ const autoSaveOptionList = computed(() => [
     label: t('config.general.autoSaveOption.onTabSwitch'),
     value: 'switch',
   },
+  {
+    label: t('config.general.autoSaveOption.onTabClose'),
+    value: 'closeTab',
+  },
 ])
 
 const externalFileChangeStrategyOptionList = computed(() => [

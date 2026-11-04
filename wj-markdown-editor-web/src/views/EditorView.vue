@@ -26,6 +26,7 @@ import {
   resolveRendererSessionActivationAction,
   shouldBootstrapSessionSnapshotOnMounted,
 } from '@/util/document-session/rendererSessionActivationStrategy.js'
+import { setSessionContentProvider } from '@/util/document-session/rendererSessionContentFlushService.js'
 import { createRendererSessionEventSubscription } from '@/util/document-session/rendererSessionEventSubscription.js'
 import { createRendererSessionSnapshotController } from '@/util/document-session/rendererSessionSnapshotController.js'
 import { shouldSuppressNextContentSync } from '@/util/editor/contentUpdateMetaUtil.js'
@@ -143,6 +144,37 @@ const activationRestoreScheduler = createEditorViewActivationRestoreScheduler({
   },
 })
 let clearCurrentWindowOpenPreparationProvider = null
+let clearSessionContentProvider = null
+
+/**
+ * 当前编辑页正在展示的会话 id。
+ *
+ * 正文归属必须显式声明：所有 document.edit 都要带上它，
+ * 不能再让主进程去猜“窗口当前活动会话”。
+ */
+function resolveActiveSessionId() {
+  // 窗口快照用 activeSessionId 表达“当前活动会话”；
+  // 单会话快照只带 sessionId，两者都认，避免正文在首帧丢失归属。
+  const sessionId = store.documentSessionSnapshot?.activeSessionId
+    ?? store.documentSessionSnapshot?.sessionId
+  return typeof sessionId === 'string' && sessionId !== '' ? sessionId : null
+}
+
+/**
+ * 把当前编辑器正文推给主进程。
+ *
+ * 没有活动会话时直接跳过：此时主进程也没有可以落库的目标。
+ *
+ * @returns {Promise<object | null>} 主进程命令结果；无可推内容时返回 null
+ */
+async function pushActiveSessionContent() {
+  const sessionId = resolveActiveSessionId()
+  if (!sessionId) {
+    return null
+  }
+
+  return await requestDocumentEdit(sessionId, content.value)
+}
 
 // 统一封装“把外部内容应用到编辑器”的过程。
 // 除了正文本身，还会一起生成本次更新的元数据，供子组件恢复光标和滚动位置。
@@ -173,7 +205,7 @@ async function requestCurrentWindowOpenPreparation() {
   markdownEditRef.value?.flushPendingModelSync?.()
 
   const latestSnapshot = content.value !== (store.documentSessionSnapshot?.content ?? '')
-    ? (await requestDocumentEdit(content.value))?.snapshot || await requestDocumentSessionSnapshot()
+    ? (await pushActiveSessionContent())?.snapshot || await requestDocumentSessionSnapshot()
     : await requestDocumentSessionSnapshot()
 
   // 当前窗口切换文档前，必须把完整 snapshot 交给采集入口：
@@ -253,6 +285,11 @@ async function loadCurrentDocumentSessionSnapshot() {
 onMounted(async () => {
   // 组件挂载时先激活快照控制器和事件订阅，为后续首次加载做好准备。
   bindCurrentWindowOpenPreparationProvider()
+  // 关闭链路的 flush 提供者必须活到页面卸载：
+  // keep-alive 失活时窗口仍可能被关闭，那时照样需要读各标签的正文。
+  clearSessionContentProvider = setSessionContentProvider(
+    sessionId => markdownEditRef.value?.readSessionContent?.(sessionId) ?? null,
+  )
   editorSessionSnapshotController.activate()
   documentSessionSnapshotSubscription.activate()
   // KeepAlive 页面首次进入时，真正的“进入策略”统一交给 onActivated。
@@ -292,6 +329,8 @@ onActivated(() => {
 onBeforeUnmount(() => {
   // 组件真正销毁时释放所有订阅和上下文，避免后续异步结果回写到已卸载页面。
   clearBoundCurrentWindowOpenPreparationProvider()
+  clearSessionContentProvider?.()
+  clearSessionContentProvider = null
   editorSessionSnapshotController.dispose()
   documentSessionSnapshotSubscription.dispose()
   previewAssetSessionController.invalidateActiveContext({
@@ -319,7 +358,7 @@ onBeforeRouteLeave(async () => {
   // 如果当前正文尚未同步进主进程，就优先等待 document.edit 返回最新快照；
   // 只有已经同步好的场景，才直接读取 session snapshot。
   const latestSnapshot = content.value !== (store.documentSessionSnapshot?.content ?? '')
-    ? (await requestDocumentEdit(content.value))?.snapshot || await requestDocumentSessionSnapshot()
+    ? (await pushActiveSessionContent())?.snapshot || await requestDocumentSessionSnapshot()
     : await requestDocumentSessionSnapshot()
 
   const revision = Number.isInteger(latestSnapshot?.revision) ? latestSnapshot.revision : 0
@@ -353,7 +392,11 @@ watch(() => content.value, (newValue, oldValue) => {
     }
     // 编辑器里每次真实内容变化，都经由统一命令工具发送 `document.edit`。
     // Electron 侧会再把它收口到 session 命令流，统一裁决保存态和外部变更。
-    requestDocumentEdit(newValue).then(() => {})
+    // 必须显式带 sessionId：后台标签的正文不能被写到活动会话上。
+    const sessionId = resolveActiveSessionId()
+    if (sessionId) {
+      requestDocumentEdit(sessionId, newValue).then(() => {})
+    }
   }
 })
 
