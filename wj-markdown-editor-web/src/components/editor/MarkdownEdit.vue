@@ -30,6 +30,7 @@ import { useCommonStore } from '@/stores/counter.js'
 import { requestOpenDroppedMarkdownDocument } from '@/util/document-session/documentDropOpenUtil.js'
 import { resolveDocumentScrollAnchorIdentity } from '@/util/document-session/documentScrollAnchorIdentityUtil.js'
 import { releaseDocumentEditSeq } from '@/util/document-session/rendererDocumentCommandUtil.js'
+import { shouldPushSessionContent } from '@/util/document-session/sessionContentFlushDecisionUtil.js'
 import {
   shouldDeferExternalEditorDispatch,
 } from '@/util/editor/compositionStateUtil.js'
@@ -762,13 +763,22 @@ function hasPendingModelSync() {
  * 关闭链路（关单个标签 / 批量关标签 / 关窗口）必须拿到该标签的真实内容，
  * 而不是主进程 session 里可能落后的副本。
  * 返回 null 表示这个标签在本窗口还没有自己的 EditorView
- * （后台新开、从未激活过），此时 session 内容就是权威值。
+ * （后台新开、从未激活过），或者它的 view 不可能比 session 新，
+ * 两种情况都以主进程手里的正文为准。
  *
  * @param {string} sessionId
- * @returns {string | null} 该标签当前正文；没有对应编辑器实例时返回 null
+ * @returns {string | null} 该标签当前正文；不应回推时返回 null
  */
 function readSessionContent(sessionId) {
   if (typeof sessionId !== 'string' || sessionId === '') {
+    return null
+  }
+
+  // “渲染层有 view”不等于“这个 view 比 session 新”：
+  // 后台标签的文件被外部修改且策略为「直接应用」时，主进程已经把新正文写进会话，
+  // 而该标签的后台 EditorView 仍是旧正文。这里回推旧正文会把会话改回陈旧内容，
+  // 让一次“直接关闭干净的后台标签”变成“有未保存的修改”。
+  if (shouldPushSessionContent({ sessionId, snapshot: store.documentSessionSnapshot }) !== true) {
     return null
   }
 
