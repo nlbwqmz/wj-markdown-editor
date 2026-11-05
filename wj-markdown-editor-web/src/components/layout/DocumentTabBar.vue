@@ -195,15 +195,22 @@ function getTabLabel(tab) {
  * 标签的悬浮提示文案。
  *
  * 默认就是文件名：长文件名会被 `truncate` 截断，这里顺带承担“看全名”的作用。
- * 文件已被删除或移动时，在文件名后补一句原因，作为删除线与弱化之外的文字说明。
+ * 文件被删除 / 移走、存在未决外部变更时，在文件名后补一句原因，
+ * 避免用户只看到一条黄色文字却不知道发生了什么。
+ *
+ * 两种黄态理论上互斥（文件缺失时主进程会清空 pendingExternalChange），
+ * 仍然把缺失放在前面：它描述的是更严重、且不会自行恢复的那个状态。
  */
 function getTabTitle(tab) {
   const label = getTabLabel(tab)
-  if (tab?.fileMissing !== true) {
-    return label
+  if (tab?.fileMissing === true) {
+    return t('documentTab.fileDeletedOrMoved', { fileName: label })
+  }
+  if (tab?.hasPendingExternalChange === true) {
+    return t('documentTab.externalChangePending', { fileName: label })
   }
 
-  return t('documentTab.fileDeletedOrMoved', { fileName: label })
+  return label
 }
 
 function isActiveTab(tab) {
@@ -564,6 +571,7 @@ function onMenuClick({ key }, tab) {
             :data-active="isActiveTab(tab) ? 'true' : 'false'"
             :data-dirty="tab.dirty ? 'true' : 'false'"
             :data-file-missing="tab.fileMissing ? 'true' : 'false'"
+            :data-external-change="tab.hasPendingExternalChange ? 'true' : 'false'"
             :title="getTabTitle(tab)"
             class="group document-tab h-6 max-w-60 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1 text-sm transition-colors"
             :class="getTabClassList(tab)"
@@ -622,30 +630,25 @@ function onMenuClick({ key }, tab) {
    *
    * 这里显式列出 color / background-color，是为了覆盖 UnoCSS 的
    * `transition-colors` 时不把原有的颜色过渡一起丢掉。
-   * opacity 用于让“文件已被删除或移动”的弱化在文件恢复后平滑撤掉。
    */
   transition:
     transform 140ms cubic-bezier(0.2, 0.7, 0.3, 1),
     color 150ms,
-    background-color 150ms,
-    opacity 150ms;
+    background-color 150ms;
 
   /*
-   * 文件已被删除或移动：只改视觉，不动任何交互。
-   * 删除线承担“这个文件已经不在盘上”的语义，整体降透明度承担“弱化”；
-   * hover 回升到 0.85，是为了让关闭按钮与右键入口仍然看得清、点得到。
-   * 状态完全派生自快照，文件恢复或保存成功后类名消失、弱化自动撤掉。
+   * 文件名警示色：两种“磁盘侧有变化”的状态共用同一个黄色通道，
+   * 靠删除线区分「文件已不在盘上」与「磁盘上有新版本待裁决」。
+   * 颜色只打在文件名上，关闭按钮与脏点保持中性色，
+   * 避免整条标签变成告警条后和激活态、hover 背景互相打架。
    */
-  &[data-file-missing='true'] {
-    opacity: 0.55;
+  &[data-external-change='true'] .document-tab__label {
+    color: var(--wj-markdown-text-warning);
+  }
 
-    &:hover {
-      opacity: 0.85;
-    }
-
-    .document-tab__label {
-      text-decoration: line-through;
-    }
+  &[data-file-missing='true'] .document-tab__label {
+    color: var(--wj-markdown-text-warning);
+    text-decoration: line-through;
   }
 }
 

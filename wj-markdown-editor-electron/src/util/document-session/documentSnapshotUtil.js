@@ -66,6 +66,10 @@ export function deriveDocumentSnapshot(session) {
   // documentSource.path 恒为 null，它们的缺失语义另有 isRecentMissing / missingReason 表达，
   // 不能被这里重复计入，否则渲染层会把“最近文件失效”也当成“当前文件被删除”。
   const fileMissing = Boolean(documentSource.path) && !exists
+  // 当前会话是否存在“磁盘已经有新版本，但用户尚未裁决”的外部变更。
+  // 标记页需要知道每个标签自己的未决状态：后台标签同样会收到外部变更，
+  // 但 externalPrompt 只投影活动会话，所以标签栏必须基于这个布尔值单独提示。
+  const hasPendingExternalChange = Boolean(pendingExternalChange)
   const saved = editorSnapshot.content === diskSnapshot.content
     && exists === Boolean(diskSnapshot.exists)
   const dirty = !saved
@@ -110,6 +114,9 @@ export function deriveDocumentSnapshot(session) {
     // 渲染层据此给标签页加“文件已被删除或移动”的视觉标记与菜单禁用，
     // 文件恢复或保存成功后该值会自动回到 false，不需要额外维护标记位。
     fileMissing,
+    // 当前会话是否存在未决的外部变更。
+    // 用户选择应用或忽略后 pendingExternalChange 会被清空，该值随之回到 false。
+    hasPendingExternalChange,
     // 当前会话是否属于 recent-missing。
     // 渲染层可以基于这个字段决定是否展示“最近文件缺失”相关提示和操作入口。
     isRecentMissing: recentMissing,
@@ -173,7 +180,7 @@ export function deriveDocumentSnapshot(session) {
 /**
  * 生成标签栏需要的精简快照。
  *
- * 标签页只是文档会话的视图外壳，所以标签栏只需要“它是谁、叫什么、是否脏、是否缺失、文件是否已丢失”，
+ * 标签页只是文档会话的视图外壳，所以标签栏只需要“它是谁、叫什么、是否脏、是否缺失、文件是否已丢失、是否有未决外部变更”，
  * 不需要携带正文内容。把正文留给活动会话的完整快照，避免每次推送都把 N 份正文传进渲染层。
  */
 export function deriveDocumentTabSnapshot(session) {
@@ -186,8 +193,10 @@ export function deriveDocumentTabSnapshot(session) {
     displayPath: snapshot.displayPath,
     dirty: snapshot.dirty,
     isRecentMissing: snapshot.isRecentMissing,
-    // 文件是否已从磁盘消失。标签栏用它决定是否加删除线、弱化与禁用“在资源管理器中显示”。
+    // 文件是否已从磁盘消失。标签栏用它决定是否加删除线、警示色与禁用“在资源管理器中显示”。
     fileMissing: snapshot.fileMissing,
+    // 是否存在未决的外部变更。标签栏用它把文件名染成警示色。
+    hasPendingExternalChange: snapshot.hasPendingExternalChange,
   }
 }
 

@@ -181,4 +181,33 @@ describe('documentSnapshotUtil', () => {
     expect(recentMissingTab.fileMissing).toBe(false)
     expect(recentMissingTab.isRecentMissing).toBe(true)
   })
+
+  it('外部变更未决时，标签快照应标记 hasPendingExternalChange=true，裁决后回到 false', () => {
+    const session = createBoundFileSession({
+      sessionId: 'bound-file-external-change-session',
+      path: 'C:/docs/external.md',
+      content: '# 正文',
+    })
+
+    expect(deriveDocumentTabSnapshot(session).hasPendingExternalChange).toBe(false)
+
+    // 模拟 prompt 策略下的挂起变更：磁盘上有新版本，等用户裁决。
+    session.externalRuntime.pendingExternalChange = {
+      version: 1,
+      versionHash: 'external-hash',
+      diskContent: '# 磁盘版本',
+      diskStat: null,
+      detectedAt: 1700000000030,
+      watchBindingToken: 1,
+      watchingPath: 'C:/docs/external.md',
+      comparablePath: 'c:/docs/external.md',
+    }
+
+    expect(deriveDocumentTabSnapshot(session).hasPendingExternalChange).toBe(true)
+
+    // markResolved 的效果：用户应用或忽略后挂起项被清空，标记必须自动消失。
+    session.externalRuntime.pendingExternalChange = null
+
+    expect(deriveDocumentTabSnapshot(session).hasPendingExternalChange).toBe(false)
+  })
 })

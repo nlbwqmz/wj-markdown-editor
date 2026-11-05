@@ -113,8 +113,11 @@ function normalizeTabList(tabs) {
         dirty: tab.dirty === true,
         isRecentMissing: tab.isRecentMissing === true,
         // 标签绑定路径的文件是否已从磁盘消失。
-        // 标签栏用它驱动删除线、弱化与菜单禁用，属于展示信息，不向上提成文档真相。
+        // 标签栏用它驱动删除线、警示色与菜单禁用，属于展示信息，不向上提成文档真相。
         fileMissing: tab.fileMissing === true,
+        // 是否存在未决的外部变更。
+        // 后台标签也会收到外部变更，但弹窗只投影活动会话，所以标签栏必须自己能看见这个状态。
+        hasPendingExternalChange: tab.hasPendingExternalChange === true,
       }
     })
     .filter(Boolean)

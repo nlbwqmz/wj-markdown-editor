@@ -65,6 +65,7 @@ export default {
     copyPath: '复制路径',
     revealInExplorer: '在资源管理器中显示',
     fileDeletedOrMoved: '{fileName}（文件已被删除或移动）',
+    externalChangePending: '{fileName}（有外部改动待处理）',
     reorderFailed: '调整标签顺序失败',
   },
   previewAssetMenu: {

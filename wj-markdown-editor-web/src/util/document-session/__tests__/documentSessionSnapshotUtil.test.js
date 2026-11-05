@@ -164,7 +164,7 @@ test('缺省快照也应被归一化为稳定结构，避免 renderer 再自行�
   })
 })
 
-test('标签归一化必须保留 fileMissing，否则标签栏拿不到文件缺失状态', () => {
+test('标签归一化必须保留 fileMissing 与 hasPendingExternalChange，否则标签栏拿不到文件状态', () => {
   const snapshot = normalizeDocumentSessionSnapshot({
     sessionId: 'session-9',
     fileName: 'deleted.md',
@@ -175,6 +175,7 @@ test('标签归一化必须保留 fileMissing，否则标签栏拿不到文件�
         displayPath: 'C:/docs/deleted.md',
         dirty: true,
         fileMissing: true,
+        hasPendingExternalChange: true,
       },
       {
         sessionId: 'session-10',
@@ -182,8 +183,9 @@ test('标签归一化必须保留 fileMissing，否则标签栏拿不到文件�
         displayPath: 'C:/docs/alive.md',
         dirty: false,
         fileMissing: false,
+        hasPendingExternalChange: true,
       },
-      // 旧快照没有该字段时必须收敛成 false，不能被当成“文件已缺失”。
+      // 旧快照没有这些字段时必须收敛成 false，不能被当成“已缺失”或“有未决变更”。
       { sessionId: 'session-11', fileName: 'legacy.md' },
     ],
   })
@@ -191,11 +193,15 @@ test('标签归一化必须保留 fileMissing，否则标签栏拿不到文件�
   assert.equal(snapshot.tabs[0].fileMissing, true)
   assert.equal(snapshot.tabs[1].fileMissing, false)
   assert.equal(snapshot.tabs[2].fileMissing, false)
+  assert.equal(snapshot.tabs[0].hasPendingExternalChange, true)
+  assert.equal(snapshot.tabs[1].hasPendingExternalChange, true)
+  assert.equal(snapshot.tabs[2].hasPendingExternalChange, false)
   assert.deepEqual(Object.keys(snapshot.tabs[0]).sort(), [
     'dirty',
     'displayPath',
     'fileMissing',
     'fileName',
+    'hasPendingExternalChange',
     'isRecentMissing',
     'kind',
     'sessionId',

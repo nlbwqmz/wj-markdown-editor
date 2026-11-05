@@ -1052,3 +1052,44 @@ describe('documentTabBar 文件已被删除或移动', () => {
     wrapper.unmount()
   })
 })
+
+describe('documentTabBar 外部变更未决', () => {
+  it('未决标签必须带外部变更标记与待处理提示，且不与文件缺失混在一起', async () => {
+    store.documentSessionSnapshot.tabs = [
+      { ...defaultTabs[0], hasPendingExternalChange: true },
+    ]
+    const wrapper = mountTabBar()
+
+    // 警示色由 data-external-change 驱动，测试只关心属性是否落到 DOM 上
+    const tab = wrapper.get('[data-testid="document-tab-session-1"]')
+    expect(tab.attributes('data-external-change')).toBe('true')
+    expect(tab.attributes('data-file-missing')).toBe('false')
+    expect(tab.attributes('title')).toBe('documentTab.externalChangePending')
+
+    // 裁决完成后主进程会清空挂起项，标记必须跟着消失
+    store.documentSessionSnapshot.tabs = [
+      { ...defaultTabs[0], hasPendingExternalChange: false },
+    ]
+    await nextTick()
+
+    const resolvedTab = wrapper.get('[data-testid="document-tab-session-1"]')
+    expect(resolvedTab.attributes('data-external-change')).toBe('false')
+    expect(resolvedTab.attributes('title')).toBe('a.md')
+
+    wrapper.unmount()
+  })
+
+  it('同时存在删除与外部变更时，提示文案必须以文件缺失为准', () => {
+    store.documentSessionSnapshot.tabs = [
+      { ...defaultTabs[0], fileMissing: true, hasPendingExternalChange: true },
+    ]
+    const wrapper = mountTabBar()
+
+    const tab = wrapper.get('[data-testid="document-tab-session-1"]')
+    expect(tab.attributes('data-file-missing')).toBe('true')
+    expect(tab.attributes('data-external-change')).toBe('true')
+    expect(tab.attributes('title')).toBe('documentTab.fileDeletedOrMoved')
+
+    wrapper.unmount()
+  })
+})
