@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createDraftSession } from '../documentSessionFactory.js'
-import { deriveDocumentSnapshot } from '../documentSnapshotUtil.js'
+import { createBoundFileSession, createDraftSession, createRecentMissingSession } from '../documentSessionFactory.js'
+import { deriveDocumentSnapshot, deriveDocumentTabSnapshot } from '../documentSnapshotUtil.js'
 
 describe('documentSnapshotUtil', () => {
   it('deriveDocumentSnapshot 在编辑内容和磁盘基线不一致时，应返回 dirty=true', () => {
@@ -139,5 +139,46 @@ describe('documentSnapshotUtil', () => {
     }
 
     expect(deriveDocumentSnapshot(session).kind).toBe('markdown')
+  })
+
+  it('已绑定文件被外部删除时，标签快照应标记 fileMissing=true，恢复后自动撤回', () => {
+    const session = createBoundFileSession({
+      sessionId: 'bound-file-missing-session',
+      path: 'C:/docs/deleted.md',
+      content: '# 正文',
+    })
+
+    // 绑定成功的初始态：文件在盘上，不能标记为缺失。
+    expect(deriveDocumentTabSnapshot(session).fileMissing).toBe(false)
+
+    // 模拟 watcher 收到 watch.file-missing 后的磁盘基线重置：
+    // 路径身份保留，但 exists 变成 false。
+    session.documentSource.exists = false
+    session.diskSnapshot.exists = false
+
+    const missingTab = deriveDocumentTabSnapshot(session)
+
+    expect(missingTab.fileMissing).toBe(true)
+    // 文件名必须保留真实文件名，删除线才有打在该打的字上。
+    expect(missingTab.fileName).toBe('deleted.md')
+
+    // 文件恢复（或保存成功重新写回磁盘）后，标记必须自动消失，不保留历史。
+    session.documentSource.exists = true
+    session.diskSnapshot.exists = true
+
+    expect(deriveDocumentTabSnapshot(session).fileMissing).toBe(false)
+  })
+
+  it('草稿与 recent-missing 会话的路径身份为空，不能被误标记为 fileMissing', () => {
+    const draftTab = deriveDocumentTabSnapshot(createDraftSession({ sessionId: 'draft-file-missing-session' }))
+    const recentMissingTab = deriveDocumentTabSnapshot(createRecentMissingSession({
+      sessionId: 'recent-missing-file-missing-session',
+      missingPath: 'C:/docs/recent-missing.md',
+    }))
+
+    // 两者的 documentSource.path 都是 null，缺失语义分别由草稿与 isRecentMissing 表达。
+    expect(draftTab.fileMissing).toBe(false)
+    expect(recentMissingTab.fileMissing).toBe(false)
+    expect(recentMissingTab.isRecentMissing).toBe(true)
   })
 })

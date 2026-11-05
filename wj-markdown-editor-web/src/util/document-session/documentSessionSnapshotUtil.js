@@ -112,6 +112,9 @@ function normalizeTabList(tabs) {
         displayPath: tab.displayPath ?? null,
         dirty: tab.dirty === true,
         isRecentMissing: tab.isRecentMissing === true,
+        // 标签绑定路径的文件是否已从磁盘消失。
+        // 标签栏用它驱动删除线、弱化与菜单禁用，属于展示信息，不向上提成文档真相。
+        fileMissing: tab.fileMissing === true,
       }
     })
     .filter(Boolean)

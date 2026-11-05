@@ -64,6 +64,7 @@ export default {
     copyFileName: 'Copy file name',
     copyPath: 'Copy path',
     revealInExplorer: 'Show in explorer',
+    fileDeletedOrMoved: '{fileName} (the file has been deleted or moved)',
     reorderFailed: 'Failed to reorder tabs',
   },
   previewAssetMenu: {

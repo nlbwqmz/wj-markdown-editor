@@ -191,6 +191,21 @@ function getTabLabel(tab) {
   return tab?.fileName || UNTITLED_FILE_NAME
 }
 
+/**
+ * 标签的悬浮提示文案。
+ *
+ * 默认就是文件名：长文件名会被 `truncate` 截断，这里顺带承担“看全名”的作用。
+ * 文件已被删除或移动时，在文件名后补一句原因，作为删除线与弱化之外的文字说明。
+ */
+function getTabTitle(tab) {
+  const label = getTabLabel(tab)
+  if (tab?.fileMissing !== true) {
+    return label
+  }
+
+  return t('documentTab.fileDeletedOrMoved', { fileName: label })
+}
+
 function isActiveTab(tab) {
   return Boolean(tab) && tab.sessionId === activeSessionId.value
 }
@@ -394,6 +409,10 @@ async function moveTabToNewWindow(tab) {
 
 function getMenuItems(tab) {
   const hasPath = Boolean(tab?.displayPath)
+  // 文件已从磁盘消失时，任何“要求文件真实存在”的动作都必须禁用。
+  // 复制路径 / 复制文件名只需要路径字符串或文件名，仍然有效——
+  // 此刻用户恰恰要靠复制出来的路径去找文件被搬到了哪里，不能一并禁掉。
+  const fileMissing = tab?.fileMissing === true
   const tabIndex = tabs.value.findIndex(item => item.sessionId === tab?.sessionId)
 
   // 批量关闭的禁用态必须跟主进程的裁剪策略一致，否则会出现“能关但菜单是灰的”
@@ -473,7 +492,9 @@ function getMenuItems(tab) {
     {
       key: 'reveal-in-explorer',
       label: t('documentTab.revealInExplorer'),
-      disabled: !hasPath,
+      // “在资源管理器中显示”要求目标文件真实存在：
+      // 文件被删除或移动后点下去只会是一条“文件不存在”的警告，直接置灰更诚实。
+      disabled: !hasPath || fileMissing,
     },
   ]
 }
@@ -542,6 +563,8 @@ function onMenuClick({ key }, tab) {
             :data-session-id="tab.sessionId"
             :data-active="isActiveTab(tab) ? 'true' : 'false'"
             :data-dirty="tab.dirty ? 'true' : 'false'"
+            :data-file-missing="tab.fileMissing ? 'true' : 'false'"
+            :title="getTabTitle(tab)"
             class="group document-tab h-6 max-w-60 min-w-0 flex shrink-0 cursor-pointer select-none items-center gap-1 rounded px-1 text-sm transition-colors"
             :class="getTabClassList(tab)"
             @pointerdown="handleTabPointerDown(tab, $event)"
@@ -599,11 +622,31 @@ function onMenuClick({ key }, tab) {
    *
    * 这里显式列出 color / background-color，是为了覆盖 UnoCSS 的
    * `transition-colors` 时不把原有的颜色过渡一起丢掉。
+   * opacity 用于让“文件已被删除或移动”的弱化在文件恢复后平滑撤掉。
    */
   transition:
     transform 140ms cubic-bezier(0.2, 0.7, 0.3, 1),
     color 150ms,
-    background-color 150ms;
+    background-color 150ms,
+    opacity 150ms;
+
+  /*
+   * 文件已被删除或移动：只改视觉，不动任何交互。
+   * 删除线承担“这个文件已经不在盘上”的语义，整体降透明度承担“弱化”；
+   * hover 回升到 0.85，是为了让关闭按钮与右键入口仍然看得清、点得到。
+   * 状态完全派生自快照，文件恢复或保存成功后类名消失、弱化自动撤掉。
+   */
+  &[data-file-missing='true'] {
+    opacity: 0.55;
+
+    &:hover {
+      opacity: 0.85;
+    }
+
+    .document-tab__label {
+      text-decoration: line-through;
+    }
+  }
 }
 
 .document-tab-bar.is-dragging {

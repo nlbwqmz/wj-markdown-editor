@@ -164,6 +164,44 @@ test('缺省快照也应被归一化为稳定结构，避免 renderer 再自行�
   })
 })
 
+test('标签归一化必须保留 fileMissing，否则标签栏拿不到文件缺失状态', () => {
+  const snapshot = normalizeDocumentSessionSnapshot({
+    sessionId: 'session-9',
+    fileName: 'deleted.md',
+    tabs: [
+      {
+        sessionId: 'session-9',
+        fileName: 'deleted.md',
+        displayPath: 'C:/docs/deleted.md',
+        dirty: true,
+        fileMissing: true,
+      },
+      {
+        sessionId: 'session-10',
+        fileName: 'alive.md',
+        displayPath: 'C:/docs/alive.md',
+        dirty: false,
+        fileMissing: false,
+      },
+      // 旧快照没有该字段时必须收敛成 false，不能被当成“文件已缺失”。
+      { sessionId: 'session-11', fileName: 'legacy.md' },
+    ],
+  })
+
+  assert.equal(snapshot.tabs[0].fileMissing, true)
+  assert.equal(snapshot.tabs[1].fileMissing, false)
+  assert.equal(snapshot.tabs[2].fileMissing, false)
+  assert.deepEqual(Object.keys(snapshot.tabs[0]).sort(), [
+    'dirty',
+    'displayPath',
+    'fileMissing',
+    'fileName',
+    'isRecentMissing',
+    'kind',
+    'sessionId',
+  ])
+})
+
 test('getDocumentSessionSnapshotIdentity 会统一提取 sessionId 与 revision，非法 revision 回退为 0', () => {
   assert.deepEqual(getDocumentSessionSnapshotIdentity({
     sessionId: 'session-8',

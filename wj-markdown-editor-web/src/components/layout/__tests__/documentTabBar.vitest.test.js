@@ -1005,3 +1005,50 @@ describe('documentTabBar 活动标签自动滚动', () => {
     wrapper.unmount()
   })
 })
+
+describe('documentTabBar 文件已被删除或移动', () => {
+  it('缺失文件的标签必须带缺失标记与原因提示，并禁用“在资源管理器中显示”', () => {
+    store.documentSessionSnapshot.tabs = [
+      { ...defaultTabs[0], fileMissing: true },
+      { ...defaultTabs[1], fileMissing: false },
+    ]
+    const wrapper = mountTabBar()
+
+    // 删除线与弱化完全由 data-file-missing 驱动，测试只关心属性是否落到 DOM 上
+    const missingTab = wrapper.get('[data-testid="document-tab-session-1"]')
+    expect(missingTab.attributes('data-file-missing')).toBe('true')
+    expect(missingTab.attributes('title')).toBe('documentTab.fileDeletedOrMoved')
+
+    // 正常标签的 title 就是文件名，顺带承担“长文件名被截断后看全名”的作用
+    const aliveTab = wrapper.get('[data-testid="document-tab-session-2"]')
+    expect(aliveTab.attributes('data-file-missing')).toBe('false')
+    expect(aliveTab.attributes('title')).toBe('b.md')
+
+    // 需要文件真实存在的动作必须置灰；
+    // 复制路径只需要路径字符串，必须仍可用（用户靠它去找文件被搬去哪了）。
+    const missingMenu = wrapper.findAll('.menu-stub')[0]
+    expect(missingMenu.get('[data-menu-key="reveal-in-explorer"]').attributes('data-disabled')).toBe('true')
+    expect(missingMenu.get('[data-menu-key="copy-path"]').attributes('data-disabled')).toBe('false')
+    expect(missingMenu.get('[data-menu-key="move-to-new-window"]').attributes('data-disabled')).toBe('false')
+
+    wrapper.unmount()
+  })
+
+  it('文件恢复后标签必须立即撤回缺失标记，不保留历史', async () => {
+    store.documentSessionSnapshot.tabs = [{ ...defaultTabs[0], fileMissing: true }]
+    const wrapper = mountTabBar()
+
+    expect(wrapper.get('[data-testid="document-tab-session-1"]').attributes('data-file-missing')).toBe('true')
+
+    // 模拟主进程重新对账后推送“文件又回来了”的快照
+    store.documentSessionSnapshot.tabs = [{ ...defaultTabs[0], fileMissing: false }]
+    await nextTick()
+
+    const restoredTab = wrapper.get('[data-testid="document-tab-session-1"]')
+    expect(restoredTab.attributes('data-file-missing')).toBe('false')
+    expect(restoredTab.attributes('title')).toBe('a.md')
+    expect(wrapper.get('.menu-stub [data-menu-key="reveal-in-explorer"]').attributes('data-disabled')).toBe('false')
+
+    wrapper.unmount()
+  })
+})
