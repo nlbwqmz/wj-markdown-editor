@@ -1,15 +1,17 @@
 import path from 'node:path'
-import { app } from 'electron'
 import fs from 'fs-extra'
 import { toComparableDocumentPath } from '../util/document-session/documentOpenTargetUtil.js'
+import { resolveUserDataDir } from '../util/userDataPathUtil.js'
 
 let recent = []
 let maxSize = 10
 let callback = null
 let exclusiveQueue = Promise.resolve()
 
-const documentsPath = app.isPackaged ? path.resolve(app.getPath('documents'), 'wj-markdown-editor') : app.getAppPath()
-const recentPath = path.resolve(documentsPath, 'recent.json')
+// 目录必须惰性解析：启动早期的旧数据迁移先于任何 recent 读写。
+function getRecentPath() {
+  return path.resolve(resolveUserDataDir(), 'recent.json')
+}
 
 function runExclusive(task) {
   const nextTask = exclusiveQueue.then(task, task)
@@ -96,8 +98,9 @@ function notifyCallbackSafely() {
 async function initRecent(max, callbackFunction) {
   maxSize = resolveRecentMaxSize(max, 10)
   callback = callbackFunction
+  const recentPath = getRecentPath()
   try {
-    await fs.ensureDir(documentsPath)
+    await fs.ensureDir(resolveUserDataDir())
     if (await fs.pathExists(recentPath)) {
       const recentContent = JSON.parse(await fs.readFile(recentPath, 'utf-8'))
       const normalizedRecent = trimRecentListToMax(recentContent, maxSize)
@@ -134,6 +137,7 @@ async function remove(filePath) {
 }
 
 async function clearInternal({ notify = true } = {}) {
+  const recentPath = getRecentPath()
   const nextRecent = []
   await fs.writeFile(recentPath, JSON.stringify(nextRecent), 'utf-8')
   recent = nextRecent
@@ -149,6 +153,7 @@ async function addInternal(filePath, { notify = true } = {}) {
     return
   }
 
+  const recentPath = getRecentPath()
   const nextRecent = recent.filter(item => getRecentComparableKey(item) !== comparableKey)
   nextRecent.unshift(normalizedFilePath)
   const normalizedRecent = trimRecentListToMax(nextRecent, maxSize)
@@ -166,6 +171,7 @@ async function removeInternal(filePath, { notify = true } = {}) {
     return
   }
 
+  const recentPath = getRecentPath()
   const nextRecent = recent.filter(item => getRecentComparableKey(item) !== comparableKey)
   if (nextRecent.length === recent.length) {
     return
@@ -197,7 +203,7 @@ async function restoreStateInternal(snapshot, { notify = false } = {}) {
   recent = restoredRecent
   maxSize = restoredMaxSize
 
-  await fs.writeFile(recentPath, JSON.stringify(restoredRecent), 'utf-8')
+  await fs.writeFile(getRecentPath(), JSON.stringify(restoredRecent), 'utf-8')
 
   if (notify) {
     notifyCallbackSafely()

@@ -10,9 +10,11 @@ import { initializeDocumentSessionRuntime } from './util/document-session/docume
 import { createDocumentSessionRuntimeComposition } from './util/document-session/documentSessionRuntimeComposition.js'
 import windowLifecycleService from './util/document-session/windowLifecycleService.js'
 import { createWindowRegistry } from './util/document-session/windowRegistry.js'
+import { migrateLegacyUserData } from './util/legacyUserDataMigrationUtil.js'
 import logUtil from './util/logUtil.js'
 import protocolUtil from './util/protocolUtil.js'
 import updateUtil from './util/updateUtil.js'
+import { resolveUserDataDir } from './util/userDataPathUtil.js'
 import aboutUtil from './util/win/aboutUtil.js'
 import exportUtil from './util/win/exportUtil.js'
 import guideUtil from './util/win/guideUtil.js'
@@ -137,8 +139,17 @@ if (!lock) {
     const activeWindow = windowLifecycleService.listWindows()[0] || null
     activeWindow?.show?.()
   })
-  logUtil.init()
   app.whenReady().then(async () => {
+    // 旧数据迁移必须先于日志与配置初始化：
+    // logUtil / recent / configRepository 的目录都改成惰性解析，迁移完成后才会指向新目录。
+    try {
+      await migrateLegacyUserData({ app, targetDir: resolveUserDataDir() })
+    }
+    catch (error) {
+      // 迁移失败不能阻塞启动：新目录照常可用，下次启动重试。
+      console.error('[Main] 旧用户数据迁移失败:', error)
+    }
+    logUtil.init()
     const runtime = initializeAppDocumentSessionRuntime()
     Menu.setApplicationMenu(null)
     await configUtil.initConfig((config) => {

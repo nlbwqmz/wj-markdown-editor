@@ -12,8 +12,8 @@
   "main": "src/main.js",
   "desktopName": "wj-markdown-editor",
   "scripts": {
-    "start": "cross-env NODE_ENV=dev electron .",
-    "static": "electron .",
+    "start": "cross-env WJ_WEB_SOURCE=dev WJ_USER_DATA_IN_APP_DIR=1 electron .",
+    "static": "cross-env WJ_WEB_SOURCE=dist WJ_USER_DATA_IN_APP_DIR=1 electron .",
     "make": "cd ../wj-markdown-editor-web && npm install && npm run build && cd ../wj-markdown-editor-electron && npm install && electron-builder",
     "build": "electron-builder",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix",
@@ -45,6 +45,7 @@
       "!eslint.config.mjs",
       "!recent.json",
       "!tab-group.json",
+      "!data/**",
       "!installer.nsh",
       "!scripts/**",
       "!icon/1024x1024.png",

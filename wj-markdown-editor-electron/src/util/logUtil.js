@@ -1,10 +1,13 @@
 import path from 'node:path'
 import dayjs from 'dayjs'
-import { app } from 'electron'
 import log from 'electron-log'
 import fs from 'fs-extra'
+import { resolveUserDataDir } from './userDataPathUtil.js'
 
-const logPath = path.join(app.getPath('documents'), 'wj-markdown-editor/logs')
+// 日志目录惰性解析：旧数据迁移会先于 logUtil.init 执行。
+function getLogPath() {
+  return path.join(resolveUserDataDir(), 'logs')
+}
 
 /**
  * 清理日志
@@ -58,8 +61,8 @@ export default {
     // 日志文件大小 5MB
     log.transports.file.maxSize = 1048576 * 5
     Object.assign(console, log.functions)
-    log.transports.file.resolvePathFn = () => path.join(logPath, `${dayjs().format('YYYY-MM-DD')}/main.log`)
+    log.transports.file.resolvePathFn = () => path.join(getLogPath(), `${dayjs().format('YYYY-MM-DD')}/main.log`)
     // 清理日志
-    cleanupOldLog(logPath).then(() => {})
+    cleanupOldLog(getLogPath()).then(() => {})
   },
 }

@@ -13,6 +13,7 @@ import fileWatchUtil from '../fileWatchUtil.js'
 import resourceFileUtil from '../resourceFileUtil.js'
 import { resolveLanguagePreference } from '../systemLocaleUtil.js'
 import updateUtil from '../updateUtil.js'
+import { isDevServerMode } from '../webSourceUtil.js'
 import {
   appendMarkdownExtension,
   isMarkdownFilePath,
@@ -1265,7 +1266,7 @@ function createWindowShellLoadFailedResult(documentPath) {
 }
 
 function isDevRendererMode() {
-  return Boolean(process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev')
+  return isDevServerMode()
 }
 
 function getWindowShellLoadFailureContent(documentPath) {

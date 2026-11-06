@@ -1,6 +1,6 @@
 import path from 'node:path'
-import { app } from 'electron'
 import fs from 'fs-extra'
+import { resolveUserDataDir } from '../util/userDataPathUtil.js'
 
 /**
  * 上次打开的标签组。
@@ -11,16 +11,14 @@ import fs from 'fs-extra'
  *    否则“开了 15 个标签重启只回来 10 个”
  */
 // 路径必须惰性求值：
-// windowLifecycleService 会在导入阶段连带引入本模块，
-// 而部分测试环境只提供了最小的 electron mock。
-function getDocumentsPath() {
-  return app.isPackaged
-    ? path.resolve(app.getPath('documents'), 'wj-markdown-editor')
-    : app.getAppPath()
+// 1. windowLifecycleService 会在导入阶段连带引入本模块，部分测试环境只提供了最小的 electron mock
+// 2. 启动早期的旧数据迁移必须在目录解析之前完成
+function getUserDataRoot() {
+  return resolveUserDataDir()
 }
 
 function getTabGroupPath() {
-  return path.resolve(getDocumentsPath(), 'tab-group.json')
+  return path.resolve(getUserDataRoot(), 'tab-group.json')
 }
 
 const EMPTY_TAB_GROUP = {
@@ -89,9 +87,9 @@ function normalizeTabGroup(rawTabGroup) {
 
 async function initTabGroup() {
   try {
-    const documentsPath = getDocumentsPath()
+    const userDataRoot = getUserDataRoot()
     const tabGroupPath = getTabGroupPath()
-    await fs.ensureDir(documentsPath)
+    await fs.ensureDir(userDataRoot)
     if (!await fs.pathExists(tabGroupPath)) {
       tabGroup = { ...EMPTY_TAB_GROUP }
       return get()
@@ -116,7 +114,7 @@ function get() {
 async function save(nextTabGroup) {
   tabGroup = normalizeTabGroup(nextTabGroup)
   try {
-    await fs.ensureDir(getDocumentsPath())
+    await fs.ensureDir(getUserDataRoot())
     await fs.writeFile(getTabGroupPath(), JSON.stringify(tabGroup, null, 2), 'utf-8')
   }
   catch (error) {
@@ -135,7 +133,7 @@ async function save(nextTabGroup) {
 function saveSync(nextTabGroup) {
   tabGroup = normalizeTabGroup(nextTabGroup)
   try {
-    fs.ensureDirSync(getDocumentsPath())
+    fs.ensureDirSync(getUserDataRoot())
     fs.writeFileSync(getTabGroupPath(), JSON.stringify(tabGroup, null, 2), 'utf-8')
   }
   catch (error) {

@@ -2,6 +2,9 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { createConfigRepository } from '../configRepository.js'
 
+// 配置目录解析链会在导入期引用 electron.app，这里只做占位，实际 app 由用例注入。
+vi.mock('electron', () => ({ app: {} }))
+
 function createFakeFs({
   existingPaths = new Set(),
   fileContents = new Map(),
@@ -48,28 +51,61 @@ function createFakeFs({
 }
 
 describe('configRepository', () => {
-  it('开发环境必须继续使用 app.getAppPath 下的 config.json', async () => {
+  it('数据目录写在应用目录时（WJ_USER_DATA_IN_APP_DIR=1）必须使用 app.getAppPath 下的 config.json', async () => {
     const appPath = path.resolve('/app')
     const repository = createConfigRepository({
       app: {
-        isPackaged: false,
         getAppPath: () => appPath,
-        getPath: () => path.resolve('/documents'),
+        getPath: () => path.resolve('/userData'),
       },
+      env: { WJ_USER_DATA_IN_APP_DIR: '1' },
       fs: createFakeFs(),
       writeFileAtomic: vi.fn(),
     })
 
     expect(repository.getConfigPath()).toMatch(/[\\/]config\.json$/)
-    expect(repository.getConfigPath()).toBe(path.join(appPath, 'config.json'))
+    expect(repository.getConfigPath()).toBe(path.join(appPath, 'data', 'config.json'))
+  })
+
+  it('非开发态必须使用 app.getPath("userData") 作为配置目录', async () => {
+    const userDataPath = path.resolve('/userData')
+    const repository = createConfigRepository({
+      app: {
+        getAppPath: () => path.resolve('/app'),
+        getPath: name => (name === 'userData' ? userDataPath : path.resolve('/unused')),
+      },
+      env: {},
+      fs: createFakeFs(),
+      writeFileAtomic: vi.fn(),
+    })
+
+    expect(repository.getConfigPath()).toBe(path.join(userDataPath, 'data', 'config.json'))
+  })
+
+  it('配置目录必须惰性解析，不能在构造期固化', () => {
+    let currentDir = path.resolve('/before')
+    const repository = createConfigRepository({
+      app: {
+        getAppPath: () => path.resolve('/app'),
+        getPath: () => currentDir,
+      },
+      env: {},
+      fs: createFakeFs(),
+      writeFileAtomic: vi.fn(),
+    })
+
+    expect(repository.getConfigPath()).toBe(path.join(currentDir, 'data', 'config.json'))
+
+    currentDir = path.resolve('/after')
+    expect(repository.getConfigPath()).toBe(path.join(currentDir, 'data', 'config.json'))
   })
 
   it('jSON 解析失败时必须备份损坏文件并回退默认配置流程', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-23T10:20:30.456Z'))
 
-    const documentsPath = path.resolve('/documents')
-    const configDir = path.resolve(documentsPath, 'wj-markdown-editor')
+    const userDataPath = path.resolve('/userData')
+    const configDir = path.join(userDataPath, 'data')
     const configPath = path.join(configDir, 'config.json')
     const rawText = '{"broken": }'
     const backupPath = path.join(configDir, 'config.corrupted.1774261230456.json')
@@ -79,10 +115,10 @@ describe('configRepository', () => {
     })
     const repository = createConfigRepository({
       app: {
-        isPackaged: true,
         getAppPath: () => path.resolve('/unused'),
-        getPath: () => documentsPath,
+        getPath: () => userDataPath,
       },
+      env: {},
       fs: fakeFs,
       writeFileAtomic: vi.fn(),
     })
@@ -102,8 +138,8 @@ describe('configRepository', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-23T10:20:30.456Z'))
 
-    const documentsPath = path.resolve('/documents')
-    const configDir = path.resolve(documentsPath, 'wj-markdown-editor')
+    const userDataPath = path.resolve('/userData')
+    const configDir = path.join(userDataPath, 'data')
     const configPath = path.join(configDir, 'config.json')
     const backupWriteError = new Error('disk full')
     const fakeFs = createFakeFs({
@@ -113,10 +149,10 @@ describe('configRepository', () => {
     })
     const repository = createConfigRepository({
       app: {
-        isPackaged: true,
         getAppPath: () => path.resolve('/unused'),
-        getPath: () => documentsPath,
+        getPath: () => userDataPath,
       },
+      env: {},
       fs: fakeFs,
       writeFileAtomic: vi.fn(),
     })
@@ -135,14 +171,14 @@ describe('configRepository', () => {
   it('写入配置文本前必须先确保配置目录存在，并使用原子写与 utf8 编码', async () => {
     const writeFileAtomic = vi.fn().mockResolvedValue(undefined)
     const fakeFs = createFakeFs()
-    const documentsPath = path.resolve('/documents')
-    const configDir = path.resolve(documentsPath, 'wj-markdown-editor')
+    const userDataPath = path.resolve('/userData')
+    const configDir = path.join(userDataPath, 'data')
     const repository = createConfigRepository({
       app: {
-        isPackaged: true,
         getAppPath: () => path.resolve('/unused'),
-        getPath: () => documentsPath,
+        getPath: () => userDataPath,
       },
+      env: {},
       fs: fakeFs,
       writeFileAtomic,
     })

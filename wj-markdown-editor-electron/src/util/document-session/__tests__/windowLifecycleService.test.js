@@ -603,8 +603,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
   })
 
   it('createNew 在开发态壳页加载失败时，必须回滚已注册窗口且不能污染 recent', async () => {
-    const originalNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'dev'
+    const originalWebSource = process.env.WJ_WEB_SOURCE
+    process.env.WJ_WEB_SOURCE = 'dev'
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     loadURLMock.mockRejectedValueOnce(new Error('ECONNREFUSED: dev server unavailable'))
@@ -629,7 +629,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
       expect(browserWindowInstances).toHaveLength(1)
       expect(browserWindowInstances[0].isDestroyed()).toBe(true)
     } finally {
-      process.env.NODE_ENV = originalNodeEnv
+      process.env.WJ_WEB_SOURCE = originalWebSource
     }
   })
 
@@ -675,8 +675,8 @@ describe('windowLifecycleService 生命周期 facade', () => {
   })
 
   it('createNew 在开发态加载壳页时同样必须恒为 editor hash', async () => {
-    const originalNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'dev'
+    const originalWebSource = process.env.WJ_WEB_SOURCE
+    process.env.WJ_WEB_SOURCE = 'dev'
     pathExistsMock.mockResolvedValue(true)
     readFileMock.mockResolvedValue('# 原始内容')
     getConfigMock.mockReturnValue({ language: 'zh-CN', autoSave: [], startView: 'source' })
@@ -686,7 +686,7 @@ describe('windowLifecycleService 生命周期 facade', () => {
 
       expect(loadURLMock).toHaveBeenCalledWith('http://localhost:8080/#/editor')
     } finally {
-      process.env.NODE_ENV = originalNodeEnv
+      process.env.WJ_WEB_SOURCE = originalWebSource
     }
   })
 

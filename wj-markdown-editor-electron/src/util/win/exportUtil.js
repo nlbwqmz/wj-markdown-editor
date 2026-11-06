@@ -4,6 +4,7 @@ import { BrowserWindow, clipboard, dialog, nativeImage } from 'electron'
 import fs from 'fs-extra'
 import configUtil from '../../data/configUtil.js'
 import commonUtil from '../commonUtil.js'
+import { isDevServerMode } from '../webSourceUtil.js'
 import { captureExportImageBuffer } from './exportImageCaptureUtil.js'
 import { createExportWindowOptions } from './exportWindowOptionsUtil.js'
 
@@ -58,7 +59,7 @@ function createExportWin({ parentWindow, documentContext, type, target = 'file',
   }
   const search = searchParams.toString()
 
-  if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
+  if (isDevServerMode()) {
     exportWin.loadURL(`http://localhost:8080/#/export?${search}`).then(() => {
       // exportWin.webContents.openDevTools({ mode: 'undocked' })
     })

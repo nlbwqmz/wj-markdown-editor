@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { BrowserWindow, shell } from 'electron'
 import configUtil from '../../data/configUtil.js'
 import { WINDOW_ICON_PATH } from '../appIconUtil.js'
+import { isDevServerMode } from '../webSourceUtil.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -49,7 +50,7 @@ export default {
       settingWin.once('ready-to-show', () => {
         settingWin.show()
       })
-      if (process.env.NODE_ENV && process.env.NODE_ENV.trim() === 'dev') {
+      if (isDevServerMode()) {
         settingWin.loadURL('http://localhost:8080/#/setting').then(() => {
           settingWin.webContents.openDevTools({ mode: 'undocked' })
         })
